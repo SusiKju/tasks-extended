@@ -1,0 +1,48 @@
+{
+  "expo": {
+    "name": "TasksExtended",
+    "slug": "tasks-extended",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.tasksextended.app",
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "Bilder für Task-Anhänge auswählen",
+        "NSCameraUsageDescription": "Foto für Task-Anhang aufnehmen",
+        "NSPhotoLibraryAddUsageDescription": "Fotos aus der App speichern"
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.tasksextended.app",
+      "permissions": [
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "CAMERA"
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Bilder für Task-Anhänge auswählen",
+          "cameraPermission": "Foto für Task-Anhang aufnehmen"
+        }
+      ],
+      "expo-secure-store"
+    ],
+    "scheme": "tasksextended"
+  }
+}

@@ -1,0 +1,346 @@
+<?xml version='1.0' encoding='utf-8'?>
+<tasks generated="2026-05-28T09:32" prefix="TE">
+  <task id="1" status="done">
+    <title>Cross-Platform Mobile Task-App aufbauen (Android &amp; iOS)</title>
+    <summary>Grundstruktur einer Android- und iOS-App zur Task-Verwaltung aufsetzen, inkl. Projekt-Setup, Navigation und Basis-UI für Brainstorming-Workflows.</summary>
+    <created>2026-05-28T08:47</created>
+    <started>2026-05-28T08:51</started>
+    <done>2026-05-28T08:51</done>
+    <human_estimate>mehrere tage</human_estimate>
+    <story_points>13</story_points>
+    <agents>Claude</agents>
+    <concept>tasks/TE-1.md</concept>
+    <parent />
+    <subtasks />
+    <external_id />
+    <external_url />
+    <backlog_rank />
+    <informational />
+    <kind>feature</kind>
+    <testing_tool />
+    <lane_id>run-e1aa5536</lane_id>
+    <lane_order />
+    <history>
+      <event ts="2026-05-28T08:47">received, backlog</event>
+      <event ts="2026-05-28T08:47">refined (title, summary, human_estimate, story_points, kind)</event>
+      <event ts="2026-05-28T08:51">scheduled for claude (bulk-start)</event>
+      <event ts="2026-05-28T08:51">auto-aktiviert via prompt-hook</event>
+      <event ts="2026-05-28T08:51">started run lane run-e1aa5536</event>
+      <event ts="2026-05-28T08:51">completed</event>
+    </history>
+    <files>
+      <file path="package.json" ts="2026-05-28T08:52" />
+      <file path="app.json" ts="2026-05-28T08:53" />
+      <file path="tsconfig.json" ts="2026-05-28T08:53" />
+      <file path="src/types/index.ts" ts="2026-05-28T08:53" />
+      <file path="src/store/index.ts" ts="2026-05-28T08:53" />
+      <file path="src/utils/dateFormat.ts" ts="2026-05-28T08:53" />
+      <file path="src/utils/autoGroup.ts" ts="2026-05-28T08:53" />
+      <file path="src/services/googleCalendar.ts" ts="2026-05-28T08:54" />
+      <file path="src/components/GroupBadge.tsx" ts="2026-05-28T08:54" />
+      <file path="src/components/TaskCard.tsx" ts="2026-05-28T08:54" />
+      <file path="src/components/AttachmentPreview.tsx" ts="2026-05-28T08:54" />
+      <file path="src/screens/TaskListScreen.tsx" ts="2026-05-28T08:55" />
+      <file path="src/screens/CreateTaskScreen.tsx" ts="2026-05-28T08:55" />
+      <file path="src/screens/TaskDetailScreen.tsx" ts="2026-05-28T08:56" />
+      <file path="src/screens/GroupsScreen.tsx" ts="2026-05-28T08:57" />
+      <file path="src/screens/SettingsScreen.tsx" ts="2026-05-28T08:58" />
+      <file path="app/_layout.tsx" ts="2026-05-28T08:58" />
+      <file path="app/(tabs)/_layout.tsx" ts="2026-05-28T08:58" />
+      <file path="app/(tabs)/index.tsx" ts="2026-05-28T08:58" />
+      <file path="app/(tabs)/groups.tsx" ts="2026-05-28T08:58" />
+      <file path="app/(tabs)/settings.tsx" ts="2026-05-28T08:58" />
+      <file path="app/task/new.tsx" ts="2026-05-28T08:58" />
+      <file path="app/task/[id].tsx" ts="2026-05-28T08:58" />
+      <file path="babel.config.js" ts="2026-05-28T08:58" />
+    </files>
+  </task>
+  <task id="2" status="done">
+    <title>Gruppen-Verwaltung für Tasks implementieren</title>
+    <summary>Nutzer sollen verschiedene Gruppen anlegen, benennen und Tasks diesen zuordnen können.</summary>
+    <created>2026-05-28T08:47</created>
+    <started>2026-05-28T08:51</started>
+    <done>2026-05-28T08:51</done>
+    <human_estimate>1h</human_estimate>
+    <story_points>5</story_points>
+    <agents>Claude</agents>
+    <concept>tasks/TE-2.md</concept>
+    <parent />
+    <subtasks />
+    <external_id />
+    <external_url />
+    <backlog_rank />
+    <informational />
+    <kind>feature</kind>
+    <testing_tool />
+    <lane_id />
+    <lane_order />
+    <history>
+      <event ts="2026-05-28T08:47">received, backlog</event>
+      <event ts="2026-05-28T08:51">scheduled for claude (bulk-start)</event>
+      <event ts="2026-05-28T08:51">started</event>
+      <event ts="2026-05-28T08:51">completed</event>
+    </history>
+  </task>
+  <task id="3" status="done">
+    <title>Bild- und Datei-Upload zu Tasks hinzufügen</title>
+    <summary>Tasks sollen Bilder und Dateien als Anhänge unterstützen, inkl. Auswahl aus Galerie/Dateisystem und Vorschau.</summary>
+    <created>2026-05-28T08:47</created>
+    <started>2026-05-28T08:51</started>
+    <done>2026-05-28T08:51</done>
+    <human_estimate>2h</human_estimate>
+    <story_points>5</story_points>
+    <agents>Claude</agents>
+    <concept>tasks/TE-3.md</concept>
+    <parent />
+    <subtasks />
+    <external_id />
+    <external_url />
+    <backlog_rank />
+    <informational />
+    <kind>feature</kind>
+    <testing_tool />
+    <lane_id>run-1371864e</lane_id>
+    <lane_order />
+    <history>
+      <event ts="2026-05-28T08:47">received, backlog</event>
+      <event ts="2026-05-28T08:51">scheduled for claude (bulk-start)</event>
+      <event ts="2026-05-28T08:51">auto-aktiviert nach Vorgänger-done (serial-mode)</event>
+      <event ts="2026-05-28T08:51">started</event>
+      <event ts="2026-05-28T08:51">started run lane run-1371864e</event>
+      <event ts="2026-05-28T08:51">completed</event>
+    </history>
+  </task>
+  <task id="4" status="done">
+    <title>Due-Date-Format für Tasks festlegen</title>
+    <summary>Nutzer sollen ein Fälligkeitsdatum pro Task setzen können, mit konfigurierbarem Anzeigeformat.</summary>
+    <created>2026-05-28T08:47</created>
+    <started>2026-05-28T08:51</started>
+    <done>2026-05-28T08:51</done>
+    <human_estimate>30min</human_estimate>
+    <story_points>3</story_points>
+    <agents>Claude</agents>
+    <concept>tasks/TE-4.md</concept>
+    <parent />
+    <subtasks />
+    <external_id />
+    <external_url />
+    <backlog_rank />
+    <informational />
+    <kind>feature</kind>
+    <testing_tool />
+    <lane_id />
+    <lane_order />
+    <history>
+      <event ts="2026-05-28T08:47">received, backlog</event>
+      <event ts="2026-05-28T08:51">scheduled for claude (bulk-start)</event>
+      <event ts="2026-05-28T08:51">started</event>
+      <event ts="2026-05-28T08:51">completed</event>
+    </history>
+  </task>
+  <task id="5" status="done">
+    <title>Google-Kalender-Synchronisation integrieren</title>
+    <summary>Tasks mit Fälligkeitsdatum sollen mit dem Google-Kalender des Nutzers synchronisiert werden, inkl. OAuth-Login mit Google-Account.</summary>
+    <created>2026-05-28T08:47</created>
+    <started>2026-05-28T08:51</started>
+    <done>2026-05-28T08:51</done>
+    <human_estimate>1 tag</human_estimate>
+    <story_points>8</story_points>
+    <agents>Claude</agents>
+    <concept>tasks/TE-5.md</concept>
+    <parent />
+    <subtasks />
+    <external_id />
+    <external_url />
+    <backlog_rank />
+    <informational />
+    <kind>feature</kind>
+    <testing_tool />
+    <lane_id>run-8407c267</lane_id>
+    <lane_order />
+    <history>
+      <event ts="2026-05-28T08:47">received, backlog</event>
+      <event ts="2026-05-28T08:51">scheduled for claude (bulk-start)</event>
+      <event ts="2026-05-28T08:51">auto-aktiviert nach Vorgänger-done (serial-mode)</event>
+      <event ts="2026-05-28T08:51">started</event>
+      <event ts="2026-05-28T08:51">started run lane run-8407c267</event>
+      <event ts="2026-05-28T08:51">completed</event>
+    </history>
+  </task>
+  <task id="6" status="done">
+    <title>Beim Anlegen eines Tasks automatisch die passende Gruppe ermitteln</title>
+    <summary>Wenn ein neuer Task erstellt wird, soll automatisch erkannt werden, zu welcher Gruppe er gehört. Die Gruppenzuordnung soll ohne manuelle Eingabe des Nutzers erfolgen.</summary>
+    <created>2026-05-28T08:50</created>
+    <started>2026-05-28T08:51</started>
+    <done>2026-05-28T08:51</done>
+    <human_estimate>1h</human_estimate>
+    <story_points>5</story_points>
+    <agents>Claude</agents>
+    <concept>tasks/TE-6.md</concept>
+    <parent />
+    <subtasks />
+    <external_id />
+    <external_url />
+    <backlog_rank />
+    <informational />
+    <kind>feature</kind>
+    <testing_tool />
+    <lane_id />
+    <lane_order />
+    <history>
+      <event ts="2026-05-28T08:50">received, backlog</event>
+      <event ts="2026-05-28T08:50">refined (title, summary, human_estimate, story_points, kind)</event>
+      <event ts="2026-05-28T08:51">scheduled for claude (bulk-start)</event>
+      <event ts="2026-05-28T08:51">started</event>
+      <event ts="2026-05-28T08:51">completed</event>
+    </history>
+  </task>
+  <task id="7" status="done">
+    <title>npm install liefert Fehler</title>
+    <summary />
+    <created>2026-05-28T09:16</created>
+    <started>2026-05-28T09:19</started>
+    <done>2026-05-28T09:19</done>
+    <human_estimate>30min</human_estimate>
+    <story_points>3</story_points>
+    <agents>Claude</agents>
+    <concept>tasks/TE-7.md</concept>
+    <parent />
+    <subtasks />
+    <external_id />
+    <external_url />
+    <backlog_rank />
+    <informational />
+    <kind>bug</kind>
+    <testing_tool />
+    <lane_id>run-b16c42ec</lane_id>
+    <lane_order />
+    <history>
+      <event ts="2026-05-28T09:16">received, backlog</event>
+      <event ts="2026-05-28T09:16">refined (title, summary, human_estimate, story_points, kind)</event>
+      <event ts="2026-05-28T09:19">auto-aktiviert via prompt-hook</event>
+      <event ts="2026-05-28T09:19">started run lane run-b16c42ec</event>
+      <event ts="2026-05-28T09:19">completed</event>
+    </history>
+    <files>
+      <file path=".nvmrc" ts="2026-05-28T09:20" />
+      <file path="package.json" ts="2026-05-28T09:20" />
+    </files>
+  </task>
+  <task id="8" status="backlog">
+    <title>Google Login einbauen für Google Calendar OAuth</title>
+    <summary>Einen Google-Anmelde-Flow integrieren, damit der Nutzer sich direkt mit Google authentifizieren kann. Damit entfällt die manuelle Konfiguration der EXPO_PUBLIC_GOOGLE_CLIENT_ID_*-Umgebungsvariablen.</summary>
+    <created>2026-05-28T09:20</created>
+    <started />
+    <done />
+    <human_estimate>2h</human_estimate>
+    <story_points>5</story_points>
+    <agents>Claude</agents>
+    <concept>tasks/TE-8.md</concept>
+    <parent />
+    <subtasks />
+    <external_id />
+    <external_url />
+    <backlog_rank />
+    <informational />
+    <kind>feature</kind>
+    <testing_tool />
+    <lane_id />
+    <lane_order />
+    <history>
+      <event ts="2026-05-28T09:20">received, backlog</event>
+      <event ts="2026-05-28T09:20">refined (title, summary, human_estimate, story_points, kind)</event>
+    </history>
+  </task>
+  <task id="9" status="done">
+    <title>Web-App startet nicht – Bundle 500 Error</title>
+    <summary>npx expo start läuft, aber die Web-App crasht sofort. Browser zeigt 500 Internal Server Error beim Laden von entry.bundle.</summary>
+    <created>2026-05-28T09:26</created>
+    <started>2026-05-28T09:26</started>
+    <done>2026-05-28T09:26</done>
+    <human_estimate>1h</human_estimate>
+    <story_points>5</story_points>
+    <agents>Claude</agents>
+    <concept>tasks/TE-9.md</concept>
+    <parent />
+    <subtasks />
+    <external_id />
+    <external_url />
+    <backlog_rank />
+    <informational />
+    <kind />
+    <testing_tool />
+    <lane_id>run-ab1f902f</lane_id>
+    <lane_order />
+    <history>
+      <event ts="2026-05-28T09:26">received, backlog</event>
+      <event ts="2026-05-28T09:26">started</event>
+      <event ts="2026-05-28T09:26">started run lane run-ab1f902f</event>
+      <event ts="2026-05-28T09:26">completed</event>
+    </history>
+    <files>
+      <file path="package.json" ts="2026-05-28T09:26" />
+      <file path="src/screens/TaskListScreen.tsx" ts="2026-05-28T09:27" />
+      <file path="src/screens/TaskDetailScreen.tsx" ts="2026-05-28T09:28" />
+      <file path="src/screens/CreateTaskScreen.tsx" ts="2026-05-28T09:28" />
+    </files>
+  </task>
+  <task id="10" status="backlog">
+    <title>Theme Switcher für Dark-Neon</title>
+    <summary />
+    <created>2026-05-28T09:30</created>
+    <started>2026-05-28T09:31</started>
+    <done />
+    <human_estimate>2h</human_estimate>
+    <story_points>5</story_points>
+    <agents>Claude</agents>
+    <concept>tasks/TE-10.md</concept>
+    <parent />
+    <subtasks />
+    <external_id />
+    <external_url />
+    <backlog_rank />
+    <informational />
+    <kind>feature</kind>
+    <testing_tool />
+    <lane_id>run-a3f43bc5</lane_id>
+    <lane_order />
+    <history>
+      <event ts="2026-05-28T09:30">received, backlog</event>
+      <event ts="2026-05-28T09:30">refined (title, summary, human_estimate, story_points, kind)</event>
+      <event ts="2026-05-28T09:31">started</event>
+      <event ts="2026-05-28T09:31">started run lane run-a3f43bc5</event>
+      <event ts="2026-05-28T09:31">back to backlog</event>
+    </history>
+  </task>
+  <task id="11" status="done">
+    <title>APK-Build für Android + Mac-Start klären</title>
+    <summary>User fragt, was auf dem Mac nicht startet und wie man eine APK für Android baut.</summary>
+    <created>2026-05-28T09:31</created>
+    <started>2026-05-28T09:31</started>
+    <done>2026-05-28T09:31</done>
+    <human_estimate>30min</human_estimate>
+    <story_points>2</story_points>
+    <agents>Claude</agents>
+    <concept>tasks/TE-11.md</concept>
+    <parent />
+    <subtasks />
+    <external_id />
+    <external_url />
+    <backlog_rank />
+    <informational>true</informational>
+    <kind />
+    <testing_tool />
+    <lane_id>run-83a7585a</lane_id>
+    <lane_order />
+    <history>
+      <event ts="2026-05-28T09:31">received, backlog</event>
+      <event ts="2026-05-28T09:31">started</event>
+      <event ts="2026-05-28T09:31">started run lane run-83a7585a</event>
+      <event ts="2026-05-28T09:31">completed (informational only — no code changes)</event>
+    </history>
+    <files>
+      <file path="eas.json" ts="2026-05-28T09:32" />
+    </files>
+  </task>
+</tasks>
