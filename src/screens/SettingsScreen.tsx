@@ -1,8 +1,9 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
+  Pressable,
   ScrollView,
   StyleSheet,
   Switch,
@@ -11,17 +12,24 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useStore } from '../store';
-import { DateFormat } from '../types';
+import { DateFormat, Theme } from '../types';
 import { DATE_FORMAT_LABELS } from '../utils/dateFormat';
+import { useTheme, ThemeColors, THEMES } from '../utils/theme';
 import {
   signInWithGoogle,
   listCalendars,
 } from '../services/googleCalendar';
 
 const DATE_FORMATS: DateFormat[] = ['de', 'us', 'iso', 'relative'];
+const THEME_OPTIONS: { value: Theme; label: string; subtitle: string }[] = [
+  { value: 'light', label: 'Hell', subtitle: 'iOS-Standard, weißer Hintergrund' },
+  { value: 'dark-neon', label: 'Dark Neon', subtitle: 'Dunkles Design mit Neon-Akzenten' },
+];
 
 export function SettingsScreen() {
   const { settings, updateSettings } = useStore();
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const [loadingCalendar, setLoadingCalendar] = useState(false);
 
   const handleGoogleConnect = useCallback(async () => {
@@ -45,7 +53,6 @@ export function SettingsScreen() {
         return;
       }
 
-      // Use primary calendar by default, let user pick
       const primary = calendars.find((c) => c.id === 'primary') ?? calendars[0];
       updateSettings({ googleCalendarId: primary.id });
 
@@ -61,6 +68,9 @@ export function SettingsScreen() {
       } else {
         Alert.alert('Verbunden', `Google Kalender "${primary.summary}" ist jetzt aktiv.`);
       }
+    } catch (e) {
+      console.error('[GoogleLogin] Fehler:', e);
+      Alert.alert('Fehler', `Google-Login fehlgeschlagen: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setLoadingCalendar(false);
     }
@@ -85,6 +95,36 @@ export function SettingsScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+
+      {/* Theme */}
+      <View style={styles.section}>
+        <Text style={styles.sectionHeader}>Design</Text>
+        {THEME_OPTIONS.map((opt) => {
+          const themeColors = THEMES[opt.value];
+          const isActive = (settings.theme ?? 'light') === opt.value;
+          return (
+            <TouchableOpacity
+              key={opt.value}
+              style={[styles.themeRow, isActive && styles.themeRowActive]}
+              onPress={() => updateSettings({ theme: opt.value })}
+              activeOpacity={0.75}
+            >
+              <View style={[styles.themePreview, { backgroundColor: themeColors.background, borderColor: themeColors.border }]}>
+                <View style={[styles.themePreviewBar, { backgroundColor: themeColors.surface }]} />
+                <View style={[styles.themePreviewDot, { backgroundColor: themeColors.accent }]} />
+              </View>
+              <View style={styles.rowContent}>
+                <Text style={[styles.rowTitle, isActive && { color: colors.accentNeon, fontWeight: '600' }]}>
+                  {opt.label}
+                </Text>
+                <Text style={styles.rowSubtitle}>{opt.subtitle}</Text>
+              </View>
+              {isActive ? <Ionicons name="checkmark-circle" size={20} color={colors.accentNeon} /> : null}
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
       {/* Date format */}
       <View style={styles.section}>
         <Text style={styles.sectionHeader}>Datumsformat</Text>
@@ -98,7 +138,7 @@ export function SettingsScreen() {
               <Text style={styles.rowTitle}>{DATE_FORMAT_LABELS[fmt]}</Text>
             </View>
             {settings.dateFormat === fmt ? (
-              <Ionicons name="checkmark" size={20} color="#4F86F7" />
+              <Ionicons name="checkmark" size={20} color={colors.accent} />
             ) : null}
           </TouchableOpacity>
         ))}
@@ -117,7 +157,7 @@ export function SettingsScreen() {
           <Switch
             value={settings.autoGroupEnabled}
             onValueChange={(v) => updateSettings({ autoGroupEnabled: v })}
-            trackColor={{ true: '#34C759' }}
+            trackColor={{ true: colors.success }}
           />
         </View>
 
@@ -161,7 +201,7 @@ export function SettingsScreen() {
         {settings.googleCalendarEnabled ? (
           <>
             <View style={styles.row}>
-              <Ionicons name="checkmark-circle" size={20} color="#34C759" />
+              <Ionicons name="checkmark-circle" size={20} color={colors.success} />
               <View style={styles.rowContent}>
                 <Text style={styles.rowTitle}>Verbunden</Text>
                 {settings.googleCalendarId ? (
@@ -170,20 +210,24 @@ export function SettingsScreen() {
               </View>
             </View>
             <TouchableOpacity style={styles.dangerBtn} onPress={handleGoogleDisconnect}>
-              <Ionicons name="log-out-outline" size={16} color="#FF3B30" />
-              <Text style={styles.dangerBtnText}>Google Kalender trennen</Text>
+              <Ionicons name="log-out-outline" size={16} color={colors.danger} />
+              <Text style={[styles.dangerBtnText, { color: colors.danger }]}>Google Kalender trennen</Text>
             </TouchableOpacity>
           </>
         ) : (
           <>
             <View style={styles.calendarInfo}>
-              <Ionicons name="calendar-outline" size={32} color="#4F86F7" />
+              <Ionicons name="calendar-outline" size={32} color={colors.accent} />
               <Text style={styles.calendarInfoText}>
                 Verbinde deinen Google-Account, um Tasks mit Fälligkeitsdaten automatisch als Kalendereinträge zu speichern.
               </Text>
             </View>
-            <TouchableOpacity
-              style={[styles.connectBtn, loadingCalendar && styles.connectBtnDisabled]}
+            <Pressable
+              style={({ pressed }) => [
+                styles.connectBtn,
+                loadingCalendar && styles.connectBtnDisabled,
+                pressed && !loadingCalendar && { opacity: 0.8 },
+              ]}
               onPress={handleGoogleConnect}
               disabled={loadingCalendar}
             >
@@ -195,10 +239,7 @@ export function SettingsScreen() {
                   <Text style={styles.connectBtnText}>Mit Google anmelden</Text>
                 </>
               )}
-            </TouchableOpacity>
-            <Text style={styles.credentialsNote}>
-              Hinweis: Für die Google-Kalender-Synchronisation müssen in der app.json gültige OAuth-Client-IDs hinterlegt werden (EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS / _ANDROID / _WEB).
-            </Text>
+            </Pressable>
           </>
         )}
       </View>
@@ -215,87 +256,118 @@ export function SettingsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F2F2F7' },
-  content: { padding: 16, gap: 24, paddingBottom: 60 },
-  section: { gap: 2 },
-  sectionHeader: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#8E8E93',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    paddingHorizontal: 4,
-    marginBottom: 6,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 12,
-    borderRadius: 12,
-    marginBottom: 2,
-  },
-  rowContent: { flex: 1 },
-  rowTitle: { fontSize: 15, color: '#1C1C1E' },
-  rowSubtitle: { fontSize: 13, color: '#8E8E93', marginTop: 2 },
-  rowValue: { fontSize: 15, color: '#8E8E93' },
-  thresholdButtons: { flexDirection: 'row', gap: 6 },
-  thresholdBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#E5E5EA',
-    backgroundColor: '#F2F2F7',
-  },
-  thresholdBtnActive: { backgroundColor: '#4F86F7', borderColor: '#4F86F7' },
-  thresholdBtnText: { fontSize: 12, color: '#3C3C43' },
-  thresholdBtnTextActive: { color: '#fff', fontWeight: '600' },
-  calendarInfo: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 10,
-  },
-  calendarInfoText: {
-    fontSize: 14,
-    color: '#3C3C43',
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  connectBtn: {
-    backgroundColor: '#4285F4',
-    borderRadius: 12,
-    padding: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  connectBtnDisabled: { opacity: 0.6 },
-  connectBtnText: { color: '#fff', fontSize: 15, fontWeight: '600' },
-  credentialsNote: {
-    fontSize: 12,
-    color: '#8E8E93',
-    marginTop: 8,
-    paddingHorizontal: 4,
-    lineHeight: 17,
-  },
-  dangerBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    padding: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#FF3B30',
-    backgroundColor: '#FFF5F5',
-  },
-  dangerBtnText: { color: '#FF3B30', fontSize: 15, fontWeight: '500' },
-});
+function makeStyles(c: ThemeColors) {
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: c.background },
+    content: { padding: 16, gap: 24, paddingBottom: 60 },
+    section: { gap: 2 },
+    sectionHeader: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: c.textSecondary,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+      paddingHorizontal: 4,
+      marginBottom: 6,
+    },
+    themeRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: c.surface,
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      gap: 12,
+      borderRadius: 12,
+      marginBottom: 2,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    themeRowActive: {
+      borderColor: c.accentNeon,
+      borderWidth: 1.5,
+    },
+    themePreview: {
+      width: 44,
+      height: 32,
+      borderRadius: 8,
+      borderWidth: 1,
+      justifyContent: 'center',
+      alignItems: 'flex-start',
+      paddingLeft: 6,
+      gap: 4,
+    },
+    themePreviewBar: {
+      width: 24,
+      height: 5,
+      borderRadius: 2,
+    },
+    themePreviewDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+    },
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: c.surface,
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      gap: 12,
+      borderRadius: 12,
+      marginBottom: 2,
+    },
+    rowContent: { flex: 1 },
+    rowTitle: { fontSize: 15, color: c.text },
+    rowSubtitle: { fontSize: 13, color: c.textSecondary, marginTop: 2 },
+    rowValue: { fontSize: 15, color: c.textSecondary },
+    thresholdButtons: { flexDirection: 'row', gap: 6 },
+    thresholdBtn: {
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.surfaceHigh,
+    },
+    thresholdBtnActive: { backgroundColor: c.accent, borderColor: c.accent },
+    thresholdBtnText: { fontSize: 12, color: c.textSecondary },
+    thresholdBtnTextActive: { color: '#fff', fontWeight: '600' },
+    calendarInfo: {
+      backgroundColor: c.surface,
+      borderRadius: 12,
+      padding: 16,
+      alignItems: 'center',
+      gap: 10,
+      marginBottom: 10,
+    },
+    calendarInfoText: {
+      fontSize: 14,
+      color: c.text,
+      textAlign: 'center',
+      lineHeight: 20,
+    },
+    connectBtn: {
+      backgroundColor: '#4285F4',
+      borderRadius: 12,
+      padding: 14,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+    },
+    connectBtnDisabled: { opacity: 0.6 },
+    connectBtnText: { color: '#fff', fontSize: 15, fontWeight: '600' },
+    dangerBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 6,
+      padding: 12,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: c.danger,
+      backgroundColor: c.surface,
+    },
+    dangerBtnText: { fontSize: 15, fontWeight: '500' },
+  });
+}

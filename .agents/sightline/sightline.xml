@@ -1,5 +1,5 @@
 <?xml version='1.0' encoding='utf-8'?>
-<tasks generated="2026-05-28T09:32" prefix="TE">
+<tasks generated="2026-05-29T11:04" prefix="TE">
   <task id="1" status="done">
     <title>Cross-Platform Mobile Task-App aufbauen (Android &amp; iOS)</title>
     <summary>Grundstruktur einer Android- und iOS-App zur Task-Verwaltung aufsetzen, inkl. Projekt-Setup, Navigation und Basis-UI für Brainstorming-Workflows.</summary>
@@ -227,12 +227,12 @@
       <file path="package.json" ts="2026-05-28T09:20" />
     </files>
   </task>
-  <task id="8" status="backlog">
+  <task id="8" status="done">
     <title>Google Login einbauen für Google Calendar OAuth</title>
     <summary>Einen Google-Anmelde-Flow integrieren, damit der Nutzer sich direkt mit Google authentifizieren kann. Damit entfällt die manuelle Konfiguration der EXPO_PUBLIC_GOOGLE_CLIENT_ID_*-Umgebungsvariablen.</summary>
     <created>2026-05-28T09:20</created>
-    <started />
-    <done />
+    <started>2026-05-29T09:39</started>
+    <done>2026-05-29T09:47</done>
     <human_estimate>2h</human_estimate>
     <story_points>5</story_points>
     <agents>Claude</agents>
@@ -245,11 +245,17 @@
     <informational />
     <kind>feature</kind>
     <testing_tool />
-    <lane_id />
+    <lane_id>run-2621e581</lane_id>
     <lane_order />
     <history>
       <event ts="2026-05-28T09:20">received, backlog</event>
       <event ts="2026-05-28T09:20">refined (title, summary, human_estimate, story_points, kind)</event>
+      <event ts="2026-05-29T09:39">started</event>
+      <event ts="2026-05-29T09:39">started run lane run-2621e581</event>
+      <event ts="2026-05-29T09:39">completed</event>
+      <event ts="2026-05-29T09:47">reopened: SyntaxError in SettingsScreen</event>
+      <event ts="2026-05-29T09:47">started</event>
+      <event ts="2026-05-29T09:47">completed</event>
     </history>
   </task>
   <task id="9" status="done">
@@ -285,12 +291,12 @@
       <file path="src/screens/CreateTaskScreen.tsx" ts="2026-05-28T09:28" />
     </files>
   </task>
-  <task id="10" status="backlog">
+  <task id="10" status="done">
     <title>Theme Switcher für Dark-Neon</title>
     <summary />
     <created>2026-05-28T09:30</created>
     <started>2026-05-28T09:31</started>
-    <done />
+    <done>2026-05-29T09:38</done>
     <human_estimate>2h</human_estimate>
     <story_points>5</story_points>
     <agents>Claude</agents>
@@ -311,6 +317,9 @@
       <event ts="2026-05-28T09:31">started</event>
       <event ts="2026-05-28T09:31">started run lane run-a3f43bc5</event>
       <event ts="2026-05-28T09:31">back to backlog</event>
+      <event ts="2026-05-29T09:38">started</event>
+      <event ts="2026-05-29T09:39">pausiert für TE-8</event>
+      <event ts="2026-05-29T09:38">completed</event>
     </history>
   </task>
   <task id="11" status="done">
@@ -342,5 +351,273 @@
     <files>
       <file path="eas.json" ts="2026-05-28T09:32" />
     </files>
+  </task>
+  <task id="12" status="done">
+    <title>EAS Gradle Build schlägt fehl</title>
+    <summary>eas build gibt 'Gradle build failed with unknown error' nach 2m51s. Ursache unklar ohne vollständige Gradle-Logs.</summary>
+    <created>2026-05-28T11:26</created>
+    <started>2026-05-28T11:26</started>
+    <done>2026-05-28T11:26</done>
+    <human_estimate>1h</human_estimate>
+    <story_points>5</story_points>
+    <agents>Claude</agents>
+    <concept>tasks/TE-12.md</concept>
+    <parent />
+    <subtasks />
+    <external_id />
+    <external_url />
+    <backlog_rank />
+    <informational />
+    <kind />
+    <testing_tool />
+    <lane_id>run-b3a4c6fd</lane_id>
+    <lane_order />
+    <history>
+      <event ts="2026-05-28T11:26">received, backlog</event>
+      <event ts="2026-05-28T11:26">started</event>
+      <event ts="2026-05-28T11:26">started run lane run-b3a4c6fd</event>
+      <event ts="2026-05-28T11:26">completed</event>
+    </history>
+    <files>
+      <file path="package.json" ts="2026-05-28T11:27" />
+      <file path="app.json" ts="2026-05-28T11:27" />
+      <file path=".gitignore" ts="2026-05-28T11:28" />
+    </files>
+  </task>
+  <task id="13" status="done">
+    <title>App lokal als native App starten</title>
+    <summary>App soll lokal auf dem Mac als native App gestartet werden (iOS Simulator oder Android Emulator).</summary>
+    <created>2026-05-28T17:13</created>
+    <started>2026-05-28T17:13</started>
+    <done>2026-05-28T17:13</done>
+    <human_estimate>30min</human_estimate>
+    <story_points>2</story_points>
+    <agents>Claude</agents>
+    <concept>tasks/TE-13.md</concept>
+    <parent />
+    <subtasks />
+    <external_id />
+    <external_url />
+    <backlog_rank />
+    <informational>true</informational>
+    <kind />
+    <testing_tool />
+    <lane_id>run-938f2e07</lane_id>
+    <lane_order />
+    <history>
+      <event ts="2026-05-28T17:13">received, backlog</event>
+      <event ts="2026-05-28T17:13">started</event>
+      <event ts="2026-05-28T17:13">started run lane run-938f2e07</event>
+      <event ts="2026-05-28T17:13">completed (informational only — no code changes)</event>
+    </history>
+  </task>
+  <task id="14" status="done">
+    <title>APK crasht sofort beim Start auf Android</title>
+    <summary>App öffnet kurz und schließt sich mit Fehlermeldung. Ursache unbekannt ohne Crash-Log.</summary>
+    <created>2026-05-29T08:32</created>
+    <started>2026-05-29T08:32</started>
+    <done>2026-05-29T09:16</done>
+    <human_estimate>1h</human_estimate>
+    <story_points>5</story_points>
+    <agents>Claude</agents>
+    <concept>tasks/TE-14.md</concept>
+    <parent />
+    <subtasks />
+    <external_id />
+    <external_url />
+    <backlog_rank />
+    <informational />
+    <kind />
+    <testing_tool />
+    <lane_id>run-09cc202b</lane_id>
+    <lane_order />
+    <history>
+      <event ts="2026-05-29T08:32">received, backlog</event>
+      <event ts="2026-05-29T08:32">started</event>
+      <event ts="2026-05-29T08:32">started run lane run-09cc202b</event>
+      <event ts="2026-05-29T08:32">Fehlertext vom Nutzer benötigt. Zwei Bugs gefixt (useAutoDiscovery, MediaTypeOptions), aber Startup-Crash hat andere Ursache. Bundle baut sauber.</event>
+      <event ts="2026-05-29T09:16">feedback erhalten, weiter aktiv (auto via prompt-hook)</event>
+      <event ts="2026-05-29T09:16">completed</event>
+    </history>
+    <files>
+      <file path="src/services/googleCalendar.ts" ts="2026-05-29T08:34" />
+      <file path="src/screens/CreateTaskScreen.tsx" ts="2026-05-29T08:34" />
+      <file path="src/screens/TaskDetailScreen.tsx" ts="2026-05-29T08:35" />
+      <file path="eas.json" ts="2026-05-29T09:17" />
+      <file path="package.json" ts="2026-05-29T09:17" />
+    </files>
+  </task>
+  <task id="15" status="done">
+    <title>Google Login reagiert nicht auf Klick</title>
+    <summary>Ein Klick auf den Google-Login-Button löst weder eine Aktion noch eine Fehlermeldung oder Konsolen-Log aus. Ursache prüfen und ggf. Logging einbauen.</summary>
+    <created>2026-05-29T09:52</created>
+    <started>2026-05-29T09:57</started>
+    <done>2026-05-29T10:56</done>
+    <human_estimate>1h</human_estimate>
+    <story_points>5</story_points>
+    <agents>Claude</agents>
+    <concept>tasks/TE-15.md</concept>
+    <parent />
+    <subtasks />
+    <external_id />
+    <external_url />
+    <backlog_rank />
+    <informational />
+    <kind>bug</kind>
+    <testing_tool />
+    <lane_id>run-048b15a0</lane_id>
+    <lane_order />
+    <answer_read />
+    <branch />
+    <worktree />
+    <question />
+    <tags />
+    <run_window_id />
+    <history>
+      <event ts="2026-05-29T09:52">received, backlog</event>
+      <event ts="2026-05-29T09:52">refined (title, summary, human_estimate, story_points, kind)</event>
+      <event ts="2026-05-29T09:57">started</event>
+      <event ts="2026-05-29T09:57">started run lane run-048b15a0</event>
+      <event ts="2026-05-29T09:59">User möchte TE-16 starten – soll TE-15 pausiert oder abgebrochen werden?</event>
+      <event ts="2026-05-29T09:57">completed</event>
+      <event ts="2026-05-29T09:59">weiter mit TE-15, dann TE-16</event>
+      <event ts="2026-05-29T09:59">TouchableOpacity → Pressable; Button-Touch auf Android gefixed</event>
+      <event ts="2026-05-29T10:10">reopened: weiterhin kein Login-Flow nach Button-Press</event>
+      <event ts="2026-05-29T10:10">started</event>
+      <event ts="2026-05-29T10:17">completed</event>
+      <event ts="2026-05-29T10:56">reopened: Token-Exchange schlägt auf Web fehl (CORS)</event>
+      <event ts="2026-05-29T10:56">started</event>
+      <event ts="2026-05-29T10:56">completed</event>
+    </history>
+  </task>
+  <task id="16" status="done">
+    <title>Notizen-Tab mit farbigen Notizzetteln und Gruppenzuordnung</title>
+    <summary>Neuen Tab-Bereich für Notizen hinzufügen. Notizen werden als Notizzettel dargestellt, können verschiedene Farben haben und Gruppen zugeordnet werden.</summary>
+    <created>2026-05-29T09:58</created>
+    <started>2026-05-29T09:59</started>
+    <done>2026-05-29T09:59</done>
+    <human_estimate>2h</human_estimate>
+    <story_points>8</story_points>
+    <agents>Claude</agents>
+    <concept>tasks/TE-16.md</concept>
+    <parent />
+    <subtasks />
+    <external_id />
+    <external_url />
+    <backlog_rank />
+    <informational />
+    <kind>feature</kind>
+    <testing_tool />
+    <lane_id>run-cbac5ad1</lane_id>
+    <lane_order />
+    <answer_read />
+    <branch />
+    <worktree />
+    <question />
+    <tags />
+    <run_window_id />
+    <history>
+      <event ts="2026-05-29T09:58">received, backlog</event>
+      <event ts="2026-05-29T09:58">refined (title, summary, human_estimate, story_points, kind)</event>
+      <event ts="2026-05-29T09:59">started</event>
+      <event ts="2026-05-29T09:59">started run lane run-cbac5ad1</event>
+      <event ts="2026-05-29T09:59">in testing — running tsc</event>
+      <event ts="2026-05-29T09:59">completed</event>
+    </history>
+  </task>
+  <task id="17" status="scheduled">
+    <title>Notizen per Drag-and-Drop neu anordnen</title>
+    <summary>Notizzettel sollen per Drag-and-Drop in ihrer Reihenfolge verschoben werden können. Die neue Anordnung muss persistiert werden.</summary>
+    <created>2026-05-29T10:11</created>
+    <started />
+    <done />
+    <human_estimate>2h</human_estimate>
+    <story_points>5</story_points>
+    <agents>Claude</agents>
+    <concept>tasks/TE-17.md</concept>
+    <parent />
+    <subtasks />
+    <external_id />
+    <external_url />
+    <backlog_rank />
+    <informational />
+    <kind>feature</kind>
+    <testing_tool />
+    <lane_id>lane-1</lane_id>
+    <lane_order>2</lane_order>
+    <answer_read />
+    <branch />
+    <worktree />
+    <question />
+    <tags />
+    <run_window_id />
+    <history>
+      <event ts="2026-05-29T10:11">received, backlog</event>
+      <event ts="2026-05-29T10:11">refined (title, summary, human_estimate, story_points, kind)</event>
+      <event ts="2026-05-29T11:04">scheduled (lane=lane-1, serial 3/3)</event>
+    </history>
+  </task>
+  <task id="18" status="scheduled">
+    <title>Überschrift für jeden Notizzettel hinzufügen</title>
+    <summary>Jeder Notizzettel erhält ein Titelfeld (Überschrift), das separat vom eigentlichen Notizinhalt eingegeben und angezeigt wird.</summary>
+    <created>2026-05-29T10:11</created>
+    <started />
+    <done />
+    <human_estimate>1h</human_estimate>
+    <story_points>3</story_points>
+    <agents>Claude</agents>
+    <concept>tasks/TE-18.md</concept>
+    <parent />
+    <subtasks />
+    <external_id />
+    <external_url />
+    <backlog_rank />
+    <informational />
+    <kind>feature</kind>
+    <testing_tool />
+    <lane_id>lane-1</lane_id>
+    <lane_order>1</lane_order>
+    <answer_read />
+    <branch />
+    <worktree />
+    <question />
+    <tags />
+    <run_window_id />
+    <history>
+      <event ts="2026-05-29T10:11">received, backlog</event>
+      <event ts="2026-05-29T11:04">scheduled (lane=lane-1, serial 2/3)</event>
+    </history>
+  </task>
+  <task id="19" status="scheduled">
+    <title>Fälligkeitsdatum als Typ Date mit Datumsauswahl-Dialog</title>
+    <summary>Das Fälligkeitsdatum-Feld soll als Date-Typ implementiert werden, sodass Nutzer über ein Dialogfenster ein Datum auswählen können.</summary>
+    <created>2026-05-29T11:04</created>
+    <started />
+    <done />
+    <human_estimate>30min</human_estimate>
+    <story_points>2</story_points>
+    <agents>Claude</agents>
+    <concept>tasks/TE-19.md</concept>
+    <parent />
+    <subtasks />
+    <external_id />
+    <external_url />
+    <backlog_rank />
+    <informational />
+    <kind>change</kind>
+    <testing_tool />
+    <lane_id>lane-1</lane_id>
+    <lane_order>0</lane_order>
+    <answer_read />
+    <branch />
+    <worktree />
+    <question />
+    <tags />
+    <run_window_id />
+    <history>
+      <event ts="2026-05-29T11:04">received, backlog</event>
+      <event ts="2026-05-29T11:04">refined (title, summary, human_estimate, story_points, kind)</event>
+      <event ts="2026-05-29T11:04">scheduled (lane=lane-1, serial 1/3)</event>
+    </history>
   </task>
 </tasks>

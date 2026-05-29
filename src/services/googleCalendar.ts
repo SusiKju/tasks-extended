@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
 import { Task } from '../types';
@@ -5,10 +6,7 @@ import { formatDate } from '../utils/dateFormat';
 
 WebBrowser.maybeCompleteAuthSession();
 
-// Configure these in your Google Cloud Console
-const CLIENT_ID_IOS = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS ?? '';
-const CLIENT_ID_ANDROID = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_ANDROID ?? '';
-const CLIENT_ID_WEB = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB ?? '';
+const GOOGLE_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID ?? '';
 
 const SCOPES = [
   'https://www.googleapis.com/auth/calendar.events',
@@ -23,35 +21,66 @@ export interface CalendarAuthResult {
 }
 
 export async function signInWithGoogle(): Promise<CalendarAuthResult | null> {
-  const discovery = AuthSession.useAutoDiscovery('https://accounts.google.com');
-  if (!discovery) return null;
+  if (!GOOGLE_CLIENT_ID) {
+    throw new Error('EXPO_PUBLIC_GOOGLE_CLIENT_ID ist nicht konfiguriert. Siehe .env.example.');
+  }
 
-  const redirectUri = AuthSession.makeRedirectUri({ scheme: 'tasksextended' });
+  const isWeb = Platform.OS === 'web';
 
-  const request = new AuthSession.AuthRequest({
-    clientId: CLIENT_ID_WEB || CLIENT_ID_IOS,
-    scopes: SCOPES,
-    redirectUri,
-    responseType: AuthSession.ResponseType.Code,
-    usePKCE: true,
-  });
+  try {
+    console.log('[GoogleLogin] fetchDiscovery start, platform:', Platform.OS);
+    const discovery = await AuthSession.fetchDiscoveryAsync('https://accounts.google.com');
+    if (!discovery) {
+      console.warn('[GoogleLogin] discovery null');
+      return null;
+    }
 
-  const result = await request.promptAsync(discovery);
+    const redirectUri = AuthSession.makeRedirectUri({ scheme: 'tasksextended' });
+    console.log('[GoogleLogin] redirectUri:', redirectUri);
 
-  if (result.type !== 'success') return null;
+    const request = new AuthSession.AuthRequest({
+      clientId: GOOGLE_CLIENT_ID,
+      scopes: SCOPES,
+      redirectUri,
+      // Web: implicit flow (Token) — CORS blockiert direkten Token-Exchange vom Browser
+      // Native: PKCE code flow mit serverseitigem Exchange
+      responseType: isWeb ? AuthSession.ResponseType.Token : AuthSession.ResponseType.Code,
+      usePKCE: !isWeb,
+    });
 
-  const tokenResponse = await exchangeCodeForTokens(
-    result.params.code,
-    request.codeVerifier ?? '',
-    redirectUri
-  );
-  return tokenResponse;
+    console.log('[GoogleLogin] promptAsync start');
+    const result = await request.promptAsync(discovery);
+    console.log('[GoogleLogin] promptAsync result type:', result.type);
+
+    if (result.type !== 'success') return null;
+
+    if (isWeb) {
+      const accessToken = result.params.access_token;
+      if (!accessToken) {
+        console.warn('[GoogleLogin] kein access_token im Web-Result');
+        return null;
+      }
+      return { accessToken, refreshToken: null };
+    }
+
+    const tokenResponse = await exchangeCodeForTokens(
+      result.params.code,
+      request.codeVerifier ?? '',
+      redirectUri,
+      GOOGLE_CLIENT_ID
+    );
+    return tokenResponse;
+  } catch (e) {
+    console.error('[GoogleLogin] signInWithGoogle error:', e);
+    throw e;
+  }
 }
 
 async function exchangeCodeForTokens(
   code: string,
   codeVerifier: string,
-  redirectUri: string
+  redirectUri: string,
+  clientId: string
 ): Promise<CalendarAuthResult | null> {
   try {
     const response = await fetch('https://oauth2.googleapis.com/token', {
@@ -59,7 +88,7 @@ async function exchangeCodeForTokens(
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
         code,
-        client_id: CLIENT_ID_WEB || CLIENT_ID_IOS,
+        client_id: clientId,
         code_verifier: codeVerifier,
         grant_type: 'authorization_code',
         redirect_uri: redirectUri,
@@ -78,14 +107,14 @@ async function exchangeCodeForTokens(
   }
 }
 
-export async function refreshAccessToken(refreshToken: string): Promise<string | null> {
+export async function refreshAccessToken(refreshToken: string, clientId: string): Promise<string | null> {
   try {
     const response = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
         refresh_token: refreshToken,
-        client_id: CLIENT_ID_WEB || CLIENT_ID_IOS,
+        client_id: clientId,
         grant_type: 'refresh_token',
       }).toString(),
     });
