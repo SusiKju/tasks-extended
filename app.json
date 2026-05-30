@@ -60,6 +60,9 @@
       "backgroundColor": "#08080F"
     },
     "scheme": "tasksextended",
+    "experiments": {
+      "baseUrl": "/tasks-extended"
+    },
     "extra": {
       "router": {},
       "eas": {
