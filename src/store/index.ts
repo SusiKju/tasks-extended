@@ -43,21 +43,21 @@ const DEFAULT_GROUPS: Group[] = [
     name: 'Arbeit',
     color: '#4F86F7',
     keywords: ['meeting', 'projekt', 'report', 'präsentation', 'deadline', 'client', 'kunde', 'arbeit', 'büro', 'team', 'review'],
-    createdAt: new Date().toISOString(),
+    createdAt: '2024-01-01T00:00:00.000Z',
   },
   {
     id: 'group-personal',
     name: 'Persönlich',
     color: '#34C759',
     keywords: ['einkauf', 'arzt', 'sport', 'freunde', 'familie', 'urlaub', 'hobby', 'persönlich', 'privat'],
-    createdAt: new Date().toISOString(),
+    createdAt: '2024-01-01T00:00:00.000Z',
   },
   {
     id: 'group-home',
     name: 'Haushalt',
     color: '#FF9500',
     keywords: ['putzen', 'kochen', 'wäsche', 'reparatur', 'haushalt', 'reinigung', 'garten', 'küche'],
-    createdAt: new Date().toISOString(),
+    createdAt: '2024-01-01T00:00:00.000Z',
   },
 ];
 
