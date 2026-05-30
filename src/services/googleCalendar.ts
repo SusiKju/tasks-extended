@@ -38,7 +38,9 @@ export async function signInWithGoogle(): Promise<CalendarAuthResult | null> {
       return null;
     }
 
-    const redirectUri = AuthSession.makeRedirectUri({ scheme: 'tasksextended' });
+    const redirectUri = Platform.OS === 'web'
+      ? 'https://SusiKju.github.io/tasks-extended/'
+      : AuthSession.makeRedirectUri({ scheme: 'tasksextended' });
     console.log('[GoogleLogin] redirectUri:', redirectUri);
 
     const request = new AuthSession.AuthRequest({
