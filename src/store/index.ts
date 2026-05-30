@@ -1,18 +1,22 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Task, Group, AppSettings, Attachment } from '../types';
+import { Task, Group, AppSettings, Attachment, Note } from '../types';
 
 interface TaskState {
   tasks: Task[];
   groups: Group[];
+  notes: Note[];
   settings: AppSettings;
+  deletedGoogleEventIds: string[];
 
   // Task actions
   addTask: (task: Task) => void;
   updateTask: (id: string, updates: Partial<Task>) => void;
   deleteTask: (id: string) => void;
+  deleteTasks: (ids: string[]) => void;
   toggleTask: (id: string) => void;
+  clearDeletedGoogleEventIds: () => void;
 
   // Attachment actions
   addAttachment: (taskId: string, attachment: Attachment) => void;
@@ -22,6 +26,12 @@ interface TaskState {
   addGroup: (group: Group) => void;
   updateGroup: (id: string, updates: Partial<Group>) => void;
   deleteGroup: (id: string) => void;
+
+  // Note actions
+  addNote: (note: Note) => void;
+  updateNote: (id: string, updates: Partial<Note>) => void;
+  deleteNote: (id: string) => void;
+  clearNotes: () => void;
 
   // Settings actions
   updateSettings: (updates: Partial<AppSettings>) => void;
@@ -53,12 +63,16 @@ const DEFAULT_GROUPS: Group[] = [
 
 const DEFAULT_SETTINGS: AppSettings = {
   dateFormat: 'de',
+  theme: 'light',
   googleCalendarEnabled: false,
+  googleClientId: null,
   googleAccessToken: null,
   googleRefreshToken: null,
   googleCalendarId: null,
+  googleCalendarName: null,
   autoGroupEnabled: true,
   autoGroupConfidenceThreshold: 0.4,
+  googleNotesEnabled: false,
 };
 
 export const useStore = create<TaskState>()(
@@ -66,7 +80,9 @@ export const useStore = create<TaskState>()(
     (set) => ({
       tasks: [],
       groups: DEFAULT_GROUPS,
+      notes: [],
       settings: DEFAULT_SETTINGS,
+      deletedGoogleEventIds: [],
 
       addTask: (task) =>
         set((state) => ({ tasks: [task, ...state.tasks] })),
@@ -79,7 +95,29 @@ export const useStore = create<TaskState>()(
         })),
 
       deleteTask: (id) =>
-        set((state) => ({ tasks: state.tasks.filter((t) => t.id !== id) })),
+        set((state) => {
+          const task = state.tasks.find((t) => t.id === id);
+          return {
+            tasks: state.tasks.filter((t) => t.id !== id),
+            deletedGoogleEventIds: task?.googleEventId
+              ? [...state.deletedGoogleEventIds, task.googleEventId]
+              : state.deletedGoogleEventIds,
+          };
+        }),
+
+      deleteTasks: (ids) =>
+        set((state) => {
+          const googleEventIds = state.tasks
+            .filter((t) => ids.includes(t.id) && t.googleEventId)
+            .map((t) => t.googleEventId as string);
+          return {
+            tasks: state.tasks.filter((t) => !ids.includes(t.id)),
+            deletedGoogleEventIds: [...state.deletedGoogleEventIds, ...googleEventIds],
+          };
+        }),
+
+      clearDeletedGoogleEventIds: () =>
+        set({ deletedGoogleEventIds: [] }),
 
       toggleTask: (id) =>
         set((state) => ({
@@ -94,7 +132,7 @@ export const useStore = create<TaskState>()(
         set((state) => ({
           tasks: state.tasks.map((t) =>
             t.id === taskId
-              ? { ...t, attachments: [...t.attachments, attachment], updatedAt: new Date().toISOString() }
+              ? { ...t, attachments: [...(t.attachments ?? []), attachment], updatedAt: new Date().toISOString() }
               : t
           ),
         })),
@@ -105,7 +143,7 @@ export const useStore = create<TaskState>()(
             t.id === taskId
               ? {
                   ...t,
-                  attachments: t.attachments.filter((a) => a.id !== attachmentId),
+                  attachments: (t.attachments ?? []).filter((a) => a.id !== attachmentId),
                   updatedAt: new Date().toISOString(),
                 }
               : t
@@ -128,11 +166,61 @@ export const useStore = create<TaskState>()(
           ),
         })),
 
+      addNote: (note) =>
+        set((state) => ({ notes: [note, ...state.notes] })),
+
+      updateNote: (id, updates) =>
+        set((state) => ({
+          notes: state.notes.map((n) =>
+            n.id === id ? { ...n, ...updates, updatedAt: new Date().toISOString() } : n
+          ),
+        })),
+
+      deleteNote: (id) =>
+        set((state) => ({ notes: state.notes.filter((n) => n.id !== id) })),
+
+      clearNotes: () => set({ notes: [] }),
+
       updateSettings: (updates) =>
         set((state) => ({ settings: { ...state.settings, ...updates } })),
     }),
     {
       name: 'tasks-extended-store',
+      version: 8,
+      migrate: (persistedState: any, version: number) => {
+        if (version < 1 && persistedState?.tasks) {
+          persistedState.tasks = persistedState.tasks.map((t: any) => ({
+            ...t,
+            attachments: t.attachments ?? [],
+          }));
+        }
+        if (version < 4) {
+          persistedState.deletedGoogleEventIds = persistedState.deletedGoogleEventIds ?? [];
+        }
+        if (version < 7 && persistedState?.settings) {
+          persistedState.settings.googleNotesEnabled =
+            persistedState.settings.googleNotesEnabled ??
+            persistedState.settings.googleKeepEnabled ??
+            false;
+          delete persistedState.settings.googleKeepEnabled;
+          delete persistedState.settings.googleNotesDriveFileIds;
+        }
+        if (version < 8 && persistedState?.notes) {
+          const colorMap: Record<string, string> = {
+            '#FFE566': '#F0C040',
+            '#A8E6A3': '#52B87A',
+            '#FFB3BA': '#E8607A',
+            '#AED9E0': '#4A94C8',
+            '#C9B1FF': '#A878E0',
+            '#FFD4A3': '#E87C3E',
+          };
+          persistedState.notes = persistedState.notes.map((n: any) => ({
+            ...n,
+            color: colorMap[n.color] ?? n.color,
+          }));
+        }
+        return persistedState;
+      },
       storage: createJSONStorage(() => AsyncStorage),
     }
   )

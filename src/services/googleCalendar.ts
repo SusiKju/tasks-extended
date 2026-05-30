@@ -11,9 +11,12 @@ const GOOGLE_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID ?? '';
 const SCOPES = [
   'https://www.googleapis.com/auth/calendar.events',
   'https://www.googleapis.com/auth/calendar.readonly',
+  'https://www.googleapis.com/auth/tasks',
+  'https://www.googleapis.com/auth/gmail.modify',
 ];
 
 const CALENDAR_API = 'https://www.googleapis.com/calendar/v3';
+const TASKS_API = 'https://tasks.googleapis.com/tasks/v1';
 
 export interface CalendarAuthResult {
   accessToken: string;
@@ -126,6 +129,10 @@ export async function refreshAccessToken(refreshToken: string, clientId: string)
   }
 }
 
+export async function refreshGoogleToken(refreshToken: string): Promise<string | null> {
+  return refreshAccessToken(refreshToken, GOOGLE_CLIENT_ID);
+}
+
 async function calendarFetch(
   path: string,
   accessToken: string,
@@ -142,13 +149,14 @@ async function calendarFetch(
   });
 }
 
-export async function listCalendars(accessToken: string): Promise<Array<{ id: string; summary: string }>> {
+export async function listCalendars(accessToken: string): Promise<Array<{ id: string; summary: string; primary?: boolean }>> {
   const res = await calendarFetch('/users/me/calendarList', accessToken);
   if (!res.ok) return [];
   const data = await res.json();
-  return (data.items ?? []).map((c: { id: string; summary: string }) => ({
+  return (data.items ?? []).map((c: { id: string; summary: string; primary?: boolean }) => ({
     id: c.id,
     summary: c.summary,
+    primary: c.primary,
   }));
 }
 
@@ -210,6 +218,94 @@ export async function deleteCalendarEvent(
 ): Promise<boolean> {
   const res = await calendarFetch(
     `/calendars/${encodeURIComponent(calendarId)}/events/${eventId}`,
+    accessToken,
+    'DELETE'
+  );
+  return res.ok || res.status === 404;
+}
+
+async function tasksFetch(
+  path: string,
+  accessToken: string,
+  method: string = 'GET',
+  body?: object
+): Promise<Response> {
+  return fetch(`${TASKS_API}${path}`, {
+    method,
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+}
+
+export async function listTaskLists(accessToken: string): Promise<Array<{ id: string; title: string }>> {
+  const res = await tasksFetch('/users/@me/lists', accessToken);
+  if (!res.ok) return [];
+  const data = await res.json();
+  return (data.items ?? []).map((l: { id: string; title: string }) => ({ id: l.id, title: l.title }));
+}
+
+export async function listGoogleTasks(accessToken: string, taskListId?: string): Promise<Array<any>> {
+  // Ohne taskListId: erste Taskliste laden
+  if (!taskListId) {
+    const lists = await listTaskLists(accessToken);
+    if (lists.length === 0) return [];
+    taskListId = lists[0].id;
+  }
+  return listGoogleTasksById(accessToken, taskListId);
+}
+
+async function listGoogleTasksById(accessToken: string, taskListId: string): Promise<Array<any>> {
+  const res = await tasksFetch(
+    `/lists/${encodeURIComponent(taskListId)}/tasks?showCompleted=true&maxResults=100`,
+    accessToken
+  );
+  if (!res.ok) return [];
+  const data = await res.json();
+  return data.items ?? [];
+}
+
+export async function createGoogleTask(
+  accessToken: string,
+  taskListId: string,
+  title: string,
+  notes?: string,
+  due?: string
+): Promise<string | null> {
+  const body: any = { title };
+  if (notes) body.notes = notes;
+  if (due) body.due = due;
+
+  const res = await tasksFetch(`/lists/${encodeURIComponent(taskListId)}/tasks`, accessToken, 'POST', body);
+  if (!res.ok) return null;
+  const data = await res.json();
+  return data.id ?? null;
+}
+
+export async function updateGoogleTask(
+  accessToken: string,
+  taskListId: string,
+  taskId: string,
+  updates: { title?: string; notes?: string; due?: string; status?: 'needsAction' | 'completed' }
+): Promise<boolean> {
+  const res = await tasksFetch(
+    `/lists/${encodeURIComponent(taskListId)}/tasks/${encodeURIComponent(taskId)}`,
+    accessToken,
+    'PATCH',
+    updates
+  );
+  return res.ok;
+}
+
+export async function deleteGoogleTask(
+  accessToken: string,
+  taskListId: string,
+  taskId: string
+): Promise<boolean> {
+  const res = await tasksFetch(
+    `/lists/${encodeURIComponent(taskListId)}/tasks/${encodeURIComponent(taskId)}`,
     accessToken,
     'DELETE'
   );

@@ -1,20 +1,34 @@
 import React from 'react';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useTheme, neonGlow } from '../../src/utils/theme';
 
 export default function TabsLayout() {
+  const { colors, isDark } = useTheme();
+
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: '#4F86F7',
-        tabBarInactiveTintColor: '#8E8E93',
+        tabBarActiveTintColor: colors.accentNeon,
+        tabBarInactiveTintColor: colors.textSecondary,
         tabBarStyle: {
-          backgroundColor: '#fff',
-          borderTopColor: '#E5E5EA',
+          backgroundColor: colors.tabBar,
+          borderTopColor: colors.tabBarBorder,
+          borderTopWidth: isDark ? 0 : 1,
+          ...(isDark ? {
+            shadowColor: colors.accentNeon,
+            shadowOffset: { width: 0, height: -2 },
+            shadowOpacity: 0.15,
+            shadowRadius: 12,
+          } : {}),
         },
-        headerStyle: { backgroundColor: '#F2F2F7' },
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: '600',
+        },
+        headerStyle: { backgroundColor: colors.header },
+        headerTitleStyle: { fontWeight: '700', fontSize: 18, color: colors.text },
         headerShadowVisible: false,
-        headerTitleStyle: { fontWeight: '700', fontSize: 18 },
       }}
     >
       <Tabs.Screen
@@ -27,11 +41,26 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="notes"
+        options={{
+          title: 'Notizen',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="document-text-outline" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="groups"
         options={{
-          title: 'Gruppen',
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="mail"
+        options={{
+          title: 'Mail',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="folder-outline" size={size} color={color} />
+            <Ionicons name="mail-outline" size={size} color={color} />
           ),
         }}
       />

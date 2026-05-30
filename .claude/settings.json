@@ -8,6 +8,14 @@
             "command": "python3 \"/Users/matthiasredmann/.claude/skills/sightline/scripts/bootstrap.py\""
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"/Users/matthiasredmann/.claude/skills/sightdeck-ai/scripts/bootstrap.py\""
+          }
+        ]
       }
     ],
     "PostToolUse": [
@@ -17,6 +25,10 @@
           {
             "type": "command",
             "command": "python3 \"/Users/matthiasredmann/.claude/skills/sightline/scripts/track_files.py\""
+          },
+          {
+            "type": "command",
+            "command": "python3 \"/Users/matthiasredmann/.claude/skills/sightdeck-ai/scripts/track_files.py\""
           }
         ]
       }

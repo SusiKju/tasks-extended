@@ -1,30 +1,60 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Task, Group } from '../types';
+import { Task } from '../types';
 import { GroupBadge } from './GroupBadge';
 import { formatDate, isDueToday, isOverdue } from '../utils/dateFormat';
 import { useStore } from '../store';
+import { useTheme, ThemeColors, neonGlow } from '../utils/theme';
 
 interface Props {
   task: Task;
   onPress: () => void;
   onToggle: () => void;
+  onDelete: () => void;
+  isSelected?: boolean;
+  onSelectToggle?: () => void;
 }
 
-export function TaskCard({ task, onPress, onToggle }: Props) {
+export function TaskCard({ task, onPress, onToggle, onDelete, isSelected, onSelectToggle }: Props) {
   const { groups, settings } = useStore();
+  const { colors, isDark } = useTheme();
+  const styles = useMemo(() => makeStyles(colors, isDark), [colors, isDark]);
+
   const group = groups.find((g) => g.id === task.groupId) ?? null;
   const overdue = isOverdue(task.dueDate) && !task.completed;
   const dueToday = isDueToday(task.dueDate) && !task.completed;
 
+  const leftBorderColor = isSelected
+    ? colors.accent
+    : task.completed
+    ? 'transparent'
+    : overdue
+    ? colors.danger
+    : dueToday
+    ? colors.warning
+    : 'transparent';
+
+  const isHighlighted = leftBorderColor !== 'transparent';
+  const cardGlow = isDark && isHighlighted && !isSelected ? neonGlow(leftBorderColor, 'soft') : {};
+
   return (
-    <TouchableOpacity style={[styles.card, task.completed && styles.completed]} onPress={onPress} activeOpacity={0.7}>
-      <TouchableOpacity style={styles.checkbox} onPress={onToggle} hitSlop={8}>
+    <TouchableOpacity
+      style={[
+        styles.card,
+        task.completed && !isSelected && styles.completed,
+        { borderLeftColor: leftBorderColor, borderLeftWidth: isHighlighted ? 3 : 1 },
+        isSelected && styles.selectedCard,
+        cardGlow,
+      ]}
+      onPress={onPress}
+      activeOpacity={0.7}
+    >
+      <TouchableOpacity style={styles.toggleBtn} onPress={onToggle} hitSlop={8}>
         <Ionicons
           name={task.completed ? 'checkmark-circle' : 'ellipse-outline'}
           size={24}
-          color={task.completed ? '#34C759' : '#C7C7CC'}
+          color={task.completed ? colors.success : colors.textMuted}
         />
       </TouchableOpacity>
 
@@ -47,92 +77,117 @@ export function TaskCard({ task, onPress, onToggle }: Props) {
               <Ionicons
                 name="calendar-outline"
                 size={12}
-                color={overdue ? '#FF3B30' : dueToday ? '#FF9500' : '#8E8E93'}
+                color={overdue ? colors.danger : dueToday ? colors.warning : colors.textSecondary}
               />
-              <Text style={[styles.date, overdue && styles.overdue, dueToday && styles.dueToday]}>
+              <Text
+                style={[
+                  styles.date,
+                  overdue && { color: colors.danger, fontWeight: '600' },
+                  dueToday && { color: colors.warning, fontWeight: '600' },
+                ]}
+              >
                 {formatDate(task.dueDate, settings.dateFormat)}
               </Text>
             </View>
           ) : null}
 
-          {task.attachments.length > 0 ? (
+          {(task.attachments ?? []).length > 0 ? (
             <View style={styles.dateRow}>
-              <Ionicons name="attach-outline" size={12} color="#8E8E93" />
+              <Ionicons name="attach-outline" size={12} color={colors.textSecondary} />
               <Text style={styles.date}>{task.attachments.length}</Text>
             </View>
           ) : null}
 
           {task.googleEventId ? (
-            <Ionicons name="calendar" size={12} color="#4F86F7" />
+            <Ionicons name="calendar" size={12} color={colors.accent} />
           ) : null}
         </View>
       </View>
 
-      <Ionicons name="chevron-forward" size={16} color="#C7C7CC" />
+      <View style={styles.actions}>
+        <TouchableOpacity onPress={onDelete} hitSlop={8} style={styles.actionBtn}>
+          <Ionicons name="trash-outline" size={18} color={colors.textMuted} />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={onSelectToggle} hitSlop={8} style={styles.actionBtn}>
+          <Ionicons
+            name={isSelected ? 'checkbox' : 'square-outline'}
+            size={18}
+            color={isSelected ? colors.accent : colors.textMuted}
+          />
+        </TouchableOpacity>
+      </View>
     </TouchableOpacity>
   );
 }
 
-const styles = StyleSheet.create({
-  card: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 14,
-    marginHorizontal: 16,
-    marginVertical: 4,
-    gap: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  completed: {
-    opacity: 0.55,
-  },
-  checkbox: {
-    marginTop: 1,
-  },
-  content: {
-    flex: 1,
-    gap: 4,
-  },
-  title: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: '#1C1C1E',
-  },
-  completedText: {
-    textDecorationLine: 'line-through',
-    color: '#8E8E93',
-  },
-  description: {
-    fontSize: 13,
-    color: '#8E8E93',
-  },
-  meta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    flexWrap: 'wrap',
-  },
-  dateRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-  },
-  date: {
-    fontSize: 11,
-    color: '#8E8E93',
-  },
-  overdue: {
-    color: '#FF3B30',
-    fontWeight: '600',
-  },
-  dueToday: {
-    color: '#FF9500',
-    fontWeight: '600',
-  },
-});
+function makeStyles(c: ThemeColors, _isDark: boolean) {
+  return StyleSheet.create({
+    card: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      backgroundColor: c.surface,
+      borderRadius: 12,
+      padding: 14,
+      marginHorizontal: 16,
+      marginVertical: 4,
+      gap: 10,
+      borderWidth: 1,
+      borderColor: c.border,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.06,
+      shadowRadius: 4,
+      elevation: 2,
+    },
+    completed: {
+      opacity: 0.55,
+    },
+    selectedCard: {
+      backgroundColor: c.accent + '15',
+      borderColor: c.accent + '55',
+    },
+    toggleBtn: {
+      marginTop: 1,
+    },
+    content: {
+      flex: 1,
+      gap: 4,
+    },
+    title: {
+      fontSize: 15,
+      fontWeight: '500',
+      color: c.text,
+    },
+    completedText: {
+      textDecorationLine: 'line-through',
+      color: c.textSecondary,
+    },
+    description: {
+      fontSize: 13,
+      color: c.textSecondary,
+    },
+    meta: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      flexWrap: 'wrap',
+    },
+    dateRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 3,
+    },
+    date: {
+      fontSize: 11,
+      color: c.textSecondary,
+    },
+    actions: {
+      alignItems: 'center',
+      gap: 8,
+      paddingTop: 1,
+    },
+    actionBtn: {
+      padding: 2,
+    },
+  });
+}

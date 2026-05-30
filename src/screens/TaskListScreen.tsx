@@ -1,32 +1,83 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useCallback } from 'react';
 import {
   View,
   Text,
-  FlatList,
   TouchableOpacity,
   StyleSheet,
   SectionList,
   TextInput,
+  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useStore } from '../store';
 import { TaskCard } from '../components/TaskCard';
 import { Task } from '../types';
+import { isOverdue } from '../utils/dateFormat';
+import { useTheme, ThemeColors, neonGlow } from '../utils/theme';
+import { updateCalendarEvent } from '../services/googleCalendar';
 
-type FilterMode = 'all' | 'open' | 'done';
+type FilterMode = 'all' | 'open' | 'overdue' | 'done';
 
 export function TaskListScreen() {
   const router = useRouter();
-  const { tasks, groups, toggleTask } = useStore();
+  const { tasks, groups, settings, toggleTask, deleteTask, deleteTasks } = useStore();
   const [filter, setFilter] = useState<FilterMode>('open');
   const [search, setSearch] = useState('');
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const { colors, isDark } = useTheme();
+  const styles = useMemo(() => makeStyles(colors, isDark), [colors, isDark]);
+
+  const toggleSelection = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
+
+  const handleToggle = useCallback(async (task: Task) => {
+    toggleTask(task.id);
+    if (settings.googleCalendarEnabled && settings.googleAccessToken && task.googleEventId) {
+      await updateCalendarEvent(
+        { ...task, completed: !task.completed },
+        settings.googleAccessToken,
+        settings.googleCalendarId ?? '',
+        task.googleEventId
+      ).catch(() => {});
+    }
+  }, [toggleTask, settings]);
+
+  const handleSingleDelete = useCallback(
+    (id: string, title: string) => {
+      Alert.alert('Task löschen', `"${title}" endgültig löschen?`, [
+        { text: 'Abbrechen', style: 'cancel' },
+        {
+          text: 'Löschen',
+          style: 'destructive',
+          onPress: () => {
+            deleteTask(id);
+            setSelectedIds((prev) => {
+              const next = new Set(prev);
+              next.delete(id);
+              return next;
+            });
+          },
+        },
+      ]);
+    },
+    [deleteTask]
+  );
 
   const filtered = useMemo(() => {
     let list = tasks;
 
     if (filter === 'open') list = list.filter((t) => !t.completed);
+    if (filter === 'overdue') list = list.filter((t) => isOverdue(t.dueDate) && !t.completed);
     if (filter === 'done') list = list.filter((t) => t.completed);
     if (selectedGroupId) list = list.filter((t) => t.groupId === selectedGroupId);
     if (search.trim()) {
@@ -38,6 +89,36 @@ export function TaskListScreen() {
 
     return list;
   }, [tasks, filter, selectedGroupId, search]);
+
+  const allFilteredSelected =
+    filtered.length > 0 && filtered.every((t) => selectedIds.has(t.id));
+
+  const handleSelectAll = useCallback(() => {
+    if (allFilteredSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filtered.map((t) => t.id)));
+    }
+  }, [allFilteredSelected, filtered]);
+
+  const handleBulkDelete = useCallback(() => {
+    const count = selectedIds.size;
+    Alert.alert(
+      'Tasks löschen',
+      `${count} Task${count !== 1 ? 's' : ''} endgültig löschen?`,
+      [
+        { text: 'Abbrechen', style: 'cancel' },
+        {
+          text: 'Löschen',
+          style: 'destructive',
+          onPress: () => {
+            deleteTasks(Array.from(selectedIds));
+            clearSelection();
+          },
+        },
+      ]
+    );
+  }, [selectedIds, deleteTasks, clearSelection]);
 
   const sections = useMemo(() => {
     const byGroup: Record<string, Task[]> = {};
@@ -56,44 +137,70 @@ export function TaskListScreen() {
       .map((g) => ({ title: g.name, data: byGroup[g.id], color: g.color }));
 
     if (ungrouped.length > 0) {
-      result.push({ title: 'Ohne Gruppe', data: ungrouped, color: '#C7C7CC' });
+      result.push({ title: 'Ohne Gruppe', data: ungrouped, color: colors.textMuted });
     }
 
     return result;
-  }, [filtered, groups]);
+  }, [filtered, groups, colors]);
+
+  const hasSelection = selectedIds.size > 0;
 
   return (
     <View style={styles.container}>
-      {/* Search */}
       <View style={styles.searchRow}>
-        <Ionicons name="search-outline" size={16} color="#8E8E93" style={styles.searchIcon} />
+        <Ionicons name="search-outline" size={16} color={colors.textSecondary} />
         <TextInput
           style={styles.searchInput}
           placeholder="Suchen…"
-          placeholderTextColor="#C7C7CC"
+          placeholderTextColor={colors.placeholder}
           value={search}
           onChangeText={setSearch}
         />
         {search ? (
           <TouchableOpacity onPress={() => setSearch('')}>
-            <Ionicons name="close-circle" size={16} color="#C7C7CC" />
+            <Ionicons name="close-circle" size={16} color={colors.textMuted} />
           </TouchableOpacity>
         ) : null}
       </View>
 
-      {/* Filter chips */}
       <View style={styles.filterRow}>
-        {(['all', 'open', 'done'] as FilterMode[]).map((f) => (
-          <TouchableOpacity
-            key={f}
-            style={[styles.chip, filter === f && styles.chipActive]}
-            onPress={() => setFilter(f)}
-          >
-            <Text style={[styles.chipText, filter === f && styles.chipTextActive]}>
-              {f === 'all' ? 'Alle' : f === 'open' ? 'Offen' : 'Erledigt'}
-            </Text>
-          </TouchableOpacity>
-        ))}
+        {(['all', 'open', 'overdue', 'done'] as FilterMode[]).map((f) => {
+          const isActive = filter === f;
+          const isDanger = f === 'overdue' && isActive;
+          return (
+            <TouchableOpacity
+              key={f}
+              style={[
+                styles.chip,
+                isActive && (isDanger ? styles.chipDanger : styles.chipActive),
+              ]}
+              onPress={() => setFilter(f)}
+            >
+              {f === 'overdue' ? (
+                <Ionicons
+                  name="alert-circle-outline"
+                  size={12}
+                  color={isActive ? '#fff' : colors.danger}
+                />
+              ) : null}
+              <Text
+                style={[
+                  styles.chipText,
+                  isActive && styles.chipTextActive,
+                  !isActive && f === 'overdue' && { color: colors.danger },
+                ]}
+              >
+                {f === 'all'
+                  ? 'Alle'
+                  : f === 'open'
+                  ? 'Offen'
+                  : f === 'overdue'
+                  ? 'Abgelaufen'
+                  : 'Erledigt'}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
 
         <View style={styles.divider} />
 
@@ -101,13 +208,21 @@ export function TaskListScreen() {
           style={[styles.chip, !selectedGroupId && styles.chipActive]}
           onPress={() => setSelectedGroupId(null)}
         >
-          <Text style={[styles.chipText, !selectedGroupId && styles.chipTextActive]}>Alle Gruppen</Text>
+          <Text style={[styles.chipText, !selectedGroupId && styles.chipTextActive]}>
+            Alle Gruppen
+          </Text>
         </TouchableOpacity>
 
         {groups.map((g) => (
           <TouchableOpacity
             key={g.id}
-            style={[styles.chip, selectedGroupId === g.id && { backgroundColor: g.color + '22', borderColor: g.color }]}
+            style={[
+              styles.chip,
+              selectedGroupId === g.id && {
+                backgroundColor: g.color + '22',
+                borderColor: g.color,
+              },
+            ]}
             onPress={() => setSelectedGroupId(g.id === selectedGroupId ? null : g.id)}
           >
             <View style={[styles.chipDot, { backgroundColor: g.color }]} />
@@ -125,7 +240,7 @@ export function TaskListScreen() {
 
       {filtered.length === 0 ? (
         <View style={styles.empty}>
-          <Ionicons name="checkmark-done-circle-outline" size={56} color="#C7C7CC" />
+          <Ionicons name="checkmark-done-circle-outline" size={56} color={colors.textMuted} />
           <Text style={styles.emptyTitle}>Keine Tasks</Text>
           <Text style={styles.emptySubtitle}>Tippe auf + um einen neuen Task anzulegen</Text>
         </View>
@@ -136,8 +251,11 @@ export function TaskListScreen() {
           renderItem={({ item }) => (
             <TaskCard
               task={item}
-              onPress={() => router.push({ pathname: '/task/[id]', params: { id: item.id } })}
-              onToggle={() => toggleTask(item.id)}
+              onPress={() => router.push(`/task/${item.id}` as any)}
+              onToggle={() => handleToggle(item)}
+              onDelete={() => handleSingleDelete(item.id, item.title)}
+              isSelected={selectedIds.has(item.id)}
+              onSelectToggle={() => toggleSelection(item.id)}
             />
           )}
           renderSectionHeader={({ section }) => (
@@ -147,125 +265,220 @@ export function TaskListScreen() {
               <Text style={styles.sectionCount}>{section.data.length}</Text>
             </View>
           )}
-          contentContainerStyle={styles.list}
+          contentContainerStyle={[styles.list, hasSelection && styles.listWithBulkBar]}
           stickySectionHeadersEnabled={false}
         />
       )}
 
-      <TouchableOpacity
-        style={styles.fab}
-        onPress={() => router.push('/task/new')}
-        activeOpacity={0.85}
-      >
-        <Ionicons name="add" size={28} color="#fff" />
-      </TouchableOpacity>
+      {hasSelection ? (
+        <View style={styles.bulkBar}>
+          <TouchableOpacity style={styles.bulkSelectAll} onPress={handleSelectAll}>
+            <Ionicons
+              name={allFilteredSelected ? 'checkbox' : 'square-outline'}
+              size={20}
+              color={allFilteredSelected ? colors.accent : colors.textSecondary}
+            />
+            <Text style={styles.bulkSelectAllText}>
+              {allFilteredSelected ? 'Alle abwählen' : 'Alle auswählen'}
+            </Text>
+          </TouchableOpacity>
+
+          <View style={styles.bulkRight}>
+            <TouchableOpacity onPress={clearSelection}>
+              <Text style={styles.bulkCancelText}>Abbrechen</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.bulkDeleteBtn} onPress={handleBulkDelete}>
+              <Ionicons name="trash-outline" size={16} color="#fff" />
+              <Text style={styles.bulkDeleteText}>{selectedIds.size} löschen</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      ) : (
+        <TouchableOpacity
+          style={styles.fab}
+          onPress={() => router.push('/task/new')}
+          activeOpacity={0.85}
+        >
+          <Ionicons name="add" size={28} color={isDark ? colors.accentNeon : '#fff'} />
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F2F2F7' },
-  searchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    marginHorizontal: 16,
-    marginTop: 12,
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    gap: 6,
-  },
-  searchIcon: {},
-  searchInput: {
-    flex: 1,
-    fontSize: 15,
-    color: '#1C1C1E',
-  },
-  filterRow: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    gap: 6,
-    flexWrap: 'wrap',
-    alignItems: 'center',
-  },
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 14,
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#E5E5EA',
-    gap: 4,
-  },
-  chipActive: {
-    backgroundColor: '#1C1C1E',
-    borderColor: '#1C1C1E',
-  },
-  chipDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  chipText: {
-    fontSize: 13,
-    color: '#3C3C43',
-  },
-  chipTextActive: {
-    color: '#fff',
-    fontWeight: '600',
-  },
-  divider: {
-    width: 1,
-    height: 16,
-    backgroundColor: '#E5E5EA',
-    marginHorizontal: 2,
-  },
-  list: { paddingBottom: 100 },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 6,
-    gap: 6,
-  },
-  sectionDot: { width: 8, height: 8, borderRadius: 4 },
-  sectionTitle: { fontSize: 13, fontWeight: '700', color: '#3C3C43', flex: 1 },
-  sectionCount: {
-    fontSize: 12,
-    color: '#8E8E93',
-    backgroundColor: '#E5E5EA',
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: 8,
-  },
-  empty: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingBottom: 60,
-  },
-  emptyTitle: { fontSize: 17, fontWeight: '600', color: '#3C3C43' },
-  emptySubtitle: { fontSize: 14, color: '#8E8E93', textAlign: 'center', paddingHorizontal: 40 },
-  fab: {
-    position: 'absolute',
-    right: 20,
-    bottom: 32,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#4F86F7',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#4F86F7',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-});
+function makeStyles(c: ThemeColors, isDark: boolean) {
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: c.background },
+    searchRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: c.surface,
+      marginHorizontal: 16,
+      marginTop: 12,
+      borderRadius: 10,
+      paddingHorizontal: 10,
+      paddingVertical: 8,
+      gap: 6,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    searchInput: {
+      flex: 1,
+      fontSize: 15,
+      color: c.text,
+    },
+    filterRow: {
+      flexDirection: 'row',
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      gap: 6,
+      flexWrap: 'wrap',
+      alignItems: 'center',
+    },
+    chip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: 14,
+      backgroundColor: c.surface,
+      borderWidth: 1,
+      borderColor: c.border,
+      gap: 4,
+    },
+    chipActive: {
+      backgroundColor: isDark ? 'transparent' : c.accent,
+      borderColor: isDark ? c.accentNeon : c.accent,
+      borderWidth: isDark ? 1.5 : 1,
+      ...(isDark ? neonGlow(c.accentNeon, 'soft') : {}),
+    },
+    chipDanger: {
+      backgroundColor: isDark ? 'transparent' : c.danger,
+      borderColor: c.danger,
+      borderWidth: isDark ? 1.5 : 1,
+      ...(isDark ? neonGlow(c.danger, 'soft') : {}),
+    },
+    chipDot: {
+      width: 6,
+      height: 6,
+      borderRadius: 3,
+    },
+    chipText: {
+      fontSize: 13,
+      color: c.textSecondary,
+    },
+    chipTextActive: {
+      color: isDark ? c.accentNeon : '#fff',
+      fontWeight: '600',
+    },
+    divider: {
+      width: 1,
+      height: 16,
+      backgroundColor: c.border,
+      marginHorizontal: 2,
+    },
+    list: { paddingBottom: 100 },
+    listWithBulkBar: { paddingBottom: 90 },
+    sectionHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 20,
+      paddingTop: 16,
+      paddingBottom: 6,
+      gap: 6,
+    },
+    sectionDot: { width: 8, height: 8, borderRadius: 4 },
+    sectionTitle: { fontSize: 13, fontWeight: '700', color: c.textSecondary, flex: 1 },
+    sectionCount: {
+      fontSize: 12,
+      color: c.textSecondary,
+      backgroundColor: c.surfaceHigh,
+      paddingHorizontal: 6,
+      paddingVertical: 1,
+      borderRadius: 8,
+    },
+    empty: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      paddingBottom: 60,
+    },
+    emptyTitle: { fontSize: 17, fontWeight: '600', color: c.textSecondary },
+    emptySubtitle: {
+      fontSize: 14,
+      color: c.textSecondary,
+      textAlign: 'center',
+      paddingHorizontal: 40,
+    },
+    fab: {
+      position: 'absolute',
+      right: 20,
+      bottom: 32,
+      width: 56,
+      height: 56,
+      borderRadius: 28,
+      backgroundColor: isDark ? 'transparent' : c.accent,
+      borderWidth: isDark ? 1.5 : 0,
+      borderColor: isDark ? c.accentNeon : 'transparent',
+      alignItems: 'center',
+      justifyContent: 'center',
+      ...(isDark
+        ? neonGlow(c.accentNeon, 'hard')
+        : {
+            shadowColor: c.accent,
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.4,
+            shadowRadius: 8,
+            elevation: 6,
+          }),
+    },
+    bulkBar: {
+      position: 'absolute',
+      bottom: 0,
+      left: 0,
+      right: 0,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 16,
+      paddingTop: 12,
+      paddingBottom: 28,
+      backgroundColor: c.surface,
+      borderTopWidth: 1,
+      borderTopColor: c.border,
+    },
+    bulkSelectAll: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
+    bulkSelectAllText: {
+      fontSize: 14,
+      color: c.textSecondary,
+    },
+    bulkRight: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    bulkCancelText: {
+      fontSize: 14,
+      color: c.textSecondary,
+    },
+    bulkDeleteBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      backgroundColor: c.danger,
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      borderRadius: 20,
+    },
+    bulkDeleteText: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: '#fff',
+    },
+  });
+}

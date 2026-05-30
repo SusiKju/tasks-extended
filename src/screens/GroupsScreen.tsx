@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import uuid from 'react-native-uuid';
 import { useStore } from '../store';
 import { Group } from '../types';
+import { useTheme, ThemeColors, neonGlow } from '../utils/theme';
 
 const PRESET_COLORS = [
   '#4F86F7',
@@ -38,6 +39,9 @@ const EMPTY_FORM: GroupFormState = { name: '', color: PRESET_COLORS[0], keywords
 
 export function GroupsScreen() {
   const { groups, tasks, addGroup, updateGroup, deleteGroup } = useStore();
+  const { colors, isDark } = useTheme();
+  const styles = useMemo(() => makeStyles(colors, isDark), [colors, isDark]);
+
   const [modalVisible, setModalVisible] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<GroupFormState>(EMPTY_FORM);
@@ -114,7 +118,7 @@ export function GroupsScreen() {
         contentContainerStyle={styles.list}
         ListEmptyComponent={
           <View style={styles.empty}>
-            <Ionicons name="folder-open-outline" size={56} color="#C7C7CC" />
+            <Ionicons name="folder-open-outline" size={56} color={colors.textMuted} />
             <Text style={styles.emptyTitle}>Keine Gruppen</Text>
             <Text style={styles.emptySubtitle}>Lege Gruppen an, um deine Tasks zu organisieren</Text>
           </View>
@@ -149,21 +153,20 @@ export function GroupsScreen() {
 
             <View style={styles.rowActions}>
               <TouchableOpacity onPress={() => openEdit(group)} hitSlop={8}>
-                <Ionicons name="pencil-outline" size={18} color="#4F86F7" />
+                <Ionicons name="pencil-outline" size={18} color={colors.accent} />
               </TouchableOpacity>
               <TouchableOpacity onPress={() => handleDelete(group)} hitSlop={8}>
-                <Ionicons name="trash-outline" size={18} color="#FF3B30" />
+                <Ionicons name="trash-outline" size={18} color={colors.danger} />
               </TouchableOpacity>
             </View>
           </View>
         )}
       />
 
-      <TouchableOpacity style={styles.fab} onPress={openCreate}>
-        <Ionicons name="add" size={28} color="#fff" />
+      <TouchableOpacity style={[styles.fab, { backgroundColor: isDark ? 'transparent' : colors.accent }]} onPress={openCreate}>
+        <Ionicons name="add" size={28} color={isDark ? colors.accentNeon : '#fff'} />
       </TouchableOpacity>
 
-      {/* Create / Edit Modal */}
       <Modal visible={modalVisible} animationType="slide" presentationStyle="pageSheet">
         <View style={styles.modal}>
           <View style={styles.modalHeader}>
@@ -184,7 +187,7 @@ export function GroupsScreen() {
                 value={form.name}
                 onChangeText={(v) => setForm((f) => ({ ...f, name: v }))}
                 placeholder="Gruppenname"
-                placeholderTextColor="#C7C7CC"
+                placeholderTextColor={colors.placeholder}
                 autoFocus={!editingId}
               />
             </View>
@@ -206,7 +209,6 @@ export function GroupsScreen() {
               </View>
             </View>
 
-            {/* Preview */}
             <View style={[styles.previewCard, { borderLeftColor: form.color }]}>
               <View style={[styles.previewDot, { backgroundColor: form.color }]} />
               <Text style={[styles.previewName, { color: form.color }]}>
@@ -224,7 +226,7 @@ export function GroupsScreen() {
                 value={form.keywords}
                 onChangeText={(v) => setForm((f) => ({ ...f, keywords: v }))}
                 placeholder="meeting, projekt, deadline, …"
-                placeholderTextColor="#C7C7CC"
+                placeholderTextColor={colors.placeholder}
                 multiline
                 numberOfLines={3}
               />
@@ -236,142 +238,153 @@ export function GroupsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F2F2F7' },
-  list: { padding: 16, gap: 10, paddingBottom: 100 },
-  groupRow: {
-    flexDirection: 'row',
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    overflow: 'hidden',
-    alignItems: 'stretch',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  colorStripe: { width: 4 },
-  groupInfo: { flex: 1, padding: 14, gap: 6 },
-  groupNameRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  groupName: { fontSize: 16, fontWeight: '600', color: '#1C1C1E' },
-  countBadge: {
-    backgroundColor: '#E5E5EA',
-    borderRadius: 10,
-    paddingHorizontal: 7,
-    paddingVertical: 1,
-  },
-  countText: { fontSize: 12, color: '#3C3C43', fontWeight: '600' },
-  keywordRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 4 },
-  kwBadge: {
-    backgroundColor: '#F2F2F7',
-    borderRadius: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  kwText: { fontSize: 11, color: '#8E8E93' },
-  kwMore: { fontSize: 11, color: '#C7C7CC' },
-  noKeywords: { fontSize: 12, color: '#C7C7CC', fontStyle: 'italic' },
-  rowActions: {
-    flexDirection: 'column',
-    justifyContent: 'space-around',
-    paddingHorizontal: 14,
-    gap: 12,
-  },
-  empty: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: 80,
-    gap: 8,
-  },
-  emptyTitle: { fontSize: 17, fontWeight: '600', color: '#3C3C43' },
-  emptySubtitle: {
-    fontSize: 14,
-    color: '#8E8E93',
-    textAlign: 'center',
-    paddingHorizontal: 40,
-  },
-  fab: {
-    position: 'absolute',
-    right: 20,
-    bottom: 32,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#4F86F7',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#4F86F7',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  modal: { flex: 1, backgroundColor: '#F2F2F7' },
-  modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    backgroundColor: '#fff',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#E5E5EA',
-  },
-  modalCancel: { fontSize: 16, color: '#8E8E93' },
-  modalTitle: { fontSize: 17, fontWeight: '600', color: '#1C1C1E' },
-  modalSave: { fontSize: 16, fontWeight: '600', color: '#4F86F7' },
-  modalContent: { flex: 1 },
-  modalScrollContent: { padding: 16, gap: 16, paddingBottom: 60 },
-  field: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 14,
-    gap: 8,
-  },
-  fieldLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#8E8E93',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  fieldHint: { fontSize: 13, color: '#8E8E93' },
-  fieldInput: {
-    fontSize: 15,
-    color: '#1C1C1E',
-    backgroundColor: '#F2F2F7',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-  },
-  keywordInput: { minHeight: 70, textAlignVertical: 'top' },
-  colorGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  colorSwatch: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  colorSwatchSelected: {
-    borderWidth: 3,
-    borderColor: '#fff',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  previewCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 14,
-    gap: 8,
-    borderLeftWidth: 4,
-  },
-  previewDot: { width: 10, height: 10, borderRadius: 5 },
-  previewName: { fontSize: 16, fontWeight: '600' },
-});
+function makeStyles(c: ThemeColors, isDark: boolean) {
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: c.background },
+    list: { padding: 16, gap: 10, paddingBottom: 100 },
+    groupRow: {
+      flexDirection: 'row',
+      backgroundColor: c.surface,
+      borderRadius: 12,
+      overflow: 'hidden',
+      alignItems: 'stretch',
+      borderWidth: 1,
+      borderColor: c.border,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.06,
+      shadowRadius: 4,
+      elevation: 2,
+    },
+    colorStripe: { width: 4 },
+    groupInfo: { flex: 1, padding: 14, gap: 6 },
+    groupNameRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    groupName: { fontSize: 16, fontWeight: '600', color: c.text },
+    countBadge: {
+      backgroundColor: c.surfaceHigh,
+      borderRadius: 10,
+      paddingHorizontal: 7,
+      paddingVertical: 1,
+    },
+    countText: { fontSize: 12, color: c.textSecondary, fontWeight: '600' },
+    keywordRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 4 },
+    kwBadge: {
+      backgroundColor: c.surfaceHigh,
+      borderRadius: 6,
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+    },
+    kwText: { fontSize: 11, color: c.textSecondary },
+    kwMore: { fontSize: 11, color: c.textMuted },
+    noKeywords: { fontSize: 12, color: c.textMuted, fontStyle: 'italic' },
+    rowActions: {
+      flexDirection: 'column',
+      justifyContent: 'space-around',
+      paddingHorizontal: 14,
+      gap: 12,
+    },
+    empty: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingTop: 80,
+      gap: 8,
+    },
+    emptyTitle: { fontSize: 17, fontWeight: '600', color: c.textSecondary },
+    emptySubtitle: {
+      fontSize: 14,
+      color: c.textSecondary,
+      textAlign: 'center',
+      paddingHorizontal: 40,
+    },
+    fab: {
+      position: 'absolute',
+      right: 20,
+      bottom: 32,
+      width: 56,
+      height: 56,
+      borderRadius: 28,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: isDark ? 1.5 : 0,
+      borderColor: isDark ? c.accentNeon : 'transparent',
+      ...(isDark ? neonGlow(c.accentNeon, 'hard') : {
+        shadowColor: c.accent,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.4,
+        shadowRadius: 8,
+        elevation: 6,
+      }),
+    },
+    modal: { flex: 1, backgroundColor: c.background },
+    modalHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+      backgroundColor: c.surface,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: c.border,
+    },
+    modalCancel: { fontSize: 16, color: c.textSecondary },
+    modalTitle: { fontSize: 17, fontWeight: '600', color: c.text },
+    modalSave: { fontSize: 16, fontWeight: '600', color: c.accent },
+    modalContent: { flex: 1 },
+    modalScrollContent: { padding: 16, gap: 16, paddingBottom: 60 },
+    field: {
+      backgroundColor: c.surface,
+      borderRadius: 12,
+      padding: 14,
+      gap: 8,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    fieldLabel: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: c.textSecondary,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+    },
+    fieldHint: { fontSize: 13, color: c.textSecondary },
+    fieldInput: {
+      fontSize: 15,
+      color: c.text,
+      backgroundColor: c.surfaceHigh,
+      borderRadius: 8,
+      paddingHorizontal: 10,
+      paddingVertical: 8,
+    },
+    keywordInput: { minHeight: 70, textAlignVertical: 'top' },
+    colorGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+    colorSwatch: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    colorSwatchSelected: {
+      borderWidth: 3,
+      borderColor: '#fff',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.2,
+      shadowRadius: 4,
+      elevation: 4,
+    },
+    previewCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: c.surface,
+      borderRadius: 12,
+      padding: 14,
+      gap: 8,
+      borderLeftWidth: 4,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    previewDot: { width: 10, height: 10, borderRadius: 5 },
+    previewName: { fontSize: 16, fontWeight: '600' },
+  });
+}

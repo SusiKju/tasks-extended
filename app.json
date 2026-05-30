@@ -6,11 +6,6 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
-    "splash": {
-      "image": "./assets/splash.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
-    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.tasksextended.app",
@@ -27,13 +22,22 @@
       },
       "package": "com.tasksextended.app",
       "permissions": [
-        "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE",
-        "CAMERA"
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "plugins": [
       "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#ffffff"
+        }
+      ],
       [
         "expo-image-picker",
         {
@@ -41,8 +45,26 @@
           "cameraPermission": "Foto für Task-Anhang aufnehmen"
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-document-picker"
     ],
-    "scheme": "tasksextended"
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/icon.png",
+      "name": "TasksExtended",
+      "shortName": "Tasks",
+      "description": "Aufgabenverwaltung mit Google-Sync",
+      "lang": "de",
+      "themeColor": "#4F7EF5",
+      "backgroundColor": "#08080F"
+    },
+    "scheme": "tasksextended",
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "d2992d41-b8a8-42de-b1d9-f6848a6485b6"
+      }
+    }
   }
 }

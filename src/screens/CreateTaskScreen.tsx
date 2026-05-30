@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -18,22 +18,27 @@ import { useStore } from '../store';
 import { Task, Attachment, Group } from '../types';
 import { GroupBadge } from '../components/GroupBadge';
 import { AttachmentPreview } from '../components/AttachmentPreview';
+import { DatePickerModal } from '../components/DatePickerModal';
 import { detectGroup } from '../utils/autoGroup';
-import { createCalendarEvent } from '../services/googleCalendar';
+import { createCalendarEvent, refreshGoogleToken } from '../services/googleCalendar';
+import { useTheme, ThemeColors } from '../utils/theme';
+import { formatDate } from '../utils/dateFormat';
 
 export function CreateTaskScreen() {
   const router = useRouter();
-  const { groups, settings, addTask, updateTask } = useStore();
+  const { groups, settings, addTask, updateTask, updateSettings } = useStore();
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
-  const [dueDate, setDueDate] = useState('');
+  const [dueDate, setDueDate] = useState<Date | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [suggestedGroup, setSuggestedGroup] = useState<Group | null>(null);
   const [saving, setSaving] = useState(false);
 
-  // Auto-group suggestion while typing
   useEffect(() => {
     if (!settings.autoGroupEnabled || selectedGroupId) {
       setSuggestedGroup(null);
@@ -54,7 +59,7 @@ export function CreateTaskScreen() {
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ['images'],
       allowsMultipleSelection: true,
       quality: 0.8,
     });
@@ -80,9 +85,7 @@ export function CreateTaskScreen() {
       Alert.alert('Berechtigung fehlt', 'Bitte erlaube den Kamerazugriff in den Einstellungen.');
       return;
     }
-    const result = await ImagePicker.launchCameraAsync({
-      quality: 0.8,
-    });
+    const result = await ImagePicker.launchCameraAsync({ quality: 0.8 });
 
     if (!result.canceled && result.assets[0]) {
       const asset = result.assets[0];
@@ -143,15 +146,15 @@ export function CreateTaskScreen() {
     setSaving(true);
     const taskId = uuid.v4() as string;
     const effectiveGroupId = selectedGroupId ?? (suggestedGroup?.id ?? null);
-
     const finalAttachments: Attachment[] = attachments.map((a) => ({ ...a, taskId }));
+
 
     const task: Task = {
       id: taskId,
       title: title.trim(),
       description: description.trim(),
       groupId: effectiveGroupId,
-      dueDate: dueDate ? new Date(dueDate).toISOString() : null,
+      dueDate: dueDate ? dueDate.toISOString() : null,
       completed: false,
       attachments: finalAttachments,
       googleEventId: null,
@@ -161,35 +164,54 @@ export function CreateTaskScreen() {
 
     addTask(task);
 
-    // Sync to Google Calendar if enabled and dueDate set
-    if (
-      settings.googleCalendarEnabled &&
-      settings.googleAccessToken &&
-      settings.googleCalendarId &&
-      task.dueDate
-    ) {
-      try {
-        const eventId = await createCalendarEvent(task, settings.googleAccessToken, settings.googleCalendarId);
-        if (eventId) {
-          updateTask(taskId, { googleEventId: eventId });
+    if (settings.googleCalendarEnabled && settings.googleCalendarId && task.dueDate) {
+      if (!settings.googleAccessToken) {
+        Alert.alert('Kalender-Sync', 'Kein Google-Token gespeichert. Bitte in den Einstellungen erneut verbinden.');
+      } else {
+        try {
+          let token = settings.googleAccessToken;
+          let eventId = await createCalendarEvent(task, token, settings.googleCalendarId);
+
+          if (eventId === null && settings.googleRefreshToken) {
+            const newToken = await refreshGoogleToken(settings.googleRefreshToken);
+            if (newToken) {
+              updateSettings({ googleAccessToken: newToken });
+              token = newToken;
+              eventId = await createCalendarEvent(task, token, settings.googleCalendarId);
+            }
+          }
+
+          if (eventId) {
+            updateTask(taskId, { googleEventId: eventId });
+          } else if (!settings.googleRefreshToken) {
+            Alert.alert(
+              'Google-Session abgelaufen',
+              'Bitte in den Einstellungen "Google Kalender trennen" und anschließend neu verbinden.',
+            );
+          } else {
+            Alert.alert(
+              'Kalender-Sync fehlgeschlagen',
+              'Task konnte nicht im Google Kalender eingetragen werden. Bitte in den Einstellungen die Google-Verbindung trennen und neu verbinden.',
+            );
+          }
+        } catch (e) {
+          console.error('[CalendarSync]', e);
+          Alert.alert('Kalender-Sync Fehler', e instanceof Error ? e.message : String(e));
         }
-      } catch {
-        // Calendar sync failure is non-fatal
       }
     }
 
     setSaving(false);
     router.back();
-  }, [title, description, selectedGroupId, suggestedGroup, dueDate, attachments, settings, addTask, updateTask, navigation]);
+  }, [title, description, selectedGroupId, suggestedGroup, dueDate, attachments, settings, addTask, updateTask, updateSettings, router]);
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-      {/* Title */}
       <View style={styles.section}>
         <TextInput
           style={styles.titleInput}
           placeholder="Task-Titel"
-          placeholderTextColor="#C7C7CC"
+          placeholderTextColor={colors.placeholder}
           value={title}
           onChangeText={setTitle}
           autoFocus
@@ -198,12 +220,11 @@ export function CreateTaskScreen() {
         />
       </View>
 
-      {/* Description */}
       <View style={styles.section}>
         <TextInput
           style={styles.descInput}
           placeholder="Beschreibung (optional)"
-          placeholderTextColor="#C7C7CC"
+          placeholderTextColor={colors.placeholder}
           value={description}
           onChangeText={setDescription}
           multiline
@@ -211,7 +232,6 @@ export function CreateTaskScreen() {
         />
       </View>
 
-      {/* Auto-group suggestion */}
       {suggestedGroup && !selectedGroupId ? (
         <TouchableOpacity
           style={[styles.suggestion, { borderColor: suggestedGroup.color }]}
@@ -226,7 +246,6 @@ export function CreateTaskScreen() {
         </TouchableOpacity>
       ) : null}
 
-      {/* Group selection */}
       <View style={styles.section}>
         <Text style={styles.label}>Gruppe</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.groupRow}>
@@ -261,26 +280,40 @@ export function CreateTaskScreen() {
         </ScrollView>
       </View>
 
-      {/* Due date */}
       <View style={styles.section}>
         <Text style={styles.label}>Fälligkeitsdatum</Text>
-        <TextInput
-          style={styles.dateInput}
-          placeholder="YYYY-MM-DD"
-          placeholderTextColor="#C7C7CC"
-          value={dueDate}
-          onChangeText={setDueDate}
-          keyboardType="numbers-and-punctuation"
-        />
+        <TouchableOpacity style={styles.dateBtn} onPress={() => setShowDatePicker(true)}>
+          <Ionicons name="calendar-outline" size={16} color={dueDate ? colors.text : colors.placeholder} />
+          <Text style={[styles.dateBtnText, { color: dueDate ? colors.text : colors.placeholder }]}>
+            {dueDate ? formatDate(dueDate.toISOString(), settings.dateFormat) : 'Datum wählen…'}
+          </Text>
+          {dueDate ? (
+            <TouchableOpacity
+              onPress={(e) => { e.stopPropagation(); setDueDate(null); }}
+              hitSlop={8}
+            >
+              <Ionicons name="close-circle" size={16} color={colors.textSecondary} />
+            </TouchableOpacity>
+          ) : null}
+        </TouchableOpacity>
         {settings.googleCalendarEnabled && dueDate ? (
           <View style={styles.calendarHint}>
-            <Ionicons name="calendar-outline" size={12} color="#4F86F7" />
-            <Text style={styles.calendarHintText}>Wird mit Google Kalender synchronisiert</Text>
+            <Ionicons name="calendar-outline" size={12} color={colors.accent} />
+            <Text style={[styles.calendarHintText, { color: colors.accent }]}>
+              Wird mit Google Kalender synchronisiert
+            </Text>
           </View>
         ) : null}
       </View>
 
-      {/* Attachments */}
+      <DatePickerModal
+        visible={showDatePicker}
+        value={dueDate}
+        onConfirm={(d) => { setDueDate(d); setShowDatePicker(false); }}
+        onCancel={() => setShowDatePicker(false)}
+        colors={colors}
+      />
+
       <View style={styles.section}>
         <AttachmentPreview
           attachments={attachments}
@@ -290,7 +323,6 @@ export function CreateTaskScreen() {
         />
       </View>
 
-      {/* Save */}
       <TouchableOpacity
         style={[styles.saveBtn, saving && styles.saveBtnDisabled]}
         onPress={handleSave}
@@ -302,85 +334,93 @@ export function CreateTaskScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F2F2F7' },
-  content: { padding: 16, gap: 12, paddingBottom: 60 },
-  section: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 14,
-    gap: 8,
-  },
-  label: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#8E8E93',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  titleInput: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: '#1C1C1E',
-  },
-  descInput: {
-    fontSize: 15,
-    color: '#1C1C1E',
-    minHeight: 70,
-    textAlignVertical: 'top',
-  },
-  dateInput: {
-    fontSize: 15,
-    color: '#1C1C1E',
-    backgroundColor: '#F2F2F7',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-  },
-  calendarHint: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  calendarHintText: {
-    fontSize: 12,
-    color: '#4F86F7',
-  },
-  groupRow: { flexDirection: 'row' },
-  groupChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#E5E5EA',
-    marginRight: 6,
-    gap: 5,
-  },
-  groupChipSelected: { backgroundColor: '#1C1C1E', borderColor: '#1C1C1E' },
-  groupDot: { width: 6, height: 6, borderRadius: 3 },
-  groupChipText: { fontSize: 13, color: '#3C3C43' },
-  groupChipTextSelected: { color: '#fff', fontWeight: '600' },
-  suggestion: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    borderWidth: 1,
-    padding: 10,
-    flexWrap: 'wrap',
-  },
-  suggestionText: { fontSize: 13, fontWeight: '600' },
-  suggestionHint: { fontSize: 12, color: '#8E8E93' },
-  saveBtn: {
-    backgroundColor: '#4F86F7',
-    borderRadius: 14,
-    padding: 16,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  saveBtnDisabled: { opacity: 0.6 },
-  saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-});
+function makeStyles(c: ThemeColors) {
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: c.background },
+    content: { padding: 16, gap: 12, paddingBottom: 60 },
+    section: {
+      backgroundColor: c.surface,
+      borderRadius: 12,
+      padding: 14,
+      gap: 8,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    label: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: c.textSecondary,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+    },
+    titleInput: {
+      fontSize: 17,
+      fontWeight: '600',
+      color: c.text,
+    },
+    descInput: {
+      fontSize: 15,
+      color: c.text,
+      minHeight: 70,
+      textAlignVertical: 'top',
+    },
+    dateBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      backgroundColor: c.surfaceHigh,
+      borderRadius: 8,
+      paddingHorizontal: 10,
+      paddingVertical: 10,
+    },
+    dateBtnText: {
+      flex: 1,
+      fontSize: 15,
+    },
+    calendarHint: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+    },
+    calendarHintText: {
+      fontSize: 12,
+    },
+    groupRow: { flexDirection: 'row' },
+    groupChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: c.border,
+      marginRight: 6,
+      gap: 5,
+    },
+    groupChipSelected: { backgroundColor: c.accent, borderColor: c.accent },
+    groupDot: { width: 6, height: 6, borderRadius: 3 },
+    groupChipText: { fontSize: 13, color: c.textSecondary },
+    groupChipTextSelected: { color: '#fff', fontWeight: '600' },
+    suggestion: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      backgroundColor: c.surface,
+      borderRadius: 10,
+      borderWidth: 1,
+      padding: 10,
+      flexWrap: 'wrap',
+    },
+    suggestionText: { fontSize: 13, fontWeight: '600' },
+    suggestionHint: { fontSize: 12, color: c.textSecondary },
+    saveBtn: {
+      backgroundColor: c.accent,
+      borderRadius: 14,
+      padding: 16,
+      alignItems: 'center',
+      marginTop: 8,
+    },
+    saveBtnDisabled: { opacity: 0.6 },
+    saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  });
+}
