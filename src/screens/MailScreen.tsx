@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -7,8 +7,6 @@ import {
   StyleSheet,
   ActivityIndicator,
   RefreshControl,
-  Animated,
-  PanResponder,
   LayoutAnimation,
   Platform,
   UIManager,
@@ -17,14 +15,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { useStore } from '../store';
 import { useTheme, ThemeColors } from '../utils/theme';
 import { signInWithGoogle } from '../services/googleCalendar';
-import { fetchRecentMails, trashMail, archiveMail, MailMessage } from '../services/googleMail';
+import { fetchRecentMails, trashMail, MailMessage } from '../services/googleMail';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
-
-const ACTION_WIDTH = 140;
-const SWIPE_THRESHOLD = 60;
 
 function parseDisplayDate(dateStr: string): string {
   if (!dateStr) return '';
@@ -38,7 +33,7 @@ function parseDisplayDate(dateStr: string): string {
       d.getFullYear() === now.getFullYear();
     return isToday
       ? d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })
-      : d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+      : d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
   } catch {
     return dateStr;
   }
@@ -50,121 +45,63 @@ function parseDisplayFrom(from: string): string {
   return from.replace(/<[^>]+>/, '').trim() || from;
 }
 
-// ─── Desktop Mail Item (Web) ──────────────────────────────────────────────────
+// ─── Mail Item ────────────────────────────────────────────────────────────────
 
 interface MailItemProps {
   item: MailMessage;
+  expanded: boolean;
+  onToggle: () => void;
+  onDelete: (id: string) => void;
   colors: ThemeColors;
   styles: ReturnType<typeof makeStyles>;
-  onArchive: (id: string) => void;
-  onDelete: (id: string) => void;
 }
 
-function DesktopMailItem({ item, colors, styles, onArchive, onDelete }: MailItemProps) {
+function MailItem({ item, expanded, onToggle, onDelete, colors, styles }: MailItemProps) {
   return (
-    <View style={styles.desktopMailRow}><View style={styles.mailItem}>
+    <Pressable
+      style={({ pressed }) => [styles.mailCard, pressed && !expanded && { opacity: 0.85 }]}
+      onPress={onToggle}
+    >
+      {/* Header row – immer sichtbar */}
       <View style={styles.mailHeader}>
-        <Text style={styles.mailFrom} numberOfLines={1}>{parseDisplayFrom(item.from)}</Text>
-        <View style={styles.desktopActions}>
-          <Pressable
-            style={({ hovered }: any) => [styles.desktopActionBtn, { opacity: hovered ? 1 : 0.55 }]}
-            onPress={() => onArchive(item.id)}
-          >
-            <Ionicons name="archive-outline" size={18} color="#4A94C8" />
-          </Pressable>
-          <Pressable
-            style={({ hovered }: any) => [styles.desktopActionBtn, { opacity: hovered ? 1 : 0.55 }]}
-            onPress={() => onDelete(item.id)}
-          >
-            <Ionicons name="trash-outline" size={18} color={colors.danger} />
-          </Pressable>
-          <Text style={styles.mailDate}>{parseDisplayDate(item.date)}</Text>
+        <View style={[styles.avatar, { backgroundColor: colors.accentNeon + '22' }]}>
+          <Text style={[styles.avatarText, { color: colors.accentNeon }]}>
+            {parseDisplayFrom(item.from).charAt(0).toUpperCase()}
+          </Text>
         </View>
+        <View style={{ flex: 1 }}>
+          <View style={styles.metaRow}>
+            <Text style={styles.mailFrom} numberOfLines={1}>{parseDisplayFrom(item.from)}</Text>
+            <Text style={styles.mailDate}>{parseDisplayDate(item.date)}</Text>
+          </View>
+          <Text style={styles.mailSubject} numberOfLines={expanded ? 0 : 1}>
+            {item.subject || '(Kein Betreff)'}
+          </Text>
+        </View>
+        <Ionicons
+          name={expanded ? 'chevron-up' : 'chevron-down'}
+          size={16}
+          color={colors.textSecondary}
+          style={{ marginLeft: 8 }}
+        />
       </View>
-      <Text style={styles.mailSubject} numberOfLines={1}>{item.subject || '(Kein Betreff)'}</Text>
-      <Text style={styles.mailSnippet} numberOfLines={2}>{item.snippet}</Text>
-    </View></View>
-  );
-}
 
-// ─── Swipeable Mail Item (Native) ─────────────────────────────────────────────
-
-interface SwipeableMailItemProps {
-  item: MailMessage;
-  colors: ThemeColors;
-  styles: ReturnType<typeof makeStyles>;
-  onArchive: (id: string) => void;
-  onDelete: (id: string) => void;
-}
-
-function SwipeableMailItem({ item, colors, styles, onArchive, onDelete }: SwipeableMailItemProps) {
-  const translateX = useRef(new Animated.Value(0)).current;
-  const actionOpacity = useRef(new Animated.Value(0)).current;
-
-  const panResponder = useRef(
-    PanResponder.create({
-      onMoveShouldSetPanResponder: (_, { dx, dy }) =>
-        Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dy),
-      onPanResponderMove: (_, { dx }) => {
-        if (dx > 0) return;
-        const clamped = Math.max(dx, -ACTION_WIDTH);
-        translateX.setValue(clamped);
-        actionOpacity.setValue(Math.min(Math.abs(clamped) / SWIPE_THRESHOLD, 1));
-      },
-      onPanResponderRelease: (_, { dx }) => {
-        if (dx < -SWIPE_THRESHOLD) {
-          Animated.spring(translateX, { toValue: -ACTION_WIDTH, useNativeDriver: true }).start();
-          Animated.timing(actionOpacity, { toValue: 1, duration: 100, useNativeDriver: true }).start();
-        } else {
-          Animated.spring(translateX, { toValue: 0, useNativeDriver: true }).start();
-          Animated.timing(actionOpacity, { toValue: 0, duration: 100, useNativeDriver: true }).start();
-        }
-      },
-    })
-  ).current;
-
-  const close = useCallback(() => {
-    Animated.spring(translateX, { toValue: 0, useNativeDriver: true }).start();
-    Animated.timing(actionOpacity, { toValue: 0, duration: 100, useNativeDriver: true }).start();
-  }, [translateX, actionOpacity]);
-
-  const handleArchive = useCallback(() => {
-    close();
-    onArchive(item.id);
-  }, [close, onArchive, item.id]);
-
-  const handleDelete = useCallback(() => {
-    close();
-    onDelete(item.id);
-  }, [close, onDelete, item.id]);
-
-  return (
-    <View style={styles.swipeRow}>
-      {/* Action buttons behind the row */}
-      <Animated.View style={[styles.actionContainer, { opacity: actionOpacity }]}>
-        <Pressable style={[styles.actionButton, styles.archiveButton]} onPress={handleArchive}>
-          <Ionicons name="archive-outline" size={20} color="#fff" />
-          <Text style={styles.actionLabel}>Archiv</Text>
-        </Pressable>
-        <Pressable style={[styles.actionButton, styles.deleteButton]} onPress={handleDelete}>
-          <Ionicons name="trash-outline" size={20} color="#fff" />
-          <Text style={styles.actionLabel}>Löschen</Text>
-        </Pressable>
-      </Animated.View>
-
-      {/* Sliding mail row */}
-      <Animated.View
-        style={[styles.mailItem, { transform: [{ translateX }] }]}
-        {...panResponder.panHandlers}
-      >
-        <View style={styles.mailHeader}>
-          <Text style={styles.mailFrom} numberOfLines={1}>{parseDisplayFrom(item.from)}</Text>
-          <Text style={styles.mailDate}>{parseDisplayDate(item.date)}</Text>
+      {/* Expanded: vollständiger Inhalt + Löschen-Button */}
+      {expanded && (
+        <View style={styles.expandedContent}>
+          <Text style={styles.mailSnippet}>{item.snippet}</Text>
+          <View style={styles.expandedActions}>
+            <Pressable
+              style={({ pressed }) => [styles.deleteBtn, pressed && { opacity: 0.75 }]}
+              onPress={() => onDelete(item.id)}
+            >
+              <Ionicons name="trash-outline" size={16} color="#fff" />
+              <Text style={styles.deleteBtnText}>Löschen</Text>
+            </Pressable>
+          </View>
         </View>
-        <Text style={styles.mailSubject} numberOfLines={1}>{item.subject || '(Kein Betreff)'}</Text>
-        <Text style={styles.mailSnippet} numberOfLines={2}>{item.snippet}</Text>
-      </Animated.View>
-    </View>
+      )}
+    </Pressable>
   );
 }
 
@@ -180,7 +117,7 @@ export function MailScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
-  const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const loadMails = useCallback(async (token: string, isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
@@ -218,34 +155,19 @@ export function MailScreen() {
     }
   }, [updateSettings, loadMails]);
 
-  const removeFromList = useCallback((id: string) => {
+  const handleToggle = useCallback((id: string) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setMails((prev) => prev.filter((m) => m.id !== id));
+    setExpandedId((prev) => (prev === id ? null : id));
   }, []);
-
-  const handleArchive = useCallback(async (id: string) => {
-    if (!settings.googleAccessToken) return;
-    setPendingIds((s) => new Set(s).add(id));
-    removeFromList(id);
-    const ok = await archiveMail(settings.googleAccessToken, id);
-    setPendingIds((s) => { const n = new Set(s); n.delete(id); return n; });
-    if (!ok) {
-      setMails((prev) => {
-        const already = prev.find((m) => m.id === id);
-        return already ? prev : prev;
-      });
-      setError('Archivieren fehlgeschlagen.');
-    }
-  }, [settings.googleAccessToken, removeFromList]);
 
   const handleDelete = useCallback(async (id: string) => {
     if (!settings.googleAccessToken) return;
-    setPendingIds((s) => new Set(s).add(id));
-    removeFromList(id);
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setExpandedId(null);
+    setMails((prev) => prev.filter((m) => m.id !== id));
     const ok = await trashMail(settings.googleAccessToken, id);
-    setPendingIds((s) => { const n = new Set(s); n.delete(id); return n; });
     if (!ok) setError('Löschen fehlgeschlagen.');
-  }, [settings.googleAccessToken, removeFromList]);
+  }, [settings.googleAccessToken]);
 
   React.useEffect(() => {
     if (settings.googleAccessToken && !loaded) {
@@ -294,25 +216,16 @@ export function MailScreen() {
       <FlatList
         data={mails}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) =>
-          Platform.OS === 'web' ? (
-            <DesktopMailItem
-              item={item}
-              colors={colors}
-              styles={styles}
-              onArchive={handleArchive}
-              onDelete={handleDelete}
-            />
-          ) : (
-            <SwipeableMailItem
-              item={item}
-              colors={colors}
-              styles={styles}
-              onArchive={handleArchive}
-              onDelete={handleDelete}
-            />
-          )
-        }
+        renderItem={({ item }) => (
+          <MailItem
+            item={item}
+            expanded={expandedId === item.id}
+            onToggle={() => handleToggle(item.id)}
+            onDelete={handleDelete}
+            colors={colors}
+            styles={styles}
+          />
+        )}
         contentContainerStyle={mails.length === 0 ? styles.emptyContainer : styles.listContent}
         refreshControl={
           <RefreshControl
@@ -322,12 +235,7 @@ export function MailScreen() {
           />
         }
         ListHeaderComponent={
-          <View>
-            <Text style={styles.periodLabel}>E-Mails der letzten 2 Tage</Text>
-            {mails.length > 0 && Platform.OS !== 'web' && (
-              <Text style={styles.hint}>← Nach links wischen zum Archivieren oder Löschen</Text>
-            )}
-          </View>
+          <Text style={styles.periodLabel}>E-Mails der letzten 2 Tage · Tippen zum Öffnen</Text>
         }
         ListEmptyComponent={
           loaded && !error ? (
@@ -348,65 +256,71 @@ function makeStyles(colors: ThemeColors) {
     container: { flex: 1, backgroundColor: colors.background },
     center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32, backgroundColor: colors.background },
     emptyContainer: { flex: 1 },
-    listContent: { paddingVertical: 8 },
+    listContent: { paddingVertical: 8, paddingHorizontal: 12, gap: 8 },
     periodLabel: {
       fontSize: 11,
       color: colors.textMuted,
       textAlign: 'center',
-      paddingTop: 10,
-      paddingBottom: 2,
+      paddingVertical: 10,
       fontWeight: '500',
     },
-    hint: {
-      fontSize: 11,
-      color: colors.textMuted,
-      textAlign: 'center',
-      paddingVertical: 6,
-    },
-    swipeRow: {
-      marginHorizontal: 12,
-      marginVertical: 4,
-      borderRadius: 12,
-      overflow: 'hidden',
-    },
 
-    actionContainer: {
-      position: 'absolute',
-      right: 0,
-      top: 0,
-      bottom: 0,
-      width: ACTION_WIDTH,
-      flexDirection: 'row',
-      borderRadius: 12,
-      overflow: 'hidden',
-    },
-    actionButton: {
-      flex: 1,
-      justifyContent: 'center',
-      alignItems: 'center',
-      gap: 4,
-    },
-    archiveButton: { backgroundColor: '#4A94C8' },
-    deleteButton: { backgroundColor: colors.danger },
-    actionLabel: { color: '#fff', fontSize: 11, fontWeight: '600' },
-    desktopMailRow: {
-      marginHorizontal: 12,
-      marginVertical: 4,
-    },
-    mailItem: {
+    // Mail card
+    mailCard: {
       backgroundColor: colors.surface,
-      borderRadius: 12,
+      borderRadius: 14,
       padding: 14,
       borderWidth: 1,
       borderColor: colors.border,
     },
-    mailHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 },
-    mailFrom: { fontSize: 14, fontWeight: '600', color: colors.text, flex: 1, marginRight: 8 },
-    mailDate: { fontSize: 12, color: colors.textSecondary },
-    desktopActions: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-    desktopActionBtn: { padding: 4, borderRadius: 6 },
-    mailSubject: { fontSize: 13, color: colors.text, marginBottom: 4 },
-    mailSnippet: { fontSize: 12, color: colors.textSecondary, lineHeight: 17 },
+    mailHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+    },
+    avatar: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+      flexShrink: 0,
+    },
+    avatarText: { fontSize: 15, fontWeight: '700' },
+    metaRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 },
+    mailFrom: { fontSize: 13, fontWeight: '600', color: colors.text, flex: 1, marginRight: 6 },
+    mailDate: { fontSize: 11, color: colors.textSecondary },
+    mailSubject: { fontSize: 13, color: colors.textSecondary },
+
+    // Expanded
+    expandedContent: {
+      marginTop: 12,
+      paddingTop: 12,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.border,
+      gap: 12,
+    },
+    mailSnippet: {
+      fontSize: 13,
+      color: colors.text,
+      lineHeight: 19,
+    },
+    expandedActions: {
+      flexDirection: 'row',
+      justifyContent: 'flex-end',
+    },
+    deleteBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      backgroundColor: colors.danger,
+      paddingHorizontal: 16,
+      paddingVertical: 8,
+      borderRadius: 10,
+    },
+    deleteBtnText: { color: '#fff', fontWeight: '600', fontSize: 13 },
+
+    // Misc
     emptyTitle: { fontSize: 18, fontWeight: '600', color: colors.text, marginTop: 16, marginBottom: 8, textAlign: 'center' },
     emptySubtitle: { fontSize: 14, color: colors.textSecondary, textAlign: 'center', lineHeight: 20, marginBottom: 24 },
     loadingText: { marginTop: 16, fontSize: 14, color: colors.textSecondary },
