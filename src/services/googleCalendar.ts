@@ -157,6 +157,54 @@ async function calendarFetch(
   });
 }
 
+export interface CalendarEvent {
+  id: string;
+  summary: string;
+  start: string;   // ISO datetime or date
+  end: string;
+  allDay: boolean;
+  location?: string;
+  calendarName?: string;
+}
+
+export async function listUpcomingEvents(
+  accessToken: string,
+  calendarId: string,
+  days = 2
+): Promise<CalendarEvent[]> {
+  const now = new Date();
+  const until = new Date(now);
+  until.setDate(until.getDate() + days);
+  until.setHours(23, 59, 59, 999);
+
+  const params = new URLSearchParams({
+    timeMin: now.toISOString(),
+    timeMax: until.toISOString(),
+    orderBy: 'startTime',
+    singleEvents: 'true',
+    maxResults: '20',
+  });
+
+  const res = await calendarFetch(
+    `/calendars/${encodeURIComponent(calendarId)}/events?${params}`,
+    accessToken
+  );
+  if (!res.ok) return [];
+  const data = await res.json();
+
+  return (data.items ?? []).map((e: any) => {
+    const allDay = !!e.start?.date;
+    return {
+      id: e.id,
+      summary: e.summary ?? '(Kein Titel)',
+      start: e.start?.dateTime ?? e.start?.date ?? '',
+      end: e.end?.dateTime ?? e.end?.date ?? '',
+      allDay,
+      location: e.location,
+    };
+  });
+}
+
 export async function listCalendars(accessToken: string): Promise<Array<{ id: string; summary: string; primary?: boolean }>> {
   const res = await calendarFetch('/users/me/calendarList', accessToken);
   if (!res.ok) return [];

@@ -14,6 +14,7 @@ import { useStore } from '../store';
 import { useTheme, ThemeColors, neonGlow } from '../utils/theme';
 import { isOverdue } from '../utils/dateFormat';
 import { fetchRecentMails, MailMessage } from '../services/googleMail';
+import { listUpcomingEvents, CalendarEvent } from '../services/googleCalendar';
 import { Task, Note } from '../types';
 
 function greeting(): string {
@@ -234,6 +235,63 @@ function MailWidget({ mails, loading, error, connected, colors, styles, onConnec
   );
 }
 
+// ─── Calendar Widget ──────────────────────────────────────────────────────────
+
+interface CalendarWidgetProps {
+  events: CalendarEvent[];
+  loading: boolean;
+  connected: boolean;
+  colors: ThemeColors;
+  styles: ReturnType<typeof makeStyles>;
+}
+
+function formatEventTime(event: CalendarEvent): string {
+  if (event.allDay) return 'Ganztägig';
+  try {
+    const d = new Date(event.start);
+    const now = new Date();
+    const isToday = d.toDateString() === now.toDateString();
+    const tomorrow = new Date(now); tomorrow.setDate(now.getDate() + 1);
+    const isTomorrow = d.toDateString() === tomorrow.toDateString();
+    const dayLabel = isToday ? 'Heute' : isTomorrow ? 'Morgen' : d.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' });
+    const time = d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+    return `${dayLabel}, ${time}`;
+  } catch { return ''; }
+}
+
+function CalendarWidget({ events, loading, connected, colors, styles }: CalendarWidgetProps) {
+  if (!connected) return null;
+  if (loading) return (
+    <View style={styles.emptyWidget}>
+      <ActivityIndicator color={colors.accentNeon} />
+    </View>
+  );
+  if (events.length === 0) return (
+    <View style={styles.emptyWidget}>
+      <Ionicons name="calendar-outline" size={28} color={colors.textMuted} />
+      <Text style={styles.emptyWidgetText}>Keine Termine in den nächsten 2 Tagen</Text>
+    </View>
+  );
+  return (
+    <View style={styles.widgetList}>
+      {events.map((event) => (
+        <View key={event.id} style={styles.calEventRow}>
+          <View style={[styles.calEventBar, { backgroundColor: colors.accentNeon }]} />
+          <View style={styles.calEventContent}>
+            <Text style={styles.calEventTitle} numberOfLines={1}>{event.summary}</Text>
+            <Text style={[styles.calEventTime, { color: colors.textSecondary }]}>{formatEventTime(event)}</Text>
+            {event.location ? (
+              <Text style={[styles.calEventLocation, { color: colors.textMuted }]} numberOfLines={1}>
+                📍 {event.location}
+              </Text>
+            ) : null}
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+}
+
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export function DashboardScreen() {
@@ -245,6 +303,8 @@ export function DashboardScreen() {
   const [mails, setMails] = useState<MailMessage[]>([]);
   const [mailLoading, setMailLoading] = useState(false);
   const [mailError, setMailError] = useState<string | null>(null);
+  const [calEvents, setCalEvents] = useState<CalendarEvent[]>([]);
+  const [calLoading, setCalLoading] = useState(false);
 
   const upcomingTasks = useMemo(() => {
     const open = tasks.filter((t) => !t.completed);
@@ -297,6 +357,16 @@ export function DashboardScreen() {
       loadMails(settings.googleAccessToken);
     }
   }, [settings.googleAccessToken, loadMails]);
+
+  useEffect(() => {
+    if (settings.googleAccessToken && settings.googleCalendarId) {
+      setCalLoading(true);
+      listUpcomingEvents(settings.googleAccessToken, settings.googleCalendarId, 2)
+        .then(setCalEvents)
+        .catch(() => {})
+        .finally(() => setCalLoading(false));
+    }
+  }, [settings.googleAccessToken, settings.googleCalendarId]);
 
   const handleConnectMail = useCallback(() => {
     router.push('/(tabs)/mail');
@@ -379,6 +449,29 @@ export function DashboardScreen() {
           <NotesWidget notes={recentNotes} colors={colors} styles={styles} />
         </View>
       </View>
+
+      {/* Calendar widget */}
+      {settings.googleCalendarEnabled && (
+        <View style={styles.section}>
+          <SectionHeader
+            icon="calendar-outline"
+            title="Nächste 2 Tage"
+            count={calEvents.length}
+            onShowAll={() => {}}
+            colors={colors}
+            styles={styles}
+          />
+          <View style={[styles.widget, isDark ? { borderColor: colors.border } : {}]}>
+            <CalendarWidget
+              events={calEvents}
+              loading={calLoading}
+              connected={!!settings.googleAccessToken}
+              colors={colors}
+              styles={styles}
+            />
+          </View>
+        </View>
+      )}
 
       {/* Mail widget */}
       <View style={[styles.section, styles.lastSection]}>
@@ -526,6 +619,27 @@ function makeStyles(colors: ThemeColors, isDark: boolean) {
     mailFrom: { fontSize: 13, fontWeight: '600', color: colors.text, flex: 1, marginRight: 8 },
     mailDate: { fontSize: 11, color: colors.textSecondary },
     mailSubject: { fontSize: 12, color: colors.textSecondary },
+
+    // Calendar event rows
+    calEventRow: {
+      flexDirection: 'row',
+      alignItems: 'stretch',
+      paddingVertical: 10,
+      paddingHorizontal: 16,
+      gap: 12,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+    },
+    calEventBar: {
+      width: 3,
+      borderRadius: 2,
+      alignSelf: 'stretch',
+      minHeight: 36,
+    },
+    calEventContent: { flex: 1 },
+    calEventTitle: { fontSize: 14, fontWeight: '600', color: colors.text, marginBottom: 2 },
+    calEventTime: { fontSize: 12, marginBottom: 1 },
+    calEventLocation: { fontSize: 11 },
 
     // Connect card
     connectCard: {

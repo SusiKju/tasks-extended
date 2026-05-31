@@ -8,6 +8,7 @@ export default function TabsLayout() {
 
   return (
     <Tabs
+      initialRouteName="dashboard"
       screenOptions={{
         tabBarActiveTintColor: colors.accentNeon,
         tabBarInactiveTintColor: colors.textSecondary,
