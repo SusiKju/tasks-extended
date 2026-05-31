@@ -96,6 +96,12 @@ export async function downloadAllNotes(accessToken: string): Promise<Note[] | nu
   }
 }
 
+// imageUris sind gerätespezifisch (IndexedDB-Keys) – nicht auf Drive speichern
+function stripDeviceData(note: Note): Note {
+  const { imageUris: _, ...rest } = note as any;
+  return rest as Note;
+}
+
 export async function uploadAllNotes(
   accessToken: string,
   notes: Note[]
@@ -103,11 +109,10 @@ export async function uploadAllNotes(
   const folderId = await findOrCreateFolder(accessToken);
   if (!folderId) return false;
 
-  const content = JSON.stringify(notes);
+  const content = JSON.stringify(notes.map(stripDeviceData));
   const existingFileId = await findNotesFile(accessToken, folderId);
 
   if (existingFileId) {
-    // Update
     const res = await fetch(`${UPLOAD_API}/files/${existingFileId}?uploadType=media`, {
       method: 'PATCH',
       headers: {
@@ -116,6 +121,7 @@ export async function uploadAllNotes(
       },
       body: content,
     });
+    if (!res.ok) console.error('[Drive] update failed:', res.status, await res.text().catch(() => ''));
     return res.ok;
   }
 
@@ -135,7 +141,10 @@ export async function uploadAllNotes(
     },
     body,
   });
-  if (!res.ok) return false;
+  if (!res.ok) {
+    console.error('[Drive] create failed:', res.status, await res.text().catch(() => ''));
+    return false;
+  }
   cachedNotesFileId = (await res.json()).id as string;
   return true;
 }
