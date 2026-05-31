@@ -78,6 +78,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   autoGroupEnabled: true,
   autoGroupConfidenceThreshold: 0.4,
   googleNotesEnabled: false,
+  selectedCalendarIds: [],
 };
 
 export const useStore = create<TaskState>()(

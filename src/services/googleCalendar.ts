@@ -202,7 +202,7 @@ async function fetchEventsFromCalendar(
 
 export async function listUpcomingEvents(
   accessToken: string,
-  _calendarId: string,   // wird ignoriert – alle Kalender werden abgefragt
+  selectedCalendarIds: string[],
   days = 2
 ): Promise<CalendarEvent[]> {
   const now = new Date();
@@ -212,25 +212,22 @@ export async function listUpcomingEvents(
   const timeMin = now.toISOString();
   const timeMax = until.toISOString();
 
-  // Alle Kalender laden
-  const calendars = await listCalendars(accessToken);
-  if (calendars.length === 0) return [];
+  // Alle verfügbaren Kalender laden
+  const allCalendars = await listCalendars(accessToken);
+  if (allCalendars.length === 0) return [];
 
-  // Alle parallel abfragen
+  // Nur ausgewählte – wenn keine Auswahl, alle nehmen
+  const filtered = selectedCalendarIds.length > 0
+    ? allCalendars.filter((c) => selectedCalendarIds.includes(c.id))
+    : allCalendars;
+
   const results = await Promise.all(
-    calendars.map((cal) =>
+    filtered.map((cal) =>
       fetchEventsFromCalendar(accessToken, cal.id, cal.summary, timeMin, timeMax)
     )
   );
 
-  // Zusammenführen und nach Startzeit sortieren
-  return results
-    .flat()
-    .sort((a, b) => {
-      const ta = new Date(a.start).getTime();
-      const tb = new Date(b.start).getTime();
-      return ta - tb;
-    });
+  return results.flat().sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
 }
 
 export async function listCalendars(accessToken: string): Promise<Array<{ id: string; summary: string; primary?: boolean }>> {

@@ -46,6 +46,7 @@ export interface AppSettings {
   autoGroupEnabled: boolean;
   autoGroupConfidenceThreshold: number;
   googleNotesEnabled: boolean;
+  selectedCalendarIds: string[];
 }
 
 export interface NoteChecklistItem {

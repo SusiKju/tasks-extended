@@ -61,12 +61,25 @@ export function SettingsScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [loadingCalendar, setLoadingCalendar] = useState(false);
+  const [availableCalendars, setAvailableCalendars] = useState<Array<{ id: string; summary: string; primary?: boolean }>>([]);
+  const [loadingCalendars, setLoadingCalendars] = useState(false);
   const [loadingKeepImport, setLoadingKeepImport] = useState(false);
   const [loadingTasksSync, setLoadingTasksSync] = useState(false);
   const [loadingNotesSync, setLoadingNotesSync] = useState(false);
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
   const [tasksSyncResult, setTasksSyncResult] = useState<string | null>(null);
   const [notesSyncResult, setNotesSyncResult] = useState<string | null>(null);
+
+  // Kalender-Liste laden wenn verbunden
+  React.useEffect(() => {
+    if (settings.googleAccessToken && settings.googleCalendarEnabled) {
+      setLoadingCalendars(true);
+      listCalendars(settings.googleAccessToken)
+        .then(setAvailableCalendars)
+        .catch(() => {})
+        .finally(() => setLoadingCalendars(false));
+    }
+  }, [settings.googleAccessToken, settings.googleCalendarEnabled]);
 
   const handleGoogleConnect = useCallback(async () => {
     setLoadingCalendar(true);
@@ -425,6 +438,47 @@ export function SettingsScreen() {
                 </Pressable>
               </View>
             ) : null}
+            {/* Kalender-Auswahl für Dashboard */}
+            {availableCalendars.length > 0 && (
+              <View style={[styles.row, { flexDirection: 'column', alignItems: 'flex-start', gap: 8 }]}>
+                <Text style={[styles.rowTitle, { marginBottom: 2 }]}>Im Dashboard anzeigen</Text>
+                <Text style={styles.rowSubtitle}>Wähle welche Kalender auf dem Dashboard erscheinen</Text>
+                {loadingCalendars ? (
+                  <ActivityIndicator size="small" color={colors.accent} />
+                ) : (
+                  availableCalendars.map((cal) => {
+                    const selected = (settings.selectedCalendarIds ?? []).includes(cal.id);
+                    return (
+                      <Pressable
+                        key={cal.id}
+                        style={({ pressed }) => [styles.calendarPickerRow, pressed && { opacity: 0.7 }]}
+                        onPress={() => {
+                          const current = settings.selectedCalendarIds ?? [];
+                          const next = selected
+                            ? current.filter((id) => id !== cal.id)
+                            : [...current, cal.id];
+                          updateSettings({ selectedCalendarIds: next });
+                        }}
+                      >
+                        <Ionicons
+                          name={selected ? 'checkbox' : 'square-outline'}
+                          size={20}
+                          color={selected ? colors.accent : colors.textSecondary}
+                        />
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.rowTitle, { fontSize: 14 }]} numberOfLines={1}>{cal.summary}</Text>
+                          {cal.primary && <Text style={styles.rowSubtitle}>Primär</Text>}
+                        </View>
+                      </Pressable>
+                    );
+                  })
+                )}
+                {(settings.selectedCalendarIds ?? []).length === 0 && (
+                  <Text style={[styles.rowSubtitle, { fontStyle: 'italic' }]}>Alle Kalender werden angezeigt</Text>
+                )}
+              </View>
+            )}
+
             {confirmDisconnect ? (
               <View style={styles.confirmRow}>
                 <Text style={[styles.rowSubtitle, { flex: 1, color: colors.danger }]}>
@@ -852,6 +906,13 @@ function makeStyles(c: ThemeColors) {
       gap: 8,
     },
     syncBtnText: { color: '#fff', fontSize: 14, fontWeight: '600' },
+    calendarPickerRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      paddingVertical: 6,
+      width: '100%' as any,
+    },
     // Gruppen
     groupRow: {
       flexDirection: 'row',

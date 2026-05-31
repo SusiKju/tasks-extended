@@ -364,14 +364,14 @@ export function DashboardScreen() {
   }, [settings.googleAccessToken, loadMails]);
 
   useEffect(() => {
-    if (settings.googleAccessToken && settings.googleCalendarId) {
+    if (settings.googleAccessToken && settings.googleCalendarEnabled) {
       setCalLoading(true);
-      listUpcomingEvents(settings.googleAccessToken, settings.googleCalendarId, 2)
+      listUpcomingEvents(settings.googleAccessToken, settings.selectedCalendarIds ?? [], 2)
         .then(setCalEvents)
         .catch(() => {})
         .finally(() => setCalLoading(false));
     }
-  }, [settings.googleAccessToken, settings.googleCalendarId]);
+  }, [settings.googleAccessToken, settings.googleCalendarEnabled, settings.selectedCalendarIds]);
 
   const handleConnectMail = useCallback(() => {
     router.push('/(tabs)/mail');
