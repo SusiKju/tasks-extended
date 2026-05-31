@@ -30,6 +30,7 @@ export function useGoogleDriveNotesSync() {
     } = useStore.getState();
 
     if (!overrideToken && (!settings.googleNotesEnabled || !settings.googleAccessToken)) {
+      console.log('[DriveSync] aborted: notesEnabled=', settings.googleNotesEnabled, 'hasToken=', !!settings.googleAccessToken);
       return null;
     }
 
@@ -58,9 +59,11 @@ export function useGoogleDriveNotesSync() {
       removeDeletedDriveNoteFileIds(successfullyDeleted);
     }
 
+    console.log('[DriveSync] start – localNotes:', notes.length, 'token:', token.slice(0, 20) + '…');
     let driveFiles;
     try {
       driveFiles = await listDriveNotes(token);
+      console.log('[DriveSync] driveFiles fetched:', driveFiles.length);
     } catch (e: any) {
       if (e?.message === 'DRIVE_FORBIDDEN' || e?.message === 'DRIVE_UNAUTHORIZED') {
         return { pulled: 0, pushed: 0, deleted, scopeError: true };
@@ -104,10 +107,12 @@ export function useGoogleDriveNotesSync() {
       }
     }
 
+    console.log('[DriveSync] toUpload:', toUpload.length);
     await uploadDriveNotesBatch(token, toUpload, (noteId, fileId) => {
       updateNote(noteId, { driveFileId: fileId });
       pushed++;
     });
+    console.log('[DriveSync] done – pulled:', pulled, 'pushed:', pushed, 'deleted:', deleted);
 
     return { pulled, pushed, deleted };
   }, []);
