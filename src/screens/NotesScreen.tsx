@@ -46,7 +46,7 @@ function generateId() {
 interface NoteModalProps {
   visible: boolean;
   note: Note | null;
-  onSave: (title: string, content: string, color: string, groupId: string | null, pinned: boolean) => void;
+  onSave: (title: string, content: string, color: string, groupId: string | null, pinned: boolean, checklist?: NoteChecklistItem[]) => void;
   onClose: () => void;
   colors: ThemeColors;
   styles: ReturnType<typeof makeStyles>;
@@ -59,6 +59,8 @@ function NoteModal({ visible, note, onSave, onClose, colors, styles }: NoteModal
   const [selectedColor, setSelectedColor] = useState(NOTE_COLORS[0].value);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [pinned, setPinned] = useState(false);
+  const [isChecklist, setIsChecklist] = useState(false);
+  const [checklistItems, setChecklistItems] = useState<NoteChecklistItem[]>([]);
 
   React.useEffect(() => {
     if (visible) {
@@ -67,17 +69,46 @@ function NoteModal({ visible, note, onSave, onClose, colors, styles }: NoteModal
       setSelectedColor(note?.color ?? NOTE_COLORS[0].value);
       setSelectedGroupId(note?.groupId ?? null);
       setPinned(note?.pinned ?? false);
+      const hasList = (note?.checklist?.length ?? 0) > 0;
+      setIsChecklist(hasList);
+      setChecklistItems(note?.checklist ? [...note.checklist] : [{ text: '', checked: false }]);
     }
   }, [visible, note]);
 
   const handleSave = useCallback(() => {
-    const trimmed = content.trim();
-    if (!trimmed) {
-      Alert.alert('Inhalt fehlt', 'Bitte einen Text eingeben.');
-      return;
+    if (isChecklist) {
+      const validItems = checklistItems.filter((i) => i.text.trim());
+      if (validItems.length === 0) {
+        Alert.alert('Inhalt fehlt', 'Bitte mindestens einen Eintrag hinzufügen.');
+        return;
+      }
+      const content = validItems.map((i) => `${i.checked ? '☑' : '☐'} ${i.text}`).join('\n');
+      onSave(title.trim(), content, selectedColor, selectedGroupId, pinned, validItems);
+    } else {
+      const trimmed = content.trim();
+      if (!trimmed) {
+        Alert.alert('Inhalt fehlt', 'Bitte einen Text eingeben.');
+        return;
+      }
+      onSave(title.trim(), trimmed, selectedColor, selectedGroupId, pinned, undefined);
     }
-    onSave(title.trim(), trimmed, selectedColor, selectedGroupId, pinned);
-  }, [title, content, selectedColor, selectedGroupId, pinned, onSave]);
+  }, [title, content, selectedColor, selectedGroupId, pinned, isChecklist, checklistItems, onSave]);
+
+  const addChecklistItem = useCallback(() => {
+    setChecklistItems((prev) => [...prev, { text: '', checked: false }]);
+  }, []);
+
+  const updateChecklistItem = useCallback((index: number, text: string) => {
+    setChecklistItems((prev) => prev.map((item, i) => i === index ? { ...item, text } : item));
+  }, []);
+
+  const toggleChecklistItem = useCallback((index: number) => {
+    setChecklistItems((prev) => prev.map((item, i) => i === index ? { ...item, checked: !item.checked } : item));
+  }, []);
+
+  const removeChecklistItem = useCallback((index: number) => {
+    setChecklistItems((prev) => prev.filter((_, i) => i !== index));
+  }, []);
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
@@ -93,6 +124,13 @@ function NoteModal({ visible, note, onSave, onClose, colors, styles }: NoteModal
             {note ? 'Notiz bearbeiten' : 'Neue Notiz'}
           </Text>
           <View style={styles.modalActions}>
+            <Pressable onPress={() => setIsChecklist((v) => !v)} style={styles.pinBtn} hitSlop={8}>
+              <Ionicons
+                name={isChecklist ? 'checkbox' : 'checkbox-outline'}
+                size={22}
+                color={isChecklist ? colors.accent : colors.textSecondary}
+              />
+            </Pressable>
             <Pressable onPress={() => setPinned((p) => !p)} style={styles.pinBtn} hitSlop={8}>
               <Ionicons
                 name={pinned ? 'pin' : 'pin-outline'}
@@ -116,16 +154,49 @@ function NoteModal({ visible, note, onSave, onClose, colors, styles }: NoteModal
             multiline={false}
             returnKeyType="next"
           />
-          <TextInput
-            style={styles.noteInput}
-            value={content}
-            onChangeText={setContent}
-            placeholder="Notiz schreiben…"
-            placeholderTextColor="rgba(0,0,0,0.3)"
-            multiline
-            autoFocus={!note}
-            textAlignVertical="top"
-          />
+          {isChecklist ? (
+            <ScrollView style={{ maxHeight: 260 }} keyboardShouldPersistTaps="handled">
+              {checklistItems.map((item, index) => (
+                <View key={index} style={styles.checklistEditRow}>
+                  <Pressable onPress={() => toggleChecklistItem(index)} hitSlop={8}>
+                    <Ionicons
+                      name={item.checked ? 'checkbox' : 'square-outline'}
+                      size={22}
+                      color={item.checked ? 'rgba(0,0,0,0.4)' : 'rgba(0,0,0,0.7)'}
+                    />
+                  </Pressable>
+                  <TextInput
+                    style={[styles.checklistEditInput, item.checked && styles.checklistEditInputDone]}
+                    value={item.text}
+                    onChangeText={(t) => updateChecklistItem(index, t)}
+                    placeholder="Eintrag…"
+                    placeholderTextColor="rgba(0,0,0,0.3)"
+                    onSubmitEditing={addChecklistItem}
+                    returnKeyType="next"
+                    blurOnSubmit={false}
+                  />
+                  <Pressable onPress={() => removeChecklistItem(index)} hitSlop={8}>
+                    <Ionicons name="close" size={18} color="rgba(0,0,0,0.3)" />
+                  </Pressable>
+                </View>
+              ))}
+              <Pressable style={styles.checklistAddBtn} onPress={addChecklistItem}>
+                <Ionicons name="add" size={18} color="rgba(0,0,0,0.5)" />
+                <Text style={styles.checklistAddText}>Eintrag hinzufügen</Text>
+              </Pressable>
+            </ScrollView>
+          ) : (
+            <TextInput
+              style={styles.noteInput}
+              value={content}
+              onChangeText={setContent}
+              placeholder="Notiz schreiben…"
+              placeholderTextColor="rgba(0,0,0,0.3)"
+              multiline
+              autoFocus={!note}
+              textAlignVertical="top"
+            />
+          )}
         </View>
 
         <View style={styles.modalSection}>
@@ -198,9 +269,10 @@ function NoteCard({ note, onPress, onLongPress, onToggleItem, groupName, groupCo
 
   return (
     <Pressable
-      style={[styles.noteCard, { backgroundColor: note.color }]}
+      style={({ pressed }) => [styles.noteCard, { backgroundColor: note.color }, pressed && { opacity: 0.85 }]}
       onPress={onPress}
       onLongPress={onLongPress}
+      android_ripple={{ color: 'rgba(0,0,0,0.1)' }}
     >
       {/* Top badges row */}
       <View style={styles.cardBadgeRow}>
@@ -366,9 +438,16 @@ export function NotesScreen() {
   );
 
   const handleSave = useCallback(
-    (title: string, content: string, color: string, groupId: string | null, pinned: boolean) => {
+    (title: string, content: string, color: string, groupId: string | null, pinned: boolean, checklist?: NoteChecklistItem[]) => {
       if (editingNote) {
-        updateNote(editingNote.id, { title: title || undefined, content, color, groupId, pinned });
+        updateNote(editingNote.id, {
+          title: title || undefined,
+          content,
+          color,
+          groupId,
+          pinned,
+          checklist: checklist && checklist.length > 0 ? checklist : undefined,
+        });
       } else {
         addNote({
           id: generateId(),
@@ -377,6 +456,7 @@ export function NotesScreen() {
           color,
           groupId,
           pinned,
+          checklist: checklist && checklist.length > 0 ? checklist : undefined,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         });
@@ -617,6 +697,28 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
     noteCardTitle: {
       fontSize: 11, fontWeight: '700',
       color: 'rgba(0,0,0,0.85)', marginBottom: 3,
+    },
+    checklistEditRow: {
+      flexDirection: 'row', alignItems: 'center',
+      gap: 8, marginBottom: 6,
+    },
+    checklistEditInput: {
+      flex: 1, fontSize: 15,
+      color: 'rgba(0,0,0,0.85)',
+      paddingVertical: 2,
+      borderBottomWidth: 1,
+      borderBottomColor: 'rgba(0,0,0,0.15)',
+    },
+    checklistEditInputDone: {
+      textDecorationLine: 'line-through',
+      color: 'rgba(0,0,0,0.35)',
+    },
+    checklistAddBtn: {
+      flexDirection: 'row', alignItems: 'center',
+      gap: 6, paddingVertical: 6, marginTop: 2,
+    },
+    checklistAddText: {
+      fontSize: 14, color: 'rgba(0,0,0,0.45)',
     },
     noteCardText: {
       fontSize: 12, color: 'rgba(0,0,0,0.8)',
