@@ -112,30 +112,30 @@ export function useGoogleTasksSync() {
       }
     }
 
-    // Alle lokalen Tasks ohne Google-ID hochladen
+    // Alle lokalen Tasks ohne Google-ID → immer als Google Task anlegen
     const localOnly = tasks.filter((t) => !t.googleEventId && !t.completed);
     for (const t of localOnly) {
-      let eventId: string | null = null;
+      if (!firstTaskListId) break;
 
-      if (t.dueDate && settings.googleCalendarId) {
-        // Mit Datum → Kalendereintrag erstellen
-        eventId = await createCalendarEvent(t, token, settings.googleCalendarId);
-      }
+      // Google Task erstellen (funktioniert mit und ohne Datum)
+      const taskId = await createGoogleTask(
+        token,
+        firstTaskListId,
+        t.title,
+        t.description || undefined,
+        t.dueDate ? new Date(t.dueDate).toISOString() : undefined
+      );
 
-      if (!eventId && firstTaskListId) {
-        // Ohne Datum (oder Kalender fehlgeschlagen) → Google Task erstellen
-        eventId = await createGoogleTask(
-          token,
-          firstTaskListId,
-          t.title,
-          t.description || undefined,
-          t.dueDate ? new Date(t.dueDate).toISOString() : undefined
-        );
-      }
-
-      if (eventId) {
-        updateTask(t.id, { googleEventId: eventId });
+      if (taskId) {
+        updateTask(t.id, { googleEventId: taskId });
         pushed++;
+
+        // Zusätzlich: Kalender-Event wenn Datum vorhanden
+        if (t.dueDate && settings.googleCalendarId) {
+          createCalendarEvent(t, token, settings.googleCalendarId).catch(() => {});
+        }
+      } else {
+        console.warn('[TaskSync] createGoogleTask failed for:', t.title);
       }
     }
 
