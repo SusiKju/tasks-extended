@@ -12,6 +12,7 @@ export interface DriveNotesSyncResult {
   pulled: number;
   pushed: number;
   deleted: number;
+  scopeError?: boolean;
 }
 
 export function useGoogleDriveNotesSync() {
@@ -53,7 +54,15 @@ export function useGoogleDriveNotesSync() {
       clearDeletedDriveNoteFileIds();
     }
 
-    const driveFiles = await listDriveNotes(token);
+    let driveFiles;
+    try {
+      driveFiles = await listDriveNotes(token);
+    } catch (e: any) {
+      if (e?.message === 'DRIVE_FORBIDDEN') {
+        return { pulled: 0, pushed: 0, deleted, scopeError: true };
+      }
+      throw e;
+    }
 
     const localById = new Map<string, Note>(notes.map((n) => [n.id, n]));
     const localByFileId = new Map<string, Note>(

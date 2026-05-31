@@ -165,6 +165,10 @@ export function SettingsScreen() {
         setNotesSyncResult('Drive-Sync nicht aktiviert');
         return;
       }
+      if (result.scopeError) {
+        setNotesSyncResult('⚠️ Keine Drive-Berechtigung – bitte Google-Verbindung trennen und neu anmelden');
+        return;
+      }
       const { pulled, pushed, deleted } = result;
       const parts = [
         pulled > 0 ? `${pulled} geladen` : null,
