@@ -35,6 +35,7 @@ interface TaskState {
   deleteNote: (id: string) => void;
   clearNotes: () => void;
   clearDeletedDriveNoteFileIds: () => void;
+  removeDeletedDriveNoteFileIds: (fileIds: string[]) => void;
 
   // Settings actions
   updateSettings: (updates: Partial<AppSettings>) => void;
@@ -199,6 +200,11 @@ export const useStore = create<TaskState>()(
       clearNotes: () => set({ notes: [] }),
 
       clearDeletedDriveNoteFileIds: () => set({ deletedDriveNoteFileIds: [] }),
+
+      removeDeletedDriveNoteFileIds: (fileIds) =>
+        set((state) => ({
+          deletedDriveNoteFileIds: state.deletedDriveNoteFileIds.filter((id) => !fileIds.includes(id)),
+        })),
 
       updateSettings: (updates) =>
         set((state) => ({ settings: { ...state.settings, ...updates } })),

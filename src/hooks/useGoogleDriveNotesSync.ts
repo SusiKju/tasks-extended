@@ -26,7 +26,7 @@ export function useGoogleDriveNotesSync() {
       updateSettings,
       addNote,
       updateNote,
-      clearDeletedDriveNoteFileIds,
+      removeDeletedDriveNoteFileIds,
     } = useStore.getState();
 
     if (!overrideToken && (!settings.googleNotesEnabled || !settings.googleAccessToken)) {
@@ -46,12 +46,16 @@ export function useGoogleDriveNotesSync() {
     let pushed = 0;
     let deleted = 0;
 
+    const successfullyDeleted: string[] = [];
     for (const fileId of deletedDriveNoteFileIds) {
-      await deleteDriveNote(token, fileId).catch(() => {});
-      deleted++;
+      const ok = await deleteDriveNote(token, fileId).then(() => true).catch(() => false);
+      if (ok) {
+        successfullyDeleted.push(fileId);
+        deleted++;
+      }
     }
-    if (deletedDriveNoteFileIds.length > 0) {
-      clearDeletedDriveNoteFileIds();
+    if (successfullyDeleted.length > 0) {
+      removeDeletedDriveNoteFileIds(successfullyDeleted);
     }
 
     let driveFiles;
