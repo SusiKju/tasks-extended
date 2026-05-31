@@ -17,282 +17,119 @@ import { fetchRecentMails, MailMessage } from '../services/googleMail';
 import { listUpcomingEvents, CalendarEvent } from '../services/googleCalendar';
 import { Task, Note } from '../types';
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
 function greeting(): string {
   const h = new Date().getHours();
+  if (h < 5)  return 'Gute Nacht';
   if (h < 12) return 'Guten Morgen';
   if (h < 18) return 'Guten Tag';
   return 'Guten Abend';
 }
 
-function formatDue(dueDate: string | null): string {
-  if (!dueDate) return '';
+function parseDisplayFrom(from: string): string {
+  const match = from.match(/^"?([^"<]+)"?\s*<?[^>]*>?$/);
+  return match ? match[1].trim() : from.replace(/<[^>]+>/, '').trim() || from;
+}
+
+function formatMailDate(dateStr: string): string {
+  if (!dateStr) return '';
+  try {
+    const d = new Date(dateStr);
+    const now = new Date();
+    const isToday = d.toDateString() === now.toDateString();
+    return isToday
+      ? d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })
+      : d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+  } catch { return ''; }
+}
+
+function formatEventTime(e: CalendarEvent): { day: string; time: string } {
+  if (e.allDay) return { day: dayLabel(new Date(e.start)), time: 'Ganztägig' };
+  try {
+    const d = new Date(e.start);
+    return {
+      day: dayLabel(d),
+      time: d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }),
+    };
+  } catch { return { day: '', time: '' }; }
+}
+
+function dayLabel(d: Date): string {
+  const now = new Date();
+  const tomorrow = new Date(now); tomorrow.setDate(now.getDate() + 1);
+  if (d.toDateString() === now.toDateString()) return 'Heute';
+  if (d.toDateString() === tomorrow.toDateString()) return 'Morgen';
+  return d.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' });
+}
+
+function formatDue(dueDate: string | null): { label: string; urgent: boolean } {
+  if (!dueDate) return { label: '', urgent: false };
   try {
     const d = new Date(dueDate);
-    if (isNaN(d.getTime())) return '';
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const due = new Date(d.getFullYear(), d.getMonth(), d.getDate());
     const diff = Math.round((due.getTime() - today.getTime()) / 86400000);
-    if (diff < 0) return 'Überfällig';
-    if (diff === 0) return 'Heute';
-    if (diff === 1) return 'Morgen';
-    return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
-  } catch {
-    return '';
-  }
+    if (diff < 0) return { label: 'Überfällig', urgent: true };
+    if (diff === 0) return { label: 'Heute', urgent: true };
+    if (diff === 1) return { label: 'Morgen', urgent: false };
+    return { label: d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' }), urgent: false };
+  } catch { return { label: '', urgent: false }; }
 }
 
-function parseDisplayFrom(from: string): string {
-  const match = from.match(/^"?([^"<]+)"?\s*<?[^>]*>?$/);
-  if (match) return match[1].trim();
-  return from.replace(/<[^>]+>/, '').trim() || from;
-}
+// ─── Chip ─────────────────────────────────────────────────────────────────────
 
-function parseDisplayDate(dateStr: string): string {
-  if (!dateStr) return '';
-  try {
-    const d = new Date(dateStr);
-    if (isNaN(d.getTime())) return dateStr;
-    const now = new Date();
-    const isToday =
-      d.getDate() === now.getDate() &&
-      d.getMonth() === now.getMonth() &&
-      d.getFullYear() === now.getFullYear();
-    return isToday
-      ? d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })
-      : d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
-  } catch {
-    return dateStr;
-  }
+function Chip({ label, color, bg }: { label: string; color: string; bg: string }) {
+  return (
+    <View style={[chipStyle.pill, { backgroundColor: bg }]}>
+      <Text style={[chipStyle.text, { color }]}>{label}</Text>
+    </View>
+  );
 }
+const chipStyle = StyleSheet.create({
+  pill: { borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 },
+  text: { fontSize: 10, fontWeight: '700', letterSpacing: 0.3 },
+});
 
 // ─── Section Header ───────────────────────────────────────────────────────────
 
-interface SectionHeaderProps {
-  icon: string;
-  title: string;
-  count?: number;
-  onShowAll: () => void;
-  colors: ThemeColors;
-  styles: ReturnType<typeof makeStyles>;
-}
-
-function SectionHeader({ icon, title, count, onShowAll, colors, styles }: SectionHeaderProps) {
+function SectionLabel({ icon, title, count, onMore, colors }: {
+  icon: string; title: string; count?: number;
+  onMore?: () => void; colors: ThemeColors;
+}) {
   return (
-    <View style={styles.sectionHeader}>
-      <View style={styles.sectionTitleRow}>
-        <Ionicons name={icon as any} size={18} color={colors.accentNeon} style={{ marginRight: 6 }} />
-        <Text style={styles.sectionTitle}>{title}</Text>
-        {count !== undefined && (
-          <View style={[styles.countBadge, { backgroundColor: colors.accentNeon + '22' }]}>
-            <Text style={[styles.countBadgeText, { color: colors.accentNeon }]}>{count}</Text>
-          </View>
-        )}
-      </View>
-      <Pressable onPress={onShowAll} style={styles.showAllBtn}>
-        <Text style={[styles.showAllText, { color: colors.accentNeon }]}>Alle</Text>
-        <Ionicons name="chevron-forward" size={14} color={colors.accentNeon} />
-      </Pressable>
-    </View>
-  );
-}
-
-// ─── Task Widget ──────────────────────────────────────────────────────────────
-
-interface TaskWidgetProps {
-  tasks: Task[];
-  colors: ThemeColors;
-  styles: ReturnType<typeof makeStyles>;
-  isDark: boolean;
-  onPress: (id: string) => void;
-}
-
-function TaskWidget({ tasks, colors, styles, isDark, onPress }: TaskWidgetProps) {
-  if (tasks.length === 0) {
-    return (
-      <View style={styles.emptyWidget}>
-        <Ionicons name="checkmark-circle-outline" size={28} color={colors.success} />
-        <Text style={styles.emptyWidgetText}>Alle Tasks erledigt</Text>
-      </View>
-    );
-  }
-  return (
-    <View style={styles.widgetList}>
-      {tasks.map((task) => {
-        const overdue = isOverdue(task.dueDate);
-        const dueLabel = formatDue(task.dueDate);
-        return (
-          <Pressable
-            key={task.id}
-            style={[
-              styles.taskRow,
-              isDark && overdue ? neonGlow(colors.danger, 'soft') : {},
-            ]}
-            onPress={() => onPress(task.id)}
-          >
-            <View style={[styles.taskDot, { backgroundColor: overdue ? colors.danger : colors.accentNeon }]} />
-            <Text style={styles.taskTitle} numberOfLines={1}>{task.title}</Text>
-            {dueLabel !== '' && (
-              <Text style={[styles.taskDue, { color: overdue ? colors.danger : colors.textSecondary }]}>
-                {dueLabel}
-              </Text>
-            )}
-          </Pressable>
-        );
-      })}
-    </View>
-  );
-}
-
-// ─── Notes Widget ─────────────────────────────────────────────────────────────
-
-interface NotesWidgetProps {
-  notes: Note[];
-  colors: ThemeColors;
-  styles: ReturnType<typeof makeStyles>;
-}
-
-function NotesWidget({ notes, colors, styles }: NotesWidgetProps) {
-  if (notes.length === 0) {
-    return (
-      <View style={styles.emptyWidget}>
-        <Ionicons name="document-text-outline" size={28} color={colors.textMuted} />
-        <Text style={styles.emptyWidgetText}>Keine Notizen vorhanden</Text>
-      </View>
-    );
-  }
-  return (
-    <View style={styles.notesGrid}>
-      {notes.map((note) => (
-        <View key={note.id} style={[styles.noteCard, { backgroundColor: note.color }]}>
-          {note.title ? (
-            <Text style={styles.noteCardTitle} numberOfLines={1}>{note.title}</Text>
-          ) : null}
-          <Text style={styles.noteCardContent} numberOfLines={3}>
-            {note.content || (note.checklist?.map((i) => `• ${i.text}`).join('\n')) || ''}
-          </Text>
+    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, paddingHorizontal: 16 }}>
+      <Ionicons name={icon as any} size={14} color={colors.accentNeon} />
+      <Text style={{ fontSize: 11, fontWeight: '800', color: colors.accentNeon, marginLeft: 5, letterSpacing: 1, textTransform: 'uppercase' }}>
+        {title}
+      </Text>
+      {count !== undefined && count > 0 && (
+        <View style={{ backgroundColor: colors.accentNeon + '22', borderRadius: 8, paddingHorizontal: 6, paddingVertical: 1, marginLeft: 6 }}>
+          <Text style={{ fontSize: 10, fontWeight: '700', color: colors.accentNeon }}>{count}</Text>
         </View>
-      ))}
+      )}
+      {onMore && (
+        <Pressable onPress={onMore} style={{ marginLeft: 'auto' as any }} hitSlop={8}>
+          <Text style={{ fontSize: 11, color: colors.textSecondary, fontWeight: '600' }}>Alle →</Text>
+        </Pressable>
+      )}
     </View>
   );
 }
 
-// ─── Mail Widget ──────────────────────────────────────────────────────────────
+// ─── Birthday Row ─────────────────────────────────────────────────────────────
 
-interface MailWidgetProps {
-  mails: MailMessage[];
-  loading: boolean;
-  error: string | null;
-  connected: boolean;
-  colors: ThemeColors;
-  styles: ReturnType<typeof makeStyles>;
-  onConnectPress: () => void;
-}
-
-function MailWidget({ mails, loading, error, connected, colors, styles, onConnectPress }: MailWidgetProps) {
-  if (!connected) {
-    return (
-      <Pressable style={styles.connectCard} onPress={onConnectPress}>
-        <Ionicons name="mail-outline" size={22} color={colors.accentNeon} />
-        <Text style={[styles.connectCardText, { color: colors.accentNeon }]}>Google Mail verbinden</Text>
-      </Pressable>
-    );
-  }
-  if (loading) {
-    return (
-      <View style={styles.emptyWidget}>
-        <ActivityIndicator color={colors.accentNeon} />
-      </View>
-    );
-  }
-  if (error) {
-    return (
-      <View style={styles.emptyWidget}>
-        <Text style={[styles.emptyWidgetText, { color: colors.danger }]}>{error}</Text>
-      </View>
-    );
-  }
-  if (mails.length === 0) {
-    return (
-      <View style={styles.emptyWidget}>
-        <Ionicons name="checkmark-circle-outline" size={28} color={colors.success} />
-        <Text style={styles.emptyWidgetText}>Posteingang leer</Text>
-      </View>
-    );
-  }
+function BirthdayCard({ events, colors, styles }: { events: CalendarEvent[]; colors: ThemeColors; styles: any }) {
+  if (events.length === 0) return null;
   return (
-    <View style={styles.widgetList}>
-      {mails.map((mail) => (
-        <View key={mail.id} style={styles.mailRow}>
-          <View style={styles.mailRowMain}>
-            <Text style={styles.mailFrom} numberOfLines={1}>{parseDisplayFrom(mail.from)}</Text>
-            <Text style={styles.mailDate}>{parseDisplayDate(mail.date)}</Text>
-          </View>
-          <Text style={styles.mailSubject} numberOfLines={1}>{mail.subject || '(Kein Betreff)'}</Text>
-        </View>
-      ))}
-    </View>
-  );
-}
-
-// ─── Calendar Widget ──────────────────────────────────────────────────────────
-
-interface CalendarWidgetProps {
-  events: CalendarEvent[];
-  loading: boolean;
-  connected: boolean;
-  colors: ThemeColors;
-  styles: ReturnType<typeof makeStyles>;
-}
-
-function formatEventTime(event: CalendarEvent): string {
-  if (event.allDay) return 'Ganztägig';
-  try {
-    const d = new Date(event.start);
-    const now = new Date();
-    const isToday = d.toDateString() === now.toDateString();
-    const tomorrow = new Date(now); tomorrow.setDate(now.getDate() + 1);
-    const isTomorrow = d.toDateString() === tomorrow.toDateString();
-    const dayLabel = isToday ? 'Heute' : isTomorrow ? 'Morgen' : d.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' });
-    const time = d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
-    return `${dayLabel}, ${time}`;
-  } catch { return ''; }
-}
-
-function CalendarWidget({ events, loading, connected, colors, styles }: CalendarWidgetProps) {
-  if (!connected) return null;
-  if (loading) return (
-    <View style={styles.emptyWidget}>
-      <ActivityIndicator color={colors.accentNeon} />
-    </View>
-  );
-  if (events.length === 0) return (
-    <View style={styles.emptyWidget}>
-      <Ionicons name="calendar-outline" size={28} color={colors.textMuted} />
-      <Text style={styles.emptyWidgetText}>Keine Termine in den nächsten 2 Tagen</Text>
-    </View>
-  );
-  return (
-    <View style={styles.widgetList}>
-      {events.map((event) => (
-        <View key={event.id} style={styles.calEventRow}>
-          <View style={[styles.calEventBar, { backgroundColor: colors.accentNeon }]} />
-          <View style={styles.calEventContent}>
-            <Text style={styles.calEventTitle} numberOfLines={1}>{event.summary}</Text>
-            <Text style={[styles.calEventTime, { color: colors.textSecondary }]}>{formatEventTime(event)}</Text>
-            {event.location ? (
-              <Text style={[styles.calEventLocation, { color: colors.textMuted }]} numberOfLines={1}>
-                📍 {event.location}
-              </Text>
-            ) : null}
-            {event.calendarName ? (
-              <Text style={[styles.calEventLocation, { color: colors.textMuted }]} numberOfLines={1}>
-                🗓 {event.calendarName}
-              </Text>
-            ) : null}
-          </View>
-        </View>
-      ))}
+    <View style={styles.birthdayCard}>
+      <Text style={styles.birthdayIcon}>🎂</Text>
+      <View style={{ flex: 1 }}>
+        {events.map((e) => (
+          <Text key={e.id} style={styles.birthdayText} numberOfLines={1}>{e.summary}</Text>
+        ))}
+      </View>
     </View>
   );
 }
@@ -301,87 +138,70 @@ function CalendarWidget({ events, loading, connected, colors, styles }: Calendar
 
 export function DashboardScreen() {
   const router = useRouter();
-  const { tasks, notes, settings, updateSettings } = useStore();
+  const { tasks, notes, settings } = useStore();
   const { colors, isDark } = useTheme();
   const styles = useMemo(() => makeStyles(colors, isDark), [colors, isDark]);
 
   const [mails, setMails] = useState<MailMessage[]>([]);
   const [mailLoading, setMailLoading] = useState(false);
-  const [mailError, setMailError] = useState<string | null>(null);
   const [calEvents, setCalEvents] = useState<CalendarEvent[]>([]);
+  const [birthdays, setBirthdays] = useState<CalendarEvent[]>([]);
   const [calLoading, setCalLoading] = useState(false);
 
+  // Upcoming tasks (open, sorted by due date)
   const upcomingTasks = useMemo(() => {
-    const open = tasks.filter((t) => !t.completed);
-    return [...open]
+    return tasks
+      .filter((t) => !t.completed)
       .sort((a, b) => {
         if (a.dueDate && b.dueDate) return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
         if (a.dueDate) return -1;
         if (b.dueDate) return 1;
-        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        return 0;
       })
       .slice(0, 5);
   }, [tasks]);
 
-  const recentNotes = useMemo(() => {
-    return [...notes]
-      .sort((a, b) => {
-        if (a.pinned && !b.pinned) return -1;
-        if (!a.pinned && b.pinned) return 1;
-        return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
-      })
-      .slice(0, 4);
-  }, [notes]);
+  const overdueCount = useMemo(() => tasks.filter((t) => !t.completed && isOverdue(t.dueDate)).length, [tasks]);
+  const openCount = useMemo(() => tasks.filter((t) => !t.completed).length, [tasks]);
 
-  const openTaskCount = useMemo(() => tasks.filter((t) => !t.completed).length, [tasks]);
-  const overdueCount = useMemo(
-    () => tasks.filter((t) => !t.completed && isOverdue(t.dueDate)).length,
-    [tasks]
+  const recentNotes = useMemo(() =>
+    [...notes]
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+      .slice(0, 3),
+    [notes]
   );
 
-  const loadMails = useCallback(async (token: string) => {
+  // Load mails
+  useEffect(() => {
+    if (!settings.googleAccessToken) return;
     setMailLoading(true);
-    setMailError(null);
-    try {
-      const result = await fetchRecentMails(token);
-      setMails(result.slice(0, 4));
-    } catch (e: any) {
-      if (e?.message === 'UNAUTHORIZED') {
-        updateSettings({ googleAccessToken: null, googleRefreshToken: null, googleCalendarEnabled: false });
-        setMailError('Sitzung abgelaufen.');
-      } else {
-        setMailError('E-Mails konnten nicht geladen werden.');
-      }
-    } finally {
-      setMailLoading(false);
-    }
-  }, [updateSettings]);
+    fetchRecentMails(settings.googleAccessToken)
+      .then((r) => setMails(r.slice(0, 5)))
+      .catch(() => {})
+      .finally(() => setMailLoading(false));
+  }, [settings.googleAccessToken]);
 
+  // Load calendar events + birthdays
   useEffect(() => {
-    if (settings.googleAccessToken) {
-      loadMails(settings.googleAccessToken);
-    }
-  }, [settings.googleAccessToken, loadMails]);
-
-  useEffect(() => {
-    if (settings.googleAccessToken && settings.googleCalendarEnabled) {
-      setCalLoading(true);
-      listUpcomingEvents(settings.googleAccessToken, settings.selectedCalendarIds ?? [], 2)
-        .then(setCalEvents)
-        .catch(() => {})
-        .finally(() => setCalLoading(false));
-    }
+    if (!settings.googleAccessToken || !settings.googleCalendarEnabled) return;
+    setCalLoading(true);
+    Promise.all([
+      listUpcomingEvents(settings.googleAccessToken, settings.selectedCalendarIds ?? [], 2),
+      listUpcomingEvents(settings.googleAccessToken, ['#contacts@group.v.calendar.google.com'], 1),
+    ])
+      .then(([events, bdays]) => {
+        setCalEvents(events.filter((e) => !e.summary?.toLowerCase().includes('geburtstag') && !e.calendarName?.toLowerCase().includes('geburtstag')));
+        setBirthdays([
+          ...bdays,
+          ...events.filter((e) => e.summary?.toLowerCase().includes('geburtstag') || e.calendarName?.toLowerCase().includes('geburtstag')),
+        ]);
+      })
+      .catch(() => {})
+      .finally(() => setCalLoading(false));
   }, [settings.googleAccessToken, settings.googleCalendarEnabled, settings.selectedCalendarIds]);
 
-  const handleConnectMail = useCallback(() => {
-    router.push('/(tabs)/mail');
-  }, [router]);
-
-  const todayStr = new Date().toLocaleDateString('de-DE', {
-    weekday: 'long',
-    day: '2-digit',
-    month: 'long',
-  });
+  const now = new Date();
+  const todayStr = now.toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' });
 
   return (
     <ScrollView
@@ -389,270 +209,288 @@ export function DashboardScreen() {
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
     >
-      {/* Greeting */}
-      <View style={styles.greetingSection}>
-        <Text style={styles.greetingText}>{greeting()} 👋</Text>
-        <Text style={styles.dateText}>{todayStr}</Text>
-        {overdueCount > 0 && (
-          <View style={[styles.overduePill, isDark ? neonGlow(colors.danger, 'soft') : {}]}>
-            <Ionicons name="alert-circle-outline" size={14} color={colors.danger} />
-            <Text style={[styles.overduePillText, { color: colors.danger }]}>
-              {overdueCount} überfällig
-            </Text>
-          </View>
-        )}
-      </View>
-
-      {/* Stats row */}
-      <View style={styles.statsRow}>
-        <View style={[styles.statCard, isDark ? neonGlow(colors.accentNeon, 'soft') : {}]}>
-          <Text style={styles.statNumber}>{openTaskCount}</Text>
-          <Text style={styles.statLabel}>Offene Tasks</Text>
+      {/* ── Hero ── */}
+      <View style={styles.hero}>
+        <View>
+          <Text style={styles.heroGreeting}>{greeting()} 👋</Text>
+          <Text style={styles.heroDate}>{todayStr}</Text>
         </View>
-        <View style={styles.statCard}>
-          <Text style={styles.statNumber}>{notes.length}</Text>
-          <Text style={styles.statLabel}>Notizen</Text>
-        </View>
-        <View style={styles.statCard}>
-          <Text style={styles.statNumber}>{mails.length > 0 ? mails.length + '+' : settings.googleAccessToken ? '…' : '–'}</Text>
-          <Text style={styles.statLabel}>Neue Mails</Text>
+        <View style={styles.heroStats}>
+          {overdueCount > 0 && (
+            <Chip label={`${overdueCount} überfällig`} color={colors.danger} bg={colors.danger + '22'} />
+          )}
+          <Chip label={`${openCount} Tasks`} color={colors.accentNeon} bg={colors.accentNeon + '18'} />
+          <Chip label={`${notes.length} Notizen`} color={colors.textSecondary} bg={colors.border} />
         </View>
       </View>
 
-      {/* Tasks widget */}
-      <View style={styles.section}>
-        <SectionHeader
-          icon="checkmark-circle-outline"
-          title="Kommende Tasks"
-          count={openTaskCount}
-          onShowAll={() => router.push('/(tabs)/')}
-          colors={colors}
-          styles={styles}
-        />
-        <View style={[styles.widget, isDark ? { borderColor: colors.border } : {}]}>
-          <TaskWidget
-            tasks={upcomingTasks}
-            colors={colors}
-            styles={styles}
-            isDark={isDark}
-            onPress={(id) => router.push(`/task/${id}` as any)}
-          />
-        </View>
-      </View>
+      {/* ── Geburtstage ── */}
+      {birthdays.length > 0 && (
+        <BirthdayCard events={birthdays} colors={colors} styles={styles} />
+      )}
 
-      {/* Notes widget */}
-      <View style={styles.section}>
-        <SectionHeader
-          icon="document-text-outline"
-          title="Letzte Notizen"
-          count={notes.length}
-          onShowAll={() => router.push('/(tabs)/notes')}
-          colors={colors}
-          styles={styles}
-        />
-        <View style={[styles.widget, isDark ? { borderColor: colors.border } : {}]}>
-          <NotesWidget notes={recentNotes} colors={colors} styles={styles} />
-        </View>
-      </View>
-
-      {/* Calendar widget */}
-      {settings.googleCalendarEnabled && (
+      {/* ── Mails ── */}
+      {settings.googleAccessToken && (
         <View style={styles.section}>
-          <SectionHeader
-            icon="calendar-outline"
-            title="Nächste 2 Tage"
-            count={calEvents.length}
-            onShowAll={() => {}}
-            colors={colors}
-            styles={styles}
-          />
-          <View style={[styles.widget, isDark ? { borderColor: colors.border } : {}]}>
-            <CalendarWidget
-              events={calEvents}
-              loading={calLoading}
-              connected={!!settings.googleAccessToken}
-              colors={colors}
-              styles={styles}
-            />
+          <SectionLabel icon="mail-outline" title="Posteingang" count={mails.length} onMore={() => router.push('/(tabs)/mail')} colors={colors} />
+          <View style={styles.card}>
+            {mailLoading ? (
+              <View style={styles.loadingRow}><ActivityIndicator color={colors.accentNeon} size="small" /></View>
+            ) : mails.length === 0 ? (
+              <View style={styles.emptyRow}>
+                <Ionicons name="checkmark-circle-outline" size={20} color={colors.success} />
+                <Text style={styles.emptyText}>Posteingang leer</Text>
+              </View>
+            ) : mails.map((mail, i) => (
+              <View key={mail.id} style={[styles.mailRow, i < mails.length - 1 && styles.rowDivider]}>
+                <View style={styles.mailAvatar}>
+                  <Text style={styles.mailAvatarText}>{parseDisplayFrom(mail.from).charAt(0).toUpperCase()}</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <View style={styles.mailMeta}>
+                    <Text style={styles.mailFrom} numberOfLines={1}>{parseDisplayFrom(mail.from)}</Text>
+                    <Text style={styles.mailDate}>{formatMailDate(mail.date)}</Text>
+                  </View>
+                  <Text style={styles.mailSubject} numberOfLines={1}>{mail.subject || '(Kein Betreff)'}</Text>
+                </View>
+              </View>
+            ))}
           </View>
         </View>
       )}
 
-      {/* Mail widget */}
-      <View style={[styles.section, styles.lastSection]}>
-        <SectionHeader
-          icon="mail-outline"
-          title="Neueste Mails"
-          onShowAll={() => router.push('/(tabs)/mail')}
-          colors={colors}
-          styles={styles}
-        />
-        <View style={[styles.widget, isDark ? { borderColor: colors.border } : {}]}>
-          <MailWidget
-            mails={mails}
-            loading={mailLoading}
-            error={mailError}
-            connected={!!settings.googleAccessToken}
-            colors={colors}
-            styles={styles}
-            onConnectPress={handleConnectMail}
-          />
+      {/* ── Tasks ── */}
+      <View style={styles.section}>
+        <SectionLabel icon="checkmark-circle-outline" title="Tasks" count={openCount} onMore={() => router.push('/(tabs)/')} colors={colors} />
+        <View style={styles.card}>
+          {upcomingTasks.length === 0 ? (
+            <View style={styles.emptyRow}>
+              <Ionicons name="checkmark-circle-outline" size={20} color={colors.success} />
+              <Text style={styles.emptyText}>Alle Tasks erledigt 🎉</Text>
+            </View>
+          ) : upcomingTasks.map((task, i) => {
+            const { label, urgent } = formatDue(task.dueDate);
+            return (
+              <Pressable
+                key={task.id}
+                style={[styles.taskRow, i < upcomingTasks.length - 1 && styles.rowDivider]}
+                onPress={() => router.push(`/task/${task.id}` as any)}
+              >
+                <View style={[styles.taskAccent, { backgroundColor: urgent ? colors.danger : colors.accentNeon }]} />
+                <Text style={styles.taskTitle} numberOfLines={1}>{task.title}</Text>
+                {label !== '' && (
+                  <Chip
+                    label={label}
+                    color={urgent ? colors.danger : colors.textSecondary}
+                    bg={urgent ? colors.danger + '18' : colors.border}
+                  />
+                )}
+              </Pressable>
+            );
+          })}
         </View>
+      </View>
+
+      {/* ── Kalender ── */}
+      {settings.googleCalendarEnabled && (
+        <View style={styles.section}>
+          <SectionLabel icon="calendar-outline" title="Nächste 2 Tage" count={calEvents.length} colors={colors} />
+          <View style={styles.card}>
+            {calLoading ? (
+              <View style={styles.loadingRow}><ActivityIndicator color={colors.accentNeon} size="small" /></View>
+            ) : calEvents.length === 0 ? (
+              <View style={styles.emptyRow}>
+                <Ionicons name="calendar-outline" size={20} color={colors.textMuted} />
+                <Text style={styles.emptyText}>Keine Termine</Text>
+              </View>
+            ) : calEvents.map((event, i) => {
+              const { day, time } = formatEventTime(event);
+              return (
+                <View key={event.id} style={[styles.calRow, i < calEvents.length - 1 && styles.rowDivider]}>
+                  <View style={styles.calTime}>
+                    <Text style={styles.calDay}>{day}</Text>
+                    <Text style={styles.calHour}>{time}</Text>
+                  </View>
+                  <View style={[styles.calBar, { backgroundColor: colors.accentNeon }]} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.calTitle} numberOfLines={1}>{event.summary}</Text>
+                    {event.location ? <Text style={styles.calSub} numberOfLines={1}>📍 {event.location}</Text> : null}
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        </View>
+      )}
+
+      {/* ── Notizen ── */}
+      <View style={[styles.section, { marginBottom: 0 }]}>
+        <SectionLabel icon="document-text-outline" title="Notizen" count={notes.length} onMore={() => router.push('/(tabs)/notes')} colors={colors} />
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.noteScroll}>
+          {recentNotes.map((note) => (
+            <View key={note.id} style={[styles.noteCard, { backgroundColor: note.color }]}>
+              {note.title ? <Text style={styles.noteCardTitle} numberOfLines={1}>{note.title}</Text> : null}
+              <Text style={styles.noteCardContent} numberOfLines={4}>
+                {note.content || note.checklist?.map((i) => `${i.checked ? '☑' : '☐'} ${i.text}`).join('\n') || ''}
+              </Text>
+            </View>
+          ))}
+          {notes.length === 0 && (
+            <View style={[styles.noteCard, { backgroundColor: colors.surface, justifyContent: 'center', alignItems: 'center' }]}>
+              <Text style={{ color: colors.textMuted, fontSize: 12 }}>Keine Notizen</Text>
+            </View>
+          )}
+        </ScrollView>
       </View>
     </ScrollView>
   );
 }
 
-function makeStyles(colors: ThemeColors, isDark: boolean) {
-  return StyleSheet.create({
-    container: { flex: 1, backgroundColor: colors.background },
-    content: { padding: 16, paddingBottom: 32 },
+// ─── Styles ───────────────────────────────────────────────────────────────────
 
-    // Greeting
-    greetingSection: { marginBottom: 20 },
-    greetingText: { fontSize: 26, fontWeight: '700', color: colors.text, marginBottom: 2 },
-    dateText: { fontSize: 14, color: colors.textSecondary, marginBottom: 8 },
-    overduePill: {
+function makeStyles(c: ThemeColors, isDark: boolean) {
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: c.background },
+    content: { paddingTop: 12, paddingBottom: 40 },
+
+    // Hero
+    hero: {
+      paddingHorizontal: 16,
+      paddingBottom: 16,
+      gap: 10,
+    },
+    heroGreeting: {
+      fontSize: 28,
+      fontWeight: '800',
+      color: c.text,
+      letterSpacing: -0.5,
+    },
+    heroDate: {
+      fontSize: 13,
+      color: c.textSecondary,
+      marginTop: 1,
+    },
+    heroStats: {
+      flexDirection: 'row',
+      gap: 6,
+      flexWrap: 'wrap',
+    },
+
+    // Birthday
+    birthdayCard: {
       flexDirection: 'row',
       alignItems: 'center',
-      alignSelf: 'flex-start',
-      backgroundColor: colors.danger + '1A',
-      borderRadius: 20,
-      paddingHorizontal: 10,
-      paddingVertical: 4,
-      gap: 4,
-      marginTop: 4,
-    },
-    overduePillText: { fontSize: 12, fontWeight: '600' },
-
-    // Stats
-    statsRow: { flexDirection: 'row', gap: 10, marginBottom: 24 },
-    statCard: {
-      flex: 1,
-      backgroundColor: colors.surface,
+      backgroundColor: '#FFF3E0',
+      marginHorizontal: 16,
+      marginBottom: 14,
       borderRadius: 14,
-      padding: 14,
-      alignItems: 'center',
-      borderWidth: 1,
-      borderColor: colors.border,
+      padding: 12,
+      gap: 10,
+      borderLeftWidth: 3,
+      borderLeftColor: '#FF9500',
     },
-    statNumber: { fontSize: 22, fontWeight: '700', color: colors.accentNeon, marginBottom: 2 },
-    statLabel: { fontSize: 11, color: colors.textSecondary, textAlign: 'center' },
+    birthdayIcon: { fontSize: 24 },
+    birthdayText: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: '#7A4100',
+    },
 
     // Section
-    section: { marginBottom: 20 },
-    lastSection: { marginBottom: 0 },
-    sectionHeader: {
+    section: { marginBottom: 18 },
+
+    // Card container
+    card: {
+      marginHorizontal: 16,
+      backgroundColor: c.surface,
+      borderRadius: 16,
+      overflow: 'hidden',
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+
+    rowDivider: {
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: c.border,
+    },
+
+    loadingRow: { padding: 20, alignItems: 'center' },
+    emptyRow: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 16 },
+    emptyText: { fontSize: 13, color: c.textSecondary },
+
+    // Mail
+    mailRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'space-between',
-      marginBottom: 10,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      gap: 10,
     },
-    sectionTitleRow: { flexDirection: 'row', alignItems: 'center' },
-    sectionTitle: { fontSize: 15, fontWeight: '700', color: colors.text },
-    countBadge: {
-      marginLeft: 8,
-      borderRadius: 10,
-      paddingHorizontal: 7,
-      paddingVertical: 2,
-    },
-    countBadgeText: { fontSize: 11, fontWeight: '700' },
-    showAllBtn: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-    showAllText: { fontSize: 13, fontWeight: '600' },
-
-    // Widget container
-    widget: {
-      backgroundColor: colors.surface,
-      borderRadius: 16,
-      borderWidth: 1,
-      borderColor: colors.border,
-      overflow: 'hidden',
-    },
-
-    // Empty state
-    emptyWidget: {
-      padding: 24,
+    mailAvatar: {
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      backgroundColor: c.accentNeon + '22',
       alignItems: 'center',
-      gap: 8,
+      justifyContent: 'center',
     },
-    emptyWidgetText: { fontSize: 13, color: colors.textSecondary, textAlign: 'center' },
+    mailAvatarText: {
+      fontSize: 14,
+      fontWeight: '700',
+      color: c.accentNeon,
+    },
+    mailMeta: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 },
+    mailFrom: { fontSize: 13, fontWeight: '600', color: c.text, flex: 1, marginRight: 8 },
+    mailDate: { fontSize: 11, color: c.textSecondary },
+    mailSubject: { fontSize: 12, color: c.textSecondary },
 
-    // Task rows
-    widgetList: { paddingVertical: 4 },
+    // Tasks
     taskRow: {
       flexDirection: 'row',
       alignItems: 'center',
+      paddingHorizontal: 14,
       paddingVertical: 11,
+      gap: 10,
+    },
+    taskAccent: { width: 3, height: '100%' as any, borderRadius: 2, minHeight: 18 },
+    taskTitle: { flex: 1, fontSize: 14, fontWeight: '500', color: c.text },
+
+    // Calendar
+    calRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      gap: 10,
+    },
+    calTime: { width: 52, alignItems: 'center' },
+    calDay: { fontSize: 10, fontWeight: '700', color: c.accentNeon, textTransform: 'uppercase', letterSpacing: 0.5 },
+    calHour: { fontSize: 13, fontWeight: '600', color: c.text },
+    calBar: { width: 3, borderRadius: 2, alignSelf: 'stretch', minHeight: 28 },
+    calTitle: { fontSize: 14, fontWeight: '500', color: c.text },
+    calSub: { fontSize: 11, color: c.textSecondary, marginTop: 1 },
+
+    // Notes horizontal scroll
+    noteScroll: {
       paddingHorizontal: 16,
       gap: 10,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
-    },
-    taskDot: { width: 7, height: 7, borderRadius: 4, flexShrink: 0 },
-    taskTitle: { flex: 1, fontSize: 14, color: colors.text, fontWeight: '500' },
-    taskDue: { fontSize: 12, fontWeight: '600', flexShrink: 0 },
-
-    // Note grid
-    notesGrid: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      padding: 10,
-      gap: 8,
     },
     noteCard: {
-      width: Platform.OS === 'web' ? 'calc(50% - 4px)' as any : '48%',
-      borderRadius: 10,
-      padding: 10,
-      minHeight: 70,
+      width: 160,
+      minHeight: 100,
+      borderRadius: 14,
+      padding: 12,
     },
     noteCardTitle: {
       fontSize: 12,
       fontWeight: '700',
-      color: '#1C1C1E',
-      marginBottom: 3,
+      color: 'rgba(0,0,0,0.8)',
+      marginBottom: 4,
     },
-    noteCardContent: { fontSize: 12, color: '#1C1C1E', lineHeight: 17 },
-
-    // Mail rows
-    mailRow: {
-      paddingVertical: 11,
-      paddingHorizontal: 16,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
+    noteCardContent: {
+      fontSize: 12,
+      color: 'rgba(0,0,0,0.7)',
+      lineHeight: 17,
     },
-    mailRowMain: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 },
-    mailFrom: { fontSize: 13, fontWeight: '600', color: colors.text, flex: 1, marginRight: 8 },
-    mailDate: { fontSize: 11, color: colors.textSecondary },
-    mailSubject: { fontSize: 12, color: colors.textSecondary },
-
-    // Calendar event rows
-    calEventRow: {
-      flexDirection: 'row',
-      alignItems: 'stretch',
-      paddingVertical: 10,
-      paddingHorizontal: 16,
-      gap: 12,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
-    },
-    calEventBar: {
-      width: 3,
-      borderRadius: 2,
-      alignSelf: 'stretch',
-      minHeight: 36,
-    },
-    calEventContent: { flex: 1 },
-    calEventTitle: { fontSize: 14, fontWeight: '600', color: colors.text, marginBottom: 2 },
-    calEventTime: { fontSize: 12, marginBottom: 1 },
-    calEventLocation: { fontSize: 11 },
-
-    // Connect card
-    connectCard: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      padding: 16,
-      gap: 10,
-    },
-    connectCardText: { fontSize: 14, fontWeight: '600' },
   });
 }
