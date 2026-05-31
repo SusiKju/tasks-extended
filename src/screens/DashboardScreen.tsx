@@ -126,25 +126,32 @@ const chipStyle = StyleSheet.create({
 
 // ─── Section Header ───────────────────────────────────────────────────────────
 
-function SectionLabel({ icon, title, count, onMore, colors }: {
-  icon: string; title: string; count?: number;
+function SectionLabel({ icon, title, subtitle, count, onMore, colors }: {
+  icon: string; title: string; subtitle?: string; count?: number;
   onMore?: () => void; colors: ThemeColors;
 }) {
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, paddingHorizontal: 16 }}>
-      <Ionicons name={icon as any} size={14} color={colors.accentNeon} />
-      <Text style={{ fontSize: 11, fontWeight: '800', color: colors.accentNeon, marginLeft: 5, letterSpacing: 1, textTransform: 'uppercase' }}>
-        {title}
-      </Text>
-      {count !== undefined && count > 0 && (
-        <View style={{ backgroundColor: colors.accentNeon + '22', borderRadius: 8, paddingHorizontal: 6, paddingVertical: 1, marginLeft: 6 }}>
-          <Text style={{ fontSize: 10, fontWeight: '700', color: colors.accentNeon }}>{count}</Text>
-        </View>
-      )}
-      {onMore && (
-        <Pressable onPress={onMore} style={{ marginLeft: 'auto' as any }} hitSlop={8}>
-          <Text style={{ fontSize: 11, color: colors.textSecondary, fontWeight: '600' }}>Alle →</Text>
-        </Pressable>
+    <View style={{ marginBottom: 8, paddingHorizontal: 16 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <Ionicons name={icon as any} size={14} color={colors.accentNeon} />
+        <Text style={{ fontSize: 11, fontWeight: '800', color: colors.accentNeon, marginLeft: 5, letterSpacing: 1, textTransform: 'uppercase' }}>
+          {title}
+        </Text>
+        {count !== undefined && count > 0 && (
+          <View style={{ backgroundColor: colors.accentNeon + '22', borderRadius: 8, paddingHorizontal: 6, paddingVertical: 1, marginLeft: 6 }}>
+            <Text style={{ fontSize: 10, fontWeight: '700', color: colors.accentNeon }}>{count}</Text>
+          </View>
+        )}
+        {onMore && (
+          <Pressable onPress={onMore} style={{ marginLeft: 'auto' as any }} hitSlop={8}>
+            <Text style={{ fontSize: 11, color: colors.textSecondary, fontWeight: '600' }}>Alle →</Text>
+          </Pressable>
+        )}
+      </View>
+      {subtitle && (
+        <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 2, marginLeft: 19 }}>
+          {subtitle}
+        </Text>
       )}
     </View>
   );
@@ -317,7 +324,7 @@ export function DashboardScreen() {
       {/* ── Mails ── */}
       {settings.googleAccessToken && (
         <View style={styles.section}>
-          <SectionLabel icon="mail-outline" title="Posteingang" count={mails.length} onMore={() => router.push('/(tabs)/mail')} colors={colors} />
+          <SectionLabel icon="mail-outline" title="Posteingang" subtitle="Ungelesene Mails der letzten 2 Tage" count={mails.length} onMore={() => router.push('/(tabs)/mail')} colors={colors} />
           <View style={styles.card}>
             {mailLoading ? (
               <View style={styles.loadingRow}><ActivityIndicator color={colors.accentNeon} size="small" /></View>
@@ -346,7 +353,7 @@ export function DashboardScreen() {
 
       {/* ── Tasks ── */}
       <View style={styles.section}>
-        <SectionLabel icon="checkmark-circle-outline" title="Tasks" count={openCount} onMore={() => router.push('/(tabs)/')} colors={colors} />
+        <SectionLabel icon="checkmark-circle-outline" title="Tasks" subtitle="Offene Tasks, sortiert nach Fälligkeit" count={openCount} onMore={() => router.push('/(tabs)/')} colors={colors} />
         <View style={styles.card}>
           {upcomingTasks.length === 0 ? (
             <View style={styles.emptyRow}>
@@ -379,7 +386,7 @@ export function DashboardScreen() {
       {/* ── Kalender ── */}
       {settings.googleCalendarEnabled && (
         <View style={styles.section}>
-          <SectionLabel icon="calendar-outline" title="Nächste 2 Tage" count={calEvents.length} colors={colors} />
+          <SectionLabel icon="calendar-outline" title="Nächste 2 Tage" subtitle="Termine aus ausgewählten Kalendern" count={calEvents.length} colors={colors} />
           <View style={styles.card}>
             {calLoading ? (
               <View style={styles.loadingRow}><ActivityIndicator color={colors.accentNeon} size="small" /></View>
@@ -410,7 +417,7 @@ export function DashboardScreen() {
 
       {/* ── Notizen ── */}
       <View style={[styles.section, { marginBottom: 0 }]}>
-        <SectionLabel icon="document-text-outline" title="Notizen" count={notes.length} onMore={() => router.push('/(tabs)/notes')} colors={colors} />
+        <SectionLabel icon="document-text-outline" title="Notizen" subtitle="Zuletzt bearbeitet" count={notes.length} onMore={() => router.push('/(tabs)/notes')} colors={colors} />
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.noteScroll}>
           {recentNotes.map((note) => (
             <View key={note.id} style={[styles.noteCard, { backgroundColor: note.color }]}>
