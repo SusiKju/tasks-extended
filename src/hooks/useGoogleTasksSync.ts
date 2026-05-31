@@ -7,6 +7,7 @@ import {
   createCalendarEvent,
   deleteCalendarEvent,
   deleteGoogleTask,
+  createGoogleTask,
 } from '../services/googleCalendar';
 
 export interface SyncResult {
@@ -111,9 +112,27 @@ export function useGoogleTasksSync() {
       }
     }
 
-    const localOnly = tasks.filter((t) => !t.googleEventId && t.dueDate);
+    // Alle lokalen Tasks ohne Google-ID hochladen
+    const localOnly = tasks.filter((t) => !t.googleEventId && !t.completed);
     for (const t of localOnly) {
-      const eventId = await createCalendarEvent(t, token, settings.googleCalendarId!);
+      let eventId: string | null = null;
+
+      if (t.dueDate && settings.googleCalendarId) {
+        // Mit Datum → Kalendereintrag erstellen
+        eventId = await createCalendarEvent(t, token, settings.googleCalendarId);
+      }
+
+      if (!eventId && firstTaskListId) {
+        // Ohne Datum (oder Kalender fehlgeschlagen) → Google Task erstellen
+        eventId = await createGoogleTask(
+          token,
+          firstTaskListId,
+          t.title,
+          t.description || undefined,
+          t.dueDate ? new Date(t.dueDate).toISOString() : undefined
+        );
+      }
+
       if (eventId) {
         updateTask(t.id, { googleEventId: eventId });
         pushed++;

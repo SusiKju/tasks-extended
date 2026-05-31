@@ -21,12 +21,14 @@ import { AttachmentPreview } from '../components/AttachmentPreview';
 import { DatePickerModal } from '../components/DatePickerModal';
 import { detectGroup } from '../utils/autoGroup';
 import { createCalendarEvent, refreshGoogleToken } from '../services/googleCalendar';
+import { useGoogleTasksSync } from '../hooks/useGoogleTasksSync';
 import { useTheme, ThemeColors } from '../utils/theme';
 import { formatDate } from '../utils/dateFormat';
 
 export function CreateTaskScreen() {
   const router = useRouter();
   const { groups, settings, addTask, updateTask, updateSettings } = useStore();
+  const { syncTasks } = useGoogleTasksSync();
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
@@ -201,9 +203,12 @@ export function CreateTaskScreen() {
       }
     }
 
+    // Sync mit Google Tasks/Calendar – auch ohne Datum
+    setTimeout(() => syncTasks().catch(() => {}), 500);
+
     setSaving(false);
     router.back();
-  }, [title, description, selectedGroupId, suggestedGroup, dueDate, attachments, settings, addTask, updateTask, updateSettings, router]);
+  }, [title, description, selectedGroupId, suggestedGroup, dueDate, attachments, settings, addTask, updateTask, updateSettings, syncTasks, router]);
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
