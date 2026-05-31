@@ -62,7 +62,7 @@ export function useGoogleDriveNotesSync() {
     try {
       driveFiles = await listDriveNotes(token);
     } catch (e: any) {
-      if (e?.message === 'DRIVE_FORBIDDEN') {
+      if (e?.message === 'DRIVE_FORBIDDEN' || e?.message === 'DRIVE_UNAUTHORIZED') {
         return { pulled: 0, pushed: 0, deleted, scopeError: true };
       }
       throw e;

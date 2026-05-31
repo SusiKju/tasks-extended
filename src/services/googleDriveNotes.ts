@@ -42,8 +42,12 @@ async function findOrCreateFolder(accessToken: string): Promise<string | null> {
     `name='${FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' and trashed=false`
   );
   const res = await driveFetch(`/files?q=${query}&fields=files(id)`, accessToken);
+  if (res.status === 401) throw new Error('DRIVE_UNAUTHORIZED');
   if (res.status === 403) throw new Error('DRIVE_FORBIDDEN');
-  if (!res.ok) return null;
+  if (!res.ok) {
+    console.error('[Drive] folder lookup failed:', res.status);
+    return null;
+  }
 
   const data = await res.json();
   if (data.files?.length > 0) {
