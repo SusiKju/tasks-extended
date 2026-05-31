@@ -95,15 +95,14 @@ function FocusTiles({ tiles, styles }: { tiles: FocusTile[]; styles: any }) {
           key={tile.id}
           style={({ pressed }) => [
             styles.focusTile,
-            { backgroundColor: tile.bg, borderColor: tile.color + '44' },
+            { backgroundColor: tile.bg, borderColor: tile.color + '33' },
             pressed && { opacity: 0.8 },
           ]}
           onPress={tile.onPress}
           disabled={!tile.onPress}
         >
-          <Text style={styles.focusTileIcon}>{tile.icon}</Text>
           <Text style={[styles.focusTileValue, { color: tile.color }]}>{tile.value}</Text>
-          <Text style={[styles.focusTileLabel, { color: tile.color + 'BB' }]}>{tile.label}</Text>
+          <Text style={[styles.focusTileLabel, { color: tile.color }]}>{tile.label}</Text>
         </Pressable>
       ))}
     </ScrollView>
@@ -256,46 +255,46 @@ export function DashboardScreen() {
     return [
       {
         id: 'overdue',
-        icon: '🔴',
+        icon: '',
         value: `${overdue.length}`,
-        label: overdue.length === 1 ? 'Task überfällig' : 'Tasks überfällig',
+        label: 'Überfällig',
         color: overdue.length > 0 ? '#FF3B30' : colors.textMuted,
-        bg: overdue.length > 0 ? '#FF3B3018' : colors.surface,
+        bg: overdue.length > 0 ? '#FF3B3022' : colors.surface,
         onPress: () => router.push('/(tabs)/'),
       },
       {
         id: 'today-tasks',
-        icon: '✅',
+        icon: '',
         value: `${todayTasks.length}`,
-        label: todayTasks.length === 1 ? 'Task heute' : 'Tasks heute',
-        color: todayTasks.length > 0 ? colors.accentNeon : colors.textMuted,
-        bg: todayTasks.length > 0 ? colors.accentNeon + '18' : colors.surface,
+        label: 'Tasks heute',
+        color: todayTasks.length > 0 ? '#007AFF' : colors.textMuted,
+        bg: todayTasks.length > 0 ? '#007AFF22' : colors.surface,
         onPress: () => router.push('/(tabs)/'),
       },
       {
-        id: 'birthdays',
-        icon: '🎂',
-        value: `${todayBirthdays.length}`,
-        label: todayBirthdays.length === 1 ? 'Geburtstag' : 'Geburtstage',
-        color: todayBirthdays.length > 0 ? '#FF9500' : colors.textMuted,
-        bg: todayBirthdays.length > 0 ? '#FF950018' : colors.surface,
-      },
-      {
         id: 'mails',
-        icon: '📧',
+        icon: '',
         value: `${todayMails.length}`,
-        label: todayMails.length === 1 ? 'neue Mail' : 'neue Mails',
-        color: todayMails.length > 0 ? '#007AFF' : colors.textMuted,
-        bg: todayMails.length > 0 ? '#007AFF18' : colors.surface,
+        label: 'Neue Mails',
+        color: todayMails.length > 0 ? '#30B955' : colors.textMuted,
+        bg: todayMails.length > 0 ? '#30B95522' : colors.surface,
         onPress: () => router.push('/(tabs)/mail'),
       },
       {
         id: 'cal-today',
-        icon: '📅',
+        icon: '',
         value: `${todayCal.length}`,
-        label: todayCal.length === 1 ? 'Termin heute' : 'Termine heute',
-        color: todayCal.length > 0 ? '#30B955' : colors.textMuted,
-        bg: todayCal.length > 0 ? '#30B95518' : colors.surface,
+        label: 'Termine heute',
+        color: todayCal.length > 0 ? '#FF9500' : colors.textMuted,
+        bg: todayCal.length > 0 ? '#FF950022' : colors.surface,
+      },
+      {
+        id: 'birthdays',
+        icon: '',
+        value: `${todayBirthdays.length}`,
+        label: 'Geburtstage',
+        color: todayBirthdays.length > 0 ? '#AF52DE' : colors.textMuted,
+        bg: todayBirthdays.length > 0 ? '#AF52DE22' : colors.surface,
       },
     ];
   }, [tasks, birthdays, mails, calEvents, colors]);
@@ -461,18 +460,17 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
     // Focus tiles
     focusScroll: {
       paddingHorizontal: 16,
-      gap: 10,
+      gap: 8,
     },
     focusTile: {
-      width: 130,
+      width: 110,
       borderRadius: 16,
       padding: 14,
       borderWidth: 1,
-      gap: 4,
+      gap: 2,
     },
-    focusTileIcon: { fontSize: 24 },
-    focusTileValue: { fontSize: 28, fontWeight: '800', letterSpacing: -1 },
-    focusTileLabel: { fontSize: 11, fontWeight: '600', letterSpacing: 0.2 },
+    focusTileValue: { fontSize: 34, fontWeight: '800', letterSpacing: -1.5 },
+    focusTileLabel: { fontSize: 11, fontWeight: '600', letterSpacing: 0.1, lineHeight: 15 },
 
     // Birthday
     birthdayCard: {
