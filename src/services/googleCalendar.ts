@@ -167,22 +167,19 @@ export interface CalendarEvent {
   calendarName?: string;
 }
 
-export async function listUpcomingEvents(
+async function fetchEventsFromCalendar(
   accessToken: string,
   calendarId: string,
-  days = 2
+  calendarName: string,
+  timeMin: string,
+  timeMax: string
 ): Promise<CalendarEvent[]> {
-  const now = new Date();
-  const until = new Date(now);
-  until.setDate(until.getDate() + days);
-  until.setHours(23, 59, 59, 999);
-
   const params = new URLSearchParams({
-    timeMin: now.toISOString(),
-    timeMax: until.toISOString(),
+    timeMin,
+    timeMax,
     orderBy: 'startTime',
     singleEvents: 'true',
-    maxResults: '20',
+    maxResults: '50',
   });
 
   const res = await calendarFetch(
@@ -192,17 +189,48 @@ export async function listUpcomingEvents(
   if (!res.ok) return [];
   const data = await res.json();
 
-  return (data.items ?? []).map((e: any) => {
-    const allDay = !!e.start?.date;
-    return {
-      id: e.id,
-      summary: e.summary ?? '(Kein Titel)',
-      start: e.start?.dateTime ?? e.start?.date ?? '',
-      end: e.end?.dateTime ?? e.end?.date ?? '',
-      allDay,
-      location: e.location,
-    };
-  });
+  return (data.items ?? []).map((e: any) => ({
+    id: `${calendarId}::${e.id}`,
+    summary: e.summary ?? '(Kein Titel)',
+    start: e.start?.dateTime ?? e.start?.date ?? '',
+    end: e.end?.dateTime ?? e.end?.date ?? '',
+    allDay: !!e.start?.date,
+    location: e.location,
+    calendarName,
+  }));
+}
+
+export async function listUpcomingEvents(
+  accessToken: string,
+  _calendarId: string,   // wird ignoriert – alle Kalender werden abgefragt
+  days = 2
+): Promise<CalendarEvent[]> {
+  const now = new Date();
+  const until = new Date(now);
+  until.setDate(until.getDate() + days);
+  until.setHours(23, 59, 59, 999);
+  const timeMin = now.toISOString();
+  const timeMax = until.toISOString();
+
+  // Alle Kalender laden
+  const calendars = await listCalendars(accessToken);
+  if (calendars.length === 0) return [];
+
+  // Alle parallel abfragen
+  const results = await Promise.all(
+    calendars.map((cal) =>
+      fetchEventsFromCalendar(accessToken, cal.id, cal.summary, timeMin, timeMax)
+    )
+  );
+
+  // Zusammenführen und nach Startzeit sortieren
+  return results
+    .flat()
+    .sort((a, b) => {
+      const ta = new Date(a.start).getTime();
+      const tb = new Date(b.start).getTime();
+      return ta - tb;
+    });
 }
 
 export async function listCalendars(accessToken: string): Promise<Array<{ id: string; summary: string; primary?: boolean }>> {

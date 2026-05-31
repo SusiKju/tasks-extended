@@ -285,6 +285,11 @@ function CalendarWidget({ events, loading, connected, colors, styles }: Calendar
                 📍 {event.location}
               </Text>
             ) : null}
+            {event.calendarName ? (
+              <Text style={[styles.calEventLocation, { color: colors.textMuted }]} numberOfLines={1}>
+                🗓 {event.calendarName}
+              </Text>
+            ) : null}
           </View>
         </View>
       ))}
