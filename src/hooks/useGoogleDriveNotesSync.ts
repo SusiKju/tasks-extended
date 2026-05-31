@@ -97,7 +97,9 @@ export function useGoogleDriveNotesSync() {
     // Alle zu uploadenden Notizen sammeln und parallel hochladen
     const toUpload: Array<{ note: Note; existingFileId?: string }> = [];
     for (const note of notes) {
-      if (!note.driveFileId && !driveNoteIdSet.has(note.id)) {
+      const notInDrive = !driveNoteIdSet.has(note.id);
+      if (notInDrive) {
+        // Neu hochladen – egal ob driveFileId gesetzt ist oder nicht
         toUpload.push({ note });
       } else if (note.driveFileId && driveFileIdSet.has(note.driveFileId)) {
         const driveEntry = driveByFileId.get(note.driveFileId);
