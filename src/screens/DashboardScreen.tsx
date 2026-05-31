@@ -76,6 +76,7 @@ interface FocusTile {
   id: string;
   icon: string;
   label: string;
+  sublabel?: string;
   value: string;
   color: string;
   bg: string;
@@ -85,27 +86,31 @@ interface FocusTile {
 function FocusTiles({ tiles, styles }: { tiles: FocusTile[]; styles: any }) {
   if (tiles.length === 0) return null;
   return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      contentContainerStyle={styles.focusScroll}
-    >
-      {tiles.map((tile) => (
+    <View style={styles.focusGrid}>
+      {tiles.map((tile, i) => (
         <Pressable
           key={tile.id}
           style={({ pressed }) => [
             styles.focusTile,
-            { backgroundColor: tile.bg, borderColor: tile.color + '33' },
+            { backgroundColor: tile.bg, borderColor: tile.color + '44' },
+            // Letztes Element bei ungerader Anzahl volle Breite
+            tiles.length % 2 !== 0 && i === tiles.length - 1 && styles.focusTileFull,
             pressed && { opacity: 0.8 },
           ]}
           onPress={tile.onPress}
           disabled={!tile.onPress}
         >
+          <View style={[styles.focusTileIconWrap, { backgroundColor: tile.color + '22' }]}>
+            <Ionicons name={tile.icon as any} size={16} color={tile.color} />
+          </View>
           <Text style={[styles.focusTileValue, { color: tile.color }]}>{tile.value}</Text>
           <Text style={[styles.focusTileLabel, { color: tile.color }]}>{tile.label}</Text>
+          {tile.sublabel ? (
+            <Text style={[styles.focusTileSublabel, { color: tile.color + 'AA' }]} numberOfLines={1}>{tile.sublabel}</Text>
+          ) : null}
         </Pressable>
       ))}
-    </ScrollView>
+    </View>
   );
 }
 
@@ -252,47 +257,58 @@ export function DashboardScreen() {
     const todayMails = mails.filter((m) => new Date(m.date).toDateString() === now.toDateString());
     const todayCal = calEvents.filter((e) => new Date(e.start).toDateString() === now.toDateString());
 
+    const firstOverdue = overdue[0]?.title;
+    const firstTask = todayTasks[0]?.title;
+    const firstMail = todayMails[0] ? parseDisplayFrom(todayMails[0].from) : undefined;
+    const firstEvent = todayCal[0]?.summary;
+    const firstBirthday = todayBirthdays[0]?.summary;
+
     return [
       {
         id: 'overdue',
-        icon: '',
+        icon: 'alert-circle',
         value: `${overdue.length}`,
         label: 'Überfällig',
+        sublabel: firstOverdue,
         color: overdue.length > 0 ? '#FF3B30' : colors.textMuted,
         bg: overdue.length > 0 ? '#FF3B3022' : colors.surface,
         onPress: () => router.push('/(tabs)/'),
       },
       {
         id: 'today-tasks',
-        icon: '',
+        icon: 'checkmark-circle',
         value: `${todayTasks.length}`,
         label: 'Tasks heute',
+        sublabel: firstTask,
         color: todayTasks.length > 0 ? '#007AFF' : colors.textMuted,
         bg: todayTasks.length > 0 ? '#007AFF22' : colors.surface,
         onPress: () => router.push('/(tabs)/'),
       },
       {
         id: 'mails',
-        icon: '',
+        icon: 'mail',
         value: `${todayMails.length}`,
         label: 'Neue Mails',
+        sublabel: firstMail,
         color: todayMails.length > 0 ? '#30B955' : colors.textMuted,
         bg: todayMails.length > 0 ? '#30B95522' : colors.surface,
         onPress: () => router.push('/(tabs)/mail'),
       },
       {
         id: 'cal-today',
-        icon: '',
+        icon: 'calendar',
         value: `${todayCal.length}`,
         label: 'Termine heute',
+        sublabel: firstEvent,
         color: todayCal.length > 0 ? '#FF9500' : colors.textMuted,
         bg: todayCal.length > 0 ? '#FF950022' : colors.surface,
       },
       {
         id: 'birthdays',
-        icon: '',
+        icon: 'gift',
         value: `${todayBirthdays.length}`,
         label: 'Geburtstage',
+        sublabel: firstBirthday,
         color: todayBirthdays.length > 0 ? '#AF52DE' : colors.textMuted,
         bg: todayBirthdays.length > 0 ? '#AF52DE22' : colors.surface,
       },
@@ -457,20 +473,35 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
       letterSpacing: 0.8,
     },
 
-    // Focus tiles
-    focusScroll: {
+    // Focus tiles – 2-Spalten-Grid, kein Scrollen
+    focusGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
       paddingHorizontal: 16,
       gap: 8,
     },
     focusTile: {
-      width: 110,
-      borderRadius: 16,
+      flexBasis: '47.5%',
+      flexGrow: 1,
+      borderRadius: 18,
       padding: 14,
       borderWidth: 1,
-      gap: 2,
+      gap: 4,
     },
-    focusTileValue: { fontSize: 34, fontWeight: '800', letterSpacing: -1.5 },
-    focusTileLabel: { fontSize: 11, fontWeight: '600', letterSpacing: 0.1, lineHeight: 15 },
+    focusTileFull: {
+      flexBasis: '100%',
+    },
+    focusTileIconWrap: {
+      width: 32,
+      height: 32,
+      borderRadius: 10,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 2,
+    },
+    focusTileValue: { fontSize: 30, fontWeight: '800', letterSpacing: -1.5, lineHeight: 32 },
+    focusTileLabel: { fontSize: 12, fontWeight: '700', letterSpacing: 0.1 },
+    focusTileSublabel: { fontSize: 10, fontWeight: '500', lineHeight: 13 },
 
     // Birthday
     birthdayCard: {
