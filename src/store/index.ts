@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Task, Group, AppSettings, Attachment, Note } from '../types';
 
 interface TaskState {
+  _hydrated?: boolean;
   tasks: Task[];
   groups: Group[];
   notes: Note[];
@@ -250,6 +251,9 @@ export const useStore = create<TaskState>()(
         return persistedState;
       },
       storage: createJSONStorage(() => AsyncStorage),
+      onRehydrateStorage: () => (state) => {
+        if (state) state._hydrated = true;
+      },
     }
   )
 );

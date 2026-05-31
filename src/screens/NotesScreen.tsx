@@ -19,6 +19,7 @@ import { useStore } from '../store';
 import { Note } from '../types';
 import { useTheme, ThemeColors, neonGlow } from '../utils/theme';
 import { loadImage } from '../utils/imageStore';
+import { useGoogleDriveNotesSync } from '../hooks/useGoogleDriveNotesSync';
 
 const NOTE_COLORS = [
   { value: '#F0C040', label: 'Amber' },
@@ -370,6 +371,7 @@ export function NotesScreen() {
   const [filterGroupId, setFilterGroupId] = useState<string | null>(null);
   const [filterLabel, setFilterLabel] = useState<string | null>(null);
   const [sortOrder, setSortOrder] = useState<SortOrder>('newest');
+  const { syncDriveNotes } = useGoogleDriveNotesSync();
 
   const groupMap = useMemo(() => Object.fromEntries(groups.map((g) => [g.id, g])), [groups]);
 
@@ -433,8 +435,10 @@ export function NotesScreen() {
         i === itemIndex ? { ...item, checked: !item.checked } : item
       );
       updateNote(note.id, { checklist: updated });
+      // Änderung sofort zu Drive hochladen
+      setTimeout(() => syncDriveNotes().catch(() => {}), 500);
     },
-    [updateNote],
+    [updateNote, syncDriveNotes],
   );
 
   const handleSave = useCallback(

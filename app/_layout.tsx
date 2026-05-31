@@ -4,6 +4,7 @@ import { Stack } from 'expo-router';
 import Head from 'expo-router/head';
 import { StatusBar } from 'expo-status-bar';
 import { useTheme } from '../src/utils/theme';
+import { useStore } from '../src/store';
 import { useGoogleTasksSync } from '../src/hooks/useGoogleTasksSync';
 import { useGoogleDriveNotesSync } from '../src/hooks/useGoogleDriveNotesSync';
 
@@ -16,13 +17,27 @@ export default function RootLayout() {
   syncTasksRef.current = syncTasks;
   const syncNotesRef = useRef(syncDriveNotes);
   syncNotesRef.current = syncDriveNotes;
-  // keep old ref name for backward compat below
   const syncRef = syncTasksRef;
   const lastSyncAt = useRef(0);
 
   useEffect(() => {
-    syncRef.current().catch(() => {});
-    syncNotesRef.current().catch(() => {});
+    // Warten bis der Store aus AsyncStorage geladen ist, dann erst syncen
+    const runSync = () => {
+      syncRef.current().catch(() => {});
+      syncNotesRef.current().catch(() => {});
+    };
+
+    const state = useStore.getState();
+    if (state._hydrated) {
+      runSync();
+    } else {
+      const unsub = useStore.subscribe((s) => {
+        if (s._hydrated) {
+          unsub();
+          runSync();
+        }
+      });
+    }
 
     const onStateChange = (nextState: AppStateStatus) => {
       if (nextState === 'active') {
