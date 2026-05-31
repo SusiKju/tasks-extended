@@ -19,14 +19,6 @@ import { Task, Note } from '../types';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function greeting(): string {
-  const h = new Date().getHours();
-  if (h < 5)  return 'Gute Nacht';
-  if (h < 12) return 'Guten Morgen';
-  if (h < 18) return 'Guten Tag';
-  return 'Guten Abend';
-}
-
 function parseDisplayFrom(from: string): string {
   const match = from.match(/^"?([^"<]+)"?\s*<?[^>]*>?$/);
   return match ? match[1].trim() : from.replace(/<[^>]+>/, '').trim() || from;
@@ -76,6 +68,46 @@ function formatDue(dueDate: string | null): { label: string; urgent: boolean } {
     if (diff === 1) return { label: 'Morgen', urgent: false };
     return { label: d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' }), urgent: false };
   } catch { return { label: '', urgent: false }; }
+}
+
+// ─── Focus Tiles ──────────────────────────────────────────────────────────────
+
+interface FocusTile {
+  id: string;
+  icon: string;
+  label: string;
+  value: string;
+  color: string;
+  bg: string;
+  onPress?: () => void;
+}
+
+function FocusTiles({ tiles, styles }: { tiles: FocusTile[]; styles: any }) {
+  if (tiles.length === 0) return null;
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={styles.focusScroll}
+    >
+      {tiles.map((tile) => (
+        <Pressable
+          key={tile.id}
+          style={({ pressed }) => [
+            styles.focusTile,
+            { backgroundColor: tile.bg, borderColor: tile.color + '44' },
+            pressed && { opacity: 0.8 },
+          ]}
+          onPress={tile.onPress}
+          disabled={!tile.onPress}
+        >
+          <Text style={styles.focusTileIcon}>{tile.icon}</Text>
+          <Text style={[styles.focusTileValue, { color: tile.color }]}>{tile.value}</Text>
+          <Text style={[styles.focusTileLabel, { color: tile.color + 'BB' }]}>{tile.label}</Text>
+        </Pressable>
+      ))}
+    </ScrollView>
+  );
 }
 
 // ─── Chip ─────────────────────────────────────────────────────────────────────
@@ -203,26 +235,75 @@ export function DashboardScreen() {
   const now = new Date();
   const todayStr = now.toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' });
 
+  // Focus tiles – nur was HEUTE relevant ist
+  const focusTiles = useMemo((): FocusTile[] => {
+    const tiles: FocusTile[] = [];
+    const todayTasks = tasks.filter((t) => {
+      if (t.completed || !t.dueDate) return false;
+      const d = new Date(t.dueDate);
+      return d.toDateString() === now.toDateString();
+    });
+    const overdue = tasks.filter((t) => !t.completed && isOverdue(t.dueDate));
+    const todayBirthdays = birthdays.filter((e) => {
+      const d = new Date(e.start);
+      return d.toDateString() === now.toDateString();
+    });
+    const todayMails = mails.filter((m) => {
+      const d = new Date(m.date);
+      return d.toDateString() === now.toDateString();
+    });
+
+    if (overdue.length > 0) tiles.push({
+      id: 'overdue', icon: '🔴', value: `${overdue.length}`,
+      label: overdue.length === 1 ? 'Task überfällig' : 'Tasks überfällig',
+      color: '#FF3B30', bg: '#FF3B3018',
+      onPress: () => router.push('/(tabs)/'),
+    });
+    if (todayTasks.length > 0) tiles.push({
+      id: 'today-tasks', icon: '✅', value: `${todayTasks.length}`,
+      label: todayTasks.length === 1 ? 'Task heute' : 'Tasks heute',
+      color: colors.accentNeon, bg: colors.accentNeon + '18',
+      onPress: () => router.push('/(tabs)/'),
+    });
+    if (todayBirthdays.length > 0) tiles.push({
+      id: 'birthdays', icon: '🎂', value: `${todayBirthdays.length}`,
+      label: todayBirthdays.length === 1 ? 'Geburtstag heute' : 'Geburtstage heute',
+      color: '#FF9500', bg: '#FF950018',
+    });
+    if (todayMails.length > 0) tiles.push({
+      id: 'mails', icon: '📧', value: `${todayMails.length}`,
+      label: todayMails.length === 1 ? 'neue Mail heute' : 'neue Mails heute',
+      color: '#007AFF', bg: '#007AFF18',
+      onPress: () => router.push('/(tabs)/mail'),
+    });
+    if (calEvents.filter((e) => new Date(e.start).toDateString() === now.toDateString()).length > 0) {
+      const todayCal = calEvents.filter((e) => new Date(e.start).toDateString() === now.toDateString());
+      tiles.push({
+        id: 'cal-today', icon: '📅', value: `${todayCal.length}`,
+        label: todayCal.length === 1 ? 'Termin heute' : 'Termine heute',
+        color: '#30B955', bg: '#30B95518',
+      });
+    }
+    return tiles;
+  }, [tasks, birthdays, mails, calEvents, colors]);
+
   return (
     <ScrollView
       style={styles.container}
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
     >
-      {/* ── Hero ── */}
+      {/* ── Header ── */}
       <View style={styles.hero}>
-        <View>
-          <Text style={styles.heroGreeting}>{greeting()} 👋</Text>
-          <Text style={styles.heroDate}>{todayStr}</Text>
-        </View>
-        <View style={styles.heroStats}>
-          {overdueCount > 0 && (
-            <Chip label={`${overdueCount} überfällig`} color={colors.danger} bg={colors.danger + '22'} />
-          )}
-          <Chip label={`${openCount} Tasks`} color={colors.accentNeon} bg={colors.accentNeon + '18'} />
-          <Chip label={`${notes.length} Notizen`} color={colors.textSecondary} bg={colors.border} />
-        </View>
+        <Text style={styles.heroDate}>{todayStr}</Text>
       </View>
+
+      {/* ── Focus Tiles ── */}
+      {focusTiles.length > 0 && (
+        <View style={{ marginBottom: 18 }}>
+          <FocusTiles tiles={focusTiles} styles={styles} />
+        </View>
+      )}
 
       {/* ── Geburtstage ── */}
       {birthdays.length > 0 && (
@@ -356,25 +437,31 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
     // Hero
     hero: {
       paddingHorizontal: 16,
-      paddingBottom: 16,
-      gap: 10,
-    },
-    heroGreeting: {
-      fontSize: 28,
-      fontWeight: '800',
-      color: c.text,
-      letterSpacing: -0.5,
+      paddingBottom: 10,
     },
     heroDate: {
-      fontSize: 13,
+      fontSize: 14,
+      fontWeight: '700',
       color: c.textSecondary,
-      marginTop: 1,
+      textTransform: 'uppercase',
+      letterSpacing: 0.8,
     },
-    heroStats: {
-      flexDirection: 'row',
-      gap: 6,
-      flexWrap: 'wrap',
+
+    // Focus tiles
+    focusScroll: {
+      paddingHorizontal: 16,
+      gap: 10,
     },
+    focusTile: {
+      width: 130,
+      borderRadius: 16,
+      padding: 14,
+      borderWidth: 1,
+      gap: 4,
+    },
+    focusTileIcon: { fontSize: 24 },
+    focusTileValue: { fontSize: 28, fontWeight: '800', letterSpacing: -1 },
+    focusTileLabel: { fontSize: 11, fontWeight: '600', letterSpacing: 0.2 },
 
     // Birthday
     birthdayCard: {
