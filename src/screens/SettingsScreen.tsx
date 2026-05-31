@@ -94,7 +94,12 @@ export function SettingsScreen() {
         googleCalendarEnabled: true,
         googleCalendarId: primary.id,
         googleCalendarName: primary.summary,
+        googleNotesEnabled: true,
       });
+
+      // Initial push: sync notes to Drive with the fresh token right away,
+      // bypassing any stale hook closure by passing the token explicitly.
+      syncDriveNotes(auth.accessToken).catch(() => {});
 
       if (calendars.length > 1) {
         Alert.alert(
@@ -114,7 +119,7 @@ export function SettingsScreen() {
     } finally {
       setLoadingCalendar(false);
     }
-  }, [updateSettings]);
+  }, [updateSettings, syncDriveNotes]);
 
   const handleGoogleDisconnect = useCallback(() => {
     updateSettings({
@@ -123,6 +128,7 @@ export function SettingsScreen() {
       googleRefreshToken: null,
       googleCalendarId: null,
       googleCalendarName: null,
+      googleNotesEnabled: false,
     });
     setConfirmDisconnect(false);
   }, [updateSettings]);
