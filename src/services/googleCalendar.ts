@@ -13,6 +13,7 @@ const SCOPES = [
   'https://www.googleapis.com/auth/calendar.readonly',
   'https://www.googleapis.com/auth/tasks',
   'https://www.googleapis.com/auth/gmail.modify',
+  'https://www.googleapis.com/auth/drive.file',
 ];
 
 const CALENDAR_API = 'https://www.googleapis.com/calendar/v3';

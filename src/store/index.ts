@@ -9,6 +9,7 @@ interface TaskState {
   notes: Note[];
   settings: AppSettings;
   deletedGoogleEventIds: string[];
+  deletedDriveNoteFileIds: string[];
 
   // Task actions
   addTask: (task: Task) => void;
@@ -32,6 +33,7 @@ interface TaskState {
   updateNote: (id: string, updates: Partial<Note>) => void;
   deleteNote: (id: string) => void;
   clearNotes: () => void;
+  clearDeletedDriveNoteFileIds: () => void;
 
   // Settings actions
   updateSettings: (updates: Partial<AppSettings>) => void;
@@ -83,6 +85,7 @@ export const useStore = create<TaskState>()(
       notes: [],
       settings: DEFAULT_SETTINGS,
       deletedGoogleEventIds: [],
+      deletedDriveNoteFileIds: [],
 
       addTask: (task) =>
         set((state) => ({ tasks: [task, ...state.tasks] })),
@@ -177,16 +180,26 @@ export const useStore = create<TaskState>()(
         })),
 
       deleteNote: (id) =>
-        set((state) => ({ notes: state.notes.filter((n) => n.id !== id) })),
+        set((state) => {
+          const note = state.notes.find((n) => n.id === id);
+          return {
+            notes: state.notes.filter((n) => n.id !== id),
+            deletedDriveNoteFileIds: note?.driveFileId
+              ? [...state.deletedDriveNoteFileIds, note.driveFileId]
+              : state.deletedDriveNoteFileIds,
+          };
+        }),
 
       clearNotes: () => set({ notes: [] }),
+
+      clearDeletedDriveNoteFileIds: () => set({ deletedDriveNoteFileIds: [] }),
 
       updateSettings: (updates) =>
         set((state) => ({ settings: { ...state.settings, ...updates } })),
     }),
     {
       name: 'tasks-extended-store',
-      version: 8,
+      version: 9,
       migrate: (persistedState: any, version: number) => {
         if (version < 1 && persistedState?.tasks) {
           persistedState.tasks = persistedState.tasks.map((t: any) => ({
@@ -218,6 +231,9 @@ export const useStore = create<TaskState>()(
             ...n,
             color: colorMap[n.color] ?? n.color,
           }));
+        }
+        if (version < 9) {
+          persistedState.deletedDriveNoteFileIds = persistedState.deletedDriveNoteFileIds ?? [];
         }
         return persistedState;
       },

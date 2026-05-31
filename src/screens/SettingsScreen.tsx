@@ -38,6 +38,7 @@ import {
   refreshGoogleToken,
 } from '../services/googleCalendar';
 import { useGoogleTasksSync } from '../hooks/useGoogleTasksSync';
+import { useGoogleDriveNotesSync } from '../hooks/useGoogleDriveNotesSync';
 import { importKeepTakeout } from '../utils/importKeepTakeout';
 
 const DATE_FORMATS: DateFormat[] = ['de', 'us', 'iso', 'relative'];
@@ -56,13 +57,16 @@ function generateId() {
 export function SettingsScreen() {
   const { settings, notes, groups, tasks, updateSettings, addNote, updateNote, deleteNote, clearNotes, addGroup, updateGroup, deleteGroup } = useStore();
   const { syncTasks } = useGoogleTasksSync();
+  const { syncDriveNotes } = useGoogleDriveNotesSync();
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [loadingCalendar, setLoadingCalendar] = useState(false);
   const [loadingKeepImport, setLoadingKeepImport] = useState(false);
   const [loadingTasksSync, setLoadingTasksSync] = useState(false);
+  const [loadingNotesSync, setLoadingNotesSync] = useState(false);
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
   const [tasksSyncResult, setTasksSyncResult] = useState<string | null>(null);
+  const [notesSyncResult, setNotesSyncResult] = useState<string | null>(null);
 
   const handleGoogleConnect = useCallback(async () => {
     setLoadingCalendar(true);
@@ -145,6 +149,31 @@ export function SettingsScreen() {
     }
   }, [syncTasks]);
 
+
+  const handleNotesSync = useCallback(async () => {
+    setLoadingNotesSync(true);
+    setNotesSyncResult(null);
+    try {
+      const result = await syncDriveNotes();
+      if (result === null) {
+        setNotesSyncResult('Drive-Sync nicht aktiviert');
+        return;
+      }
+      const { pulled, pushed, deleted } = result;
+      const parts = [
+        pulled > 0 ? `${pulled} geladen` : null,
+        pushed > 0 ? `${pushed} hochgeladen` : null,
+        deleted > 0 ? `${deleted} gelöscht` : null,
+        pulled === 0 && pushed === 0 && deleted === 0 ? 'Keine Änderungen' : null,
+      ].filter(Boolean);
+      setNotesSyncResult(parts.join(', '));
+    } catch (e) {
+      console.error('[NotesSync]', e);
+      setNotesSyncResult('Fehler beim Sync');
+    } finally {
+      setLoadingNotesSync(false);
+    }
+  }, [syncDriveNotes]);
 
   const handleKeepImport = useCallback(async () => {
     setLoadingKeepImport(true);
@@ -501,6 +530,52 @@ export function SettingsScreen() {
           </Pressable>
         )}
       </View>
+
+      {/* Google Drive Notizen-Sync */}
+      {settings.googleCalendarEnabled ? (
+        <View style={styles.section}>
+          <Text style={styles.sectionHeader}>Google Drive Notizen-Sync</Text>
+          <View style={styles.row}>
+            <View style={styles.rowContent}>
+              <Text style={styles.rowTitle}>Automatisch synchronisieren</Text>
+              <Text style={styles.rowSubtitle}>Notizen werden beim Start und Aktivieren der App mit Drive abgeglichen</Text>
+            </View>
+            <Switch
+              value={settings.googleNotesEnabled}
+              onValueChange={(v) => updateSettings({ googleNotesEnabled: v })}
+              trackColor={{ false: colors.border, true: colors.accent }}
+              thumbColor="#fff"
+            />
+          </View>
+          {settings.googleNotesEnabled ? (
+            <>
+              <Pressable
+                style={({ pressed }) => [styles.syncBtn, pressed && { opacity: 0.8 }, loadingNotesSync && { opacity: 0.6 }]}
+                onPress={handleNotesSync}
+                disabled={loadingNotesSync}
+              >
+                {loadingNotesSync ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <>
+                    <Ionicons name="cloud-upload-outline" size={16} color="#fff" />
+                    <Text style={styles.syncBtnText}>Notizen jetzt synchronisieren</Text>
+                  </>
+                )}
+              </Pressable>
+              {notesSyncResult ? (
+                <View style={[styles.row, { backgroundColor: colors.surfaceHigh }]}>
+                  <Ionicons name="checkmark-circle-outline" size={16} color={colors.success} />
+                  <Text style={[styles.rowSubtitle, { flex: 1 }]}>{notesSyncResult}</Text>
+                  <Pressable onPress={() => setNotesSyncResult(null)} hitSlop={8}>
+                    <Ionicons name="close" size={16} color={colors.textSecondary} />
+                  </Pressable>
+                </View>
+              ) : null}
+            </>
+          ) : null}
+        </View>
+      ) : null}
 
       {/* Gruppen */}
       <View style={styles.section}>

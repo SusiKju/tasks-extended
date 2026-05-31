@@ -5,17 +5,24 @@ import Head from 'expo-router/head';
 import { StatusBar } from 'expo-status-bar';
 import { useTheme } from '../src/utils/theme';
 import { useGoogleTasksSync } from '../src/hooks/useGoogleTasksSync';
+import { useGoogleDriveNotesSync } from '../src/hooks/useGoogleDriveNotesSync';
 
 export default function RootLayout() {
   const { colors, theme } = useTheme();
   const isDark = theme === 'dark-neon';
   const { syncTasks } = useGoogleTasksSync();
-  const syncRef = useRef(syncTasks);
-  syncRef.current = syncTasks;
+  const { syncDriveNotes } = useGoogleDriveNotesSync();
+  const syncTasksRef = useRef(syncTasks);
+  syncTasksRef.current = syncTasks;
+  const syncNotesRef = useRef(syncDriveNotes);
+  syncNotesRef.current = syncDriveNotes;
+  // keep old ref name for backward compat below
+  const syncRef = syncTasksRef;
   const lastSyncAt = useRef(0);
 
   useEffect(() => {
     syncRef.current().catch(() => {});
+    syncNotesRef.current().catch(() => {});
 
     const onStateChange = (nextState: AppStateStatus) => {
       if (nextState === 'active') {
@@ -23,6 +30,7 @@ export default function RootLayout() {
         if (now - lastSyncAt.current > 60_000) {
           lastSyncAt.current = now;
           syncRef.current().catch(() => {});
+          syncNotesRef.current().catch(() => {});
         }
       }
     };
