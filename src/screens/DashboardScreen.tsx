@@ -266,11 +266,10 @@ export function DashboardScreen() {
     const todayCal = calEvents.filter((e) => new Date(e.start).toDateString() === now.toDateString());
 
     return [
-      { id: 'overdue',    icon: 'alert-circle',      value: `${overdue.length}`,       label: 'überfällig',  active: overdue.length > 0,       color: '#FF3B30', onPress: () => scrollTo('tasks', triggerTaskBlink) },
-      { id: 'tasks',      icon: 'checkmark-circle',  value: `${todayTasks.length}`,    label: 'tasks heute', active: todayTasks.length > 0,     color: SECTION_COLORS.tasks, onPress: () => scrollTo('tasks', triggerTaskBlink) },
-      { id: 'mails',      icon: 'mail',              value: `${todayMails.length}`,    label: 'neue mails',  active: todayMails.length > 0,     color: SECTION_COLORS.mail,  onPress: () => scrollTo('mail', triggerMailBlink) },
-      { id: 'cal',        icon: 'calendar',          value: `${todayCal.length}`,      label: 'termine',     active: todayCal.length > 0,       color: SECTION_COLORS.calendar, onPress: () => scrollTo('cal', triggerCalBlink) },
-      { id: 'birthdays',  icon: 'gift',              value: `${todayBirthdays.length}`,label: 'geburtstage', active: todayBirthdays.length > 0, color: '#AF52DE', onPress: () => scrollTo('notes', triggerNotesBlink) },
+      { id: 'mails',   icon: 'mail',             value: `${todayMails.length}`, label: 'neue mails',  active: todayMails.length > 0,  color: SECTION_COLORS.mail,     onPress: () => scrollTo('mail',  triggerMailBlink) },
+      { id: 'overdue', icon: 'alert-circle',     value: `${overdue.length}`,    label: 'überfällig',  active: overdue.length > 0,     color: '#FF3B30',               onPress: () => scrollTo('tasks', triggerTaskBlink) },
+      { id: 'tasks',   icon: 'checkmark-circle', value: `${todayTasks.length}`, label: 'tasks heute', active: todayTasks.length > 0,  color: SECTION_COLORS.tasks,    onPress: () => scrollTo('tasks', triggerTaskBlink) },
+      { id: 'cal',     icon: 'calendar',         value: `${todayCal.length}`,   label: 'termine',     active: todayCal.length > 0,    color: SECTION_COLORS.calendar, onPress: () => scrollTo('cal',   triggerCalBlink) },
     ];
   }, [tasks, birthdays, mails, calEvents, scrollTo, triggerTaskBlink, triggerMailBlink, triggerCalBlink, triggerNotesBlink]);
 
