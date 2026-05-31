@@ -16,17 +16,18 @@ export interface SyncResult {
 }
 
 export function useGoogleTasksSync() {
-  const {
-    settings,
-    tasks,
-    deletedGoogleEventIds,
-    updateSettings,
-    addTask,
-    updateTask,
-    clearDeletedGoogleEventIds,
-  } = useStore();
-
   const syncTasks = useCallback(async (): Promise<SyncResult | null> => {
+    // Always read from store directly so we get the latest state even when called
+    // right after a delete (before the component re-renders and the closure updates).
+    const {
+      settings,
+      tasks,
+      updateSettings,
+      addTask,
+      updateTask,
+      clearDeletedGoogleEventIds,
+    } = useStore.getState();
+
     if (!settings.googleCalendarEnabled || !settings.googleAccessToken || !settings.googleCalendarId) {
       return null;
     }
@@ -40,11 +41,15 @@ export function useGoogleTasksSync() {
       }
     }
 
+    // Snapshot deleted IDs before any async work so concurrent deletes during
+    // this sync run are not lost when we call clearDeletedGoogleEventIds below.
+    const deletedIds = useStore.getState().deletedGoogleEventIds;
+
     // Fetch task list ID once – used for both deletions and import below
     const taskLists = await listTaskLists(token);
     const firstTaskListId = taskLists[0]?.id ?? null;
 
-    for (const deletedId of deletedGoogleEventIds) {
+    for (const deletedId of deletedIds) {
       // Delete from Calendar (for tasks originally pushed there)
       if (settings.googleCalendarId) {
         await deleteCalendarEvent(token, settings.googleCalendarId, deletedId).catch(() => {});
@@ -54,7 +59,9 @@ export function useGoogleTasksSync() {
         await deleteGoogleTask(token, firstTaskListId, deletedId).catch(() => {});
       }
     }
-    clearDeletedGoogleEventIds();
+    if (deletedIds.length > 0) {
+      clearDeletedGoogleEventIds();
+    }
 
     const googleTasks = firstTaskListId
       ? await listGoogleTasks(token, firstTaskListId)
@@ -66,7 +73,7 @@ export function useGoogleTasksSync() {
 
     for (const gt of googleTasks) {
       if (!gt.title) continue;
-      if (deletedGoogleEventIds.includes(gt.id)) continue;
+      if (deletedIds.includes(gt.id)) continue;
       const exists = tasks.find((t) => t.googleEventId === gt.id);
       if (!exists) {
         const dueDate = gt.due ? new Date(gt.due).toISOString() : null;
@@ -102,7 +109,7 @@ export function useGoogleTasksSync() {
     }
 
     return { imported, updated, pushed };
-  }, [settings, tasks, deletedGoogleEventIds, updateSettings, addTask, updateTask, clearDeletedGoogleEventIds]);
+  }, []);
 
   return { syncTasks };
 }
