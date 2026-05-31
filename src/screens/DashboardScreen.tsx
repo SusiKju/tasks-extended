@@ -19,8 +19,8 @@ import { Task, Note } from '../types';
 
 // ─── Section accent colors ────────────────────────────────────────────────────
 const SECTION_COLORS = {
-  mail:     '#3B82F6',
-  tasks:    '#10B981',
+  mail:     '#F97316',  // Orange
+  tasks:    '#3B82F6',  // Blau
   calendar: '#F59E0B',
   notes:    '#8B5CF6',
 };
@@ -82,35 +82,57 @@ interface FocusTile {
   value: string;
   color: string;
   active: boolean;
+  zeroMessage?: string;
   onPress?: () => void;
 }
 
 function FocusTiles({ tiles }: { tiles: FocusTile[] }) {
+  const [toast, setToast] = useState<string | null>(null);
+  const toastAnim = useRef(new Animated.Value(0)).current;
+
+  const showToast = useCallback((msg: string) => {
+    setToast(msg);
+    Animated.sequence([
+      Animated.timing(toastAnim, { toValue: 1, duration: 200, useNativeDriver: true }),
+      Animated.delay(2200),
+      Animated.timing(toastAnim, { toValue: 0, duration: 250, useNativeDriver: true }),
+    ]).start(() => setToast(null));
+  }, [toastAnim]);
+
   return (
-    <View style={tileStyles.row}>
-      {tiles.map((tile) => (
-        <Pressable
-          key={tile.id}
-          style={({ pressed }) => [
-            tileStyles.tile,
-            {
-              borderColor: tile.active ? tile.color + '60' : 'transparent',
-              backgroundColor: tile.active ? tile.color + '15' : 'rgba(128,128,128,0.08)',
-              opacity: pressed ? 0.75 : 1,
-            },
-          ]}
-          onPress={tile.onPress}
-          disabled={!tile.onPress}
-        >
-          <Ionicons name={tile.icon as any} size={13} color={tile.active ? tile.color : 'rgba(128,128,128,0.5)'} />
-          <Text style={[tileStyles.value, { color: tile.active ? tile.color : 'rgba(128,128,128,0.6)' }]}>
-            {tile.value}
-          </Text>
-          <Text style={[tileStyles.label, { color: tile.active ? tile.color + 'CC' : 'rgba(128,128,128,0.45)' }]}>
-            {tile.label}
-          </Text>
-        </Pressable>
-      ))}
+    <View>
+      <View style={tileStyles.row}>
+        {tiles.map((tile) => (
+          <Pressable
+            key={tile.id}
+            style={({ pressed }) => [
+              tileStyles.tile,
+              {
+                borderColor: tile.active ? tile.color + '60' : 'transparent',
+                backgroundColor: tile.active ? tile.color + '15' : 'rgba(128,128,128,0.08)',
+                opacity: pressed ? 0.75 : 1,
+              },
+            ]}
+            onPress={() => {
+              if (!tile.active && tile.zeroMessage) showToast(tile.zeroMessage);
+              else tile.onPress?.();
+            }}
+          >
+            <Ionicons name={tile.icon as any} size={13} color={tile.active ? tile.color : 'rgba(128,128,128,0.5)'} />
+            <Text style={[tileStyles.value, { color: tile.active ? tile.color : 'rgba(128,128,128,0.6)' }]}>
+              {tile.value}
+            </Text>
+            <Text style={[tileStyles.label, { color: tile.active ? tile.color + 'CC' : 'rgba(128,128,128,0.45)' }]}>
+              {tile.label}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+      {toast && (
+        <Animated.View style={[tileStyles.toast, { opacity: toastAnim }]}>
+          <Text style={tileStyles.toastText}>{toast}</Text>
+        </Animated.View>
+      )}
     </View>
   );
 }
@@ -132,6 +154,12 @@ const tileStyles = StyleSheet.create({
   },
   value: { fontSize: 18, fontWeight: '800', letterSpacing: -0.5 },
   label: { fontSize: 9, fontWeight: '600', letterSpacing: 0.2, textAlign: 'center' },
+  toast: {
+    marginHorizontal: 16, marginTop: 8,
+    backgroundColor: 'rgba(30,30,40,0.88)',
+    borderRadius: 10, paddingHorizontal: 14, paddingVertical: 9,
+  },
+  toastText: { fontSize: 13, color: '#fff', textAlign: 'center' },
 });
 
 // ─── Section Header ───────────────────────────────────────────────────────────
@@ -266,10 +294,10 @@ export function DashboardScreen() {
     const todayCal = calEvents.filter((e) => new Date(e.start).toDateString() === now.toDateString());
 
     return [
-      { id: 'mails',   icon: 'mail',             value: `${todayMails.length}`, label: 'neue mails',  active: todayMails.length > 0,  color: SECTION_COLORS.mail,     onPress: () => scrollTo('mail',  triggerMailBlink) },
-      { id: 'overdue', icon: 'alert-circle',     value: `${overdue.length}`,    label: 'überfällig',  active: overdue.length > 0,     color: '#FF3B30',               onPress: () => scrollTo('tasks', triggerTaskBlink) },
-      { id: 'tasks',   icon: 'checkmark-circle', value: `${todayTasks.length}`, label: 'tasks heute', active: todayTasks.length > 0,  color: SECTION_COLORS.tasks,    onPress: () => scrollTo('tasks', triggerTaskBlink) },
-      { id: 'cal',     icon: 'calendar',         value: `${todayCal.length}`,   label: 'termine',     active: todayCal.length > 0,    color: SECTION_COLORS.calendar, onPress: () => scrollTo('cal',   triggerCalBlink) },
+      { id: 'mails',   icon: 'mail',             value: `${todayMails.length}`, label: 'neue mails',  active: todayMails.length > 0,  color: SECTION_COLORS.mail,     zeroMessage: 'Heute sind keine neuen Mails eingegangen.',          onPress: () => scrollTo('mail',  triggerMailBlink) },
+      { id: 'overdue', icon: 'alert-circle',     value: `${overdue.length}`,    label: 'überfällig',  active: overdue.length > 0,     color: '#FF3B30',               zeroMessage: 'Keine überfälligen Tasks – alles im grünen Bereich!', onPress: () => scrollTo('tasks', triggerTaskBlink) },
+      { id: 'tasks',   icon: 'checkmark-circle', value: `${todayTasks.length}`, label: 'tasks heute', active: todayTasks.length > 0,  color: SECTION_COLORS.tasks,    zeroMessage: 'Heute stehen keine Tasks an.',                       onPress: () => scrollTo('tasks', triggerTaskBlink) },
+      { id: 'cal',     icon: 'calendar',         value: `${todayCal.length}`,   label: 'termine',     active: todayCal.length > 0,    color: SECTION_COLORS.calendar, zeroMessage: 'Heute und morgen gibt es keine Termine.',            onPress: () => scrollTo('cal',   triggerCalBlink) },
     ];
   }, [tasks, birthdays, mails, calEvents, scrollTo, triggerTaskBlink, triggerMailBlink, triggerCalBlink, triggerNotesBlink]);
 
