@@ -287,27 +287,34 @@ export function DashboardScreen() {
   const now = new Date();
 
   const focusTiles = useMemo((): FocusTile[] => {
-    const todayTasks = tasks.filter((t) => !t.completed && t.dueDate && new Date(t.dueDate).toDateString() === now.toDateString());
     const overdue = tasks.filter((t) => !t.completed && isOverdue(t.dueDate));
-    const todayBirthdays = birthdays.filter((e) => new Date(e.start).toDateString() === now.toDateString());
+    const openTasks = tasks.filter((t) => !t.completed);
     const todayMails = mails.filter((m) => new Date(m.date).toDateString() === now.toDateString());
-    const todayCal = calEvents.filter((e) => new Date(e.start).toDateString() === now.toDateString());
+    // Kalender: gleiche Menge wie die Section (nächste 2 Tage = calEvents insgesamt)
+    const upcomingCal = calEvents;
+
+    // Eine Task-Kachel: rot + Ausrufezeichen wenn überfällig, sonst blau
+    const hasOverdue = overdue.length > 0;
+    const taskValue = hasOverdue ? `${overdue.length}` : `${openTasks.length}`;
+    const taskLabel = hasOverdue ? 'überfällig' : 'tasks offen';
+    const taskColor = hasOverdue ? '#FF3B30' : SECTION_COLORS.tasks;
+    const taskIcon  = hasOverdue ? 'alert-circle' : 'checkmark-circle';
+    const taskZero  = 'Keine offenen Tasks – großartig!';
+    const taskMsg   = hasOverdue
+      ? `${overdue.length} Task${overdue.length > 1 ? 's sind' : ' ist'} überfällig.`
+      : taskZero;
 
     return [
-      { id: 'mails',   icon: 'mail',             value: `${todayMails.length}`, label: 'neue mails',  active: todayMails.length > 0,  color: SECTION_COLORS.mail,     zeroMessage: 'Heute sind keine neuen Mails eingegangen.',          onPress: () => scrollTo('mail',  triggerMailBlink) },
-      { id: 'overdue', icon: 'alert-circle',     value: `${overdue.length}`,    label: 'überfällig',  active: overdue.length > 0,     color: '#FF3B30',               zeroMessage: 'Keine überfälligen Tasks – alles im grünen Bereich!', onPress: () => scrollTo('tasks', triggerTaskBlink) },
-      { id: 'tasks',   icon: 'checkmark-circle', value: `${todayTasks.length}`, label: 'tasks heute', active: todayTasks.length > 0,  color: SECTION_COLORS.tasks,    zeroMessage: 'Heute stehen keine Tasks an.',                       onPress: () => scrollTo('tasks', triggerTaskBlink) },
-      { id: 'cal',     icon: 'calendar',         value: `${todayCal.length}`,   label: 'termine',     active: todayCal.length > 0,    color: SECTION_COLORS.calendar, zeroMessage: 'Heute und morgen gibt es keine Termine.',            onPress: () => scrollTo('cal',   triggerCalBlink) },
+      { id: 'mails', icon: 'mail',    value: `${todayMails.length}`, label: 'neue mails', active: todayMails.length > 0,  color: SECTION_COLORS.mail,     zeroMessage: 'Heute sind keine neuen Mails eingegangen.',     onPress: () => scrollTo('mail',  triggerMailBlink) },
+      { id: 'tasks', icon: taskIcon,  value: taskValue,              label: taskLabel,    active: openTasks.length > 0,   color: taskColor,                zeroMessage: taskZero,                                        onPress: () => scrollTo('tasks', triggerTaskBlink) },
+      { id: 'cal',   icon: 'calendar',value: `${upcomingCal.length}`,label: 'termine',    active: upcomingCal.length > 0, color: SECTION_COLORS.calendar, zeroMessage: 'In den nächsten 2 Tagen gibt es keine Termine.', onPress: () => scrollTo('cal',   triggerCalBlink) },
     ];
-  }, [tasks, birthdays, mails, calEvents, scrollTo, triggerTaskBlink, triggerMailBlink, triggerCalBlink, triggerNotesBlink]);
+  }, [tasks, mails, calEvents, scrollTo, triggerTaskBlink, triggerMailBlink, triggerCalBlink]);
 
   const todayStr = now.toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' });
 
   return (
     <ScrollView ref={scrollRef} style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-
-      {/* ── Header ── */}
-      <Text style={styles.heroDate}>{todayStr}</Text>
 
       {/* ── Focus Tiles ── */}
       <View style={{ marginBottom: 20 }}>
