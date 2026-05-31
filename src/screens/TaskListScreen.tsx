@@ -7,6 +7,7 @@ import {
   SectionList,
   TextInput,
   Alert,
+  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,12 +17,25 @@ import { Task } from '../types';
 import { isOverdue } from '../utils/dateFormat';
 import { useTheme, ThemeColors, neonGlow } from '../utils/theme';
 import { updateCalendarEvent } from '../services/googleCalendar';
+import { useGoogleTasksSync } from '../hooks/useGoogleTasksSync';
+
+function confirmDelete(title: string, onConfirm: () => void) {
+  if (Platform.OS === 'web') {
+    if ((window as any).confirm(`"${title}" löschen?`)) onConfirm();
+  } else {
+    Alert.alert('Task löschen', `"${title}" endgültig löschen?`, [
+      { text: 'Abbrechen', style: 'cancel' },
+      { text: 'Löschen', style: 'destructive', onPress: onConfirm },
+    ]);
+  }
+}
 
 type FilterMode = 'all' | 'open' | 'overdue' | 'done';
 
 export function TaskListScreen() {
   const router = useRouter();
   const { tasks, groups, settings, toggleTask, deleteTask, deleteTasks } = useStore();
+  const { syncTasks } = useGoogleTasksSync();
   const [filter, setFilter] = useState<FilterMode>('open');
   const [search, setSearch] = useState('');
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
@@ -54,23 +68,13 @@ export function TaskListScreen() {
 
   const handleSingleDelete = useCallback(
     (id: string, title: string) => {
-      Alert.alert('Task löschen', `"${title}" endgültig löschen?`, [
-        { text: 'Abbrechen', style: 'cancel' },
-        {
-          text: 'Löschen',
-          style: 'destructive',
-          onPress: () => {
-            deleteTask(id);
-            setSelectedIds((prev) => {
-              const next = new Set(prev);
-              next.delete(id);
-              return next;
-            });
-          },
-        },
-      ]);
+      confirmDelete(title, () => {
+        deleteTask(id);
+        setSelectedIds((prev) => { const n = new Set(prev); n.delete(id); return n; });
+        setTimeout(() => syncTasks().catch(() => {}), 300);
+      });
     },
-    [deleteTask]
+    [deleteTask, syncTasks]
   );
 
   const filtered = useMemo(() => {
@@ -103,22 +107,21 @@ export function TaskListScreen() {
 
   const handleBulkDelete = useCallback(() => {
     const count = selectedIds.size;
-    Alert.alert(
-      'Tasks löschen',
-      `${count} Task${count !== 1 ? 's' : ''} endgültig löschen?`,
-      [
+    const label = `${count} Task${count !== 1 ? 's' : ''} löschen?`;
+    const doDelete = () => {
+      deleteTasks(Array.from(selectedIds));
+      clearSelection();
+      setTimeout(() => syncTasks().catch(() => {}), 300);
+    };
+    if (Platform.OS === 'web') {
+      if ((window as any).confirm(label)) doDelete();
+    } else {
+      Alert.alert('Tasks löschen', label, [
         { text: 'Abbrechen', style: 'cancel' },
-        {
-          text: 'Löschen',
-          style: 'destructive',
-          onPress: () => {
-            deleteTasks(Array.from(selectedIds));
-            clearSelection();
-          },
-        },
-      ]
-    );
-  }, [selectedIds, deleteTasks, clearSelection]);
+        { text: 'Löschen', style: 'destructive', onPress: doDelete },
+      ]);
+    }
+  }, [selectedIds, deleteTasks, clearSelection, syncTasks]);
 
   const sections = useMemo(() => {
     const byGroup: Record<string, Task[]> = {};

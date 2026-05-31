@@ -8,6 +8,7 @@ import {
   StyleSheet,
   Alert,
   Pressable,
+  Platform,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -26,12 +27,14 @@ import {
   updateCalendarEvent,
   deleteCalendarEvent,
 } from '../services/googleCalendar';
+import { useGoogleTasksSync } from '../hooks/useGoogleTasksSync';
 
 export function TaskDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
 
   const { tasks, groups, settings, updateTask, deleteTask, toggleTask } = useStore();
+  const { syncTasks } = useGoogleTasksSync();
   const { colors } = useTheme();
   const task = tasks.find((t) => t.id === id);
 
@@ -88,21 +91,23 @@ export function TaskDetailScreen() {
 
   const handleDelete = useCallback(() => {
     if (!task) return;
-    Alert.alert('Task löschen', 'Diesen Task wirklich löschen?', [
-      { text: 'Abbrechen', style: 'cancel' },
-      {
-        text: 'Löschen',
-        style: 'destructive',
-        onPress: async () => {
-          if (task.googleEventId && settings.googleAccessToken && settings.googleCalendarId) {
-            await deleteCalendarEvent(settings.googleAccessToken, settings.googleCalendarId, task.googleEventId).catch(() => {});
-          }
-          deleteTask(id);
-          router.back();
-        },
-      },
-    ]);
-  }, [id, task, settings, deleteTask, router]);
+    const doDelete = async () => {
+      if (task.googleEventId && settings.googleAccessToken && settings.googleCalendarId) {
+        await deleteCalendarEvent(settings.googleAccessToken, settings.googleCalendarId, task.googleEventId).catch(() => {});
+      }
+      deleteTask(id);
+      setTimeout(() => syncTasks().catch(() => {}), 300);
+      router.back();
+    };
+    if (Platform.OS === 'web') {
+      if ((window as any).confirm(`"${task.title}" löschen?`)) doDelete();
+    } else {
+      Alert.alert('Task löschen', 'Diesen Task wirklich löschen?', [
+        { text: 'Abbrechen', style: 'cancel' },
+        { text: 'Löschen', style: 'destructive', onPress: doDelete },
+      ]);
+    }
+  }, [id, task, settings, deleteTask, syncTasks, router]);
 
   const handleAddAttachment = useCallback(() => {
     if (!task) return;
