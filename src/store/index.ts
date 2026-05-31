@@ -18,6 +18,7 @@ interface TaskState {
   deleteTasks: (ids: string[]) => void;
   toggleTask: (id: string) => void;
   clearDeletedGoogleEventIds: () => void;
+  removeDeletedGoogleEventIds: (ids: string[]) => void;
 
   // Attachment actions
   addAttachment: (taskId: string, attachment: Attachment) => void;
@@ -121,6 +122,11 @@ export const useStore = create<TaskState>()(
 
       clearDeletedGoogleEventIds: () =>
         set({ deletedGoogleEventIds: [] }),
+
+      removeDeletedGoogleEventIds: (ids) =>
+        set((state) => ({
+          deletedGoogleEventIds: state.deletedGoogleEventIds.filter((id) => !ids.includes(id)),
+        })),
 
       toggleTask: (id) =>
         set((state) => ({

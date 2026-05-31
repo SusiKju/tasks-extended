@@ -25,7 +25,7 @@ export function useGoogleTasksSync() {
       updateSettings,
       addTask,
       updateTask,
-      clearDeletedGoogleEventIds,
+      removeDeletedGoogleEventIds,
     } = useStore.getState();
 
     if (!settings.googleCalendarEnabled || !settings.googleAccessToken || !settings.googleCalendarId) {
@@ -41,26 +41,38 @@ export function useGoogleTasksSync() {
       }
     }
 
-    // Snapshot deleted IDs before any async work so concurrent deletes during
-    // this sync run are not lost when we call clearDeletedGoogleEventIds below.
+    // Snapshot deleted IDs before async work — used for the re-import guard below.
     const deletedIds = useStore.getState().deletedGoogleEventIds;
 
     // Fetch task list ID once – used for both deletions and import below
     const taskLists = await listTaskLists(token);
     const firstTaskListId = taskLists[0]?.id ?? null;
 
+    const successfullyDeleted: string[] = [];
     for (const deletedId of deletedIds) {
+      // null = network error (retry), true = gone (200 or 404), false = other HTTP error (retry)
+      let calResult: boolean | null = true; // default: not attempted = OK
+      let taskResult: boolean | null = true;
+
       // Delete from Calendar (for tasks originally pushed there)
       if (settings.googleCalendarId) {
-        await deleteCalendarEvent(token, settings.googleCalendarId, deletedId).catch(() => {});
+        calResult = await deleteCalendarEvent(token, settings.googleCalendarId, deletedId).catch(() => null);
       }
       // Delete from Google Tasks (for tasks imported from the Tasks API)
       if (firstTaskListId) {
-        await deleteGoogleTask(token, firstTaskListId, deletedId).catch(() => {});
+        taskResult = await deleteGoogleTask(token, firstTaskListId, deletedId).catch(() => null);
+      }
+
+      // Only mark as handled when both APIs confirmed the task is gone (200 or 404).
+      // A false/null from either side means an error occurred — keep the ID for retry.
+      if (calResult && taskResult) {
+        successfullyDeleted.push(deletedId);
       }
     }
-    if (deletedIds.length > 0) {
-      clearDeletedGoogleEventIds();
+    // Remove only the IDs that were confirmed deleted; IDs added during this sync
+    // run (concurrent deletes) are preserved by filtering the live store state.
+    if (successfullyDeleted.length > 0) {
+      removeDeletedGoogleEventIds(successfullyDeleted);
     }
 
     const googleTasks = firstTaskListId
