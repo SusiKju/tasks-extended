@@ -322,9 +322,12 @@ export function MailScreen() {
           />
         }
         ListHeaderComponent={
-          mails.length > 0 && Platform.OS !== 'web' ? (
-            <Text style={styles.hint}>← Nach links wischen zum Archivieren oder Löschen</Text>
-          ) : null
+          <View>
+            <Text style={styles.periodLabel}>E-Mails der letzten 2 Tage</Text>
+            {mails.length > 0 && Platform.OS !== 'web' && (
+              <Text style={styles.hint}>← Nach links wischen zum Archivieren oder Löschen</Text>
+            )}
+          </View>
         }
         ListEmptyComponent={
           loaded && !error ? (
@@ -346,6 +349,14 @@ function makeStyles(colors: ThemeColors) {
     center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32, backgroundColor: colors.background },
     emptyContainer: { flex: 1 },
     listContent: { paddingVertical: 8 },
+    periodLabel: {
+      fontSize: 11,
+      color: colors.textMuted,
+      textAlign: 'center',
+      paddingTop: 10,
+      paddingBottom: 2,
+      fontWeight: '500',
+    },
     hint: {
       fontSize: 11,
       color: colors.textMuted,
