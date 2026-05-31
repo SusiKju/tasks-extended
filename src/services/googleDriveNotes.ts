@@ -33,8 +33,6 @@ async function findOrCreateFolder(accessToken: string): Promise<string | null> {
   );
   const res = await driveFetch(`/files?q=${query}&fields=files(id,name)`, accessToken);
   if (res.status === 403) {
-    const body = await res.json().catch(() => ({}));
-    console.error('[Drive] 403 Forbidden:', JSON.stringify(body));
     throw new Error('DRIVE_FORBIDDEN');
   }
   if (!res.ok) return null;
