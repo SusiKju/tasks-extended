@@ -237,54 +237,60 @@ export function DashboardScreen() {
 
   // Focus tiles – nur was HEUTE relevant ist
   const focusTiles = useMemo((): FocusTile[] => {
-    const tiles: FocusTile[] = [];
     const todayTasks = tasks.filter((t) => {
       if (t.completed || !t.dueDate) return false;
-      const d = new Date(t.dueDate);
-      return d.toDateString() === now.toDateString();
+      return new Date(t.dueDate).toDateString() === now.toDateString();
     });
     const overdue = tasks.filter((t) => !t.completed && isOverdue(t.dueDate));
-    const todayBirthdays = birthdays.filter((e) => {
-      const d = new Date(e.start);
-      return d.toDateString() === now.toDateString();
-    });
-    const todayMails = mails.filter((m) => {
-      const d = new Date(m.date);
-      return d.toDateString() === now.toDateString();
-    });
+    const todayBirthdays = birthdays.filter((e) => new Date(e.start).toDateString() === now.toDateString());
+    const todayMails = mails.filter((m) => new Date(m.date).toDateString() === now.toDateString());
+    const todayCal = calEvents.filter((e) => new Date(e.start).toDateString() === now.toDateString());
 
-    if (overdue.length > 0) tiles.push({
-      id: 'overdue', icon: '🔴', value: `${overdue.length}`,
-      label: overdue.length === 1 ? 'Task überfällig' : 'Tasks überfällig',
-      color: '#FF3B30', bg: '#FF3B3018',
-      onPress: () => router.push('/(tabs)/'),
-    });
-    if (todayTasks.length > 0) tiles.push({
-      id: 'today-tasks', icon: '✅', value: `${todayTasks.length}`,
-      label: todayTasks.length === 1 ? 'Task heute' : 'Tasks heute',
-      color: colors.accentNeon, bg: colors.accentNeon + '18',
-      onPress: () => router.push('/(tabs)/'),
-    });
-    if (todayBirthdays.length > 0) tiles.push({
-      id: 'birthdays', icon: '🎂', value: `${todayBirthdays.length}`,
-      label: todayBirthdays.length === 1 ? 'Geburtstag heute' : 'Geburtstage heute',
-      color: '#FF9500', bg: '#FF950018',
-    });
-    if (todayMails.length > 0) tiles.push({
-      id: 'mails', icon: '📧', value: `${todayMails.length}`,
-      label: todayMails.length === 1 ? 'neue Mail heute' : 'neue Mails heute',
-      color: '#007AFF', bg: '#007AFF18',
-      onPress: () => router.push('/(tabs)/mail'),
-    });
-    if (calEvents.filter((e) => new Date(e.start).toDateString() === now.toDateString()).length > 0) {
-      const todayCal = calEvents.filter((e) => new Date(e.start).toDateString() === now.toDateString());
-      tiles.push({
-        id: 'cal-today', icon: '📅', value: `${todayCal.length}`,
+    return [
+      {
+        id: 'overdue',
+        icon: '🔴',
+        value: `${overdue.length}`,
+        label: overdue.length === 1 ? 'Task überfällig' : 'Tasks überfällig',
+        color: overdue.length > 0 ? '#FF3B30' : colors.textMuted,
+        bg: overdue.length > 0 ? '#FF3B3018' : colors.surface,
+        onPress: () => router.push('/(tabs)/'),
+      },
+      {
+        id: 'today-tasks',
+        icon: '✅',
+        value: `${todayTasks.length}`,
+        label: todayTasks.length === 1 ? 'Task heute' : 'Tasks heute',
+        color: todayTasks.length > 0 ? colors.accentNeon : colors.textMuted,
+        bg: todayTasks.length > 0 ? colors.accentNeon + '18' : colors.surface,
+        onPress: () => router.push('/(tabs)/'),
+      },
+      {
+        id: 'birthdays',
+        icon: '🎂',
+        value: `${todayBirthdays.length}`,
+        label: todayBirthdays.length === 1 ? 'Geburtstag' : 'Geburtstage',
+        color: todayBirthdays.length > 0 ? '#FF9500' : colors.textMuted,
+        bg: todayBirthdays.length > 0 ? '#FF950018' : colors.surface,
+      },
+      {
+        id: 'mails',
+        icon: '📧',
+        value: `${todayMails.length}`,
+        label: todayMails.length === 1 ? 'neue Mail' : 'neue Mails',
+        color: todayMails.length > 0 ? '#007AFF' : colors.textMuted,
+        bg: todayMails.length > 0 ? '#007AFF18' : colors.surface,
+        onPress: () => router.push('/(tabs)/mail'),
+      },
+      {
+        id: 'cal-today',
+        icon: '📅',
+        value: `${todayCal.length}`,
         label: todayCal.length === 1 ? 'Termin heute' : 'Termine heute',
-        color: '#30B955', bg: '#30B95518',
-      });
-    }
-    return tiles;
+        color: todayCal.length > 0 ? '#30B955' : colors.textMuted,
+        bg: todayCal.length > 0 ? '#30B95518' : colors.surface,
+      },
+    ];
   }, [tasks, birthdays, mails, calEvents, colors]);
 
   return (
@@ -299,11 +305,9 @@ export function DashboardScreen() {
       </View>
 
       {/* ── Focus Tiles ── */}
-      {focusTiles.length > 0 && (
-        <View style={{ marginBottom: 18 }}>
-          <FocusTiles tiles={focusTiles} styles={styles} />
-        </View>
-      )}
+      <View style={{ marginBottom: 18 }}>
+        <FocusTiles tiles={focusTiles} styles={styles} />
+      </View>
 
       {/* ── Geburtstage ── */}
       {birthdays.length > 0 && (
