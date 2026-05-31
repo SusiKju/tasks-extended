@@ -6,6 +6,9 @@ const FOLDER_NAME = 'Tasks-Extended';
 
 export const DRIVE_NOTES_SCOPE = 'https://www.googleapis.com/auth/drive.file';
 
+// Folder-ID im Speicher cachen – nur einmal pro Session nachschlagen
+let cachedFolderId: string | null = null;
+
 async function driveFetch(
   path: string,
   accessToken: string,
@@ -20,26 +23,25 @@ async function driveFetch(
       'Content-Type': contentType,
     },
     body: body
-      ? typeof body === 'string'
-        ? body
-        : JSON.stringify(body)
+      ? typeof body === 'string' ? body : JSON.stringify(body)
       : undefined,
   });
 }
 
 async function findOrCreateFolder(accessToken: string): Promise<string | null> {
+  if (cachedFolderId) return cachedFolderId;
+
   const query = encodeURIComponent(
     `name='${FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' and trashed=false`
   );
-  const res = await driveFetch(`/files?q=${query}&fields=files(id,name)`, accessToken);
-  if (res.status === 403) {
-    throw new Error('DRIVE_FORBIDDEN');
-  }
+  const res = await driveFetch(`/files?q=${query}&fields=files(id)`, accessToken);
+  if (res.status === 403) throw new Error('DRIVE_FORBIDDEN');
   if (!res.ok) return null;
-  const data = await res.json();
 
-  if (data.files && data.files.length > 0) {
-    return data.files[0].id as string;
+  const data = await res.json();
+  if (data.files?.length > 0) {
+    cachedFolderId = data.files[0].id as string;
+    return cachedFolderId;
   }
 
   const createRes = await driveFetch('/files', accessToken, 'POST', {
@@ -48,7 +50,28 @@ async function findOrCreateFolder(accessToken: string): Promise<string | null> {
   });
   if (!createRes.ok) return null;
   const folder = await createRes.json();
-  return folder.id as string;
+  cachedFolderId = folder.id as string;
+  return cachedFolderId;
+}
+
+export function clearDriveFolderCache() {
+  cachedFolderId = null;
+}
+
+// Parallele Requests mit Concurrency-Limit (verhindert Rate-Limit-Fehler)
+async function parallel<T>(
+  items: T[],
+  fn: (item: T) => Promise<void>,
+  concurrency = 8
+): Promise<void> {
+  const queue = [...items];
+  const workers = Array.from({ length: Math.min(concurrency, Math.max(queue.length, 1)) }, async () => {
+    while (queue.length > 0) {
+      const item = queue.shift()!;
+      await fn(item);
+    }
+  });
+  await Promise.all(workers);
 }
 
 export interface DriveNoteFile {
@@ -60,6 +83,7 @@ export async function listDriveNotes(accessToken: string): Promise<DriveNoteFile
   const folderId = await findOrCreateFolder(accessToken);
   if (!folderId) return [];
 
+  // Alle Datei-IDs in einem Request holen
   const query = encodeURIComponent(
     `'${folderId}' in parents and mimeType='application/json' and trashed=false`
   );
@@ -71,20 +95,19 @@ export async function listDriveNotes(accessToken: string): Promise<DriveNoteFile
   const data = await res.json();
   const files: Array<{ id: string; name: string }> = data.files ?? [];
 
+  // Inhalte parallel herunterladen (8 gleichzeitig)
   const results: DriveNoteFile[] = [];
-  for (const file of files) {
-    const dlRes = await driveFetch(
-      `/files/${file.id}?alt=media`,
-      accessToken
-    );
-    if (!dlRes.ok) continue;
+  await parallel(files, async (file) => {
+    const dlRes = await driveFetch(`/files/${file.id}?alt=media`, accessToken);
+    if (!dlRes.ok) return;
     try {
       const note: Note = await dlRes.json();
       results.push({ fileId: file.id, note });
     } catch {
-      // skip malformed file
+      // ungültige Datei überspringen
     }
-  }
+  });
+
   return results;
 }
 
@@ -93,37 +116,29 @@ export async function uploadDriveNote(
   note: Note,
   existingFileId?: string
 ): Promise<string | null> {
-  const folderId = await findOrCreateFolder(accessToken);
-  if (!folderId) return null;
-
   const content = JSON.stringify(note);
-  const filename = `${note.id}.json`;
 
   if (existingFileId) {
-    const res = await fetch(
-      `${UPLOAD_API}/files/${existingFileId}?uploadType=media`,
-      {
-        method: 'PATCH',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: content,
-      }
-    );
+    const res = await fetch(`${UPLOAD_API}/files/${existingFileId}?uploadType=media`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: content,
+    });
     return res.ok ? existingFileId : null;
   }
 
-  const metadata = JSON.stringify({ name: filename, parents: [folderId] });
-  const boundary = 'drives_notes_boundary';
+  const folderId = await findOrCreateFolder(accessToken);
+  if (!folderId) return null;
+
+  const metadata = JSON.stringify({ name: `${note.id}.json`, parents: [folderId] });
+  const boundary = 'tasks_notes_boundary';
   const body =
-    `--${boundary}\r\n` +
-    `Content-Type: application/json; charset=UTF-8\r\n\r\n` +
-    `${metadata}\r\n` +
-    `--${boundary}\r\n` +
-    `Content-Type: application/json\r\n\r\n` +
-    `${content}\r\n` +
-    `--${boundary}--`;
+    `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n` +
+    `${metadata}\r\n--${boundary}\r\nContent-Type: application/json\r\n\r\n` +
+    `${content}\r\n--${boundary}--`;
 
   const res = await fetch(`${UPLOAD_API}/files?uploadType=multipart`, {
     method: 'POST',
@@ -134,8 +149,19 @@ export async function uploadDriveNote(
     body,
   });
   if (!res.ok) return null;
-  const data = await res.json();
-  return data.id as string;
+  const created = await res.json();
+  return created.id as string;
+}
+
+export async function uploadDriveNotesBatch(
+  accessToken: string,
+  notes: Array<{ note: Note; existingFileId?: string }>,
+  onUploaded: (noteId: string, fileId: string) => void
+): Promise<void> {
+  await parallel(notes, async ({ note, existingFileId }) => {
+    const fileId = await uploadDriveNote(accessToken, note, existingFileId);
+    if (fileId) onUploaded(note.id, fileId);
+  });
 }
 
 export async function deleteDriveNote(

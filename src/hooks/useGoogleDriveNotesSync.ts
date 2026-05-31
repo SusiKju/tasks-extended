@@ -3,7 +3,7 @@ import { useStore } from '../store';
 import { refreshGoogleToken } from '../services/googleCalendar';
 import {
   listDriveNotes,
-  uploadDriveNote,
+  uploadDriveNotesBatch,
   deleteDriveNote,
 } from '../services/googleDriveNotes';
 import { Note } from '../types';
@@ -89,22 +89,25 @@ export function useGoogleDriveNotesSync() {
 
     const driveFileIdSet = new Set(driveFiles.map((f) => f.fileId));
     const driveNoteIdSet = new Set(driveFiles.map((f) => f.note.id));
+    const driveByFileId = new Map(driveFiles.map((f) => [f.fileId, f]));
 
+    // Alle zu uploadenden Notizen sammeln und parallel hochladen
+    const toUpload: Array<{ note: Note; existingFileId?: string }> = [];
     for (const note of notes) {
       if (!note.driveFileId && !driveNoteIdSet.has(note.id)) {
-        const fileId = await uploadDriveNote(token, note);
-        if (fileId) {
-          updateNote(note.id, { driveFileId: fileId });
-          pushed++;
-        }
+        toUpload.push({ note });
       } else if (note.driveFileId && driveFileIdSet.has(note.driveFileId)) {
-        const driveEntry = driveFiles.find((f) => f.fileId === note.driveFileId);
+        const driveEntry = driveByFileId.get(note.driveFileId);
         if (driveEntry && note.updatedAt > driveEntry.note.updatedAt) {
-          await uploadDriveNote(token, note, note.driveFileId);
-          pushed++;
+          toUpload.push({ note, existingFileId: note.driveFileId });
         }
       }
     }
+
+    await uploadDriveNotesBatch(token, toUpload, (noteId, fileId) => {
+      updateNote(noteId, { driveFileId: fileId });
+      pushed++;
+    });
 
     return { pulled, pushed, deleted };
   }, []);
