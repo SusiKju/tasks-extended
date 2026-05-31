@@ -53,9 +53,10 @@ export async function signInWithGoogle(): Promise<CalendarAuthResult | null> {
       responseType: isWeb ? AuthSession.ResponseType.Token : AuthSession.ResponseType.Code,
       usePKCE: !isWeb,
       // Force consent screen so Google always issues a token with ALL requested scopes.
-      // Without this, Google may silently reuse a prior session that was consented
-      // before drive.file was added, producing a 403 on Drive API calls.
-      extraParams: { prompt: 'consent', access_type: 'offline' },
+      // Without this, Google may silently reuse a prior session consented before
+      // drive.file was added, producing a 403 on Drive API calls.
+      // access_type=offline is only valid for the code flow (native), not implicit (web).
+      extraParams: isWeb ? { prompt: 'consent' } : { prompt: 'consent', access_type: 'offline' },
     });
 
     console.log('[GoogleLogin] promptAsync start');
