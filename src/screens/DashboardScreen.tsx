@@ -508,8 +508,10 @@ export function DashboardScreen() {
     [notes]
   );
 
-  // Nur Neon-Dark: rotierender Regenbogen-Rand im AI-Komponenten-Stil.
-  const isNeon = theme === 'dark-neon';
+  // Bunter Geburtstags-Stil (rotierender Regenbogen-Rand im AI-Komponenten-Stil):
+  // im Neon-Theme und im Schwarz-Weiß-Theme – dort bleibt die Geburtstags-Card
+  // bewusst bunt als Ausnahme zum sonst monochromen Look (TE-81).
+  const richBirthday = theme === 'dark-neon' || theme === 'dark-mono';
   const rainbowRotate = useRef(new Animated.Value(0)).current;
   // Atmender, farbwechselnder Flammen-Glow (Gemini-Look).
   const flameAnim = useRef(new Animated.Value(0)).current;
@@ -550,13 +552,13 @@ export function DashboardScreen() {
 
   // Neon-Dark: Regenbogen-Gradient dreht sich endlos (läuft um den Rand).
   useEffect(() => {
-    if (todayBirthdays.length === 0 || !isNeon) { rainbowRotate.setValue(0); return; }
+    if (todayBirthdays.length === 0 || !richBirthday) { rainbowRotate.setValue(0); return; }
     const loop = Animated.loop(
       Animated.timing(rainbowRotate, { toValue: 1, duration: 2500, useNativeDriver: true })
     );
     loop.start();
     return () => { loop.stop(); rainbowRotate.setValue(0); };
-  }, [todayBirthdays.length, isNeon, rainbowRotate]);
+  }, [todayBirthdays.length, richBirthday, rainbowRotate]);
 
   // Atmender Flammen-Glow (Gemini-Look) – Schatten pulsiert + wechselt die Farbe,
   // dazu skaliert die Card synchron („atmen"). Läuft in ALLEN Themes, damit der
@@ -586,7 +588,7 @@ export function DashboardScreen() {
 
       {/* ── Geburtstage: ganz oben ── */}
       {todayBirthdays.length > 0 && (
-        isNeon ? (
+        richBirthday ? (
           // Neon-Dark: AI-Style mit rotierendem Regenbogen-Rand + atmendem Flammen-Glow.
           <Animated.View
             style={[

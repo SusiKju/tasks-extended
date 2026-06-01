@@ -47,6 +47,7 @@ const THEME_OPTIONS: { value: Theme; label: string; subtitle: string }[] = [
   { value: 'light', label: 'Hell', subtitle: 'iOS-Standard, weißer Hintergrund' },
   { value: 'dark-neon', label: 'Dark Neon', subtitle: 'Dunkles Design mit Neon-Akzenten' },
   { value: 'dark-soft', label: 'Dark Soft', subtitle: 'Augenschonendes dunkles Design' },
+  { value: 'dark-mono', label: 'Schwarz-Weiß', subtitle: 'Monochromes Neon-Design, Geburtstag bleibt bunt' },
 ];
 
 const DEFAULT_NOTE_COLOR = '#F0C040';

@@ -94,10 +94,37 @@ const DARK_SOFT: ThemeColors = {
   glowSuccess: 'transparent',
 };
 
+// Schwarz-Weiß: Kopie des Neon-Themes (gleiche Glow-/Outline-Mechanik via isDark),
+// aber alle Akzente monochrom. Statt farbiger Neons reines Weiß als „Neon" und
+// abgestufte Graustufen für success/warning. Glow ist weiß.
+const DARK_MONO: ThemeColors = {
+  background:    '#000000',   // reines Schwarz
+  surface:       '#0A0A0A',
+  surfaceHigh:   '#181818',
+  text:          '#FFFFFF',   // reines Weiß
+  textSecondary: '#B4B4B4',
+  textMuted:     '#6A6A6A',
+  accent:        '#FFFFFF',
+  accentNeon:    '#FFFFFF',   // weißer „Neon"-Akzent + Glow
+  success:       '#DADADA',   // helles Grau
+  warning:       '#A8A8A8',   // mittleres Grau
+  danger:        '#FFFFFF',   // monochrom – Wichtig-Hinweis bleibt über C.important rot
+  border:        '#2A2A2A',
+  tabBar:        '#000000',
+  tabBarBorder:  '#2A2A2A',
+  header:        '#000000',
+  inputBackground: '#181818',
+  placeholder:   '#555555',
+  glowAccent:  'rgba(255, 255, 255, 0.55)',
+  glowDanger:  'rgba(255, 255, 255, 0.45)',
+  glowSuccess: 'rgba(255, 255, 255, 0.45)',
+};
+
 export const THEMES: Record<Theme, ThemeColors> = {
   light: LIGHT,
   'dark-neon': DARK_NEON,
   'dark-soft': DARK_SOFT,
+  'dark-mono': DARK_MONO,
 };
 
 /** Relative Luminanz (WCAG) einer Hex-Farbe (#RGB / #RRGGBB), 0..1. */
@@ -158,5 +185,9 @@ export function neonBorder(color: string) {
 export function useTheme(): { colors: ThemeColors; theme: Theme; isDark: boolean } {
   const theme = useStore((s) => s.settings.theme ?? 'light');
   const colors = useMemo(() => THEMES[theme] ?? LIGHT, [theme]);
-  return { colors, theme, isDark: theme === 'dark-neon' || theme === 'dark-soft' };
+  return {
+    colors,
+    theme,
+    isDark: theme === 'dark-neon' || theme === 'dark-soft' || theme === 'dark-mono',
+  };
 }
