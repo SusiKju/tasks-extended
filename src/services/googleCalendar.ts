@@ -419,5 +419,7 @@ export async function deleteGoogleTask(
     accessToken,
     'DELETE'
   );
-  return res.ok || res.status === 404;
+  // 200/204 = gelöscht, 404 = nicht gefunden, 400 = ungültige ID, 410 = bereits gelöscht
+  // Alle davon bedeuten: lokal aus der Warteschlange entfernen
+  return res.ok || res.status === 404 || res.status === 400 || res.status === 410;
 }

@@ -261,9 +261,9 @@ export function DashboardScreen() {
           }).catch(() => {}).finally(() => setCalLoading(false));
         }
       }
-      // Web: Seite neu laden damit alle Komponenten frische Daten sehen
+      // Web: zurück zum SPA-Root (nicht reload() — das würde die aktuelle Route als Datei anfragen)
       if (Platform.OS === 'web') {
-        window.location.reload();
+        window.location.replace(window.location.origin + '/tasks-extended/');
       }
     } finally {
       spinLoop.current?.stop();
