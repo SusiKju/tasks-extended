@@ -139,30 +139,38 @@ const labelStyles = StyleSheet.create({
 function TaskChip({
   task,
   onPress,
+  isDark,
 }: {
   task: Task;
   onPress: () => void;
+  isDark: boolean;
 }) {
   const urgent = isUrgent(task);
   const label = chipDueLabel(task);
   const isImportant = task.important;
 
+  // Im Dunkelmodus: aufgehelltes Rot mit gutem Kontrast
+  // Reines #FF3B30 auf #141414 hat zu wenig Helligkeit → #FF8A80 ist deutlich lesbarer
+  const importantText  = isDark ? '#FF8A80' : C.important;
+  const importantBg    = isDark ? 'rgba(255,80,60,0.22)' : C.important + '12';
+  const importantBorder= isDark ? 'rgba(255,100,80,0.65)' : C.important + '50';
+
   const bgColor = isImportant
-    ? C.important + '12'
+    ? importantBg
     : urgent
-    ? C.overdue + '10'
+    ? (isDark ? 'rgba(255,80,60,0.18)' : C.overdue + '10')
     : C.tasks + '10';
 
   const borderColor = isImportant
-    ? C.important + '50'
+    ? importantBorder
     : urgent
-    ? C.overdue + '40'
+    ? (isDark ? 'rgba(255,100,80,0.55)' : C.overdue + '40')
     : C.tasks + '35';
 
   const textColor = isImportant
-    ? C.important
+    ? importantText
     : urgent
-    ? C.overdue
+    ? (isDark ? '#FF8A80' : C.overdue)
     : C.tasks;
 
   return (
@@ -411,6 +419,7 @@ export function DashboardScreen() {
                 <TaskChip
                   key={task.id}
                   task={task}
+                  isDark={isDark}
                   onPress={() => router.push(`/task/${task.id}` as any)}
                 />
               ))}
