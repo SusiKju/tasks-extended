@@ -219,6 +219,143 @@ const chipStyles = StyleSheet.create({
   },
 });
 
+// ─── Scratchpad (Notizzettel) ─────────────────────────────────────────────────
+
+const LINE_H = 24;
+const DIVIDER = '─'.repeat(22);
+const PAD_LEFT = 38;
+
+function Scratchpad({
+  value, onChange, isDark, colors,
+}: {
+  value: string;
+  onChange: (t: string) => void;
+  isDark: boolean;
+  colors: ThemeColors;
+}) {
+  const insertDivider = useRef(false);
+
+  const paperBg    = isDark ? '#1A1814' : '#FFFEF0';
+  const marginColor= isDark ? '#5C3030' : '#F4AAAA';
+  const lineColor  = isDark ? 'rgba(255,255,255,0.055)' : 'rgba(0,0,0,0.07)';
+  const textColor  = isDark ? '#E8E4D8' : '#2C2410';
+
+  const handleKeyPress = useCallback((e: any) => {
+    if (e.nativeEvent.key === 'Enter') insertDivider.current = true;
+  }, []);
+
+  const handleChange = useCallback((newText: string) => {
+    if (insertDivider.current) {
+      insertDivider.current = false;
+      // Trennlinie nach dem letzten \n einfügen
+      const idx = newText.lastIndexOf('\n');
+      if (idx !== -1) {
+        const before = newText.slice(0, idx);
+        const after  = newText.slice(idx + 1);
+        onChange(before + '\n' + DIVIDER + '\n' + after);
+        return;
+      }
+    }
+    onChange(newText);
+  }, [onChange]);
+
+  // Anzahl Linien je nach Inhalt, mindestens 7
+  const lineCount = Math.max(7, value.split('\n').length + 3);
+
+  return (
+    <View style={[padStyles.outer, {
+      backgroundColor: paperBg,
+      shadowColor: isDark ? '#000' : '#C8B89A',
+    }]}>
+      {/* Spiralbindung oben */}
+      <View style={[padStyles.bindingStrip, { backgroundColor: isDark ? '#2A2620' : '#E8E0C8' }]}>
+        {[...Array(5)].map((_, i) => (
+          <View key={i} style={[padStyles.spiral, {
+            borderColor: isDark ? '#555' : '#B0A898',
+            backgroundColor: isDark ? '#1A1814' : '#FFFEF0',
+          }]} />
+        ))}
+      </View>
+
+      {/* Papier mit Linien */}
+      <View style={padStyles.paper}>
+        {/* Randlinie */}
+        <View style={[padStyles.margin, { backgroundColor: marginColor, left: PAD_LEFT }]} />
+
+        {/* Horizontale Linien */}
+        {[...Array(lineCount)].map((_, i) => (
+          <View key={i} style={[padStyles.ruledLine, {
+            top: 8 + i * LINE_H,
+            backgroundColor: lineColor,
+          }]} />
+        ))}
+
+        {/* Eingabe */}
+        <TextInput
+          style={[padStyles.input, { color: textColor, paddingLeft: PAD_LEFT + 8 }]}
+          value={value}
+          onChangeText={handleChange}
+          onKeyPress={handleKeyPress}
+          placeholder={'Gedanken, Ideen…'}
+          placeholderTextColor={isDark ? '#5A5040' : '#C8BFA0'}
+          multiline
+          textAlignVertical="top"
+          scrollEnabled={false}
+        />
+      </View>
+    </View>
+  );
+}
+
+const padStyles = StyleSheet.create({
+  outer: {
+    borderRadius: 6,
+    shadowOffset: { width: 3, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 4,
+    overflow: 'hidden',
+  },
+  bindingStrip: {
+    height: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-evenly',
+    paddingHorizontal: 20,
+  },
+  spiral: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    borderWidth: 2,
+  },
+  paper: {
+    position: 'relative',
+    minHeight: 130,
+  },
+  margin: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    width: 1.5,
+  },
+  ruledLine: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    height: 1,
+  },
+  input: {
+    fontSize: 13,
+    lineHeight: LINE_H,
+    paddingTop: 8,
+    paddingRight: 10,
+    paddingBottom: 12,
+    minHeight: 130,
+    fontFamily: undefined, // system font
+  },
+});
+
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export function DashboardScreen() {
@@ -430,17 +567,12 @@ export function DashboardScreen() {
         {/* Scratchpad */}
         <View style={styles.scratchCol}>
           <SectionLabel title="Notizblock" colors={colors} />
-          <View style={[styles.scratchCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <TextInput
-              style={[styles.scratchInput, { color: colors.text }]}
-              value={scratchpad}
-              onChangeText={handleScratchpadChange}
-              placeholder={'Gedanken, Ideen…'}
-              placeholderTextColor={colors.textMuted}
-              multiline
-              textAlignVertical="top"
-            />
-          </View>
+          <Scratchpad
+            value={scratchpad}
+            onChange={handleScratchpadChange}
+            isDark={isDark}
+            colors={colors}
+          />
         </View>
 
       </View>
@@ -607,18 +739,6 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
       flex: 1,
       minWidth: 0,
       paddingLeft: 8,
-    },
-    scratchCard: {
-      borderRadius: 12,
-      borderWidth: 1,
-      minHeight: 110,
-      overflow: 'hidden',
-    },
-    scratchInput: {
-      fontSize: 13,
-      lineHeight: 19,
-      padding: 10,
-      minHeight: 110,
     },
 
     card: {
