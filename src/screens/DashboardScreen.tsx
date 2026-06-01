@@ -233,18 +233,18 @@ const BUBBLE_PALETTE_NEUTRAL = [
   '#3A1F3A', '#1F3A3A', '#2A2040', '#40201A',
 ];
 
-// Neon-Palette: Magenta + Cyan als dominierende Töne
+// Neon-Palette: knallige Vollfarben mit weißem Text
 const BUBBLE_PALETTE_NEON = [
-  '#2A0028', // tief Magenta
-  '#001F2A', // tief Cyan
-  '#001530', // tief Blau
-  '#1E0018', // knalles Magenta-Dunkel
-  '#00181E', // sattes Cyan-Dunkel
-  '#200028', // lila-Magenta
-  '#002018', // Cyan-Grün
-  '#280010', // Magenta-Rot
-  '#001028', // Blau-Cyan
-  '#180020', // Violett-Neon
+  '#FF1177', // Neon-Magenta
+  '#00CCEE', // Neon-Cyan
+  '#2299FF', // Elektrisch-Blau
+  '#CC00FF', // Neon-Lila
+  '#00FF88', // Neon-Grün
+  '#FF6600', // Neon-Orange
+  '#FFE600', // Elektrisch-Gelb  → dunkler Text nötig
+  '#FF0066', // Hot-Pink
+  '#00AAFF', // Himmelblau-Neon
+  '#AA00FF', // Violett-Neon
 ];
 
 let _lastNeonPaletteIdx = -1;
@@ -313,27 +313,32 @@ function Scratchpad({
 
   return (
     <View style={padStyles.container}>
-      {entries.map((entry, idx) => (
+      {entries.map((entry, idx) => {
+        // Für helle Neon-Farben (Gelb, helles Grün) → dunkler Text
+        const isLight = isNeon && ['#FFE600', '#00FF88'].includes(entry.color);
+        const fg = isNeon ? (isLight ? '#111' : '#fff') : '#fff';
+        return (
         <View key={idx} style={[
           padStyles.bubble,
           { backgroundColor: entry.color },
-          isNeon && { borderWidth: 1, borderColor: entry.color.slice(0,7) + '80' },
+          isNeon && { borderWidth: 0 },
         ]}>
-          <Text style={padStyles.bullet}>•</Text>
+          <Text style={[padStyles.bullet, { color: fg + '99' }]}>•</Text>
           <TextInput
             ref={(r) => { inputRefs.current[idx] = r; }}
-            style={padStyles.bubbleInput}
+            style={[padStyles.bubbleInput, { color: fg }]}
             value={entry.text}
             onChangeText={(t) => updateEntry(idx, t)}
             onKeyPress={(e) => handleKeyPress(idx, e)}
             onSubmitEditing={() => addEntry(idx)}
             placeholder={idx === 0 && entries.length === 1 ? 'Notiz…' : ''}
-            placeholderTextColor="rgba(255,255,255,0.3)"
+            placeholderTextColor={fg + '55'}
             returnKeyType="done"
             blurOnSubmit={false}
           />
         </View>
-      ))}
+        );
+      })}
     </View>
   );
 }
