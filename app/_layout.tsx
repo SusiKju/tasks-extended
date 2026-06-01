@@ -7,16 +7,20 @@ import { useTheme } from '../src/utils/theme';
 import { useStore } from '../src/store';
 import { useGoogleTasksSync } from '../src/hooks/useGoogleTasksSync';
 import { useGoogleDriveNotesSync } from '../src/hooks/useGoogleDriveNotesSync';
+import { useGoogleContactsBirthdaysSync } from '../src/hooks/useGoogleContactsBirthdaysSync';
 
 export default function RootLayout() {
   const { colors, theme } = useTheme();
   const isDark = theme === 'dark-neon';
   const { syncTasks } = useGoogleTasksSync();
   const { syncDriveNotes } = useGoogleDriveNotesSync();
+  const { syncBirthdays } = useGoogleContactsBirthdaysSync();
   const syncTasksRef = useRef(syncTasks);
   syncTasksRef.current = syncTasks;
   const syncNotesRef = useRef(syncDriveNotes);
   syncNotesRef.current = syncDriveNotes;
+  const syncBirthdaysRef = useRef(syncBirthdays);
+  syncBirthdaysRef.current = syncBirthdays;
   const syncRef = syncTasksRef;
   const lastSyncAt = useRef(0);
 
@@ -25,6 +29,7 @@ export default function RootLayout() {
     const runSync = () => {
       syncRef.current().catch(() => {});
       syncNotesRef.current().catch(() => {});
+      syncBirthdaysRef.current().catch(() => {});
     };
 
     const state = useStore.getState();
@@ -46,6 +51,7 @@ export default function RootLayout() {
           lastSyncAt.current = now;
           syncRef.current().catch(() => {});
           syncNotesRef.current().catch(() => {});
+          syncBirthdaysRef.current().catch(() => {});
         }
       }
     };

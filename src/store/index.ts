@@ -1,13 +1,14 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Task, Group, AppSettings, Attachment, Note } from '../types';
+import { Task, Group, AppSettings, Attachment, Note, Birthday } from '../types';
 
 interface TaskState {
   _hydrated?: boolean;
   tasks: Task[];
   groups: Group[];
   notes: Note[];
+  birthdays: Birthday[];
   settings: AppSettings;
   scratchpad: string;
   scratchpadUpdatedAt: string;
@@ -39,6 +40,9 @@ interface TaskState {
   clearNotes: () => void;
   clearDeletedDriveNoteFileIds: () => void;
   removeDeletedDriveNoteFileIds: (fileIds: string[]) => void;
+
+  // Birthday actions
+  setBirthdays: (birthdays: Birthday[]) => void;
 
   // Scratchpad
   setScratchpad: (text: string) => void;
@@ -83,6 +87,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   autoGroupEnabled: true,
   autoGroupConfidenceThreshold: 0.4,
   googleNotesEnabled: false,
+  googleBirthdaysEnabled: false,
   selectedCalendarIds: [],
 };
 
@@ -92,6 +97,7 @@ export const useStore = create<TaskState>()(
       tasks: [],
       groups: DEFAULT_GROUPS,
       notes: [],
+      birthdays: [],
       settings: DEFAULT_SETTINGS,
       scratchpad: '',
       scratchpadUpdatedAt: new Date(0).toISOString(),
@@ -215,6 +221,8 @@ export const useStore = create<TaskState>()(
           deletedDriveNoteFileIds: state.deletedDriveNoteFileIds.filter((id) => !fileIds.includes(id)),
         })),
 
+      setBirthdays: (birthdays) => set({ birthdays }),
+
       setScratchpad: (text) => set({ scratchpad: text, scratchpadUpdatedAt: new Date().toISOString() }),
 
       updateSettings: (updates) =>
@@ -222,7 +230,7 @@ export const useStore = create<TaskState>()(
     }),
     {
       name: 'tasks-extended-store',
-      version: 10,
+      version: 11,
       migrate: (persistedState: any, version: number) => {
         if (version < 1 && persistedState?.tasks) {
           persistedState.tasks = persistedState.tasks.map((t: any) => ({
@@ -261,6 +269,13 @@ export const useStore = create<TaskState>()(
         if (version < 10) {
           persistedState.scratchpad = persistedState.scratchpad ?? '';
           persistedState.scratchpadUpdatedAt = persistedState.scratchpadUpdatedAt ?? new Date(0).toISOString();
+        }
+        if (version < 11) {
+          persistedState.birthdays = persistedState.birthdays ?? [];
+          if (persistedState?.settings) {
+            persistedState.settings.googleBirthdaysEnabled =
+              persistedState.settings.googleBirthdaysEnabled ?? false;
+          }
         }
         return persistedState;
       },

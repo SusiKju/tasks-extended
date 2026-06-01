@@ -39,6 +39,7 @@ import {
 } from '../services/googleCalendar';
 import { useGoogleTasksSync } from '../hooks/useGoogleTasksSync';
 import { useGoogleDriveNotesSync } from '../hooks/useGoogleDriveNotesSync';
+import { useGoogleContactsBirthdaysSync } from '../hooks/useGoogleContactsBirthdaysSync';
 import { importKeepTakeout } from '../utils/importKeepTakeout';
 
 const DATE_FORMATS: DateFormat[] = ['de', 'us', 'iso', 'relative'];
@@ -58,6 +59,7 @@ export function SettingsScreen() {
   const { settings, notes, groups, tasks, updateSettings, addNote, updateNote, deleteNote, clearNotes, addGroup, updateGroup, deleteGroup } = useStore();
   const { syncTasks } = useGoogleTasksSync();
   const { syncDriveNotes } = useGoogleDriveNotesSync();
+  const { syncBirthdays } = useGoogleContactsBirthdaysSync();
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [loadingCalendar, setLoadingCalendar] = useState(false);
@@ -108,11 +110,14 @@ export function SettingsScreen() {
         googleCalendarId: primary.id,
         googleCalendarName: primary.summary,
         googleNotesEnabled: true,
+        googleBirthdaysEnabled: true,
       });
 
       // Initial push: sync notes to Drive with the fresh token right away,
       // bypassing any stale hook closure by passing the token explicitly.
       syncDriveNotes(auth.accessToken).catch(() => {});
+      // Prime the birthday data basis from Google Contacts with the fresh token.
+      syncBirthdays(auth.accessToken).catch(() => {});
 
       if (calendars.length > 1) {
         Alert.alert(
@@ -132,7 +137,7 @@ export function SettingsScreen() {
     } finally {
       setLoadingCalendar(false);
     }
-  }, [updateSettings, syncDriveNotes]);
+  }, [updateSettings, syncDriveNotes, syncBirthdays]);
 
   const handleGoogleDisconnect = useCallback(() => {
     updateSettings({
@@ -142,6 +147,7 @@ export function SettingsScreen() {
       googleCalendarId: null,
       googleCalendarName: null,
       googleNotesEnabled: false,
+      googleBirthdaysEnabled: false,
     });
     setConfirmDisconnect(false);
   }, [updateSettings]);

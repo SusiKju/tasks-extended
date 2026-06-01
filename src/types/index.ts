@@ -36,6 +36,16 @@ export interface Task {
   updatedAt: string;
 }
 
+export interface Birthday {
+  id: string;            // People API resourceName, e.g. "people/c123"
+  name: string;
+  day: number;           // 1-31
+  month: number;         // 1-12
+  year: number | null;   // null when the contact hid the birth year
+  photoUrl?: string | null;
+  updatedAt: string;
+}
+
 export interface AppSettings {
   dateFormat: DateFormat;
   theme: Theme;
@@ -48,6 +58,7 @@ export interface AppSettings {
   autoGroupEnabled: boolean;
   autoGroupConfidenceThreshold: number;
   googleNotesEnabled: boolean;
+  googleBirthdaysEnabled: boolean;
   selectedCalendarIds: string[];
 }
 

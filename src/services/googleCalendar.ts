@@ -14,6 +14,7 @@ const SCOPES = [
   'https://www.googleapis.com/auth/tasks',
   'https://www.googleapis.com/auth/gmail.modify',
   'https://www.googleapis.com/auth/drive.file',
+  'https://www.googleapis.com/auth/contacts.readonly',
 ];
 
 const CALENDAR_API = 'https://www.googleapis.com/calendar/v3';

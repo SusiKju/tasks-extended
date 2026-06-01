@@ -17,6 +17,7 @@ import { useTheme, ThemeColors } from '../utils/theme';
 import { uploadScratchpad } from '../services/googleDriveNotes';
 import { useGoogleDriveNotesSync } from '../hooks/useGoogleDriveNotesSync';
 import { useGoogleTasksSync } from '../hooks/useGoogleTasksSync';
+import { useGoogleContactsBirthdaysSync } from '../hooks/useGoogleContactsBirthdaysSync';
 import { isOverdue } from '../utils/dateFormat';
 import { fetchRecentMails, MailMessage } from '../services/googleMail';
 import { listUpcomingEvents, CalendarEvent } from '../services/googleCalendar';
@@ -95,6 +96,28 @@ function isUrgent(task: Task): boolean {
   } catch { return false; }
 }
 
+const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
+
+// Präziser Fälligkeitszeitpunkt – nur mit Datum UND Uhrzeit bestimmbar.
+function deadlineMs(task: Task): number | null {
+  if (!task.dueDate || !task.dueTime) return null;
+  try {
+    const d = new Date(task.dueDate);
+    const [h, m] = task.dueTime.split(':').map(Number);
+    if (Number.isNaN(h) || Number.isNaN(m)) return null;
+    d.setHours(h, m, 0, 0);
+    return d.getTime();
+  } catch { return null; }
+}
+
+// Blinkt: wichtig + Deadline ≤ 2h entfernt (inkl. bereits überfällig).
+function isDeadlineSoon(task: Task, now: number): boolean {
+  if (!task.important) return false;
+  const ms = deadlineMs(task);
+  if (ms == null) return false;
+  return ms - now <= TWO_HOURS_MS;
+}
+
 // ─── Section Label ────────────────────────────────────────────────────────────
 
 function SectionLabel({
@@ -142,16 +165,32 @@ function TaskChip({
   isDark,
   colors,
   scale = 'lg',
+  blink = false,
 }: {
   task: Task;
   onPress: () => void;
   isDark: boolean;
   colors: ThemeColors;
   scale?: 'lg' | 'md' | 'sm';
+  blink?: boolean;
 }) {
   const urgent = isUrgent(task);
   const label = chipDueLabel(task);
   const isImportant = task.important;
+
+  // Blink-Animation, wenn die Deadline einer wichtigen Task < 2h entfernt ist.
+  const blinkAnim = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    if (!blink) { blinkAnim.setValue(1); return; }
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(blinkAnim, { toValue: 0.3, duration: 600, useNativeDriver: true }),
+        Animated.timing(blinkAnim, { toValue: 1,   duration: 600, useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => { loop.stop(); blinkAnim.setValue(1); };
+  }, [blink, blinkAnim]);
 
   // Farben direkt aus dem Theme – funktioniert für alle Themes korrekt:
   // Neon: danger=#FF1177 (Magenta), warning=#FFE600, accentNeon=#00EEFF
@@ -184,24 +223,26 @@ function TaskChip({
   const chipOpacity= scale === 'sm' ? 0.65 : 1;
 
   return (
-    <Pressable
-      style={({ pressed }) => [
-        chipStyles.chip,
-        { backgroundColor: bgColor, borderColor, opacity: pressed ? 0.7 : chipOpacity,
-          paddingVertical: padV, paddingHorizontal: padH },
-      ]}
-      onPress={onPress}
-    >
-      {isImportant && (
-        <Ionicons name="flag" size={scale === 'lg' ? 11 : 9} color={textColor} style={{ marginRight: 2 }} />
-      )}
-      <Text style={[chipStyles.title, { color: textColor, fontSize }]} numberOfLines={1}>
-        {task.title}
-      </Text>
-      {label ? (
-        <Text style={[chipStyles.label, { color: textColor + 'BB', fontSize: fontSize - 1 }]}>{label}</Text>
-      ) : null}
-    </Pressable>
+    <Animated.View style={{ opacity: blinkAnim, maxWidth: '100%' }}>
+      <Pressable
+        style={({ pressed }) => [
+          chipStyles.chip,
+          { backgroundColor: bgColor, borderColor, opacity: pressed ? 0.7 : chipOpacity,
+            paddingVertical: padV, paddingHorizontal: padH },
+        ]}
+        onPress={onPress}
+      >
+        {isImportant && (
+          <Ionicons name="flag" size={scale === 'lg' ? 11 : 9} color={textColor} style={{ marginRight: 2 }} />
+        )}
+        <Text style={[chipStyles.title, { color: textColor, fontSize }]} numberOfLines={1}>
+          {task.title}
+        </Text>
+        {label ? (
+          <Text style={[chipStyles.label, { color: textColor + 'BB', fontSize: fontSize - 1 }]}>{label}</Text>
+        ) : null}
+      </Pressable>
+    </Animated.View>
   );
 }
 
@@ -391,10 +432,11 @@ const padStyles = StyleSheet.create({
 
 export function DashboardScreen() {
   const router = useRouter();
-  const { tasks, notes, settings, scratchpad, scratchpadUpdatedAt, setScratchpad } = useStore();
+  const { tasks, notes, settings, scratchpad, scratchpadUpdatedAt, setScratchpad, birthdays: storeBirthdays } = useStore();
   const { colors, isDark } = useTheme();
   const { syncScratchpad, syncDriveNotes } = useGoogleDriveNotesSync();
   const { syncTasks } = useGoogleTasksSync();
+  const { syncBirthdays } = useGoogleContactsBirthdaysSync();
 
   // Pull beim Mount + alle 30 s automatisch pollen
   useEffect(() => {
@@ -420,6 +462,7 @@ export function DashboardScreen() {
       await Promise.all([
         syncTasks().catch(() => {}),
         syncDriveNotes().catch(() => {}),
+        syncBirthdays().catch(() => {}),
       ]);
       // Mails + Kalender neu laden
       if (settings.googleAccessToken) {
@@ -428,13 +471,10 @@ export function DashboardScreen() {
           .then((r) => setMails(r.slice(0, 5))).catch(() => {}).finally(() => setMailLoading(false));
         if (settings.googleCalendarEnabled) {
           setCalLoading(true);
-          Promise.all([
-            listUpcomingEvents(settings.googleAccessToken, settings.selectedCalendarIds ?? [], 2),
-            listUpcomingEvents(settings.googleAccessToken, ['#contacts@group.v.calendar.google.com'], 1),
-          ]).then(([events, bdays]) => {
-            setCalEvents(events.filter((e) => !e.summary?.toLowerCase().includes('geburtstag') && !e.calendarName?.toLowerCase().includes('geburtstag')));
-            setBirthdays([...bdays, ...events.filter((e) => e.summary?.toLowerCase().includes('geburtstag') || e.calendarName?.toLowerCase().includes('geburtstag'))]);
-          }).catch(() => {}).finally(() => setCalLoading(false));
+          listUpcomingEvents(settings.googleAccessToken, settings.selectedCalendarIds ?? [], 2)
+            .then((events) => setCalEvents(events))
+            .catch(() => {})
+            .finally(() => setCalLoading(false));
         }
       }
       // Web: zurück zum SPA-Root (nicht reload() — das würde die aktuelle Route als Datei anfragen)
@@ -446,7 +486,7 @@ export function DashboardScreen() {
       spinAnim.setValue(0);
       setSyncing(false);
     }
-  }, [syncing, syncTasks, syncDriveNotes, settings]);
+  }, [syncing, syncTasks, syncDriveNotes, syncBirthdays, settings]);
 
   // Debounced Drive-Upload 1,5 s nach letzter Eingabe
   const uploadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -465,8 +505,14 @@ export function DashboardScreen() {
   const [mails, setMails] = useState<MailMessage[]>([]);
   const [mailLoading, setMailLoading] = useState(false);
   const [calEvents, setCalEvents] = useState<CalendarEvent[]>([]);
-  const [birthdays, setBirthdays] = useState<CalendarEvent[]>([]);
   const [calLoading, setCalLoading] = useState(false);
+
+  // Tickender Takt, damit die "<2h"-Blink-Bedingung über die Zeit neu greift.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(id);
+  }, []);
 
   // Tasks nach Fälligkeit gruppieren
   const taskGroups = useMemo(() => {
@@ -508,6 +554,13 @@ export function DashboardScreen() {
     [notes]
   );
 
+  const todayBirthdays = useMemo(() => {
+    const now = new Date();
+    return storeBirthdays.filter(
+      (b) => b.month === now.getMonth() + 1 && b.day === now.getDate()
+    );
+  }, [storeBirthdays]);
+
   useEffect(() => {
     if (!settings.googleAccessToken) return;
     setMailLoading(true);
@@ -520,25 +573,8 @@ export function DashboardScreen() {
   useEffect(() => {
     if (!settings.googleAccessToken || !settings.googleCalendarEnabled) return;
     setCalLoading(true);
-    Promise.all([
-      listUpcomingEvents(settings.googleAccessToken, settings.selectedCalendarIds ?? [], 2),
-      listUpcomingEvents(settings.googleAccessToken, ['#contacts@group.v.calendar.google.com'], 1),
-    ])
-      .then(([events, bdays]) => {
-        setCalEvents(events.filter(
-          (e) =>
-            !e.summary?.toLowerCase().includes('geburtstag') &&
-            !e.calendarName?.toLowerCase().includes('geburtstag')
-        ));
-        setBirthdays([
-          ...bdays,
-          ...events.filter(
-            (e) =>
-              e.summary?.toLowerCase().includes('geburtstag') ||
-              e.calendarName?.toLowerCase().includes('geburtstag')
-          ),
-        ]);
-      })
+    listUpcomingEvents(settings.googleAccessToken, settings.selectedCalendarIds ?? [], 2)
+      .then((events) => setCalEvents(events))
       .catch(() => {})
       .finally(() => setCalLoading(false));
   }, [settings.googleAccessToken, settings.googleCalendarEnabled, settings.selectedCalendarIds]);
@@ -569,13 +605,13 @@ export function DashboardScreen() {
       </View>
 
       {/* ── Geburtstage ── */}
-      {birthdays.length > 0 && (
+      {todayBirthdays.length > 0 && (
         <View style={styles.birthdayCard}>
           <Text style={styles.birthdayIcon}>🎂</Text>
           <View style={{ flex: 1 }}>
-            {birthdays.map((e) => (
-              <Text key={e.id} style={styles.birthdayText} numberOfLines={1}>
-                {e.summary}
+            {todayBirthdays.map((b) => (
+              <Text key={b.id} style={styles.birthdayText} numberOfLines={1}>
+                {b.name}{b.year != null ? ` (wird ${new Date().getFullYear() - b.year})` : ''}
               </Text>
             ))}
           </View>
@@ -623,6 +659,7 @@ export function DashboardScreen() {
                           isDark={isDark}
                           colors={colors}
                           scale={chipScale}
+                          blink={isDeadlineSoon(task, now)}
                           onPress={() => router.push(`/task/${task.id}` as any)}
                         />
                       ))}
