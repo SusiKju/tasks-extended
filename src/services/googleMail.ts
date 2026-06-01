@@ -32,7 +32,7 @@ function extractHeader(headers: Array<{ name: string; value: string }>, name: st
 
 export async function fetchRecentMails(accessToken: string): Promise<MailMessage[]> {
   const fiveDaysAgo = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
-  const after = Math.floor(twoDaysAgo.getTime() / 1000);
+  const after = Math.floor(fiveDaysAgo.getTime() / 1000);
 
   const listRes = await gmailFetch(
     `/users/me/messages?labelIds=INBOX&q=after:${after}&maxResults=30`,

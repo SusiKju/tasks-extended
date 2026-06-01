@@ -181,7 +181,7 @@ export function MailScreen() {
         <Ionicons name="mail-outline" size={56} color={colors.textMuted} />
         <Text style={styles.emptyTitle}>Google Mail verbinden</Text>
         <Text style={styles.emptySubtitle}>
-          Verbinde dein Google-Konto, um Nachrichten der letzten 2 Tage zu sehen.
+          Verbinde dein Google-Konto, um Nachrichten der letzten 5 Tage zu sehen.
         </Text>
         {error && <Text style={styles.errorText}>{error}</Text>}
         <Pressable style={styles.connectButton} onPress={handleConnect} disabled={loading}>
@@ -235,14 +235,14 @@ export function MailScreen() {
           />
         }
         ListHeaderComponent={
-          <Text style={styles.periodLabel}>E-Mails der letzten 2 Tage · Tippen zum Öffnen</Text>
+          <Text style={styles.periodLabel}>E-Mails der letzten 5 Tage · Tippen zum Öffnen</Text>
         }
         ListEmptyComponent={
           loaded && !error ? (
             <View style={styles.center}>
               <Ionicons name="checkmark-circle-outline" size={48} color={colors.success} />
               <Text style={styles.emptyTitle}>Posteingang leer</Text>
-              <Text style={styles.emptySubtitle}>Keine Nachrichten in den letzten 2 Tagen.</Text>
+              <Text style={styles.emptySubtitle}>Keine Nachrichten in den letzten 5 Tagen.</Text>
             </View>
           ) : null
         }
