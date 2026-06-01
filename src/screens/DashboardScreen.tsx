@@ -7,6 +7,8 @@ import {
   StyleSheet,
   ActivityIndicator,
   TextInput,
+  Animated,
+  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,6 +16,7 @@ import { useStore } from '../store';
 import { useTheme, ThemeColors } from '../utils/theme';
 import { uploadScratchpad } from '../services/googleDriveNotes';
 import { useGoogleDriveNotesSync } from '../hooks/useGoogleDriveNotesSync';
+import { useGoogleTasksSync } from '../hooks/useGoogleTasksSync';
 import { isOverdue } from '../utils/dateFormat';
 import { fetchRecentMails, MailMessage } from '../services/googleMail';
 import { listUpcomingEvents, CalendarEvent } from '../services/googleCalendar';
@@ -214,7 +217,8 @@ export function DashboardScreen() {
   const router = useRouter();
   const { tasks, notes, settings, scratchpad, scratchpadUpdatedAt, setScratchpad } = useStore();
   const { colors, isDark } = useTheme();
-  const { syncScratchpad } = useGoogleDriveNotesSync();
+  const { syncScratchpad, syncDriveNotes } = useGoogleDriveNotesSync();
+  const { syncTasks } = useGoogleTasksSync();
 
   // Pull beim Mount + alle 30 s automatisch pollen
   useEffect(() => {
@@ -222,6 +226,51 @@ export function DashboardScreen() {
     const interval = setInterval(() => syncScratchpad(), 30_000);
     return () => clearInterval(interval);
   }, []);
+
+  // Sync-Button
+  const [syncing, setSyncing] = useState(false);
+  const spinAnim = useRef(new Animated.Value(0)).current;
+  const spinLoop = useRef<Animated.CompositeAnimation | null>(null);
+
+  const handleSync = useCallback(async () => {
+    if (syncing) return;
+    setSyncing(true);
+    spinLoop.current = Animated.loop(
+      Animated.timing(spinAnim, { toValue: 1, duration: 800, useNativeDriver: true })
+    );
+    spinLoop.current.start();
+
+    try {
+      await Promise.all([
+        syncTasks().catch(() => {}),
+        syncDriveNotes().catch(() => {}),
+      ]);
+      // Mails + Kalender neu laden
+      if (settings.googleAccessToken) {
+        setMailLoading(true);
+        fetchRecentMails(settings.googleAccessToken)
+          .then((r) => setMails(r.slice(0, 5))).catch(() => {}).finally(() => setMailLoading(false));
+        if (settings.googleCalendarEnabled) {
+          setCalLoading(true);
+          Promise.all([
+            listUpcomingEvents(settings.googleAccessToken, settings.selectedCalendarIds ?? [], 2),
+            listUpcomingEvents(settings.googleAccessToken, ['#contacts@group.v.calendar.google.com'], 1),
+          ]).then(([events, bdays]) => {
+            setCalEvents(events.filter((e) => !e.summary?.toLowerCase().includes('geburtstag') && !e.calendarName?.toLowerCase().includes('geburtstag')));
+            setBirthdays([...bdays, ...events.filter((e) => e.summary?.toLowerCase().includes('geburtstag') || e.calendarName?.toLowerCase().includes('geburtstag'))]);
+          }).catch(() => {}).finally(() => setCalLoading(false));
+        }
+      }
+      // Web: Seite neu laden damit alle Komponenten frische Daten sehen
+      if (Platform.OS === 'web') {
+        window.location.reload();
+      }
+    } finally {
+      spinLoop.current?.stop();
+      spinAnim.setValue(0);
+      setSyncing(false);
+    }
+  }, [syncing, syncTasks, syncDriveNotes, settings]);
 
   // Debounced Drive-Upload 1,5 s nach letzter Eingabe
   const uploadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -308,6 +357,24 @@ export function DashboardScreen() {
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
     >
+
+      {/* ── Sync-Button oben rechts ── */}
+      <View style={styles.syncRow}>
+        <Pressable
+          onPress={handleSync}
+          disabled={syncing}
+          style={({ pressed }) => [styles.syncBtn, { opacity: pressed ? 0.6 : 1 }]}
+          hitSlop={12}
+        >
+          <Animated.View style={{
+            transform: [{
+              rotate: spinAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] })
+            }]
+          }}>
+            <Ionicons name="sync-outline" size={18} color={colors.textSecondary} />
+          </Animated.View>
+        </Pressable>
+      </View>
 
       {/* ── Geburtstage ── */}
       {birthdays.length > 0 && (
@@ -504,6 +571,16 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: c.background },
     content: { paddingTop: 16, paddingBottom: 48, gap: 24 },
+
+    syncRow: {
+      flexDirection: 'row',
+      justifyContent: 'flex-end',
+      paddingHorizontal: 16,
+      marginBottom: -8,
+    },
+    syncBtn: {
+      padding: 4,
+    },
 
     section: {},
 
