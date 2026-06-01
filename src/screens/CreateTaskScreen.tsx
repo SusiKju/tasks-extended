@@ -275,6 +275,21 @@ export function CreateTaskScreen() {
 
       <View style={styles.section}>
         <Text style={styles.label}>Fälligkeitsdatum</Text>
+
+        {/* Quick-Date-Buttons */}
+        <View style={styles.quickRow}>
+          {[
+            { label: 'Heute', onPress: () => { setDueDate(new Date()); setDueTime(''); } },
+            { label: '+1 Std', onPress: () => { const d = new Date(); d.setHours(d.getHours() + 1); setDueDate(d); setDueTime(`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`); } },
+            { label: '+2 Std', onPress: () => { const d = new Date(); d.setHours(d.getHours() + 2); setDueDate(d); setDueTime(`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`); } },
+            { label: '+3 Std', onPress: () => { const d = new Date(); d.setHours(d.getHours() + 3); setDueDate(d); setDueTime(`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`); } },
+          ].map((q) => (
+            <TouchableOpacity key={q.label} style={styles.quickBtn} onPress={q.onPress}>
+              <Text style={styles.quickBtnText}>{q.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
         <TouchableOpacity style={styles.dateBtn} onPress={() => setShowDatePicker(true)}>
           <Ionicons name="calendar-outline" size={16} color={dueDate ? colors.text : colors.placeholder} />
           <Text style={[styles.dateBtnText, { color: dueDate ? colors.text : colors.placeholder }]}>
@@ -380,6 +395,24 @@ function makeStyles(c: ThemeColors) {
       color: c.text,
       minHeight: 70,
       textAlignVertical: 'top',
+    },
+    quickRow: {
+      flexDirection: 'row',
+      gap: 6,
+    },
+    quickBtn: {
+      flex: 1,
+      alignItems: 'center',
+      paddingVertical: 7,
+      borderRadius: 8,
+      backgroundColor: c.surfaceHigh,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    quickBtnText: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: c.accent,
     },
     dateBtn: {
       flexDirection: 'row',
