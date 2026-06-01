@@ -40,8 +40,25 @@ export async function listContactBirthdays(accessToken: string): Promise<Birthda
       headers: { Authorization: `Bearer ${accessToken}` },
     });
 
-    // Token expired / insufficient scope → signal the caller to refresh & retry.
-    if (res.status === 401 || res.status === 403) return null;
+    // 401 = Token abgelaufen → Caller refresht & retryt (sinnvoll).
+    // 403 = Forbidden → fehlender Scope oder People API nicht aktiviert. Ein
+    // Refresh bringt KEINE neuen Scopes, daher hier den Grund loggen, damit klar
+    // ist, ob neu angemeldet (Scope) oder die People API im GCP-Projekt aktiviert
+    // werden muss. Rückgabe bleibt null (Refresh-Retry ist harmlos, überschreibt
+    // keine bereits synchronisierten Geburtstage).
+    if (res.status === 403) {
+      const body = await res.text().catch(() => '');
+      const scopeMissing = /scope/i.test(body);
+      console.warn(
+        `[GoogleContacts] 403 von People API. ${
+          scopeMissing
+            ? 'Fehlender contacts.readonly-Scope → Google-Verbindung trennen und neu anmelden.'
+            : 'Vermutlich People API im GCP-Projekt nicht aktiviert → in der Google Cloud Console aktivieren.'
+        } Antwort: ${body.slice(0, 300)}`
+      );
+      return null;
+    }
+    if (res.status === 401) return null;
     if (!res.ok) return birthdays;
 
     const data: { connections?: PeoplePerson[]; nextPageToken?: string } = await res.json();
