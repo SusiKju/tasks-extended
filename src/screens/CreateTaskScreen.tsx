@@ -20,14 +20,14 @@ import { GroupBadge } from '../components/GroupBadge';
 import { AttachmentPreview } from '../components/AttachmentPreview';
 import { DatePickerModal } from '../components/DatePickerModal';
 import { detectGroup } from '../utils/autoGroup';
-import { createCalendarEvent, refreshGoogleToken } from '../services/googleCalendar';
+import { createCalendarEvent } from '../services/googleCalendar';
 import { useGoogleTasksSync } from '../hooks/useGoogleTasksSync';
 import { useTheme, ThemeColors } from '../utils/theme';
 import { formatDate } from '../utils/dateFormat';
 
 export function CreateTaskScreen() {
   const router = useRouter();
-  const { groups, settings, addTask, updateTask, updateSettings } = useStore();
+  const { groups, settings, addTask } = useStore();
   const { syncTasks } = useGoogleTasksSync();
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
@@ -172,41 +172,11 @@ export function CreateTaskScreen() {
 
     addTask(task);
 
-    if (settings.googleCalendarEnabled && settings.googleCalendarId && task.dueDate) {
-      if (!settings.googleAccessToken) {
-        Alert.alert('Kalender-Sync', 'Kein Google-Token gespeichert. Bitte in den Einstellungen erneut verbinden.');
-      } else {
-        try {
-          let token = settings.googleAccessToken;
-          let eventId = await createCalendarEvent(task, token, settings.googleCalendarId);
-
-          if (eventId === null && settings.googleRefreshToken) {
-            const newToken = await refreshGoogleToken(settings.googleRefreshToken);
-            if (newToken) {
-              updateSettings({ googleAccessToken: newToken });
-              token = newToken;
-              eventId = await createCalendarEvent(task, token, settings.googleCalendarId);
-            }
-          }
-
-          if (eventId) {
-            updateTask(taskId, { googleEventId: eventId });
-          } else if (!settings.googleRefreshToken) {
-            Alert.alert(
-              'Google-Session abgelaufen',
-              'Bitte in den Einstellungen "Google Kalender trennen" und anschließend neu verbinden.',
-            );
-          } else {
-            Alert.alert(
-              'Kalender-Sync fehlgeschlagen',
-              'Task konnte nicht im Google Kalender eingetragen werden. Bitte in den Einstellungen die Google-Verbindung trennen und neu verbinden.',
-            );
-          }
-        } catch (e) {
-          console.error('[CalendarSync]', e);
-          Alert.alert('Kalender-Sync Fehler', e instanceof Error ? e.message : String(e));
-        }
-      }
+    // Calendar Event als visuelle Ergänzung erstellen — ID wird NICHT in googleEventId gespeichert.
+    // googleEventId ist ausschließlich für Google Tasks API IDs reserviert.
+    // Der Sync-Hook (useGoogleTasksSync) übernimmt das Anlegen/Verknüpfen in der Tasks API.
+    if (settings.googleCalendarEnabled && settings.googleCalendarId && task.dueDate && settings.googleAccessToken) {
+      createCalendarEvent(task, settings.googleAccessToken, settings.googleCalendarId).catch(() => {});
     }
 
     // Sync mit Google Tasks/Calendar – auch ohne Datum
@@ -214,7 +184,7 @@ export function CreateTaskScreen() {
 
     setSaving(false);
     router.back();
-  }, [title, description, selectedGroupId, suggestedGroup, dueDate, attachments, settings, addTask, updateTask, updateSettings, syncTasks, router]);
+  }, [title, description, selectedGroupId, suggestedGroup, dueDate, attachments, settings, addTask, syncTasks, router]);
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">

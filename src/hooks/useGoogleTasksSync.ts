@@ -2,12 +2,11 @@ import { useCallback } from 'react';
 import { useStore } from '../store';
 import {
   refreshGoogleToken,
-  listGoogleTasks,
   listTaskLists,
-  createCalendarEvent,
-  deleteCalendarEvent,
-  deleteGoogleTask,
+  listGoogleTasksById,
   createGoogleTask,
+  updateGoogleTask,
+  deleteGoogleTask,
 } from '../services/googleCalendar';
 
 export interface SyncResult {
@@ -16,10 +15,33 @@ export interface SyncResult {
   pushed: number;
 }
 
+/**
+ * Tries an async action with the current token. If it returns null/false (indicating
+ * auth failure), refreshes the token once and retries. Returns the result of the
+ * successful attempt, or null if both attempts fail.
+ */
+async function withTokenRefresh(
+  token: string,
+  refreshToken: string | null,
+  onRefreshed: (newToken: string) => void,
+  action: (t: string) => Promise<string | boolean | null>
+): Promise<{ result: string | boolean | null; token: string }> {
+  const result = await action(token).catch(() => null);
+  if (result !== null && result !== false) return { result, token };
+
+  // First attempt failed — try refreshing the token once
+  if (!refreshToken) return { result: null, token };
+  const newToken = await refreshGoogleToken(refreshToken).catch(() => null);
+  if (!newToken) return { result: null, token };
+
+  onRefreshed(newToken);
+  const retried = await action(newToken).catch(() => null);
+  return { result: retried, token: newToken };
+}
+
 export function useGoogleTasksSync() {
   const syncTasks = useCallback(async (): Promise<SyncResult | null> => {
-    // Always read from store directly so we get the latest state even when called
-    // right after a delete (before the component re-renders and the closure updates).
+    // Always read from store directly — avoids stale closure values.
     const {
       settings,
       tasks,
@@ -29,117 +51,158 @@ export function useGoogleTasksSync() {
       removeDeletedGoogleEventIds,
     } = useStore.getState();
 
-    if (!settings.googleCalendarEnabled || !settings.googleAccessToken || !settings.googleCalendarId) {
-      return null;
-    }
+    if (!settings.googleCalendarEnabled || !settings.googleAccessToken) return null;
 
     let token = settings.googleAccessToken;
-    if (settings.googleRefreshToken) {
-      const refreshed = await refreshGoogleToken(settings.googleRefreshToken);
-      if (refreshed) {
-        token = refreshed;
-        updateSettings({ googleAccessToken: refreshed });
+    const onTokenRefreshed = (t: string) => {
+      token = t;
+      updateSettings({ googleAccessToken: t });
+    };
+
+    // ── 1. Get the first Google Tasks list ─────────────────────────────────────
+    let taskLists = await listTaskLists(token).catch(() => [] as Array<{ id: string; title: string }>);
+    if (taskLists.length === 0 && settings.googleRefreshToken) {
+      // Could be an expired token — refresh and retry once
+      const newToken = await refreshGoogleToken(settings.googleRefreshToken).catch(() => null);
+      if (newToken) {
+        onTokenRefreshed(newToken);
+        taskLists = await listTaskLists(token).catch(() => []);
       }
     }
+    if (taskLists.length === 0) return null;
 
-    // Snapshot deleted IDs before async work — used for the re-import guard below.
+    const taskListId = taskLists[0].id;
+
+    // ── 2. Process pending deletions ───────────────────────────────────────────
     const deletedIds = useStore.getState().deletedGoogleEventIds;
-
-    // Fetch task list ID once – used for both deletions and import below
-    const taskLists = await listTaskLists(token);
-    const firstTaskListId = taskLists[0]?.id ?? null;
-
     const successfullyDeleted: string[] = [];
-    for (const deletedId of deletedIds) {
-      // null = network error (retry), true = gone (200 or 404), false = other HTTP error (retry)
-      let calResult: boolean | null = true; // default: not attempted = OK
-      let taskResult: boolean | null = true;
-
-      // Delete from Calendar (for tasks originally pushed there)
-      if (settings.googleCalendarId) {
-        calResult = await deleteCalendarEvent(token, settings.googleCalendarId, deletedId).catch(() => null);
-      }
-      // Delete from Google Tasks (for tasks imported from the Tasks API)
-      if (firstTaskListId) {
-        taskResult = await deleteGoogleTask(token, firstTaskListId, deletedId).catch(() => null);
-      }
-
-      // Only mark as handled when both APIs confirmed the task is gone (200 or 404).
-      // A false/null from either side means an error occurred — keep the ID for retry.
-      if (calResult && taskResult) {
-        successfullyDeleted.push(deletedId);
-      }
+    for (const googleId of deletedIds) {
+      const { result } = await withTokenRefresh(
+        token,
+        settings.googleRefreshToken,
+        onTokenRefreshed,
+        (t) => deleteGoogleTask(t, taskListId, googleId)
+      );
+      if (result) successfullyDeleted.push(googleId);
     }
-    // Remove only the IDs that were confirmed deleted; IDs added during this sync
-    // run (concurrent deletes) are preserved by filtering the live store state.
     if (successfullyDeleted.length > 0) {
       removeDeletedGoogleEventIds(successfullyDeleted);
     }
 
-    const googleTasks = firstTaskListId
-      ? await listGoogleTasks(token, firstTaskListId)
-      : await listGoogleTasks(token);
+    // ── 3. Fetch all Google Tasks ───────────────────────────────────────────────
+    const googleTasks = await listGoogleTasksById(token, taskListId).catch(() => [] as any[]);
 
-    let imported = 0;
-    let updated = 0;
-    let pushed = 0;
+    const result: SyncResult = { imported: 0, updated: 0, pushed: 0 };
+
+    // Build a map for fast lookup: googleTaskId → googleTask
+    const googleTaskMap = new Map<string, any>();
+    for (const gt of googleTasks) {
+      if (gt.id) googleTaskMap.set(gt.id, gt);
+    }
+
+    // ── 4. Google → Local ──────────────────────────────────────────────────────
+    // Use fresh tasks snapshot for lookups
+    const localTasksSnapshot = useStore.getState().tasks;
 
     for (const gt of googleTasks) {
       if (!gt.title) continue;
       if (deletedIds.includes(gt.id)) continue;
-      const exists = tasks.find((t) => t.googleEventId === gt.id);
-      if (!exists) {
-        const dueDate = gt.due ? new Date(gt.due).toISOString() : null;
+
+      const local = localTasksSnapshot.find((t) => t.googleEventId === gt.id);
+
+      if (!local) {
+        // New task from Google — import it
         addTask({
           id: `gtask-${gt.id}`,
           title: gt.title,
           description: gt.notes ?? '',
           groupId: null,
-          dueDate,
+          dueDate: gt.due ? new Date(gt.due).toISOString() : null,
           completed: gt.status === 'completed',
           attachments: [],
           googleEventId: gt.id,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         });
-        imported++;
+        result.imported++;
       } else {
+        // Existing task — let Google be source of truth for completion status only.
+        // Local wins for title/description/date (user edits locally → pushed in step 5).
         const googleCompleted = gt.status === 'completed';
-        if (exists.completed !== googleCompleted) {
-          updateTask(exists.id, { completed: googleCompleted });
-          updated++;
+        if (local.completed !== googleCompleted) {
+          updateTask(local.id, { completed: googleCompleted });
+          result.updated++;
         }
       }
     }
 
-    // Alle lokalen Tasks ohne Google-ID → immer als Google Task anlegen
-    const localOnly = tasks.filter((t) => !t.googleEventId && !t.completed);
-    for (const t of localOnly) {
-      if (!firstTaskListId) break;
+    // ── 5. Local → Google ──────────────────────────────────────────────────────
+    // Re-read tasks so we see freshly imported ones (they already have googleEventId set).
+    const freshTasks = useStore.getState().tasks;
 
-      // Google Task erstellen (funktioniert mit und ohne Datum)
-      const taskId = await createGoogleTask(
-        token,
-        firstTaskListId,
-        t.title,
-        t.description || undefined,
-        t.dueDate ? new Date(t.dueDate).toISOString() : undefined
-      );
+    for (const local of freshTasks) {
+      // Skip completed tasks — don't push them as new, they're done
+      if (local.completed) continue;
 
-      if (taskId) {
-        updateTask(t.id, { googleEventId: taskId });
-        pushed++;
-
-        // Zusätzlich: Kalender-Event wenn Datum vorhanden
-        if (t.dueDate && settings.googleCalendarId) {
-          createCalendarEvent(t, token, settings.googleCalendarId).catch(() => {});
+      if (!local.googleEventId) {
+        // New local task — push to Google Tasks
+        const { result: newId } = await withTokenRefresh(
+          token,
+          settings.googleRefreshToken,
+          onTokenRefreshed,
+          (t) => createGoogleTask(
+            t,
+            taskListId,
+            local.title,
+            local.description || undefined,
+            local.dueDate ? new Date(local.dueDate).toISOString() : undefined
+          )
+        );
+        if (typeof newId === 'string' && newId) {
+          updateTask(local.id, { googleEventId: newId });
+          result.pushed++;
+        } else {
+          console.warn('[TaskSync] createGoogleTask failed for:', local.title);
         }
       } else {
-        console.warn('[TaskSync] createGoogleTask failed for:', t.title);
+        // Existing Google Task — push local changes if title, description or date diverge
+        const gt = googleTaskMap.get(local.googleEventId);
+        if (!gt) continue; // Task not in Google list (deleted remotely, or wrong ID)
+
+        const updates: Parameters<typeof updateGoogleTask>[3] = {};
+
+        if (gt.title !== local.title) {
+          updates.title = local.title;
+        }
+        if ((gt.notes ?? '') !== (local.description ?? '')) {
+          updates.notes = local.description || '';
+        }
+
+        // Compare dates at day precision (Google Tasks stores due as RFC 3339 midnight UTC)
+        const gtDue = gt.due
+          ? new Date(gt.due).toISOString().split('T')[0]
+          : null;
+        const localDue = local.dueDate
+          ? new Date(local.dueDate).toISOString().split('T')[0]
+          : null;
+        if (gtDue !== localDue) {
+          updates.due = local.dueDate
+            ? new Date(local.dueDate).toISOString()
+            : undefined;
+        }
+
+        if (Object.keys(updates).length > 0) {
+          await withTokenRefresh(
+            token,
+            settings.googleRefreshToken,
+            onTokenRefreshed,
+            (t) => updateGoogleTask(t, taskListId, local.googleEventId!, updates)
+          ).catch(() => {});
+        }
       }
     }
 
-    return { imported, updated, pushed };
+    return result;
   }, []);
 
   return { syncTasks };

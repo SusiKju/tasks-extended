@@ -26,6 +26,8 @@ import {
   createCalendarEvent,
   updateCalendarEvent,
   deleteCalendarEvent,
+  updateGoogleTask,
+  listTaskLists,
 } from '../services/googleCalendar';
 import { useGoogleTasksSync } from '../hooks/useGoogleTasksSync';
 
@@ -68,13 +70,33 @@ export function TaskDetailScreen() {
 
     updateTask(id, updates);
 
-    if (settings.googleCalendarEnabled && settings.googleAccessToken && settings.googleCalendarId) {
+    if (settings.googleCalendarEnabled && settings.googleAccessToken) {
+      const token = settings.googleAccessToken;
       const updatedTask = { ...task, ...updates };
+
+      // Push to Google Tasks API (primary sync target)
       if (task.googleEventId) {
-        await updateCalendarEvent(updatedTask, settings.googleAccessToken, settings.googleCalendarId, task.googleEventId).catch(() => {});
-      } else if (updatedTask.dueDate) {
-        const eventId = await createCalendarEvent(updatedTask, settings.googleAccessToken, settings.googleCalendarId).catch(() => null);
-        if (eventId) updateTask(id, { googleEventId: eventId });
+        const lists = await listTaskLists(token).catch(() => []);
+        const taskListId = lists[0]?.id;
+        if (taskListId) {
+          const gtUpdates: Parameters<typeof updateGoogleTask>[3] = {
+            title: updates.title,
+            notes: updates.description,
+          };
+          if (updates.dueDate) {
+            gtUpdates.due = new Date(updates.dueDate).toISOString();
+          }
+          await updateGoogleTask(token, taskListId, task.googleEventId, gtUpdates).catch(() => {});
+        }
+      }
+
+      // Calendar event: update or create as secondary display (no ID stored back)
+      if (settings.googleCalendarId && updatedTask.dueDate) {
+        if (task.googleEventId) {
+          updateCalendarEvent(updatedTask, token, settings.googleCalendarId, task.googleEventId).catch(() => {});
+        } else {
+          createCalendarEvent(updatedTask, token, settings.googleCalendarId).catch(() => {});
+        }
       }
     }
 
@@ -83,12 +105,28 @@ export function TaskDetailScreen() {
 
   const handleToggle = useCallback(async () => {
     if (!task) return;
+    const newCompleted = !task.completed;
     toggleTask(id);
-    if (settings.googleCalendarEnabled && settings.googleAccessToken && task.googleEventId) {
-      await updateCalendarEvent(
-        { ...task, completed: !task.completed },
-        settings.googleAccessToken,
-        settings.googleCalendarId ?? '',
+
+    if (!settings.googleCalendarEnabled || !settings.googleAccessToken || !task.googleEventId) return;
+
+    const token = settings.googleAccessToken;
+
+    // Push status to Google Tasks API
+    const lists = await listTaskLists(token).catch(() => []);
+    const taskListId = lists[0]?.id;
+    if (taskListId) {
+      await updateGoogleTask(token, taskListId, task.googleEventId, {
+        status: newCompleted ? 'completed' : 'needsAction',
+      }).catch(() => {});
+    }
+
+    // Also sync Calendar event (best-effort)
+    if (settings.googleCalendarId && task.dueDate) {
+      updateCalendarEvent(
+        { ...task, completed: newCompleted },
+        token,
+        settings.googleCalendarId,
         task.googleEventId
       ).catch(() => {});
     }

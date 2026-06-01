@@ -16,7 +16,7 @@ import { TaskCard } from '../components/TaskCard';
 import { Task } from '../types';
 import { isOverdue } from '../utils/dateFormat';
 import { useTheme, ThemeColors, neonGlow } from '../utils/theme';
-import { updateCalendarEvent } from '../services/googleCalendar';
+import { updateCalendarEvent, updateGoogleTask, listTaskLists } from '../services/googleCalendar';
 import { useGoogleTasksSync } from '../hooks/useGoogleTasksSync';
 
 function confirmDelete(title: string, onConfirm: () => void) {
@@ -55,12 +55,28 @@ export function TaskListScreen() {
   const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
 
   const handleToggle = useCallback(async (task: Task) => {
+    const newCompleted = !task.completed;
     toggleTask(task.id);
-    if (settings.googleCalendarEnabled && settings.googleAccessToken && task.googleEventId) {
+
+    if (!settings.googleCalendarEnabled || !settings.googleAccessToken || !task.googleEventId) return;
+
+    const token = settings.googleAccessToken;
+
+    // Push completion status to Google Tasks API
+    const lists = await listTaskLists(token).catch(() => []);
+    const taskListId = lists[0]?.id;
+    if (taskListId) {
+      await updateGoogleTask(token, taskListId, task.googleEventId, {
+        status: newCompleted ? 'completed' : 'needsAction',
+      }).catch(() => {});
+    }
+
+    // Also update the Calendar event if one exists (best-effort)
+    if (settings.googleCalendarId && task.dueDate) {
       await updateCalendarEvent(
-        { ...task, completed: !task.completed },
-        settings.googleAccessToken,
-        settings.googleCalendarId ?? '',
+        { ...task, completed: newCompleted },
+        token,
+        settings.googleCalendarId,
         task.googleEventId
       ).catch(() => {});
     }

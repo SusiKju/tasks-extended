@@ -338,7 +338,7 @@ export async function listGoogleTasks(accessToken: string, taskListId?: string):
   return listGoogleTasksById(accessToken, taskListId);
 }
 
-async function listGoogleTasksById(accessToken: string, taskListId: string): Promise<Array<any>> {
+export async function listGoogleTasksById(accessToken: string, taskListId: string): Promise<Array<any>> {
   const res = await tasksFetch(
     `/lists/${encodeURIComponent(taskListId)}/tasks?showCompleted=true&maxResults=100`,
     accessToken
