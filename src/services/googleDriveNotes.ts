@@ -4,16 +4,19 @@ const DRIVE_API = 'https://www.googleapis.com/drive/v3';
 const UPLOAD_API = 'https://www.googleapis.com/upload/drive/v3';
 const FOLDER_NAME = 'Tasks-Extended';
 const NOTES_FILENAME = 'notes.json';
+const SCRATCHPAD_FILENAME = 'scratchpad.json';
 
 export const DRIVE_NOTES_SCOPE = 'https://www.googleapis.com/auth/drive.file';
 
-// Cache: Folder-ID und Notes-File-ID pro Session
+// Cache: Folder-ID und File-IDs pro Session
 let cachedFolderId: string | null = null;
 let cachedNotesFileId: string | null = null;
+let cachedScratchpadFileId: string | null = null;
 
 export function clearDriveFolderCache() {
   cachedFolderId = null;
   cachedNotesFileId = null;
+  cachedScratchpadFileId = null;
 }
 
 async function driveFetch(
@@ -211,4 +214,85 @@ export async function deleteDriveNote(
   const filtered = existing.filter((n) => n.id !== fileId);
   if (filtered.length === existing.length) return true; // nicht gefunden = ok
   return uploadAllNotes(accessToken, filtered);
+}
+
+// ── Scratchpad ────────────────────────────────────────────────────────────────
+
+interface ScratchpadData { text: string; updatedAt: string; }
+
+async function findScratchpadFile(accessToken: string, folderId: string): Promise<string | null> {
+  if (cachedScratchpadFileId) return cachedScratchpadFileId;
+  const query = encodeURIComponent(
+    `name='${SCRATCHPAD_FILENAME}' and '${folderId}' in parents and trashed=false`
+  );
+  const res = await driveFetch(`/files?q=${query}&fields=files(id)`, accessToken);
+  if (!res.ok) return null;
+  const data = await res.json();
+  if (data.files?.length > 0) {
+    cachedScratchpadFileId = data.files[0].id as string;
+    return cachedScratchpadFileId;
+  }
+  return null;
+}
+
+export async function downloadScratchpad(accessToken: string): Promise<ScratchpadData | null> {
+  try {
+    const folderId = await findOrCreateFolder(accessToken);
+    if (!folderId) return null;
+    const fileId = await findScratchpadFile(accessToken, folderId);
+    if (!fileId) return null;
+    const res = await driveFetch(`/files/${fileId}?alt=media`, accessToken);
+    if (!res.ok) return null;
+    return (await res.json()) as ScratchpadData;
+  } catch {
+    return null;
+  }
+}
+
+export async function uploadScratchpad(
+  accessToken: string,
+  text: string,
+  updatedAt: string
+): Promise<boolean> {
+  try {
+    const folderId = await findOrCreateFolder(accessToken);
+    if (!folderId) return false;
+
+    const content = JSON.stringify({ text, updatedAt } satisfies ScratchpadData);
+    const existingFileId = await findScratchpadFile(accessToken, folderId);
+
+    if (existingFileId) {
+      const res = await fetch(`${UPLOAD_API}/files/${existingFileId}?uploadType=media`, {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: content,
+      });
+      return res.ok;
+    }
+
+    // Neu erstellen
+    const metadata = JSON.stringify({ name: SCRATCHPAD_FILENAME, parents: [folderId] });
+    const boundary = 'scratchpad_boundary';
+    const body =
+      `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n` +
+      `${metadata}\r\n--${boundary}\r\nContent-Type: application/json\r\n\r\n` +
+      `${content}\r\n--${boundary}--`;
+
+    const res = await fetch(`${UPLOAD_API}/files?uploadType=multipart`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': `multipart/related; boundary=${boundary}`,
+      },
+      body,
+    });
+    if (!res.ok) return false;
+    cachedScratchpadFileId = (await res.json()).id as string;
+    return true;
+  } catch {
+    return false;
+  }
 }

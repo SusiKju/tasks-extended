@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useStore } from '../store';
 import { useTheme, ThemeColors } from '../utils/theme';
+import { uploadScratchpad } from '../services/googleDriveNotes';
 import { isOverdue } from '../utils/dateFormat';
 import { fetchRecentMails, MailMessage } from '../services/googleMail';
 import { listUpcomingEvents, CalendarEvent } from '../services/googleCalendar';
@@ -210,8 +211,20 @@ const chipStyles = StyleSheet.create({
 
 export function DashboardScreen() {
   const router = useRouter();
-  const { tasks, notes, settings, scratchpad, setScratchpad } = useStore();
+  const { tasks, notes, settings, scratchpad, scratchpadUpdatedAt, setScratchpad } = useStore();
   const { colors, isDark } = useTheme();
+
+  // Debounced Drive-Upload nach 2 s Tipp-Pause
+  const uploadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleScratchpadChange = useCallback((text: string) => {
+    setScratchpad(text);
+    if (!settings.googleNotesEnabled || !settings.googleAccessToken) return;
+    if (uploadTimer.current) clearTimeout(uploadTimer.current);
+    uploadTimer.current = setTimeout(() => {
+      const { scratchpad: latest, scratchpadUpdatedAt: ts } = useStore.getState();
+      uploadScratchpad(settings.googleAccessToken!, latest, ts).catch(() => {});
+    }, 2000);
+  }, [setScratchpad, settings.googleNotesEnabled, settings.googleAccessToken]);
   const styles = useMemo(() => makeStyles(colors, isDark), [colors, isDark]);
 
   const [mails, setMails] = useState<MailMessage[]>([]);
@@ -335,7 +348,7 @@ export function DashboardScreen() {
             <TextInput
               style={[styles.scratchInput, { color: colors.text }]}
               value={scratchpad}
-              onChangeText={setScratchpad}
+              onChangeText={handleScratchpadChange}
               placeholder={'Gedanken, Ideen…'}
               placeholderTextColor={colors.textMuted}
               multiline

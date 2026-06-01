@@ -5,6 +5,8 @@ import {
   listDriveNotes,
   uploadDriveNotesBatch,
   deleteDriveNote,
+  downloadScratchpad,
+  uploadScratchpad,
 } from '../services/googleDriveNotes';
 import { Note } from '../types';
 
@@ -22,10 +24,13 @@ export function useGoogleDriveNotesSync() {
     const {
       settings,
       notes,
+      scratchpad,
+      scratchpadUpdatedAt,
       deletedDriveNoteFileIds,
       updateSettings,
       addNote,
       updateNote,
+      setScratchpad,
       removeDeletedDriveNoteFileIds,
     } = useStore.getState();
 
@@ -114,6 +119,31 @@ export function useGoogleDriveNotesSync() {
       updateNote(noteId, { driveFileId: fileId });
       pushed++;
     });
+    // ── Scratchpad sync ───────────────────────────────────────────────────────
+    try {
+      const driveScratchpad = await downloadScratchpad(token);
+      if (driveScratchpad) {
+        if (driveScratchpad.updatedAt > scratchpadUpdatedAt) {
+          // Drive ist neuer → lokal überschreiben (setScratchpad setzt updatedAt auf jetzt,
+          // daher direkt in den Store schreiben um den Timestamp zu erhalten)
+          useStore.setState({
+            scratchpad: driveScratchpad.text,
+            scratchpadUpdatedAt: driveScratchpad.updatedAt,
+          });
+        } else {
+          // Lokal ist neuer (oder gleich) → zu Drive hochladen
+          await uploadScratchpad(token, scratchpad, scratchpadUpdatedAt);
+        }
+      } else {
+        // Noch kein Scratchpad auf Drive → hochladen
+        if (scratchpad) {
+          await uploadScratchpad(token, scratchpad, scratchpadUpdatedAt);
+        }
+      }
+    } catch {
+      // Scratchpad-Sync-Fehler sind nicht kritisch
+    }
+
     console.log('[DriveSync] done – pulled:', pulled, 'pushed:', pushed, 'deleted:', deleted);
 
     return { pulled, pushed, deleted };

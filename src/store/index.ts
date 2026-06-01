@@ -10,6 +10,7 @@ interface TaskState {
   notes: Note[];
   settings: AppSettings;
   scratchpad: string;
+  scratchpadUpdatedAt: string;
   deletedGoogleEventIds: string[];
   deletedDriveNoteFileIds: string[];
 
@@ -93,6 +94,7 @@ export const useStore = create<TaskState>()(
       notes: [],
       settings: DEFAULT_SETTINGS,
       scratchpad: '',
+      scratchpadUpdatedAt: new Date(0).toISOString(),
       deletedGoogleEventIds: [],
       deletedDriveNoteFileIds: [],
 
@@ -213,7 +215,7 @@ export const useStore = create<TaskState>()(
           deletedDriveNoteFileIds: state.deletedDriveNoteFileIds.filter((id) => !fileIds.includes(id)),
         })),
 
-      setScratchpad: (text) => set({ scratchpad: text }),
+      setScratchpad: (text) => set({ scratchpad: text, scratchpadUpdatedAt: new Date().toISOString() }),
 
       updateSettings: (updates) =>
         set((state) => ({ settings: { ...state.settings, ...updates } })),
@@ -258,6 +260,7 @@ export const useStore = create<TaskState>()(
         }
         if (version < 10) {
           persistedState.scratchpad = persistedState.scratchpad ?? '';
+          persistedState.scratchpadUpdatedAt = persistedState.scratchpadUpdatedAt ?? new Date(0).toISOString();
         }
         return persistedState;
       },
