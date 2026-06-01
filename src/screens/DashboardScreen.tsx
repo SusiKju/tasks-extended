@@ -159,11 +159,13 @@ function TaskChip({
     return () => { loop.stop(); blinkAnim.setValue(1); };
   }, [blink, blinkAnim]);
 
-  // Farbliche Hinterlegung rein nach Priorität: wichtige Tasks rot, normale blau.
-  // Solider Chip mit weißem Text – auf beiden Farben gut lesbar.
-  const bgColor     = isImportant ? C.important : C.tasks;
-  const borderColor = isImportant ? C.important : C.tasks;
-  const textColor   = readableTextOn(bgColor);
+  // Farbe rein nach Priorität: wichtige Tasks rot, normale blau.
+  // Dark-Themes: Tasks-Tab-Stil – keine Füllung, nur Rahmen + Schrift in der
+  // Chip-Farbe (+ Glow). Light: solide Füllung mit lesbarem Text wie bisher.
+  const chipColor   = isImportant ? C.important : C.tasks;
+  const borderColor = chipColor;
+  const bgColor     = isDark ? chipColor + '18' : chipColor;
+  const textColor   = isDark ? chipColor : readableTextOn(chipColor);
 
   const fontSize   = scale === 'lg' ? 13 : scale === 'md' ? 11 : 10;
   const padV       = scale === 'lg' ? 7  : scale === 'md' ? 5  : 4;
@@ -182,7 +184,8 @@ function TaskChip({
       <Pressable
         style={({ pressed }) => [
           chipStyles.chip,
-          { backgroundColor: bgColor, borderColor, opacity: pressed ? 0.7 : chipOpacity,
+          { backgroundColor: bgColor, borderColor, borderWidth: isDark ? 1.5 : 1,
+            opacity: pressed ? 0.7 : chipOpacity,
             paddingVertical: padV, paddingHorizontal: padH },
           scale !== 'sm' && glow,
         ]}
@@ -329,14 +332,16 @@ function Scratchpad({
   return (
     <View style={padStyles.container}>
       {entries.map((entry, idx) => {
-        // Lesbarer Vordergrund per Luminanz – deckt jede Bubble-Farbe ab
-        // (Cyan, Gelb, Grün → dunkel; kräftige/dunkle Töne → hell).
-        const fg = isNeon ? readableTextOn(entry.color) : '#fff';
+        // Neon-Theme: Tasks-Tab-Stil – keine Füllung, Rahmen + Schrift in der
+        // Bubble-Farbe + Glow. Bessere Lesbarkeit, einheitlicher Look.
+        // Sonst (dark-soft/neutral): solide Bubble mit weißem Text.
+        const fg = isNeon ? entry.color : '#fff';
         return (
         <View key={idx} style={[
           padStyles.bubble,
-          { backgroundColor: entry.color },
-          isNeon && { borderWidth: 0 },
+          isNeon
+            ? { backgroundColor: entry.color + '14', borderWidth: 1.5, borderColor: entry.color, ...neonGlow(entry.color, 'soft') }
+            : { backgroundColor: entry.color },
         ]}>
           <Text style={[padStyles.bullet, { color: fg + '99' }]}>•</Text>
           <TextInput
