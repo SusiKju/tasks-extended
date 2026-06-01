@@ -650,7 +650,7 @@ export function DashboardScreen() {
       {/* ── Kalender ── */}
       {settings.googleCalendarEnabled && (
         <View style={styles.section}>
-          <SectionLabel title="Kalender" colors={colors} />
+          <SectionLabel title="Termine der nächsten 2 Tage" colors={colors} />
           {calLoading ? (
             <View style={[styles.card, styles.loadingRow]}>
               <ActivityIndicator color={C.calendar} size="small" />
