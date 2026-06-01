@@ -199,19 +199,19 @@ function TaskChip({
   const taskColor   = isDark ? colors.accentNeon : C.tasks;
 
   const bgColor = isImportant
-    ? dangerColor + (isDark ? '28' : '14')
+    ? C.tasks
     : urgent
     ? dangerColor + (isDark ? '22' : '10')
     : taskColor   + (isDark ? '18' : '10');
 
   const borderColor = isImportant
-    ? dangerColor + (isDark ? 'AA' : '55')
+    ? C.tasks
     : urgent
     ? dangerColor + (isDark ? '88' : '40')
     : taskColor   + (isDark ? '60' : '35');
 
   const textColor = isImportant
-    ? dangerColor
+    ? '#FFFFFF'
     : urgent
     ? dangerColor
     : taskColor;
