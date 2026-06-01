@@ -2,7 +2,7 @@ import { Platform } from 'react-native';
 import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
 import { Task } from '../types';
-import { formatDate } from '../utils/dateFormat';
+import { formatDate, localDateStr } from '../utils/dateFormat';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -275,11 +275,12 @@ export async function createCalendarEvent(
 ): Promise<string | null> {
   if (!task.dueDate) return null;
 
+  const dateStr = localDateStr(task.dueDate);
   const event = {
     summary: task.title,
     description: task.description || undefined,
-    start: { date: task.dueDate.split('T')[0] },
-    end: { date: task.dueDate.split('T')[0] },
+    start: { date: dateStr },
+    end: { date: dateStr },
   };
 
   const res = await calendarFetch(
@@ -302,11 +303,12 @@ export async function updateCalendarEvent(
 ): Promise<boolean> {
   if (!task.dueDate) return false;
 
+  const dateStr = localDateStr(task.dueDate);
   const event = {
     summary: task.title,
     description: task.description || undefined,
-    start: { date: task.dueDate.split('T')[0] },
-    end: { date: task.dueDate.split('T')[0] },
+    start: { date: dateStr },
+    end: { date: dateStr },
   };
 
   const res = await calendarFetch(

@@ -8,6 +8,7 @@ import {
   updateGoogleTask,
   deleteGoogleTask,
 } from '../services/googleCalendar';
+import { localDateStr, toGoogleDateISO, fromGoogleDate } from '../utils/dateFormat';
 
 export interface SyncResult {
   imported: number;
@@ -117,7 +118,7 @@ export function useGoogleTasksSync() {
           title: gt.title,
           description: gt.notes ?? '',
           groupId: null,
-          dueDate: gt.due ? new Date(gt.due).toISOString() : null,
+          dueDate: gt.due ? fromGoogleDate(gt.due) : null,
           completed: gt.status === 'completed',
           attachments: [],
           googleEventId: gt.id,
@@ -155,7 +156,7 @@ export function useGoogleTasksSync() {
             taskListId,
             local.title,
             local.description || undefined,
-            local.dueDate ? new Date(local.dueDate).toISOString() : undefined
+            local.dueDate ? toGoogleDateISO(local.dueDate) : undefined
           )
         );
         if (typeof newId === 'string' && newId) {
@@ -178,16 +179,12 @@ export function useGoogleTasksSync() {
           updates.notes = local.description || '';
         }
 
-        // Compare dates at day precision (Google Tasks stores due as RFC 3339 midnight UTC)
-        const gtDue = gt.due
-          ? new Date(gt.due).toISOString().split('T')[0]
-          : null;
-        const localDue = local.dueDate
-          ? new Date(local.dueDate).toISOString().split('T')[0]
-          : null;
+        // Datum-Vergleich im lokalen Kontext — nicht als UTC-String (Timezone-Bug!)
+        const gtDue   = gt.due        ? gt.due.split('T')[0]            : null;
+        const localDue = local.dueDate ? localDateStr(local.dueDate)     : null;
         if (gtDue !== localDue) {
           updates.due = local.dueDate
-            ? new Date(local.dueDate).toISOString()
+            ? toGoogleDateISO(local.dueDate)   // Mitternacht UTC des lokalen Datums
             : undefined;
         }
 

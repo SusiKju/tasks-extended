@@ -19,7 +19,7 @@ import { useStore } from '../store';
 import { Attachment } from '../types';
 import { GroupBadge } from '../components/GroupBadge';
 import { AttachmentPreview } from '../components/AttachmentPreview';
-import { formatDate, isOverdue, isDueToday } from '../utils/dateFormat';
+import { formatDate, isOverdue, isDueToday, toGoogleDateISO } from '../utils/dateFormat';
 import { DatePickerModal } from '../components/DatePickerModal';
 import { useTheme, ThemeColors } from '../utils/theme';
 import {
@@ -84,7 +84,7 @@ export function TaskDetailScreen() {
             notes: updates.description,
           };
           if (updates.dueDate) {
-            gtUpdates.due = new Date(updates.dueDate).toISOString();
+            gtUpdates.due = toGoogleDateISO(updates.dueDate);
           }
           await updateGoogleTask(token, taskListId, task.googleEventId, gtUpdates).catch(() => {});
         }
