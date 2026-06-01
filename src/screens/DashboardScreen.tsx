@@ -141,11 +141,13 @@ function TaskChip({
   onPress,
   isDark,
   colors,
+  scale = 'lg',
 }: {
   task: Task;
   onPress: () => void;
   isDark: boolean;
   colors: ThemeColors;
+  scale?: 'lg' | 'md' | 'sm';
 }) {
   const urgent = isUrgent(task);
   const label = chipDueLabel(task);
@@ -176,22 +178,28 @@ function TaskChip({
     ? dangerColor
     : taskColor;
 
+  const fontSize   = scale === 'lg' ? 13 : scale === 'md' ? 11 : 10;
+  const padV       = scale === 'lg' ? 7  : scale === 'md' ? 5  : 4;
+  const padH       = scale === 'lg' ? 11 : scale === 'md' ? 9  : 8;
+  const chipOpacity= scale === 'sm' ? 0.65 : 1;
+
   return (
     <Pressable
       style={({ pressed }) => [
         chipStyles.chip,
-        { backgroundColor: bgColor, borderColor, opacity: pressed ? 0.7 : 1 },
+        { backgroundColor: bgColor, borderColor, opacity: pressed ? 0.7 : chipOpacity,
+          paddingVertical: padV, paddingHorizontal: padH },
       ]}
       onPress={onPress}
     >
       {isImportant && (
-        <Ionicons name="flag" size={11} color={textColor} style={{ marginRight: 2 }} />
+        <Ionicons name="flag" size={scale === 'lg' ? 11 : 9} color={textColor} style={{ marginRight: 2 }} />
       )}
-      <Text style={[chipStyles.title, { color: textColor }]} numberOfLines={1}>
+      <Text style={[chipStyles.title, { color: textColor, fontSize }]} numberOfLines={1}>
         {task.title}
       </Text>
       {label ? (
-        <Text style={[chipStyles.label, { color: textColor + 'BB' }]}>{label}</Text>
+        <Text style={[chipStyles.label, { color: textColor + 'BB', fontSize: fontSize - 1 }]}>{label}</Text>
       ) : null}
     </Pressable>
   );
@@ -460,22 +468,38 @@ export function DashboardScreen() {
   const [birthdays, setBirthdays] = useState<CalendarEvent[]>([]);
   const [calLoading, setCalLoading] = useState(false);
 
-  // Important tasks first, then regular open tasks — both sorted by urgency
-  const allOpenTasks = useMemo(() =>
-    tasks
-      .filter((t) => !t.completed)
-      .sort((a, b) => {
-        // Important always on top
-        if (a.important && !b.important) return -1;
-        if (!a.important && b.important) return 1;
-        // Then by date
-        if (a.dueDate && b.dueDate) return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
-        if (a.dueDate) return -1;
-        if (b.dueDate) return 1;
-        return 0;
-      }),
-    [tasks]
-  );
+  // Tasks nach Fälligkeit gruppieren
+  const taskGroups = useMemo(() => {
+    const open = tasks.filter((t) => !t.completed);
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
+    const dayAfter  = new Date(today); dayAfter.setDate(today.getDate() + 2);
+
+    const byGroup = { overdue: [] as Task[], today: [] as Task[], tomorrow: [] as Task[], later: [] as Task[] };
+
+    for (const t of open) {
+      if (!t.dueDate) { byGroup.later.push(t); continue; }
+      const d = new Date(t.dueDate); d.setHours(0, 0, 0, 0);
+      if (d < today)           byGroup.overdue.push(t);
+      else if (d.getTime() === today.getTime())    byGroup.today.push(t);
+      else if (d.getTime() === tomorrow.getTime()) byGroup.tomorrow.push(t);
+      else                     byGroup.later.push(t);
+    }
+
+    // Innerhalb jeder Gruppe: Wichtig zuerst
+    const sort = (arr: Task[]) => arr.sort((a, b) => {
+      if (a.important && !b.important) return -1;
+      if (!a.important && b.important) return 1;
+      return 0;
+    });
+
+    return [
+      { key: 'overdue',  label: 'Überfällig', tasks: sort(byGroup.overdue) },
+      { key: 'today',    label: 'Heute',       tasks: sort(byGroup.today) },
+      { key: 'tomorrow', label: 'Morgen',      tasks: sort(byGroup.tomorrow) },
+      { key: 'later',    label: 'Später',      tasks: sort(byGroup.later) },
+    ].filter((g) => g.tasks.length > 0);
+  }, [tasks]);
 
   const recentNotes = useMemo(() =>
     [...notes]
@@ -568,22 +592,44 @@ export function DashboardScreen() {
             onMore={() => router.push('/(tabs)/tasks' as any)}
             colors={colors}
           />
-          {allOpenTasks.length === 0 ? (
+          {taskGroups.length === 0 ? (
             <View style={styles.emptyChips}>
               <Ionicons name="checkmark-circle-outline" size={16} color={colors.success} />
               <Text style={[styles.emptyText, { color: colors.textMuted }]}>Alle erledigt 🎉</Text>
             </View>
           ) : (
-            <View style={styles.chipWrap}>
-              {allOpenTasks.map((task) => (
-                <TaskChip
-                  key={task.id}
-                  task={task}
-                  isDark={isDark}
-                  colors={colors}
-                  onPress={() => router.push(`/task/${task.id}` as any)}
-                />
-              ))}
+            <View style={{ gap: 8 }}>
+              {taskGroups.map((group) => {
+                const isToday    = group.key === 'today';
+                const isOverdue  = group.key === 'overdue';
+                const isTomorrow = group.key === 'tomorrow';
+                const labelColor = isOverdue || isToday
+                  ? colors.danger
+                  : isTomorrow
+                  ? colors.textSecondary
+                  : colors.textMuted;
+                const chipScale: 'lg' | 'md' | 'sm' =
+                  isToday || isOverdue ? 'lg' : isTomorrow ? 'md' : 'sm';
+                return (
+                  <View key={group.key}>
+                    <Text style={[styles.dayLabel, { color: labelColor }]}>
+                      {group.label}
+                    </Text>
+                    <View style={styles.chipWrap}>
+                      {group.tasks.map((task) => (
+                        <TaskChip
+                          key={task.id}
+                          task={task}
+                          isDark={isDark}
+                          colors={colors}
+                          scale={chipScale}
+                          onPress={() => router.push(`/task/${task.id}` as any)}
+                        />
+                      ))}
+                    </View>
+                  </View>
+                );
+              })}
             </View>
           )}
         </View>
@@ -781,6 +827,15 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
     loadingRow: { padding: 18, alignItems: 'center' },
     emptyRow: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 14 },
     emptyText: { fontSize: 13, color: c.textSecondary },
+
+    dayLabel: {
+      fontSize: 9,
+      fontWeight: '700',
+      letterSpacing: 0.8,
+      textTransform: 'uppercase',
+      paddingHorizontal: 16,
+      marginBottom: 4,
+    },
 
     // Task chips
     chipWrap: {
