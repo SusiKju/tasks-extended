@@ -249,8 +249,17 @@ export function DashboardScreen() {
     setTimeout(triggerBlink, 400);
   }, []);
 
+  const importantTasks = useMemo(() =>
+    tasks.filter((t) => !t.completed && t.important)
+      .sort((a, b) => {
+        if (a.dueDate && b.dueDate) return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+        if (a.dueDate) return -1; if (b.dueDate) return 1; return 0;
+      }),
+    [tasks]
+  );
+
   const upcomingTasks = useMemo(() =>
-    tasks.filter((t) => !t.completed)
+    tasks.filter((t) => !t.completed && !t.important)
       .sort((a, b) => {
         if (a.dueDate && b.dueDate) return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
         if (a.dueDate) return -1; if (b.dueDate) return 1; return 0;
@@ -321,6 +330,39 @@ export function DashboardScreen() {
         <FocusTiles tiles={focusTiles} />
       </View>
 
+      {/* ── Wichtige Tasks ── */}
+      {importantTasks.length > 0 && (
+        <View style={[styles.section, { marginBottom: 4 }]}>
+          <View style={styles.importantHeader}>
+            <Ionicons name="flag" size={14} color="#fff" />
+            <Text style={styles.importantHeaderText}>Wichtig · {importantTasks.length} Task{importantTasks.length > 1 ? 's' : ''}</Text>
+          </View>
+          <View style={styles.importantCard}>
+            {importantTasks.map((task, i) => {
+              const { label, urgent } = formatDue(task.dueDate);
+              return (
+                <Pressable
+                  key={task.id}
+                  style={[styles.importantRow, i < importantTasks.length - 1 && styles.importantDivider]}
+                  onPress={() => router.push(`/task/${task.id}` as any)}
+                >
+                  <Ionicons name="flag" size={14} color="#FF3B30" style={{ marginTop: 1 }} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.importantTaskTitle} numberOfLines={1}>{task.title}</Text>
+                    {(label || task.dueTime) && (
+                      <Text style={[styles.importantMeta, urgent && { color: '#FF3B30' }]}>
+                        {[label, task.dueTime ? `${task.dueTime} Uhr` : null].filter(Boolean).join(' · ')}
+                      </Text>
+                    )}
+                  </View>
+                  <Ionicons name="chevron-forward" size={14} color="rgba(255,59,48,0.4)" />
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+      )}
+
       {/* ── Geburtstage ── */}
       {birthdays.length > 0 && (
         <View style={[styles.birthdayCard, { marginBottom: 14 }]}>
@@ -381,7 +423,12 @@ export function DashboardScreen() {
             return (
               <Pressable key={task.id} style={[styles.taskRow, i < upcomingTasks.length - 1 && styles.rowDivider]} onPress={() => router.push(`/task/${task.id}` as any)}>
                 <View style={[styles.taskAccent, { backgroundColor: urgent ? '#FF3B30' : SECTION_COLORS.tasks }]} />
-                <Text style={styles.taskTitle} numberOfLines={1}>{task.title}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.taskTitle} numberOfLines={1}>{task.title}</Text>
+                  {task.dueTime ? (
+                    <Text style={styles.taskTime}>{task.dueTime} Uhr</Text>
+                  ) : null}
+                </View>
                 {label !== '' && (
                   <View style={[styles.duePill, { backgroundColor: (urgent ? '#FF3B30' : SECTION_COLORS.tasks) + '20' }]}>
                     <Text style={[styles.dueText, { color: urgent ? '#FF3B30' : SECTION_COLORS.tasks }]}>{label}</Text>
@@ -502,10 +549,60 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
     mailDate: { fontSize: 11, color: c.textSecondary },
     mailSubject: { fontSize: 12, color: c.textSecondary },
 
+    // Important Tasks
+    importantHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      backgroundColor: '#FF3B30',
+      marginHorizontal: 16,
+      borderRadius: 10,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      marginBottom: 4,
+    },
+    importantHeaderText: {
+      fontSize: 13,
+      fontWeight: '800',
+      color: '#fff',
+      letterSpacing: 0.3,
+    },
+    importantCard: {
+      marginHorizontal: 16,
+      backgroundColor: isDark ? 'rgba(255,59,48,0.08)' : '#FFF5F5',
+      borderRadius: 12,
+      borderWidth: 1.5,
+      borderColor: '#FF3B3040',
+      overflow: 'hidden',
+    },
+    importantRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 14,
+      paddingVertical: 11,
+      gap: 10,
+    },
+    importantDivider: {
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: '#FF3B3025',
+    },
+    importantTaskTitle: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: c.text,
+    },
+    importantMeta: {
+      fontSize: 11,
+      fontWeight: '600',
+      color: c.textSecondary,
+      marginTop: 2,
+    },
+
     // Tasks
     taskRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 11, gap: 10 },
     taskAccent: { width: 3, borderRadius: 2, alignSelf: 'stretch', minHeight: 16 },
-    taskTitle: { flex: 1, fontSize: 14, fontWeight: '500', color: c.text },
+    taskTitle: { fontSize: 14, fontWeight: '500', color: c.text },
+    taskTime: { fontSize: 11, color: c.textSecondary, marginTop: 1 },
     duePill: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
     dueText: { fontSize: 11, fontWeight: '700' },
 

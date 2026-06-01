@@ -27,6 +27,8 @@ export interface Task {
   description: string;
   groupId: string | null;
   dueDate: string | null;
+  dueTime?: string | null;   // "HH:MM" format
+  important?: boolean;
   completed: boolean;
   attachments: Attachment[];
   googleEventId: string | null;

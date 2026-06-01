@@ -36,6 +36,8 @@ export function CreateTaskScreen() {
   const [description, setDescription] = useState('');
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [dueDate, setDueDate] = useState<Date | null>(null);
+  const [dueTime, setDueTime] = useState('');
+  const [important, setImportant] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [suggestedGroup, setSuggestedGroup] = useState<Group | null>(null);
@@ -151,12 +153,16 @@ export function CreateTaskScreen() {
     const finalAttachments: Attachment[] = attachments.map((a) => ({ ...a, taskId }));
 
 
+    const validTime = /^\d{2}:\d{2}$/.test(dueTime.trim()) ? dueTime.trim() : null;
+
     const task: Task = {
       id: taskId,
       title: title.trim(),
       description: description.trim(),
       groupId: effectiveGroupId,
       dueDate: dueDate ? dueDate.toISOString() : null,
+      dueTime: validTime,
+      important,
       completed: false,
       attachments: finalAttachments,
       googleEventId: null,
@@ -285,6 +291,18 @@ export function CreateTaskScreen() {
         </ScrollView>
       </View>
 
+      {/* Important Toggle */}
+      <TouchableOpacity
+        style={[styles.importantBtn, important && styles.importantBtnActive]}
+        onPress={() => setImportant((v) => !v)}
+        activeOpacity={0.75}
+      >
+        <Ionicons name={important ? 'flag' : 'flag-outline'} size={18} color={important ? '#fff' : '#FF3B30'} />
+        <Text style={[styles.importantBtnText, important && styles.importantBtnTextActive]}>
+          {important ? 'Als wichtig markiert' : 'Als wichtig markieren'}
+        </Text>
+      </TouchableOpacity>
+
       <View style={styles.section}>
         <Text style={styles.label}>Fälligkeitsdatum</Text>
         <TouchableOpacity style={styles.dateBtn} onPress={() => setShowDatePicker(true)}>
@@ -301,6 +319,30 @@ export function CreateTaskScreen() {
             </TouchableOpacity>
           ) : null}
         </TouchableOpacity>
+        {dueDate && (
+          <View style={styles.timeRow}>
+            <Ionicons name="time-outline" size={16} color={dueTime ? colors.text : colors.placeholder} />
+            <TextInput
+              style={[styles.timeInput, { color: dueTime ? colors.text : colors.placeholder }]}
+              placeholder="Uhrzeit (HH:MM)"
+              placeholderTextColor={colors.placeholder}
+              value={dueTime}
+              onChangeText={(t) => {
+                // Auto-insert colon after 2 digits
+                let v = t.replace(/[^0-9:]/g, '');
+                if (v.length === 2 && !v.includes(':') && dueTime.length === 1) v = v + ':';
+                if (v.length <= 5) setDueTime(v);
+              }}
+              keyboardType="numeric"
+              maxLength={5}
+            />
+            {dueTime ? (
+              <TouchableOpacity onPress={() => setDueTime('')} hitSlop={8}>
+                <Ionicons name="close-circle" size={16} color={colors.textSecondary} />
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        )}
         {settings.googleCalendarEnabled && dueDate ? (
           <View style={styles.calendarHint}>
             <Ionicons name="calendar-outline" size={12} color={colors.accent} />
@@ -418,6 +460,42 @@ function makeStyles(c: ThemeColors) {
     },
     suggestionText: { fontSize: 13, fontWeight: '600' },
     suggestionHint: { fontSize: 12, color: c.textSecondary },
+    importantBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      borderRadius: 12,
+      borderWidth: 1.5,
+      borderColor: '#FF3B30',
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      backgroundColor: 'transparent',
+    },
+    importantBtnActive: {
+      backgroundColor: '#FF3B30',
+      borderColor: '#FF3B30',
+    },
+    importantBtnText: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: '#FF3B30',
+    },
+    importantBtnTextActive: {
+      color: '#fff',
+    },
+    timeRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      backgroundColor: c.surfaceHigh,
+      borderRadius: 8,
+      paddingHorizontal: 10,
+      paddingVertical: 10,
+    },
+    timeInput: {
+      flex: 1,
+      fontSize: 15,
+    },
     saveBtn: {
       backgroundColor: c.accent,
       borderRadius: 14,

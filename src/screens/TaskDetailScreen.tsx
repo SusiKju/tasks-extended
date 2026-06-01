@@ -44,6 +44,8 @@ export function TaskDetailScreen() {
   const [title, setTitle] = useState(task?.title ?? '');
   const [description, setDescription] = useState(task?.description ?? '');
   const [dueDate, setDueDate] = useState<Date | null>(task?.dueDate ? new Date(task.dueDate) : null);
+  const [dueTime, setDueTime] = useState(task?.dueTime ?? '');
+  const [important, setImportant] = useState(task?.important ?? false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [groupId, setGroupId] = useState(task?.groupId ?? null);
 
@@ -54,11 +56,14 @@ export function TaskDetailScreen() {
       return;
     }
 
+    const validTime = /^\d{2}:\d{2}$/.test(dueTime.trim()) ? dueTime.trim() : null;
     const updates = {
       title: title.trim(),
       description: description.trim(),
       groupId,
       dueDate: dueDate ? dueDate.toISOString() : null,
+      dueTime: validTime,
+      important,
     };
 
     updateTask(id, updates);
@@ -219,6 +224,14 @@ export function TaskDetailScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      {/* Important Banner */}
+      {task.important && !editing && (
+        <View style={styles.importantBanner}>
+          <Ionicons name="flag" size={14} color="#fff" />
+          <Text style={styles.importantBannerText}>Wichtig</Text>
+        </View>
+      )}
+
       {/* Header controls */}
       <View style={styles.topRow}>
         <TouchableOpacity style={styles.toggleBtn} onPress={handleToggle}>
@@ -342,6 +355,43 @@ export function TaskDetailScreen() {
           )}
         </View>
 
+        {/* Uhrzeit */}
+        <View style={styles.metaRow}>
+          <Ionicons name="time-outline" size={16} color={colors.textSecondary} />
+          {editing ? (
+            <TextInput
+              style={[styles.timeInput, { color: dueTime ? colors.text : colors.placeholder }]}
+              placeholder="Uhrzeit (HH:MM)"
+              placeholderTextColor={colors.placeholder}
+              value={dueTime}
+              onChangeText={(t) => {
+                let v = t.replace(/[^0-9:]/g, '');
+                if (v.length === 2 && !v.includes(':') && dueTime.length === 1) v = v + ':';
+                if (v.length <= 5) setDueTime(v);
+              }}
+              keyboardType="numeric"
+              maxLength={5}
+            />
+          ) : task.dueTime ? (
+            <Text style={styles.metaText}>{task.dueTime} Uhr</Text>
+          ) : (
+            <Text style={styles.metaEmpty}>Keine Uhrzeit</Text>
+          )}
+        </View>
+
+        {/* Important Toggle (Edit-Mode) */}
+        {editing && (
+          <TouchableOpacity
+            style={[styles.importantToggle, important && styles.importantToggleActive]}
+            onPress={() => setImportant((v) => !v)}
+          >
+            <Ionicons name={important ? 'flag' : 'flag-outline'} size={15} color={important ? '#fff' : '#FF3B30'} />
+            <Text style={[styles.importantToggleText, important && styles.importantToggleTextActive]}>
+              {important ? 'Als wichtig markiert' : 'Als wichtig markieren'}
+            </Text>
+          </TouchableOpacity>
+        )}
+
         {task.googleEventId ? (
           <View style={styles.metaRow}>
             <Ionicons name="calendar" size={16} color={colors.accent} />
@@ -442,6 +492,51 @@ function makeStyles(c: ThemeColors) {
     dateBtnText: {
       flex: 1,
       fontSize: 14,
+    },
+    importantBanner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      backgroundColor: '#FF3B30',
+      borderRadius: 10,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+    },
+    importantBannerText: {
+      fontSize: 13,
+      fontWeight: '700',
+      color: '#fff',
+      letterSpacing: 0.3,
+    },
+    timeInput: {
+      flex: 1,
+      fontSize: 14,
+      backgroundColor: c.surfaceHigh,
+      borderRadius: 8,
+      paddingHorizontal: 8,
+      paddingVertical: 6,
+    },
+    importantToggle: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      borderWidth: 1.5,
+      borderColor: '#FF3B30',
+      borderRadius: 10,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+    },
+    importantToggleActive: {
+      backgroundColor: '#FF3B30',
+      borderColor: '#FF3B30',
+    },
+    importantToggleText: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: '#FF3B30',
+    },
+    importantToggleTextActive: {
+      color: '#fff',
     },
   });
 }
