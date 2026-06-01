@@ -218,13 +218,14 @@ export function DashboardScreen() {
   const uploadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleScratchpadChange = useCallback((text: string) => {
     setScratchpad(text);
-    if (!settings.googleNotesEnabled || !settings.googleAccessToken) return;
+    if (!settings.googleAccessToken) return;
     if (uploadTimer.current) clearTimeout(uploadTimer.current);
     uploadTimer.current = setTimeout(() => {
-      const { scratchpad: latest, scratchpadUpdatedAt: ts } = useStore.getState();
-      uploadScratchpad(settings.googleAccessToken!, latest, ts).catch(() => {});
+      const { scratchpad: latest, scratchpadUpdatedAt: ts, settings: s } = useStore.getState();
+      if (!s.googleAccessToken) return;
+      uploadScratchpad(s.googleAccessToken, latest, ts).catch(() => {});
     }, 2000);
-  }, [setScratchpad, settings.googleNotesEnabled, settings.googleAccessToken]);
+  }, [setScratchpad, settings.googleAccessToken]);
   const styles = useMemo(() => makeStyles(colors, isDark), [colors, isDark]);
 
   const [mails, setMails] = useState<MailMessage[]>([]);

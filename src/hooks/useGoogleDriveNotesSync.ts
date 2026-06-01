@@ -34,8 +34,7 @@ export function useGoogleDriveNotesSync() {
       removeDeletedDriveNoteFileIds,
     } = useStore.getState();
 
-    if (!overrideToken && (!settings.googleNotesEnabled || !settings.googleAccessToken)) {
-      console.log('[DriveSync] aborted: notesEnabled=', settings.googleNotesEnabled, 'hasToken=', !!settings.googleAccessToken);
+    if (!overrideToken && !settings.googleAccessToken) {
       return null;
     }
 
@@ -51,6 +50,27 @@ export function useGoogleDriveNotesSync() {
     let pulled = 0;
     let pushed = 0;
     let deleted = 0;
+
+    // Notizen-Sync nur wenn explizit aktiviert
+    if (!overrideToken && !settings.googleNotesEnabled) {
+      // Nur Scratchpad syncen (weiter unten)
+      try {
+        const driveScratchpad = await downloadScratchpad(token);
+        if (driveScratchpad) {
+          if (driveScratchpad.updatedAt > scratchpadUpdatedAt) {
+            useStore.setState({
+              scratchpad: driveScratchpad.text,
+              scratchpadUpdatedAt: driveScratchpad.updatedAt,
+            });
+          } else {
+            await uploadScratchpad(token, scratchpad, scratchpadUpdatedAt);
+          }
+        } else if (scratchpad) {
+          await uploadScratchpad(token, scratchpad, scratchpadUpdatedAt);
+        }
+      } catch {}
+      return { pulled: 0, pushed: 0, deleted: 0 };
+    }
 
     const successfullyDeleted: string[] = [];
     for (const fileId of deletedDriveNoteFileIds) {
