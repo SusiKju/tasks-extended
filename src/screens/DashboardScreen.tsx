@@ -216,9 +216,11 @@ export function DashboardScreen() {
   const { colors, isDark } = useTheme();
   const { syncScratchpad } = useGoogleDriveNotesSync();
 
-  // Pull beim Mount — damit beim Öffnen des Dashboards immer der Drive-Stand geholt wird
+  // Pull beim Mount + alle 30 s automatisch pollen
   useEffect(() => {
     syncScratchpad();
+    const interval = setInterval(() => syncScratchpad(), 30_000);
+    return () => clearInterval(interval);
   }, []);
 
   // Debounced Drive-Upload 1,5 s nach letzter Eingabe
