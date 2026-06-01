@@ -219,100 +219,118 @@ const chipStyles = StyleSheet.create({
   },
 });
 
-// ─── Scratchpad (Notizzettel) ─────────────────────────────────────────────────
+// ─── Scratchpad (Notiz-Bubbles) ───────────────────────────────────────────────
 
-const LINE_H = 24;
-const DIVIDER = '─'.repeat(22);
-const PAD_LEFT = 38;
+interface ScratchEntry { text: string; color: string; }
+
+const BUBBLE_PALETTE = [
+  '#1E3A5F', '#2D1B4E', '#1A3A2E', '#3D1F1F',
+  '#1F3D30', '#3D2D1F', '#1F2D3D', '#2D3D1F',
+  '#3A1F3A', '#1F3A3A', '#2A2040', '#40201A',
+];
+
+function randomBubbleColor(): string {
+  return BUBBLE_PALETTE[Math.floor(Math.random() * BUBBLE_PALETTE.length)];
+}
+
+function parseScratchpad(raw: string): ScratchEntry[] {
+  if (!raw || raw.trim() === '') return [{ text: '', color: randomBubbleColor() }];
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+  } catch {}
+  // Plain-text-Fallback: jede Zeile wird eine Bubble
+  const lines = raw.split('\n').filter((l) => l.trim() !== '' && !l.startsWith('─'));
+  if (lines.length === 0) return [{ text: '', color: randomBubbleColor() }];
+  return lines.map((text, i) => ({ text, color: BUBBLE_PALETTE[i % BUBBLE_PALETTE.length] }));
+}
+
+function serializeScratchpad(entries: ScratchEntry[]): string {
+  return JSON.stringify(entries);
+}
 
 function Scratchpad({
-  value, onChange, isDark, colors,
+  value, onChange,
 }: {
   value: string;
   onChange: (t: string) => void;
   isDark: boolean;
   colors: ThemeColors;
 }) {
-  const insertDivider = useRef(false);
+  const entries = useMemo(() => parseScratchpad(value), [value]);
+  const inputRefs = useRef<(any)[]>([]);
 
-  const paperBg    = isDark ? '#1A1814' : '#FFFEF0';
-  const marginColor= isDark ? '#5C3030' : '#F4AAAA';
-  const lineColor  = isDark ? 'rgba(255,255,255,0.055)' : 'rgba(0,0,0,0.07)';
-  const textColor  = isDark ? '#E8E4D8' : '#2C2410';
+  const updateEntry = useCallback((idx: number, text: string) => {
+    const next = entries.map((e, i) => i === idx ? { ...e, text } : e);
+    onChange(serializeScratchpad(next));
+  }, [entries, onChange]);
 
-  const handleKeyPress = useCallback((e: any) => {
-    if (e.nativeEvent.key === 'Enter') insertDivider.current = true;
-  }, []);
+  const addEntry = useCallback((afterIdx: number) => {
+    const next = [...entries];
+    next.splice(afterIdx + 1, 0, { text: '', color: randomBubbleColor() });
+    onChange(serializeScratchpad(next));
+    setTimeout(() => inputRefs.current[afterIdx + 1]?.focus(), 40);
+  }, [entries, onChange]);
 
-  const handleChange = useCallback((newText: string) => {
-    if (insertDivider.current) {
-      insertDivider.current = false;
-      // Trennlinie nach dem letzten \n einfügen
-      const idx = newText.lastIndexOf('\n');
-      if (idx !== -1) {
-        const before = newText.slice(0, idx);
-        const after  = newText.slice(idx + 1);
-        onChange(before + '\n' + DIVIDER + '\n' + after);
-        return;
-      }
+  const removeEntry = useCallback((idx: number) => {
+    if (entries.length <= 1) { updateEntry(0, ''); return; }
+    const next = entries.filter((_, i) => i !== idx);
+    onChange(serializeScratchpad(next));
+    setTimeout(() => inputRefs.current[Math.max(0, idx - 1)]?.focus(), 40);
+  }, [entries, onChange, updateEntry]);
+
+  const handleKeyPress = useCallback((idx: number, e: any) => {
+    if (e.nativeEvent.key === 'Backspace' && entries[idx].text === '') {
+      removeEntry(idx);
     }
-    onChange(newText);
-  }, [onChange]);
-
-  // Anzahl Linien je nach Inhalt, mindestens 7
-  const lineCount = Math.max(7, value.split('\n').length + 3);
+  }, [entries, removeEntry]);
 
   return (
-    <View style={[padStyles.outer, { backgroundColor: paperBg }]}>
-      <View style={padStyles.paper}>
-        <View style={[padStyles.margin, { backgroundColor: marginColor }]} />
-        {[...Array(lineCount)].map((_, i) => (
-          <View key={i} style={[padStyles.ruledLine, { top: i * LINE_H, backgroundColor: lineColor }]} />
-        ))}
-        <TextInput
-          style={[padStyles.input, { color: textColor }]}
-          value={value}
-          onChangeText={handleChange}
-          onKeyPress={handleKeyPress}
-          placeholder={'Gedanken…'}
-          placeholderTextColor={isDark ? '#5A5040' : '#C8BFA0'}
-          multiline
-          textAlignVertical="top"
-          scrollEnabled={false}
-        />
-      </View>
+    <View style={padStyles.container}>
+      {entries.map((entry, idx) => (
+        <View key={idx} style={[padStyles.bubble, { backgroundColor: entry.color }]}>
+          <Text style={padStyles.bullet}>•</Text>
+          <TextInput
+            ref={(r) => { inputRefs.current[idx] = r; }}
+            style={padStyles.bubbleInput}
+            value={entry.text}
+            onChangeText={(t) => updateEntry(idx, t)}
+            onKeyPress={(e) => handleKeyPress(idx, e)}
+            onSubmitEditing={() => addEntry(idx)}
+            placeholder={idx === 0 && entries.length === 1 ? 'Notiz…' : ''}
+            placeholderTextColor="rgba(255,255,255,0.3)"
+            returnKeyType="done"
+            blurOnSubmit={false}
+          />
+        </View>
+      ))}
     </View>
   );
 }
 
 const padStyles = StyleSheet.create({
-  outer: {
-    borderRadius: 6,
-    overflow: 'hidden',
+  container: {
+    gap: 4,
   },
-  paper: {
-    position: 'relative',
+  bubble: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    gap: 5,
   },
-  margin: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    left: 28,
-    width: 1.5,
-  },
-  ruledLine: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    height: 1,
-  },
-  input: {
+  bullet: {
+    color: 'rgba(255,255,255,0.5)',
     fontSize: 12,
-    lineHeight: LINE_H,
-    paddingTop: 4,
-    paddingLeft: 36,
-    paddingRight: 8,
-    paddingBottom: 6,
+    lineHeight: 18,
+  },
+  bubbleInput: {
+    flex: 1,
+    color: '#FFFFFF',
+    fontSize: 12,
+    lineHeight: 18,
+    padding: 0,
   },
 });
 
