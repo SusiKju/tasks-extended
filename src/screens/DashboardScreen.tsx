@@ -530,13 +530,14 @@ export function DashboardScreen() {
     syncBirthdays().catch(() => {});
   }, [settings.googleAccessToken, settings.googleBirthdaysEnabled, syncBirthdays]);
 
-  // Solange heute jemand Geburtstag hat, pulsiert die Card – dezent und langsam.
+  // Geburtstag heute → Card blinkt im gleichen Takt wie ein heute fälliger
+  // Task-Chip (Opacity 0.3 ↔ 1, je 600 ms).
   useEffect(() => {
     if (todayBirthdays.length === 0) { birthdayBlinkAnim.setValue(1); return; }
     const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(birthdayBlinkAnim, { toValue: 0.7, duration: 1100, useNativeDriver: true }),
-        Animated.timing(birthdayBlinkAnim, { toValue: 1,   duration: 1100, useNativeDriver: true }),
+        Animated.timing(birthdayBlinkAnim, { toValue: 0.3, duration: 600, useNativeDriver: true }),
+        Animated.timing(birthdayBlinkAnim, { toValue: 1,   duration: 600, useNativeDriver: true }),
       ])
     );
     loop.start();
@@ -890,11 +891,11 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
       paddingHorizontal: 16,
     },
 
-    // Birthday – ganz oben, dezent und schlank
+    // Birthday – ganz oben, neon-gelb, schnell blinkend
     birthdayCard: {
       flexDirection: 'row',
       alignItems: 'center',
-      backgroundColor: isDark ? 'rgba(255,149,0,0.10)' : '#FFF3E0',
+      backgroundColor: '#EEFF00',
       marginHorizontal: 16,
       marginTop: 4,
       marginBottom: 6,
@@ -902,11 +903,9 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
       paddingVertical: 8,
       paddingHorizontal: 12,
       gap: 8,
-      borderLeftWidth: 3,
-      borderLeftColor: '#FF9500',
     },
     birthdayIcon: { fontSize: 16 },
-    birthdayText: { flex: 1, fontSize: 13, fontWeight: '600', color: isDark ? '#FFC06A' : '#7A4100' },
+    birthdayText: { flex: 1, fontSize: 13, fontWeight: '700', color: '#1A1A00' },
 
     // Mail
     mailRow: {
