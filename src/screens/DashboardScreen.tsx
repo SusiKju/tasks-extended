@@ -15,7 +15,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useStore } from '../store';
-import { useTheme, ThemeColors, neonGlow } from '../utils/theme';
+import { useTheme, ThemeColors } from '../utils/theme';
 import { uploadScratchpad } from '../services/googleDriveNotes';
 import { useGoogleDriveNotesSync } from '../hooks/useGoogleDriveNotesSync';
 import { useGoogleTasksSync } from '../hooks/useGoogleTasksSync';
@@ -501,6 +501,8 @@ export function DashboardScreen() {
   // Nur Neon-Dark: rotierender Regenbogen-Rand im AI-Komponenten-Stil.
   const isNeon = theme === 'dark-neon';
   const rainbowRotate = useRef(new Animated.Value(0)).current;
+  // Atmender, farbwechselnder Flammen-Glow (Gemini-Look).
+  const flameAnim = useRef(new Animated.Value(0)).current;
 
   const todayBirthdays = useMemo(() => {
     const now = new Date();
@@ -551,15 +553,29 @@ export function DashboardScreen() {
     return () => { loop.stop(); birthdayBlinkAnim.setValue(1); };
   }, [todayBirthdays.length, isNeon, birthdayBlinkAnim]);
 
-  // Neon-Dark: Regenbogen-Gradient dreht sich endlos (AI-Schimmer).
+  // Neon-Dark: Regenbogen-Gradient dreht sich endlos (läuft um den Rand).
   useEffect(() => {
     if (todayBirthdays.length === 0 || !isNeon) { rainbowRotate.setValue(0); return; }
     const loop = Animated.loop(
-      Animated.timing(rainbowRotate, { toValue: 1, duration: 4000, useNativeDriver: true })
+      Animated.timing(rainbowRotate, { toValue: 1, duration: 2500, useNativeDriver: true })
     );
     loop.start();
     return () => { loop.stop(); rainbowRotate.setValue(0); };
   }, [todayBirthdays.length, isNeon, rainbowRotate]);
+
+  // Neon-Dark: atmender Flammen-Glow – Schatten pulsiert + wechselt die Farbe.
+  // useNativeDriver: false, weil Schatten-/Farbwerte animiert werden.
+  useEffect(() => {
+    if (todayBirthdays.length === 0 || !isNeon) { flameAnim.setValue(0); return; }
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(flameAnim, { toValue: 1, duration: 2000, useNativeDriver: false }),
+        Animated.timing(flameAnim, { toValue: 0, duration: 2000, useNativeDriver: false }),
+      ])
+    );
+    loop.start();
+    return () => { loop.stop(); flameAnim.setValue(0); };
+  }, [todayBirthdays.length, isNeon, flameAnim]);
 
   return (
     <ScrollView
@@ -571,8 +587,20 @@ export function DashboardScreen() {
       {/* ── Geburtstage: ganz oben ── */}
       {todayBirthdays.length > 0 && (
         isNeon ? (
-          // Neon-Dark: AI-Style mit rotierendem Regenbogen-Rand + Glow.
-          <View style={styles.birthdayNeonWrap}>
+          // Neon-Dark: AI-Style mit rotierendem Regenbogen-Rand + atmendem Flammen-Glow.
+          <Animated.View
+            style={[
+              styles.birthdayNeonWrap,
+              {
+                shadowColor: flameAnim.interpolate({
+                  inputRange: [0, 0.25, 0.5, 0.75, 1],
+                  outputRange: ['#FF0080', '#FF8C00', '#00FF88', '#00EEFF', '#7A5CFF'],
+                }),
+                shadowOpacity: flameAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.55, 1, 0.55] }),
+                shadowRadius: flameAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [8, 22, 8] }),
+              },
+            ]}
+          >
             <Animated.View
               style={[
                 styles.birthdayRainbowLayer,
@@ -594,7 +622,7 @@ export function DashboardScreen() {
                   .join(', ')}
               </Text>
             </View>
-          </View>
+          </Animated.View>
         ) : (
           <Animated.View style={[styles.birthdayCard, { opacity: birthdayBlinkAnim }]}>
             <Text style={styles.birthdayIcon}>🎂</Text>
@@ -951,15 +979,17 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
     birthdayIcon: { fontSize: 16 },
     birthdayText: { flex: 1, fontSize: 13, fontWeight: '700', color: '#1A1A00' },
 
-    // Birthday – Neon-Dark: rotierender Regenbogen-Rand (AI-Style)
+    // Birthday – Neon-Dark: rotierender Regenbogen-Rand (AI-Style).
+    // Schattenfarbe/-radius/-opacity werden inline animiert (Flammen-Glow).
     birthdayNeonWrap: {
       marginHorizontal: 16,
       marginTop: 4,
       marginBottom: 6,
       borderRadius: 12,
-      padding: 2,            // Dicke des Regenbogen-Rings
+      padding: 3,            // Dicke des Regenbogen-Rings
       overflow: 'hidden',
-      ...neonGlow('#7A5CFF', 'medium'),
+      shadowOffset: { width: 0, height: 0 },
+      elevation: 12,
     },
     birthdayRainbowLayer: {
       position: 'absolute',
