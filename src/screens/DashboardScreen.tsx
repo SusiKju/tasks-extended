@@ -508,10 +508,6 @@ export function DashboardScreen() {
     [notes]
   );
 
-  // Blink-Animation für die Geburtstags-Card – Geburtstag ist heute, also
-  // soll der Hinweis oben auffällig pulsieren.
-  const birthdayBlinkAnim = useRef(new Animated.Value(1)).current;
-
   // Nur Neon-Dark: rotierender Regenbogen-Rand im AI-Komponenten-Stil.
   const isNeon = theme === 'dark-neon';
   const rainbowRotate = useRef(new Animated.Value(0)).current;
@@ -552,21 +548,6 @@ export function DashboardScreen() {
     syncBirthdays().catch(() => {});
   }, [settings.googleAccessToken, settings.googleBirthdaysEnabled, syncBirthdays]);
 
-  // Geburtstag heute → Card blinkt im gleichen Takt wie ein heute fälliger
-  // Task-Chip (Opacity 0.3 ↔ 1, je 600 ms). In Neon-Dark übernimmt stattdessen
-  // der rotierende Regenbogen-Rand, die Card selbst bleibt ruhig.
-  useEffect(() => {
-    if (todayBirthdays.length === 0 || isNeon) { birthdayBlinkAnim.setValue(1); return; }
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(birthdayBlinkAnim, { toValue: 0.3, duration: 600, useNativeDriver: true }),
-        Animated.timing(birthdayBlinkAnim, { toValue: 1,   duration: 600, useNativeDriver: true }),
-      ])
-    );
-    loop.start();
-    return () => { loop.stop(); birthdayBlinkAnim.setValue(1); };
-  }, [todayBirthdays.length, isNeon, birthdayBlinkAnim]);
-
   // Neon-Dark: Regenbogen-Gradient dreht sich endlos (läuft um den Rand).
   useEffect(() => {
     if (todayBirthdays.length === 0 || !isNeon) { rainbowRotate.setValue(0); return; }
@@ -577,19 +558,24 @@ export function DashboardScreen() {
     return () => { loop.stop(); rainbowRotate.setValue(0); };
   }, [todayBirthdays.length, isNeon, rainbowRotate]);
 
-  // Neon-Dark: atmender Flammen-Glow – Schatten pulsiert + wechselt die Farbe.
-  // useNativeDriver: false, weil Schatten-/Farbwerte animiert werden.
+  // Atmender Flammen-Glow (Gemini-Look) – Schatten pulsiert + wechselt die Farbe,
+  // dazu skaliert die Card synchron („atmen"). Läuft in ALLEN Themes, damit der
+  // Geburtstag immer sehr präsent ist. useNativeDriver: false, weil Schatten-
+  // werte animiert werden (Scale wird auf demselben Node mitgeführt).
   useEffect(() => {
-    if (todayBirthdays.length === 0 || !isNeon) { flameAnim.setValue(0); return; }
+    if (todayBirthdays.length === 0) { flameAnim.setValue(0); return; }
     const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(flameAnim, { toValue: 1, duration: 2000, useNativeDriver: false }),
-        Animated.timing(flameAnim, { toValue: 0, duration: 2000, useNativeDriver: false }),
+        Animated.timing(flameAnim, { toValue: 1, duration: 1600, useNativeDriver: false }),
+        Animated.timing(flameAnim, { toValue: 0, duration: 1600, useNativeDriver: false }),
       ])
     );
     loop.start();
     return () => { loop.stop(); flameAnim.setValue(0); };
-  }, [todayBirthdays.length, isNeon, flameAnim]);
+  }, [todayBirthdays.length, flameAnim]);
+
+  // Synchron zum Glow „atmende" Skalierung – gemeinsam für beide Card-Varianten.
+  const flameScale = flameAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, 1.05, 1] });
 
   return (
     <ScrollView
@@ -610,8 +596,9 @@ export function DashboardScreen() {
                   inputRange: [0, 0.25, 0.5, 0.75, 1],
                   outputRange: ['#FF0080', '#FF8C00', '#00FF88', '#00EEFF', '#7A5CFF'],
                 }),
-                shadowOpacity: flameAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.55, 1, 0.55] }),
-                shadowRadius: flameAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [8, 22, 8] }),
+                shadowOpacity: flameAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.7, 1, 0.7] }),
+                shadowRadius: flameAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [16, 46, 16] }),
+                transform: [{ scale: flameScale }],
               },
             ]}
           >
@@ -638,7 +625,20 @@ export function DashboardScreen() {
             </View>
           </Animated.View>
         ) : (
-          <Animated.View style={[styles.birthdayCard, { opacity: birthdayBlinkAnim }]}>
+          <Animated.View
+            style={[
+              styles.birthdayCard,
+              {
+                shadowColor: flameAnim.interpolate({
+                  inputRange: [0, 0.25, 0.5, 0.75, 1],
+                  outputRange: ['#FF6B00', '#FF0080', '#FF3B30', '#FF8C00', '#FF0080'],
+                }),
+                shadowOpacity: flameAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.5, 0.95, 0.5] }),
+                shadowRadius: flameAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [10, 34, 10] }),
+                transform: [{ scale: flameScale }],
+              },
+            ]}
+          >
             <Text style={styles.birthdayIcon}>🎂</Text>
             <Text style={styles.birthdayText} numberOfLines={1}>
               {todayBirthdays
@@ -993,6 +993,9 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
       paddingVertical: 8,
       paddingHorizontal: 12,
       gap: 8,
+      // Flammen-Glow (animiert, inline) – Offset/Elevation hier als Basis.
+      shadowOffset: { width: 0, height: 0 },
+      elevation: 14,
     },
     birthdayIcon: { fontSize: 16 },
     birthdayText: { flex: 1, fontSize: 13, fontWeight: '700', color: '#1A1A00' },
@@ -1004,10 +1007,10 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
       marginTop: 4,
       marginBottom: 6,
       borderRadius: 12,
-      padding: 3,            // Dicke des Regenbogen-Rings
+      padding: 4,            // Dicke des Regenbogen-Rings
       overflow: 'hidden',
       shadowOffset: { width: 0, height: 0 },
-      elevation: 12,
+      elevation: 16,
     },
     birthdayRainbowLayer: {
       position: 'absolute',
