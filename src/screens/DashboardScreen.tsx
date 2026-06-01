@@ -15,7 +15,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useStore } from '../store';
-import { useTheme, ThemeColors } from '../utils/theme';
+import { useTheme, ThemeColors, readableTextOn } from '../utils/theme';
 import { uploadScratchpad } from '../services/googleDriveNotes';
 import { useGoogleDriveNotesSync } from '../hooks/useGoogleDriveNotesSync';
 import { useGoogleTasksSync } from '../hooks/useGoogleTasksSync';
@@ -162,7 +162,7 @@ function TaskChip({
   // Solider Chip mit weißem Text – auf beiden Farben gut lesbar.
   const bgColor     = isImportant ? C.important : C.tasks;
   const borderColor = isImportant ? C.important : C.tasks;
-  const textColor   = '#FFFFFF';
+  const textColor   = readableTextOn(bgColor);
 
   const fontSize   = scale === 'lg' ? 13 : scale === 'md' ? 11 : 10;
   const padV       = scale === 'lg' ? 7  : scale === 'md' ? 5  : 4;
@@ -320,9 +320,9 @@ function Scratchpad({
   return (
     <View style={padStyles.container}>
       {entries.map((entry, idx) => {
-        // Für helle Neon-Farben (Gelb, helles Grün) → dunkler Text
-        const isLight = isNeon && ['#FFE600', '#00FF88'].includes(entry.color);
-        const fg = isNeon ? (isLight ? '#111' : '#fff') : '#fff';
+        // Lesbarer Vordergrund per Luminanz – deckt jede Bubble-Farbe ab
+        // (Cyan, Gelb, Grün → dunkel; kräftige/dunkle Töne → hell).
+        const fg = isNeon ? readableTextOn(entry.color) : '#fff';
         return (
         <View key={idx} style={[
           padStyles.bubble,

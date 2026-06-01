@@ -52,7 +52,7 @@ const DARK_NEON: ThemeColors = {
   background:    '#02020A',   // tiefstes Schwarz-Blau
   surface:       '#07071A',   // klarer Kontrast zum BG
   surfaceHigh:   '#0E0E28',   // deutlich heller als surface
-  text:          '#EEEEFF',   // kühles Weiß
+  text:          '#DCDCEE',   // gedämpftes kühles Weiß (weniger Blendung auf Schwarz)
   textSecondary: '#9090CC',   // lesbares Blau-Lila (war viel zu dunkel)
   textMuted:     '#383858',   // sichtbar, aber zurückgezogen
   accent:        '#2299FF',   // elektrisches Blau
@@ -99,6 +99,37 @@ export const THEMES: Record<Theme, ThemeColors> = {
   'dark-neon': DARK_NEON,
   'dark-soft': DARK_SOFT,
 };
+
+/** Relative Luminanz (WCAG) einer Hex-Farbe (#RGB / #RRGGBB), 0..1. */
+function luminance(hex: string): number {
+  let h = hex.replace('#', '');
+  if (h.length === 3) h = h.split('').map((c) => c + c).join('');
+  const r = parseInt(h.slice(0, 2), 16) / 255;
+  const g = parseInt(h.slice(2, 4), 16) / 255;
+  const b = parseInt(h.slice(4, 6), 16) / 255;
+  const lin = (c: number) => (c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
+  return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+}
+
+function contrast(l1: number, l2: number): number {
+  const [hi, lo] = l1 > l2 ? [l1, l2] : [l2, l1];
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+/**
+ * Liefert eine auf `bg` gut lesbare Vordergrundfarbe – dunkel auf hellen
+ * Hintergründen, hell auf dunklen. Ersetzt manuelle Farb-Allowlists, damit
+ * Badges/Bubbles mit beliebigen Vollfarben (Cyan, Gelb, Magenta …) lesbar
+ * bleiben.
+ */
+export function readableTextOn(
+  bg: string,
+  light = '#F2F2FF',
+  dark = '#0A0A14',
+): string {
+  const lb = luminance(bg);
+  return contrast(luminance(dark), lb) >= contrast(luminance(light), lb) ? dark : light;
+}
 
 export function neonGlow(color: string, intensity: 'soft' | 'medium' | 'hard' = 'medium') {
   const cfg = {
