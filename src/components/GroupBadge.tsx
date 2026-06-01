@@ -9,10 +9,10 @@ interface Props {
 }
 
 export function GroupBadge({ group, small = false }: Props) {
-  const { mono } = useTheme();
+  const { mono, isMono } = useTheme();
   const color = mono(group.color);
   return (
-    <View style={[styles.badge, { backgroundColor: color + '22', borderColor: color }, small && styles.small]}>
+    <View style={[styles.badge, { backgroundColor: isMono ? 'transparent' : color + '22', borderColor: color }, small && styles.small]}>
       <View style={[styles.dot, { backgroundColor: color }]} />
       <Text style={[styles.label, { color }, small && styles.smallLabel]}>
         {group.name}

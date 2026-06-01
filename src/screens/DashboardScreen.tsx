@@ -305,6 +305,7 @@ function Scratchpad({
   colors: ThemeColors;
 }) {
   const isNeon = isDark && colors.accentNeon === '#00EEFF';
+  const isMono = isDark && colors.accentNeon === '#FFFFFF';
   const entries = useMemo(() => parseScratchpad(value, isNeon), [value, isNeon]);
   const inputRefs = useRef<(any)[]>([]);
 
@@ -345,6 +346,8 @@ function Scratchpad({
           padStyles.bubble,
           isNeon
             ? { backgroundColor: entry.color + '14', borderWidth: 1.5, borderColor: entry.color, ...neonGlow(entry.color, 'soft') }
+            : isMono
+            ? { backgroundColor: colors.surfaceHigh, borderWidth: 1, borderColor: colors.border }
             : { backgroundColor: entry.color },
         ]}>
           <Text style={[padStyles.bullet, { color: fg + '99' }]}>•</Text>
