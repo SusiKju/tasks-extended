@@ -9,11 +9,13 @@ import {
   TextInput,
   Animated,
   Platform,
+  Dimensions,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useStore } from '../store';
-import { useTheme, ThemeColors } from '../utils/theme';
+import { useTheme, ThemeColors, neonGlow } from '../utils/theme';
 import { uploadScratchpad } from '../services/googleDriveNotes';
 import { useGoogleDriveNotesSync } from '../hooks/useGoogleDriveNotesSync';
 import { useGoogleTasksSync } from '../hooks/useGoogleTasksSync';
@@ -142,7 +144,7 @@ function TaskChip({
   const label = chipDueLabel(task);
   const isImportant = task.important;
 
-  // Blink-Animation, wenn die Task heute fällig ist (unabhängig von Priorität).
+  // Blink-Animation: nur wenn die Task heute fällig UND wichtig ist (siehe Aufruf).
   const blinkAnim = useRef(new Animated.Value(1)).current;
   useEffect(() => {
     if (!blink) { blinkAnim.setValue(1); return; }
@@ -620,7 +622,7 @@ export function DashboardScreen() {
                           key={task.id}
                           task={task}
                           scale={chipScale}
-                          blink={isToday}
+                          blink={isToday && !!task.important}
                           onPress={() => router.push(`/task/${task.id}` as any)}
                         />
                       ))}
