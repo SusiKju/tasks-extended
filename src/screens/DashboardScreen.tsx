@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useStore } from '../store';
 import { useTheme, ThemeColors } from '../utils/theme';
 import { uploadScratchpad } from '../services/googleDriveNotes';
+import { useGoogleDriveNotesSync } from '../hooks/useGoogleDriveNotesSync';
 import { isOverdue } from '../utils/dateFormat';
 import { fetchRecentMails, MailMessage } from '../services/googleMail';
 import { listUpcomingEvents, CalendarEvent } from '../services/googleCalendar';
@@ -213,19 +214,25 @@ export function DashboardScreen() {
   const router = useRouter();
   const { tasks, notes, settings, scratchpad, scratchpadUpdatedAt, setScratchpad } = useStore();
   const { colors, isDark } = useTheme();
+  const { syncScratchpad } = useGoogleDriveNotesSync();
 
-  // Debounced Drive-Upload nach 2 s Tipp-Pause
+  // Pull beim Mount — damit beim Öffnen des Dashboards immer der Drive-Stand geholt wird
+  useEffect(() => {
+    syncScratchpad();
+  }, []);
+
+  // Debounced Drive-Upload 1,5 s nach letzter Eingabe
   const uploadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleScratchpadChange = useCallback((text: string) => {
     setScratchpad(text);
-    if (!settings.googleAccessToken) return;
     if (uploadTimer.current) clearTimeout(uploadTimer.current);
     uploadTimer.current = setTimeout(() => {
+      // Immer frisch aus dem Store lesen — Token könnte zwischenzeitlich refresht worden sein
       const { scratchpad: latest, scratchpadUpdatedAt: ts, settings: s } = useStore.getState();
       if (!s.googleAccessToken) return;
       uploadScratchpad(s.googleAccessToken, latest, ts).catch(() => {});
-    }, 2000);
-  }, [setScratchpad, settings.googleAccessToken]);
+    }, 1500);
+  }, [setScratchpad]);
   const styles = useMemo(() => makeStyles(colors, isDark), [colors, isDark]);
 
   const [mails, setMails] = useState<MailMessage[]>([]);

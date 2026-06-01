@@ -17,60 +17,91 @@ export interface DriveNotesSyncResult {
   scopeError?: boolean;
 }
 
+// ── Scratchpad: eigenständige Sync-Logik ─────────────────────────────────────
+// Läuft unabhängig von googleNotesEnabled — nur googleAccessToken wird benötigt.
+
+async function runScratchpadSync(token: string): Promise<void> {
+  const { scratchpad, scratchpadUpdatedAt } = useStore.getState();
+
+  const drive = await downloadScratchpad(token);
+
+  if (drive) {
+    if (drive.updatedAt > scratchpadUpdatedAt) {
+      // Drive ist neuer → lokal übernehmen (ohne setScratchpad, um updatedAt nicht zu überschreiben)
+      useStore.setState({
+        scratchpad: drive.text,
+        scratchpadUpdatedAt: drive.updatedAt,
+      });
+    } else if (drive.updatedAt < scratchpadUpdatedAt) {
+      // Lokal ist neuer → zu Drive hochladen
+      await uploadScratchpad(token, scratchpad, scratchpadUpdatedAt);
+    }
+    // Gleicher Timestamp → kein Upload nötig
+  } else if (scratchpad) {
+    // Noch keine Datei in Drive → erstmals hochladen
+    await uploadScratchpad(token, scratchpad, scratchpadUpdatedAt);
+  }
+}
+
+async function getValidToken(): Promise<string | null> {
+  const { settings, updateSettings } = useStore.getState();
+  if (!settings.googleAccessToken) return null;
+
+  let token = settings.googleAccessToken;
+  if (settings.googleRefreshToken) {
+    const refreshed = await refreshGoogleToken(settings.googleRefreshToken).catch(() => null);
+    if (refreshed) {
+      token = refreshed;
+      updateSettings({ googleAccessToken: refreshed });
+    }
+  }
+  return token;
+}
+
+// ── Hook ──────────────────────────────────────────────────────────────────────
+
 export function useGoogleDriveNotesSync() {
+
+  // Scratchpad-only sync — wird vom Dashboard bei Mount aufgerufen
+  const syncScratchpad = useCallback(async (): Promise<void> => {
+    const token = await getValidToken();
+    if (!token) return;
+    await runScratchpadSync(token).catch(() => {});
+  }, []);
+
   const syncDriveNotes = useCallback(async (overrideToken?: string): Promise<DriveNotesSyncResult | null> => {
-    // Always read from store directly so we get the latest state even if called
-    // right after updateSettings (before the component re-renders).
     const {
       settings,
       notes,
-      scratchpad,
-      scratchpadUpdatedAt,
       deletedDriveNoteFileIds,
       updateSettings,
       addNote,
       updateNote,
-      setScratchpad,
       removeDeletedDriveNoteFileIds,
     } = useStore.getState();
 
-    if (!overrideToken && !settings.googleAccessToken) {
-      return null;
-    }
+    if (!overrideToken && !settings.googleAccessToken) return null;
 
     let token = overrideToken ?? settings.googleAccessToken!;
     if (!overrideToken && settings.googleRefreshToken) {
-      const refreshed = await refreshGoogleToken(settings.googleRefreshToken);
+      const refreshed = await refreshGoogleToken(settings.googleRefreshToken).catch(() => null);
       if (refreshed) {
         token = refreshed;
         updateSettings({ googleAccessToken: refreshed });
       }
     }
 
+    // ── Scratchpad: immer zuerst, unabhängig vom Notes-Sync ──────────────────
+    await runScratchpadSync(token).catch(() => {});
+
+    // ── Notes-Sync: nur wenn aktiviert ───────────────────────────────────────
+    if (!overrideToken && !settings.googleNotesEnabled) {
+      return { pulled: 0, pushed: 0, deleted: 0 };
+    }
+
     let pulled = 0;
     let pushed = 0;
     let deleted = 0;
-
-    // Notizen-Sync nur wenn explizit aktiviert
-    if (!overrideToken && !settings.googleNotesEnabled) {
-      // Nur Scratchpad syncen (weiter unten)
-      try {
-        const driveScratchpad = await downloadScratchpad(token);
-        if (driveScratchpad) {
-          if (driveScratchpad.updatedAt > scratchpadUpdatedAt) {
-            useStore.setState({
-              scratchpad: driveScratchpad.text,
-              scratchpadUpdatedAt: driveScratchpad.updatedAt,
-            });
-          } else {
-            await uploadScratchpad(token, scratchpad, scratchpadUpdatedAt);
-          }
-        } else if (scratchpad) {
-          await uploadScratchpad(token, scratchpad, scratchpadUpdatedAt);
-        }
-      } catch {}
-      return { pulled: 0, pushed: 0, deleted: 0 };
-    }
 
     const successfullyDeleted: string[] = [];
     for (const fileId of deletedDriveNoteFileIds) {
@@ -84,11 +115,9 @@ export function useGoogleDriveNotesSync() {
       removeDeletedDriveNoteFileIds(successfullyDeleted);
     }
 
-    console.log('[DriveSync] start – localNotes:', notes.length, 'token:', token.slice(0, 20) + '…');
     let driveFiles;
     try {
       driveFiles = await listDriveNotes(token);
-      console.log('[DriveSync] driveFiles fetched:', driveFiles.length);
     } catch (e: any) {
       if (e?.message === 'DRIVE_FORBIDDEN' || e?.message === 'DRIVE_UNAUTHORIZED') {
         return { pulled: 0, pushed: 0, deleted, scopeError: true };
@@ -119,12 +148,10 @@ export function useGoogleDriveNotesSync() {
     const driveNoteIdSet = new Set(driveFiles.map((f) => f.note.id));
     const driveByFileId = new Map(driveFiles.map((f) => [f.fileId, f]));
 
-    // Alle zu uploadenden Notizen sammeln und parallel hochladen
     const toUpload: Array<{ note: Note; existingFileId?: string }> = [];
     for (const note of notes) {
       const notInDrive = !driveNoteIdSet.has(note.id);
       if (notInDrive) {
-        // Neu hochladen – egal ob driveFileId gesetzt ist oder nicht
         toUpload.push({ note });
       } else if (note.driveFileId && driveFileIdSet.has(note.driveFileId)) {
         const driveEntry = driveByFileId.get(note.driveFileId);
@@ -134,40 +161,13 @@ export function useGoogleDriveNotesSync() {
       }
     }
 
-    console.log('[DriveSync] toUpload:', toUpload.length);
     await uploadDriveNotesBatch(token, toUpload, (noteId, fileId) => {
       updateNote(noteId, { driveFileId: fileId });
       pushed++;
     });
-    // ── Scratchpad sync ───────────────────────────────────────────────────────
-    try {
-      const driveScratchpad = await downloadScratchpad(token);
-      if (driveScratchpad) {
-        if (driveScratchpad.updatedAt > scratchpadUpdatedAt) {
-          // Drive ist neuer → lokal überschreiben (setScratchpad setzt updatedAt auf jetzt,
-          // daher direkt in den Store schreiben um den Timestamp zu erhalten)
-          useStore.setState({
-            scratchpad: driveScratchpad.text,
-            scratchpadUpdatedAt: driveScratchpad.updatedAt,
-          });
-        } else {
-          // Lokal ist neuer (oder gleich) → zu Drive hochladen
-          await uploadScratchpad(token, scratchpad, scratchpadUpdatedAt);
-        }
-      } else {
-        // Noch kein Scratchpad auf Drive → hochladen
-        if (scratchpad) {
-          await uploadScratchpad(token, scratchpad, scratchpadUpdatedAt);
-        }
-      }
-    } catch {
-      // Scratchpad-Sync-Fehler sind nicht kritisch
-    }
-
-    console.log('[DriveSync] done – pulled:', pulled, 'pushed:', pushed, 'deleted:', deleted);
 
     return { pulled, pushed, deleted };
   }, []);
 
-  return { syncDriveNotes };
+  return { syncDriveNotes, syncScratchpad };
 }
