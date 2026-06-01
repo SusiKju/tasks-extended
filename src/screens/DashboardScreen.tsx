@@ -6,6 +6,7 @@ import {
   Pressable,
   StyleSheet,
   ActivityIndicator,
+  TextInput,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -207,7 +208,7 @@ const chipStyles = StyleSheet.create({
 
 export function DashboardScreen() {
   const router = useRouter();
-  const { tasks, notes, settings } = useStore();
+  const { tasks, notes, settings, scratchpad, setScratchpad } = useStore();
   const { colors, isDark } = useTheme();
   const styles = useMemo(() => makeStyles(colors, isDark), [colors, isDark]);
 
@@ -297,29 +298,50 @@ export function DashboardScreen() {
         </View>
       )}
 
-      {/* ── Tasks ── */}
-      <View style={styles.section}>
-        <SectionLabel
-          title="Tasks"
-          onMore={() => router.push('/(tabs)/tasks' as any)}
-          colors={colors}
-        />
-        {allOpenTasks.length === 0 ? (
-          <View style={styles.emptyChips}>
-            <Ionicons name="checkmark-circle-outline" size={16} color={colors.success} />
-            <Text style={[styles.emptyText, { color: colors.textMuted }]}>Alle erledigt 🎉</Text>
+      {/* ── Tasks + Scratchpad ── */}
+      <View style={styles.topRow}>
+
+        {/* Tasks */}
+        <View style={styles.tasksCol}>
+          <SectionLabel
+            title="Tasks"
+            onMore={() => router.push('/(tabs)/tasks' as any)}
+            colors={colors}
+          />
+          {allOpenTasks.length === 0 ? (
+            <View style={styles.emptyChips}>
+              <Ionicons name="checkmark-circle-outline" size={16} color={colors.success} />
+              <Text style={[styles.emptyText, { color: colors.textMuted }]}>Alle erledigt 🎉</Text>
+            </View>
+          ) : (
+            <View style={styles.chipWrap}>
+              {allOpenTasks.map((task) => (
+                <TaskChip
+                  key={task.id}
+                  task={task}
+                  onPress={() => router.push(`/task/${task.id}` as any)}
+                />
+              ))}
+            </View>
+          )}
+        </View>
+
+        {/* Scratchpad */}
+        <View style={styles.scratchCol}>
+          <SectionLabel title="Notizblock" colors={colors} />
+          <View style={[styles.scratchCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <TextInput
+              style={[styles.scratchInput, { color: colors.text }]}
+              value={scratchpad}
+              onChangeText={setScratchpad}
+              placeholder={'Gedanken, Ideen…'}
+              placeholderTextColor={colors.textMuted}
+              multiline
+              textAlignVertical="top"
+            />
           </View>
-        ) : (
-          <View style={styles.chipWrap}>
-            {allOpenTasks.map((task) => (
-              <TaskChip
-                key={task.id}
-                task={task}
-                onPress={() => router.push(`/task/${task.id}` as any)}
-              />
-            ))}
-          </View>
-        )}
+        </View>
+
       </View>
 
       {/* ── Kalender ── */}
@@ -459,6 +481,34 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
     content: { paddingTop: 16, paddingBottom: 48, gap: 24 },
 
     section: {},
+
+    // Two-column top layout
+    topRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 0,
+    },
+    tasksCol: {
+      flex: 3,
+    },
+    scratchCol: {
+      flex: 2,
+      paddingRight: 16,
+    },
+    scratchCard: {
+      marginLeft: 8,
+      borderRadius: 12,
+      borderWidth: 1,
+      minHeight: 110,
+      overflow: 'hidden',
+    },
+    scratchInput: {
+      flex: 1,
+      fontSize: 13,
+      lineHeight: 19,
+      padding: 10,
+      minHeight: 110,
+    },
 
     card: {
       marginHorizontal: 16,

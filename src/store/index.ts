@@ -9,6 +9,7 @@ interface TaskState {
   groups: Group[];
   notes: Note[];
   settings: AppSettings;
+  scratchpad: string;
   deletedGoogleEventIds: string[];
   deletedDriveNoteFileIds: string[];
 
@@ -37,6 +38,9 @@ interface TaskState {
   clearNotes: () => void;
   clearDeletedDriveNoteFileIds: () => void;
   removeDeletedDriveNoteFileIds: (fileIds: string[]) => void;
+
+  // Scratchpad
+  setScratchpad: (text: string) => void;
 
   // Settings actions
   updateSettings: (updates: Partial<AppSettings>) => void;
@@ -88,6 +92,7 @@ export const useStore = create<TaskState>()(
       groups: DEFAULT_GROUPS,
       notes: [],
       settings: DEFAULT_SETTINGS,
+      scratchpad: '',
       deletedGoogleEventIds: [],
       deletedDriveNoteFileIds: [],
 
@@ -208,12 +213,14 @@ export const useStore = create<TaskState>()(
           deletedDriveNoteFileIds: state.deletedDriveNoteFileIds.filter((id) => !fileIds.includes(id)),
         })),
 
+      setScratchpad: (text) => set({ scratchpad: text }),
+
       updateSettings: (updates) =>
         set((state) => ({ settings: { ...state.settings, ...updates } })),
     }),
     {
       name: 'tasks-extended-store',
-      version: 9,
+      version: 10,
       migrate: (persistedState: any, version: number) => {
         if (version < 1 && persistedState?.tasks) {
           persistedState.tasks = persistedState.tasks.map((t: any) => ({
@@ -248,6 +255,9 @@ export const useStore = create<TaskState>()(
         }
         if (version < 9) {
           persistedState.deletedDriveNoteFileIds = persistedState.deletedDriveNoteFileIds ?? [];
+        }
+        if (version < 10) {
+          persistedState.scratchpad = persistedState.scratchpad ?? '';
         }
         return persistedState;
       },
