@@ -650,46 +650,89 @@ export function DashboardScreen() {
       {/* ── Kalender ── */}
       {settings.googleCalendarEnabled && (
         <View style={styles.section}>
-          <SectionLabel title="Nächste 2 Tage" colors={colors} />
-          <View style={styles.card}>
-            {calLoading ? (
-              <View style={styles.loadingRow}>
-                <ActivityIndicator color={C.calendar} size="small" />
-              </View>
-            ) : calEvents.length === 0 ? (
-              <View style={styles.emptyRow}>
-                <Ionicons name="calendar-outline" size={16} color={colors.textMuted} />
-                <Text style={styles.emptyText}>Keine Termine</Text>
-              </View>
-            ) : (
-              calEvents.map((event, i) => {
-                const { day, time } = formatEventTime(event);
-                const eventColor = event.color ?? C.calendar;
-                return (
-                  <View
-                    key={event.id}
-                    style={[styles.calRow, i < calEvents.length - 1 && styles.rowDivider]}
-                  >
-                    <View style={styles.calTime}>
-                      <Text style={[styles.calDay, { color: eventColor }]}>{day}</Text>
-                      <Text style={[styles.calHour, { color: colors.text }]}>{time}</Text>
-                    </View>
-                    <View style={[styles.calBar, { backgroundColor: eventColor }]} />
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.calTitle, { color: colors.text }]} numberOfLines={1}>
-                        {event.summary}
+          <SectionLabel title="Kalender" colors={colors} />
+          {calLoading ? (
+            <View style={[styles.card, styles.loadingRow]}>
+              <ActivityIndicator color={C.calendar} size="small" />
+            </View>
+          ) : calEvents.length === 0 ? (
+            <View style={[styles.card, styles.emptyRow]}>
+              <Ionicons name="calendar-outline" size={16} color={colors.textMuted} />
+              <Text style={styles.emptyText}>Keine Termine</Text>
+            </View>
+          ) : (() => {
+            const todayStr    = new Date().toDateString();
+            const tomorrowStr = new Date(Date.now() + 86400000).toDateString();
+            const todayEvents    = calEvents.filter(e => new Date(e.start).toDateString() === todayStr);
+            const tomorrowEvents = calEvents.filter(e => new Date(e.start).toDateString() === tomorrowStr);
+
+            const renderEvent = (event: CalendarEvent, i: number, arr: CalendarEvent[], prominent: boolean) => {
+              const { time } = formatEventTime(event);
+              const eventColor = event.color ?? C.calendar;
+              return (
+                <View
+                  key={event.id}
+                  style={[
+                    prominent ? styles.calRowProminent : styles.calRowDimmed,
+                    i < arr.length - 1 && styles.rowDivider,
+                  ]}
+                >
+                  {/* Farbbalken */}
+                  <View style={[styles.calBar, {
+                    backgroundColor: eventColor,
+                    width: prominent ? 4 : 3,
+                    opacity: prominent ? 1 : 0.6,
+                  }]} />
+                  {/* Zeit */}
+                  <View style={prominent ? styles.calTimeLg : styles.calTimeSm}>
+                    <Text style={[
+                      prominent ? styles.calHourLg : styles.calHourSm,
+                      { color: prominent ? colors.text : colors.textSecondary }
+                    ]}>{time}</Text>
+                  </View>
+                  {/* Titel */}
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      style={[
+                        prominent ? styles.calTitleLg : styles.calTitleSm,
+                        { color: prominent ? colors.text : colors.textSecondary }
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {event.summary}
+                    </Text>
+                    {event.location && prominent ? (
+                      <Text style={[styles.calSub, { color: colors.textMuted }]} numberOfLines={1}>
+                        📍 {event.location}
                       </Text>
-                      {event.location ? (
-                        <Text style={[styles.calSub, { color: colors.textSecondary }]} numberOfLines={1}>
-                          📍 {event.location}
-                        </Text>
-                      ) : null}
+                    ) : null}
+                  </View>
+                </View>
+              );
+            };
+
+            return (
+              <View style={{ gap: 6 }}>
+                {todayEvents.length > 0 && (
+                  <View>
+                    <Text style={[styles.dayLabel, { color: colors.danger, paddingHorizontal: 0 }]}>Heute</Text>
+                    <View style={[styles.card, { borderLeftWidth: 0 }]}>
+                      {todayEvents.map((e, i) => renderEvent(e, i, todayEvents, true))}
                     </View>
                   </View>
-                );
-              })
-            )}
-          </View>
+                )}
+                {tomorrowEvents.length > 0 && (
+                  <View>
+                    <Text style={[styles.dayLabel, { color: colors.textMuted, paddingHorizontal: 0 }]}>Morgen</Text>
+                    <View style={[styles.card, { borderLeftWidth: 0, opacity: 0.75 }]}>
+                      {tomorrowEvents.map((e, i) => renderEvent(e, i, tomorrowEvents, false))}
+                    </View>
+                  </View>
+                )}
+              </View>
+            );
+          })()}
+        </View>
         </View>
       )}
 
@@ -888,24 +931,22 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
     mailSubject: { fontSize: 12 },
 
     // Calendar
-    calRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingHorizontal: 14,
-      paddingVertical: 11,
-      gap: 10,
-    },
-    calTime: { width: 52, alignItems: 'center' },
-    calDay: {
-      fontSize: 9,
-      fontWeight: '700',
-      textTransform: 'uppercase',
-      letterSpacing: 0.5,
-    },
-    calHour: { fontSize: 14, fontWeight: '700' },
-    calBar: { width: 3, borderRadius: 2, alignSelf: 'stretch', minHeight: 28 },
-    calTitle: { fontSize: 14, fontWeight: '500' },
-    calSub: { fontSize: 11, marginTop: 1 },
+    calRowProminent: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 12, gap: 10 },
+    calRowDimmed:    { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 9,  gap: 10 },
+    calTimeLg: { width: 46 },
+    calTimeSm: { width: 40 },
+    calHourLg: { fontSize: 15, fontWeight: '700' },
+    calHourSm: { fontSize: 12, fontWeight: '500' },
+    calBar: { borderRadius: 2, alignSelf: 'stretch', minHeight: 24 },
+    calTitleLg: { fontSize: 14, fontWeight: '600' },
+    calTitleSm: { fontSize: 12, fontWeight: '400' },
+    calSub: { fontSize: 11, marginTop: 2 },
+    // compat
+    calRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 11, gap: 10 },
+    calTime: { width: 52, alignItems: 'center' as const },
+    calDay: { fontSize: 9, fontWeight: '700' as const, textTransform: 'uppercase' as const, letterSpacing: 0.5 },
+    calHour: { fontSize: 14, fontWeight: '700' as const },
+    calTitle: { fontSize: 14, fontWeight: '500' as const },
 
     // Notes
     noteScroll: { paddingHorizontal: 16, gap: 10 },
