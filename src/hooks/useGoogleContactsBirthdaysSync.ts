@@ -8,9 +8,12 @@ import { listContactBirthdays } from '../services/googleContacts';
  * app's birthday data basis. Returns the number of birthdays synced, or null
  * when no Google account is connected / the sync could not run.
  *
- * Runs only when a Google access token is present. Guarded by
- * `settings.googleBirthdaysEnabled` unless an explicit token override is passed
- * (mirrors the Drive-notes hook so the very first login can prime the data).
+ * Runs whenever a Google access token is present — independent of
+ * `settings.googleBirthdaysEnabled` (mirrors the Drive-notes hook). That flag has
+ * no user-facing toggle; it is only flipped on connect/disconnect. Gating on it
+ * here suppressed the background syncs for anyone who connected Google before this
+ * feature shipped (flag defaults to false via migration), so birthdays stayed
+ * empty on the dashboard even when Google Contacts had one for today.
  */
 export function useGoogleContactsBirthdaysSync() {
   const syncBirthdays = useCallback(async (overrideToken?: string): Promise<number | null> => {
@@ -18,7 +21,6 @@ export function useGoogleContactsBirthdaysSync() {
 
     const token = overrideToken ?? settings.googleAccessToken;
     if (!token) return null;
-    if (!overrideToken && !settings.googleBirthdaysEnabled) return null;
 
     // First attempt with the current token.
     let result = await listContactBirthdays(token).catch(() => null);

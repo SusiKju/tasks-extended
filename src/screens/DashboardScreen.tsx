@@ -110,9 +110,8 @@ function deadlineMs(task: Task): number | null {
   } catch { return null; }
 }
 
-// Blinkt: wichtig + Deadline ≤ 2h entfernt (inkl. bereits überfällig).
+// Blinkt: Deadline (Datum + Uhrzeit) ≤ 2h entfernt oder bereits überfällig.
 function isDeadlineSoon(task: Task, now: number): boolean {
-  if (!task.important) return false;
   const ms = deadlineMs(task);
   if (ms == null) return false;
   return ms - now <= TWO_HOURS_MS;
@@ -554,6 +553,10 @@ export function DashboardScreen() {
     [notes]
   );
 
+  // Blink-Animation für die Geburtstags-Card – Geburtstag ist heute, also
+  // soll der Hinweis oben auffällig pulsieren.
+  const birthdayBlinkAnim = useRef(new Animated.Value(1)).current;
+
   const todayBirthdays = useMemo(() => {
     const now = new Date();
     return storeBirthdays.filter(
@@ -579,12 +582,49 @@ export function DashboardScreen() {
       .finally(() => setCalLoading(false));
   }, [settings.googleAccessToken, settings.googleCalendarEnabled, settings.selectedCalendarIds]);
 
+  // Geburtstage beim Laden automatisch aus Google Contacts ziehen – analog zu
+  // Mails/Kalender. Ohne diesen Effekt wurde die Datenbasis nur beim Login oder
+  // manuellen Sync befüllt, sodass die Geburtstags-Card beim normalen App-Start
+  // leer blieb, obwohl ein Kontakt heute Geburtstag hat.
+  useEffect(() => {
+    if (!settings.googleAccessToken || !settings.googleBirthdaysEnabled) return;
+    syncBirthdays().catch(() => {});
+  }, [settings.googleAccessToken, settings.googleBirthdaysEnabled, syncBirthdays]);
+
+  // Solange heute jemand Geburtstag hat, pulsiert die Card.
+  useEffect(() => {
+    if (todayBirthdays.length === 0) { birthdayBlinkAnim.setValue(1); return; }
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(birthdayBlinkAnim, { toValue: 0.35, duration: 650, useNativeDriver: true }),
+        Animated.timing(birthdayBlinkAnim, { toValue: 1,    duration: 650, useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => { loop.stop(); birthdayBlinkAnim.setValue(1); };
+  }, [todayBirthdays.length, birthdayBlinkAnim]);
+
   return (
     <ScrollView
       style={styles.container}
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
     >
+
+      {/* ── Geburtstage: ganz oben, prominent, blinkend ── */}
+      {todayBirthdays.length > 0 && (
+        <Animated.View style={[styles.birthdayCard, { opacity: birthdayBlinkAnim }]}>
+          <Text style={styles.birthdayIcon}>🎂</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.birthdayHeading}>Geburtstag heute!</Text>
+            {todayBirthdays.map((b) => (
+              <Text key={b.id} style={styles.birthdayText} numberOfLines={1}>
+                {b.name}{b.year != null ? ` (wird ${new Date().getFullYear() - b.year})` : ''}
+              </Text>
+            ))}
+          </View>
+        </Animated.View>
+      )}
 
       {/* ── Sync-Button oben rechts ── */}
       <View style={styles.syncRow}>
@@ -603,20 +643,6 @@ export function DashboardScreen() {
           </Animated.View>
         </Pressable>
       </View>
-
-      {/* ── Geburtstage ── */}
-      {todayBirthdays.length > 0 && (
-        <View style={styles.birthdayCard}>
-          <Text style={styles.birthdayIcon}>🎂</Text>
-          <View style={{ flex: 1 }}>
-            {todayBirthdays.map((b) => (
-              <Text key={b.id} style={styles.birthdayText} numberOfLines={1}>
-                {b.name}{b.year != null ? ` (wird ${new Date().getFullYear() - b.year})` : ''}
-              </Text>
-            ))}
-          </View>
-        </View>
-      )}
 
       {/* ── Tasks + Scratchpad ── */}
       <View style={styles.topRow}>
@@ -930,20 +956,30 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
       paddingHorizontal: 16,
     },
 
-    // Birthday
+    // Birthday – ganz oben, prominent, blinkend
     birthdayCard: {
       flexDirection: 'row',
       alignItems: 'center',
-      backgroundColor: isDark ? 'rgba(255,149,0,0.12)' : '#FFF3E0',
+      backgroundColor: isDark ? 'rgba(255,149,0,0.18)' : '#FFE0B2',
       marginHorizontal: 16,
-      borderRadius: 12,
-      padding: 12,
-      gap: 10,
-      borderLeftWidth: 3,
-      borderLeftColor: '#FF9500',
+      marginTop: 4,
+      marginBottom: 8,
+      borderRadius: 14,
+      padding: 16,
+      gap: 12,
+      borderWidth: 2,
+      borderColor: '#FF9500',
     },
-    birthdayIcon: { fontSize: 20 },
-    birthdayText: { fontSize: 13, fontWeight: '600', color: isDark ? '#FFC06A' : '#7A4100' },
+    birthdayIcon: { fontSize: 30 },
+    birthdayHeading: {
+      fontSize: 15,
+      fontWeight: '800',
+      color: '#FF9500',
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+      marginBottom: 2,
+    },
+    birthdayText: { fontSize: 16, fontWeight: '700', color: isDark ? '#FFC06A' : '#7A4100' },
 
     // Mail
     mailRow: {
