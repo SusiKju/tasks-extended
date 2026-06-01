@@ -157,6 +157,21 @@ async function calendarFetch(
   });
 }
 
+// Google Calendar colorId → hex (https://developers.google.com/calendar/api/v3/reference/colors)
+const GOOGLE_COLOR_MAP: Record<string, string> = {
+  '1':  '#7986CB', // Lavender
+  '2':  '#33B679', // Sage
+  '3':  '#8E24AA', // Grape
+  '4':  '#E67C73', // Flamingo
+  '5':  '#F6BF26', // Banana
+  '6':  '#F4511E', // Tangerine
+  '7':  '#039BE5', // Peacock
+  '8':  '#616161', // Graphite
+  '9':  '#3F51B5', // Blueberry
+  '10': '#0B8043', // Basil
+  '11': '#D50000', // Tomato
+};
+
 export interface CalendarEvent {
   id: string;
   summary: string;
@@ -165,12 +180,14 @@ export interface CalendarEvent {
   allDay: boolean;
   location?: string;
   calendarName?: string;
+  color?: string;  // resolved hex color for this event
 }
 
 async function fetchEventsFromCalendar(
   accessToken: string,
   calendarId: string,
   calendarName: string,
+  calendarColor: string | undefined,
   timeMin: string,
   timeMax: string
 ): Promise<CalendarEvent[]> {
@@ -189,15 +206,24 @@ async function fetchEventsFromCalendar(
   if (!res.ok) return [];
   const data = await res.json();
 
-  return (data.items ?? []).map((e: any) => ({
-    id: `${calendarId}::${e.id}`,
-    summary: e.summary ?? '(Kein Titel)',
-    start: e.start?.dateTime ?? e.start?.date ?? '',
-    end: e.end?.dateTime ?? e.end?.date ?? '',
-    allDay: !!e.start?.date,
-    location: e.location,
-    calendarName,
-  }));
+  return (data.items ?? []).map((e: any) => {
+    // Priority: event-level backgroundColor > event colorId > calendar color > undefined
+    const color =
+      e.backgroundColor ??
+      (e.colorId ? GOOGLE_COLOR_MAP[e.colorId] : undefined) ??
+      calendarColor;
+
+    return {
+      id: `${calendarId}::${e.id}`,
+      summary: e.summary ?? '(Kein Titel)',
+      start: e.start?.dateTime ?? e.start?.date ?? '',
+      end: e.end?.dateTime ?? e.end?.date ?? '',
+      allDay: !!e.start?.date,
+      location: e.location,
+      calendarName,
+      color,
+    };
+  });
 }
 
 export async function listUpcomingEvents(
@@ -223,21 +249,22 @@ export async function listUpcomingEvents(
 
   const results = await Promise.all(
     filtered.map((cal) =>
-      fetchEventsFromCalendar(accessToken, cal.id, cal.summary, timeMin, timeMax)
+      fetchEventsFromCalendar(accessToken, cal.id, cal.summary, cal.backgroundColor, timeMin, timeMax)
     )
   );
 
   return results.flat().sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
 }
 
-export async function listCalendars(accessToken: string): Promise<Array<{ id: string; summary: string; primary?: boolean }>> {
+export async function listCalendars(accessToken: string): Promise<Array<{ id: string; summary: string; primary?: boolean; backgroundColor?: string }>> {
   const res = await calendarFetch('/users/me/calendarList', accessToken);
   if (!res.ok) return [];
   const data = await res.json();
-  return (data.items ?? []).map((c: { id: string; summary: string; primary?: boolean }) => ({
+  return (data.items ?? []).map((c: any) => ({
     id: c.id,
     summary: c.summary,
     primary: c.primary,
+    backgroundColor: c.backgroundColor ?? undefined,
   }));
 }
 

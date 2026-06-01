@@ -326,7 +326,7 @@ export function DashboardScreen() {
       {settings.googleCalendarEnabled && (
         <View style={styles.section}>
           <SectionLabel title="Nächste 2 Tage" colors={colors} />
-          <View style={[styles.card, { borderLeftColor: C.calendar + '60', borderLeftWidth: 3 }]}>
+          <View style={styles.card}>
             {calLoading ? (
               <View style={styles.loadingRow}>
                 <ActivityIndicator color={C.calendar} size="small" />
@@ -339,16 +339,17 @@ export function DashboardScreen() {
             ) : (
               calEvents.map((event, i) => {
                 const { day, time } = formatEventTime(event);
+                const eventColor = event.color ?? C.calendar;
                 return (
                   <View
                     key={event.id}
                     style={[styles.calRow, i < calEvents.length - 1 && styles.rowDivider]}
                   >
                     <View style={styles.calTime}>
-                      <Text style={[styles.calDay, { color: C.calendar }]}>{day}</Text>
+                      <Text style={[styles.calDay, { color: eventColor }]}>{day}</Text>
                       <Text style={[styles.calHour, { color: colors.text }]}>{time}</Text>
                     </View>
-                    <View style={[styles.calBar, { backgroundColor: C.calendar }]} />
+                    <View style={[styles.calBar, { backgroundColor: eventColor }]} />
                     <View style={{ flex: 1 }}>
                       <Text style={[styles.calTitle, { color: colors.text }]} numberOfLines={1}>
                         {event.summary}
