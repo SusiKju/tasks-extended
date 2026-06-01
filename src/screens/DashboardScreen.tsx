@@ -71,14 +71,14 @@ function chipDueLabel(task: Task): string {
       const today = new Date(); today.setHours(0, 0, 0, 0);
       const due = new Date(d); due.setHours(0, 0, 0, 0);
       const diff = Math.round((due.getTime() - today.getTime()) / 86400000);
-      if (diff < 0) parts.push('Überfällig');
+      if (diff < 0) parts.push('!');          // kurz: überfällig
       else if (diff === 0) parts.push('Heute');
-      else if (diff === 1) parts.push('Morgen');
+      else if (diff === 1) parts.push('Mo.');  // Morgen → Mo.
       else parts.push(d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' }));
     } catch {}
   }
   if (task.dueTime) parts.push(task.dueTime);
-  return parts.join(' · ');
+  return parts.join(' ');
 }
 
 function isUrgent(task: Task): boolean {
@@ -187,20 +187,22 @@ const chipStyles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
     borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    gap: 3,
+    // prevent chip from exceeding column width
+    alignSelf: 'flex-start',
+    maxWidth: '100%',
   },
   title: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
     flexShrink: 1,
-    maxWidth: 180,
   },
   label: {
     fontSize: 11,
     fontWeight: '500',
-    flexShrink: 0,
+    flexShrink: 1,
   },
 });
 
@@ -486,24 +488,24 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
     topRow: {
       flexDirection: 'row',
       alignItems: 'flex-start',
-      gap: 0,
-    },
-    tasksCol: {
-      flex: 3,
-    },
-    scratchCol: {
-      flex: 2,
       paddingRight: 16,
     },
+    tasksCol: {
+      flex: 1,
+      minWidth: 0,
+    },
+    scratchCol: {
+      flex: 1,
+      minWidth: 0,
+      paddingLeft: 8,
+    },
     scratchCard: {
-      marginLeft: 8,
       borderRadius: 12,
       borderWidth: 1,
       minHeight: 110,
       overflow: 'hidden',
     },
     scratchInput: {
-      flex: 1,
       fontSize: 13,
       lineHeight: 19,
       padding: 10,
