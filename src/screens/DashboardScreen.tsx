@@ -380,7 +380,7 @@ const padStyles = StyleSheet.create({
 export function DashboardScreen() {
   const router = useRouter();
   const { tasks, notes, settings, scratchpad, scratchpadUpdatedAt, setScratchpad, birthdays: storeBirthdays } = useStore();
-  const { colors, isDark } = useTheme();
+  const { colors, isDark, theme } = useTheme();
   const { syncScratchpad, syncDriveNotes } = useGoogleDriveNotesSync();
   const { syncTasks } = useGoogleTasksSync();
   const { syncBirthdays } = useGoogleContactsBirthdaysSync();
@@ -498,6 +498,10 @@ export function DashboardScreen() {
   // soll der Hinweis oben auffällig pulsieren.
   const birthdayBlinkAnim = useRef(new Animated.Value(1)).current;
 
+  // Nur Neon-Dark: rotierender Regenbogen-Rand im AI-Komponenten-Stil.
+  const isNeon = theme === 'dark-neon';
+  const rainbowRotate = useRef(new Animated.Value(0)).current;
+
   const todayBirthdays = useMemo(() => {
     const now = new Date();
     return storeBirthdays.filter(
@@ -533,9 +537,10 @@ export function DashboardScreen() {
   }, [settings.googleAccessToken, settings.googleBirthdaysEnabled, syncBirthdays]);
 
   // Geburtstag heute → Card blinkt im gleichen Takt wie ein heute fälliger
-  // Task-Chip (Opacity 0.3 ↔ 1, je 600 ms).
+  // Task-Chip (Opacity 0.3 ↔ 1, je 600 ms). In Neon-Dark übernimmt stattdessen
+  // der rotierende Regenbogen-Rand, die Card selbst bleibt ruhig.
   useEffect(() => {
-    if (todayBirthdays.length === 0) { birthdayBlinkAnim.setValue(1); return; }
+    if (todayBirthdays.length === 0 || isNeon) { birthdayBlinkAnim.setValue(1); return; }
     const loop = Animated.loop(
       Animated.sequence([
         Animated.timing(birthdayBlinkAnim, { toValue: 0.3, duration: 600, useNativeDriver: true }),
@@ -544,7 +549,17 @@ export function DashboardScreen() {
     );
     loop.start();
     return () => { loop.stop(); birthdayBlinkAnim.setValue(1); };
-  }, [todayBirthdays.length, birthdayBlinkAnim]);
+  }, [todayBirthdays.length, isNeon, birthdayBlinkAnim]);
+
+  // Neon-Dark: Regenbogen-Gradient dreht sich endlos (AI-Schimmer).
+  useEffect(() => {
+    if (todayBirthdays.length === 0 || !isNeon) { rainbowRotate.setValue(0); return; }
+    const loop = Animated.loop(
+      Animated.timing(rainbowRotate, { toValue: 1, duration: 4000, useNativeDriver: true })
+    );
+    loop.start();
+    return () => { loop.stop(); rainbowRotate.setValue(0); };
+  }, [todayBirthdays.length, isNeon, rainbowRotate]);
 
   return (
     <ScrollView
@@ -553,16 +568,43 @@ export function DashboardScreen() {
       showsVerticalScrollIndicator={false}
     >
 
-      {/* ── Geburtstage: ganz oben, dezent, sanft pulsierend ── */}
+      {/* ── Geburtstage: ganz oben ── */}
       {todayBirthdays.length > 0 && (
-        <Animated.View style={[styles.birthdayCard, { opacity: birthdayBlinkAnim }]}>
-          <Text style={styles.birthdayIcon}>🎂</Text>
-          <Text style={styles.birthdayText} numberOfLines={1}>
-            {todayBirthdays
-              .map((b) => `${b.name}${b.year != null ? ` (${new Date().getFullYear() - b.year})` : ''}`)
-              .join(', ')}
-          </Text>
-        </Animated.View>
+        isNeon ? (
+          // Neon-Dark: AI-Style mit rotierendem Regenbogen-Rand + Glow.
+          <View style={styles.birthdayNeonWrap}>
+            <Animated.View
+              style={[
+                styles.birthdayRainbowLayer,
+                { transform: [{ rotate: rainbowRotate.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] }) }] },
+              ]}
+            >
+              <LinearGradient
+                colors={['#FF0080', '#FF8C00', '#FFE600', '#00FF88', '#00EEFF', '#7A5CFF', '#FF0080']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={StyleSheet.absoluteFill}
+              />
+            </Animated.View>
+            <View style={styles.birthdayNeonInner}>
+              <Text style={styles.birthdayIcon}>🎂</Text>
+              <Text style={[styles.birthdayText, styles.birthdayTextNeon]} numberOfLines={1}>
+                {todayBirthdays
+                  .map((b) => `${b.name}${b.year != null ? ` (${new Date().getFullYear() - b.year})` : ''}`)
+                  .join(', ')}
+              </Text>
+            </View>
+          </View>
+        ) : (
+          <Animated.View style={[styles.birthdayCard, { opacity: birthdayBlinkAnim }]}>
+            <Text style={styles.birthdayIcon}>🎂</Text>
+            <Text style={styles.birthdayText} numberOfLines={1}>
+              {todayBirthdays
+                .map((b) => `${b.name}${b.year != null ? ` (${new Date().getFullYear() - b.year})` : ''}`)
+                .join(', ')}
+            </Text>
+          </Animated.View>
+        )
       )}
 
       {/* ── Sync-Button oben rechts ── */}
@@ -908,6 +950,36 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
     },
     birthdayIcon: { fontSize: 16 },
     birthdayText: { flex: 1, fontSize: 13, fontWeight: '700', color: '#1A1A00' },
+
+    // Birthday – Neon-Dark: rotierender Regenbogen-Rand (AI-Style)
+    birthdayNeonWrap: {
+      marginHorizontal: 16,
+      marginTop: 4,
+      marginBottom: 6,
+      borderRadius: 12,
+      padding: 2,            // Dicke des Regenbogen-Rings
+      overflow: 'hidden',
+      ...neonGlow('#7A5CFF', 'medium'),
+    },
+    birthdayRainbowLayer: {
+      position: 'absolute',
+      width: Math.max(Dimensions.get('window').width, 480),
+      height: Math.max(Dimensions.get('window').width, 480),
+      left: '50%',
+      top: '50%',
+      marginLeft: -Math.max(Dimensions.get('window').width, 480) / 2,
+      marginTop: -Math.max(Dimensions.get('window').width, 480) / 2,
+    },
+    birthdayNeonInner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      backgroundColor: '#0E0E16',
+      borderRadius: 10,
+      paddingVertical: 8,
+      paddingHorizontal: 12,
+    },
+    birthdayTextNeon: { color: '#EAEAFF' },
 
     // Mail
     mailRow: {
