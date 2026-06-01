@@ -366,16 +366,16 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
       gap: 4,
     },
     chipActive: {
-      backgroundColor: isDark ? 'transparent' : c.accent,
+      backgroundColor: isDark ? c.accentNeon + '18' : c.accent,
       borderColor: isDark ? c.accentNeon : c.accent,
       borderWidth: isDark ? 1.5 : 1,
-      ...(isDark ? neonGlow(c.accentNeon, 'soft') : {}),
+      ...(isDark ? neonGlow(c.accentNeon, 'medium') : {}),
     },
     chipDanger: {
-      backgroundColor: isDark ? 'transparent' : c.danger,
+      backgroundColor: isDark ? c.danger + '18' : c.danger,
       borderColor: c.danger,
       borderWidth: isDark ? 1.5 : 1,
-      ...(isDark ? neonGlow(c.danger, 'soft') : {}),
+      ...(isDark ? neonGlow(c.danger, 'medium') : {}),
     },
     chipDot: {
       width: 6,

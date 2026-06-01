@@ -5,7 +5,7 @@ import { Task } from '../types';
 import { GroupBadge } from './GroupBadge';
 import { formatDate, isDueToday, isOverdue } from '../utils/dateFormat';
 import { useStore } from '../store';
-import { useTheme, ThemeColors, neonGlow } from '../utils/theme';
+import { useTheme, ThemeColors, neonGlow, neonBorder } from '../utils/theme';
 
 interface Props {
   task: Task;
@@ -36,15 +36,22 @@ export function TaskCard({ task, onPress, onToggle, onDelete, isSelected, onSele
     : 'transparent';
 
   const isHighlighted = leftBorderColor !== 'transparent';
-  const cardGlow = isDark && isHighlighted && !isSelected ? neonGlow(leftBorderColor, 'soft') : {};
+  const cardGlow = isDark && isHighlighted && !isSelected
+    ? neonGlow(leftBorderColor, 'medium')
+    : {};
+  // Im Neon-Theme: jede Card bekommt einen dezenten Accent-Tint am Rand
+  const neonCardBorder = isDark && !isHighlighted && !isSelected
+    ? { borderColor: colors.border, borderWidth: 1 }
+    : {};
 
   return (
     <TouchableOpacity
       style={[
         styles.card,
         task.completed && !isSelected && styles.completed,
-        { borderLeftColor: leftBorderColor, borderLeftWidth: isHighlighted ? 3 : 1 },
+        { borderLeftColor: leftBorderColor, borderLeftWidth: isHighlighted ? 4 : 1 },
         isSelected && styles.selectedCard,
+        neonCardBorder,
         cardGlow,
       ]}
       onPress={onPress}

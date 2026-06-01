@@ -18,9 +18,10 @@ export default function TabsLayout() {
           borderTopWidth: isDark ? 0 : 1,
           ...(isDark ? {
             shadowColor: colors.accentNeon,
-            shadowOffset: { width: 0, height: -2 },
-            shadowOpacity: 0.15,
-            shadowRadius: 12,
+            shadowOffset: { width: 0, height: -3 },
+            shadowOpacity: 0.5,
+            shadowRadius: 18,
+            elevation: 16,
           } : {}),
         },
         tabBarLabelStyle: {

@@ -49,26 +49,26 @@ const LIGHT: ThemeColors = {
 };
 
 const DARK_NEON: ThemeColors = {
-  background: '#08080F',
-  surface: '#111120',
-  surfaceHigh: '#1A1A2E',
-  text: '#EAEAff',
-  textSecondary: '#6060A0',
-  textMuted: '#30304A',
-  accent: '#3D8FFF',
-  accentNeon: '#00E5FF',
-  success: '#0FFF6A',
-  warning: '#FFD60A',
-  danger: '#FF2D55',
-  border: '#202038',
-  tabBar: '#08080F',
-  tabBarBorder: '#202038',
-  header: '#08080F',
-  inputBackground: '#1A1A2E',
-  placeholder: '#303048',
-  glowAccent: 'rgba(0, 229, 255, 0.45)',
-  glowDanger: 'rgba(255, 45, 85, 0.5)',
-  glowSuccess: 'rgba(15, 255, 106, 0.4)',
+  background:    '#02020A',   // tiefstes Schwarz-Blau
+  surface:       '#07071A',   // klarer Kontrast zum BG
+  surfaceHigh:   '#0E0E28',   // deutlich heller als surface
+  text:          '#EEEEFF',   // kühles Weiß
+  textSecondary: '#9090CC',   // lesbares Blau-Lila (war viel zu dunkel)
+  textMuted:     '#383858',   // sichtbar, aber zurückgezogen
+  accent:        '#2299FF',   // elektrisches Blau
+  accentNeon:    '#00EEFF',   // volles Cyan-Neon
+  success:       '#00FF88',   // Neon-Grün
+  warning:       '#FFE600',   // elektrisches Gelb
+  danger:        '#FF1177',   // Neon-Magenta-Pink
+  border:        '#16163A',   // klare Trennlinie
+  tabBar:        '#02020A',
+  tabBarBorder:  '#16163A',
+  header:        '#02020A',
+  inputBackground: '#0E0E28',
+  placeholder:   '#2A2A50',
+  glowAccent:  'rgba(0, 238, 255, 0.65)',
+  glowDanger:  'rgba(255, 17, 119, 0.65)',
+  glowSuccess: 'rgba(0, 255, 136, 0.55)',
 };
 
 const DARK_SOFT: ThemeColors = {
@@ -102,16 +102,25 @@ export const THEMES: Record<Theme, ThemeColors> = {
 
 export function neonGlow(color: string, intensity: 'soft' | 'medium' | 'hard' = 'medium') {
   const cfg = {
-    soft:   { opacity: 0.45, radius: 10 },
-    medium: { opacity: 0.65, radius: 16 },
-    hard:   { opacity: 0.85, radius: 24 },
+    soft:   { opacity: 0.55, radius: 12 },
+    medium: { opacity: 0.80, radius: 20 },
+    hard:   { opacity: 1.00, radius: 32 },
   }[intensity];
   return {
     shadowColor: color,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: cfg.opacity,
     shadowRadius: cfg.radius,
-    elevation: 10,
+    elevation: 12,
+  };
+}
+
+/** Subtiler Neon-Rahmen für Cards im Neon-Theme */
+export function neonBorder(color: string) {
+  return {
+    borderColor: color + '55',
+    borderWidth: 1,
+    ...neonGlow(color, 'soft'),
   };
 }
 
