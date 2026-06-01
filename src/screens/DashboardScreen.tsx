@@ -87,36 +87,6 @@ function chipDueLabel(task: Task): string {
   return parts.join(' ');
 }
 
-function isUrgent(task: Task): boolean {
-  if (!task.dueDate) return false;
-  try {
-    const today = new Date(); today.setHours(0, 0, 0, 0);
-    const due = new Date(task.dueDate); due.setHours(0, 0, 0, 0);
-    return due.getTime() <= today.getTime();
-  } catch { return false; }
-}
-
-const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
-
-// Präziser Fälligkeitszeitpunkt – nur mit Datum UND Uhrzeit bestimmbar.
-function deadlineMs(task: Task): number | null {
-  if (!task.dueDate || !task.dueTime) return null;
-  try {
-    const d = new Date(task.dueDate);
-    const [h, m] = task.dueTime.split(':').map(Number);
-    if (Number.isNaN(h) || Number.isNaN(m)) return null;
-    d.setHours(h, m, 0, 0);
-    return d.getTime();
-  } catch { return null; }
-}
-
-// Blinkt: Deadline (Datum + Uhrzeit) ≤ 2h entfernt oder bereits überfällig.
-function isDeadlineSoon(task: Task, now: number): boolean {
-  const ms = deadlineMs(task);
-  if (ms == null) return false;
-  return ms - now <= TWO_HOURS_MS;
-}
-
 // ─── Section Label ────────────────────────────────────────────────────────────
 
 function SectionLabel({
@@ -161,23 +131,18 @@ const labelStyles = StyleSheet.create({
 function TaskChip({
   task,
   onPress,
-  isDark,
-  colors,
   scale = 'lg',
   blink = false,
 }: {
   task: Task;
   onPress: () => void;
-  isDark: boolean;
-  colors: ThemeColors;
   scale?: 'lg' | 'md' | 'sm';
   blink?: boolean;
 }) {
-  const urgent = isUrgent(task);
   const label = chipDueLabel(task);
   const isImportant = task.important;
 
-  // Blink-Animation, wenn die Deadline einer wichtigen Task < 2h entfernt ist.
+  // Blink-Animation, wenn die Task heute fällig ist (unabhängig von Priorität).
   const blinkAnim = useRef(new Animated.Value(1)).current;
   useEffect(() => {
     if (!blink) { blinkAnim.setValue(1); return; }
@@ -191,30 +156,11 @@ function TaskChip({
     return () => { loop.stop(); blinkAnim.setValue(1); };
   }, [blink, blinkAnim]);
 
-  // Farben direkt aus dem Theme – funktioniert für alle Themes korrekt:
-  // Neon: danger=#FF1177 (Magenta), warning=#FFE600, accentNeon=#00EEFF
-  // Dark-Soft: danger=#FF5F57, warning=#F5A623
-  // Light: danger=#FF3B30
-  const dangerColor = colors.danger;
-  const taskColor   = isDark ? colors.accentNeon : C.tasks;
-
-  const bgColor = isImportant
-    ? C.tasks
-    : urgent
-    ? dangerColor + (isDark ? '22' : '10')
-    : taskColor   + (isDark ? '18' : '10');
-
-  const borderColor = isImportant
-    ? C.tasks
-    : urgent
-    ? dangerColor + (isDark ? '88' : '40')
-    : taskColor   + (isDark ? '60' : '35');
-
-  const textColor = isImportant
-    ? '#FFFFFF'
-    : urgent
-    ? dangerColor
-    : taskColor;
+  // Farbliche Hinterlegung rein nach Priorität: wichtige Tasks rot, normale blau.
+  // Solider Chip mit weißem Text – auf beiden Farben gut lesbar.
+  const bgColor     = isImportant ? C.important : C.tasks;
+  const borderColor = isImportant ? C.important : C.tasks;
+  const textColor   = '#FFFFFF';
 
   const fontSize   = scale === 'lg' ? 13 : scale === 'md' ? 11 : 10;
   const padV       = scale === 'lg' ? 7  : scale === 'md' ? 5  : 4;
@@ -506,13 +452,6 @@ export function DashboardScreen() {
   const [calEvents, setCalEvents] = useState<CalendarEvent[]>([]);
   const [calLoading, setCalLoading] = useState(false);
 
-  // Tickender Takt, damit die "<2h"-Blink-Bedingung über die Zeit neu greift.
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 60_000);
-    return () => clearInterval(id);
-  }, []);
-
   // Tasks nach Fälligkeit gruppieren
   const taskGroups = useMemo(() => {
     const open = tasks.filter((t) => !t.completed);
@@ -679,10 +618,8 @@ export function DashboardScreen() {
                         <TaskChip
                           key={task.id}
                           task={task}
-                          isDark={isDark}
-                          colors={colors}
                           scale={chipScale}
-                          blink={isDeadlineSoon(task, now)}
+                          blink={isToday}
                           onPress={() => router.push(`/task/${task.id}` as any)}
                         />
                       ))}
