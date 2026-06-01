@@ -258,16 +258,26 @@ function randomBubbleColor(isNeon = false): string {
   return palette[idx];
 }
 
+const NEON_FIRST_COLOR = '#FF1177';
+
 function parseScratchpad(raw: string, isNeon = false): ScratchEntry[] {
-  if (!raw || raw.trim() === '') return [{ text: '', color: randomBubbleColor(isNeon) }];
+  const firstColor = isNeon ? NEON_FIRST_COLOR : randomBubbleColor(false);
+  if (!raw || raw.trim() === '') return [{ text: '', color: firstColor }];
   try {
     const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      // Erste Notiz im Neon-Theme immer auf #FF1177 setzen
+      if (isNeon) parsed[0] = { ...parsed[0], color: NEON_FIRST_COLOR };
+      return parsed;
+    }
   } catch {}
   const palette = isNeon ? BUBBLE_PALETTE_NEON : BUBBLE_PALETTE_NEUTRAL;
   const lines = raw.split('\n').filter((l) => l.trim() !== '' && !l.startsWith('─'));
-  if (lines.length === 0) return [{ text: '', color: randomBubbleColor(isNeon) }];
-  return lines.map((text, i) => ({ text, color: palette[i % palette.length] }));
+  if (lines.length === 0) return [{ text: '', color: firstColor }];
+  return lines.map((text, i) => ({
+    text,
+    color: i === 0 && isNeon ? NEON_FIRST_COLOR : palette[i % palette.length],
+  }));
 }
 
 function serializeScratchpad(entries: ScratchEntry[]): string {
