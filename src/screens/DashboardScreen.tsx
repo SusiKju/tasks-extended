@@ -15,7 +15,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useStore } from '../store';
-import { useTheme, ThemeColors, readableTextOn } from '../utils/theme';
+import { useTheme, ThemeColors, readableTextOn, neonGlow } from '../utils/theme';
 import { uploadScratchpad } from '../services/googleDriveNotes';
 import { useGoogleDriveNotesSync } from '../hooks/useGoogleDriveNotesSync';
 import { useGoogleTasksSync } from '../hooks/useGoogleTasksSync';
@@ -141,6 +141,7 @@ function TaskChip({
   scale?: 'lg' | 'md' | 'sm';
   blink?: boolean;
 }) {
+  const { isDark } = useTheme();
   const label = chipDueLabel(task);
   const isImportant = task.important;
 
@@ -169,6 +170,13 @@ function TaskChip({
   const padH       = scale === 'lg' ? 11 : scale === 'md' ? 9  : 8;
   const chipOpacity= scale === 'sm' ? 0.65 : 1;
 
+  // Neon-Glow wie die aktiven Filter-Chips im Tasks-Tab: Schatten in der
+  // Chip-Farbe, Intensität nach Wichtigkeit (Heute/Überfällig kräftig, Später ohne).
+  // Nur in den Dark-Themes – Light bleibt flach.
+  const glow = isDark
+    ? neonGlow(borderColor, scale === 'lg' ? 'medium' : scale === 'md' ? 'soft' : 'soft')
+    : null;
+
   return (
     <Animated.View style={{ opacity: blinkAnim, maxWidth: '100%' }}>
       <Pressable
@@ -176,6 +184,7 @@ function TaskChip({
           chipStyles.chip,
           { backgroundColor: bgColor, borderColor, opacity: pressed ? 0.7 : chipOpacity,
             paddingVertical: padV, paddingHorizontal: padH },
+          scale !== 'sm' && glow,
         ]}
         onPress={onPress}
       >
@@ -903,6 +912,8 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
     },
     syncBtn: {
       padding: 4,
+      borderRadius: 16,
+      ...(isDark ? neonGlow(c.accentNeon, 'soft') : {}),
     },
 
     section: {},
@@ -929,7 +940,9 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
       borderRadius: 14,
       overflow: 'hidden',
       borderWidth: 1,
-      borderColor: c.border,
+      // Leuchtende Oberfläche wie im Tasks-Tab: dezenter Neon-Rand + soft Glow.
+      borderColor: isDark ? c.accentNeon + '40' : c.border,
+      ...(isDark ? neonGlow(c.accentNeon, 'soft') : {}),
     },
 
     rowDivider: {
