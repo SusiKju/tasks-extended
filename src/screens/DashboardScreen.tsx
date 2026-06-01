@@ -733,7 +733,6 @@ export function DashboardScreen() {
             );
           })()}
         </View>
-        </View>
       )}
 
       {/* ── Posteingang ── */}
