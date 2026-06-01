@@ -280,6 +280,8 @@ export function CreateTaskScreen() {
         <View style={styles.quickRow}>
           {[
             { label: 'Heute', onPress: () => { setDueDate(new Date()); setDueTime(''); } },
+            { label: 'Morgen', onPress: () => { const d = new Date(); d.setDate(d.getDate() + 1); setDueDate(d); setDueTime(''); } },
+            { label: 'Übermorgen', onPress: () => { const d = new Date(); d.setDate(d.getDate() + 2); setDueDate(d); setDueTime(''); } },
             { label: '+1 Std', onPress: () => { const d = new Date(); d.setHours(d.getHours() + 1); setDueDate(d); setDueTime(`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`); } },
             { label: '+2 Std', onPress: () => { const d = new Date(); d.setHours(d.getHours() + 2); setDueDate(d); setDueTime(`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`); } },
             { label: '+3 Std', onPress: () => { const d = new Date(); d.setHours(d.getHours() + 3); setDueDate(d); setDueTime(`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`); } },
@@ -398,10 +400,12 @@ function makeStyles(c: ThemeColors) {
     },
     quickRow: {
       flexDirection: 'row',
+      flexWrap: 'wrap',
       gap: 6,
     },
     quickBtn: {
-      flex: 1,
+      flexGrow: 1,
+      flexBasis: '30%',
       alignItems: 'center',
       paddingVertical: 7,
       borderRadius: 8,

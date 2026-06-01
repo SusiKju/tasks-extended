@@ -32,6 +32,17 @@
           }
         ]
       }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"/Users/matthiasredmann/.claude/skills/sightdeck-ai/scripts/detect_test_tool.py\""
+          }
+        ]
+      }
     ]
   }
 }
