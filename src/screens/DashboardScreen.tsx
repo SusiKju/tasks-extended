@@ -263,40 +263,18 @@ function Scratchpad({
   const lineCount = Math.max(7, value.split('\n').length + 3);
 
   return (
-    <View style={[padStyles.outer, {
-      backgroundColor: paperBg,
-      shadowColor: isDark ? '#000' : '#C8B89A',
-    }]}>
-      {/* Spiralbindung oben */}
-      <View style={[padStyles.bindingStrip, { backgroundColor: isDark ? '#2A2620' : '#E8E0C8' }]}>
-        {[...Array(5)].map((_, i) => (
-          <View key={i} style={[padStyles.spiral, {
-            borderColor: isDark ? '#555' : '#B0A898',
-            backgroundColor: isDark ? '#1A1814' : '#FFFEF0',
-          }]} />
-        ))}
-      </View>
-
-      {/* Papier mit Linien */}
+    <View style={[padStyles.outer, { backgroundColor: paperBg }]}>
       <View style={padStyles.paper}>
-        {/* Randlinie */}
-        <View style={[padStyles.margin, { backgroundColor: marginColor, left: PAD_LEFT }]} />
-
-        {/* Horizontale Linien */}
+        <View style={[padStyles.margin, { backgroundColor: marginColor }]} />
         {[...Array(lineCount)].map((_, i) => (
-          <View key={i} style={[padStyles.ruledLine, {
-            top: 8 + i * LINE_H,
-            backgroundColor: lineColor,
-          }]} />
+          <View key={i} style={[padStyles.ruledLine, { top: i * LINE_H, backgroundColor: lineColor }]} />
         ))}
-
-        {/* Eingabe */}
         <TextInput
-          style={[padStyles.input, { color: textColor, paddingLeft: PAD_LEFT + 8 }]}
+          style={[padStyles.input, { color: textColor }]}
           value={value}
           onChangeText={handleChange}
           onKeyPress={handleKeyPress}
-          placeholder={'Gedanken, Ideen…'}
+          placeholder={'Gedanken…'}
           placeholderTextColor={isDark ? '#5A5040' : '#C8BFA0'}
           multiline
           textAlignVertical="top"
@@ -310,33 +288,16 @@ function Scratchpad({
 const padStyles = StyleSheet.create({
   outer: {
     borderRadius: 6,
-    shadowOffset: { width: 3, height: 3 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 4,
     overflow: 'hidden',
-  },
-  bindingStrip: {
-    height: 18,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-evenly',
-    paddingHorizontal: 20,
-  },
-  spiral: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    borderWidth: 2,
   },
   paper: {
     position: 'relative',
-    minHeight: 130,
   },
   margin: {
     position: 'absolute',
     top: 0,
     bottom: 0,
+    left: 28,
     width: 1.5,
   },
   ruledLine: {
@@ -346,13 +307,12 @@ const padStyles = StyleSheet.create({
     height: 1,
   },
   input: {
-    fontSize: 13,
+    fontSize: 12,
     lineHeight: LINE_H,
-    paddingTop: 8,
-    paddingRight: 10,
-    paddingBottom: 12,
-    minHeight: 130,
-    fontFamily: undefined, // system font
+    paddingTop: 4,
+    paddingLeft: 36,
+    paddingRight: 8,
+    paddingBottom: 6,
   },
 });
 
