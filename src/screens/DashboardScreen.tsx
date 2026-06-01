@@ -591,13 +591,13 @@ export function DashboardScreen() {
     syncBirthdays().catch(() => {});
   }, [settings.googleAccessToken, settings.googleBirthdaysEnabled, syncBirthdays]);
 
-  // Solange heute jemand Geburtstag hat, pulsiert die Card.
+  // Solange heute jemand Geburtstag hat, pulsiert die Card – dezent und langsam.
   useEffect(() => {
     if (todayBirthdays.length === 0) { birthdayBlinkAnim.setValue(1); return; }
     const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(birthdayBlinkAnim, { toValue: 0.35, duration: 650, useNativeDriver: true }),
-        Animated.timing(birthdayBlinkAnim, { toValue: 1,    duration: 650, useNativeDriver: true }),
+        Animated.timing(birthdayBlinkAnim, { toValue: 0.7, duration: 1100, useNativeDriver: true }),
+        Animated.timing(birthdayBlinkAnim, { toValue: 1,   duration: 1100, useNativeDriver: true }),
       ])
     );
     loop.start();
@@ -611,18 +611,15 @@ export function DashboardScreen() {
       showsVerticalScrollIndicator={false}
     >
 
-      {/* ── Geburtstage: ganz oben, prominent, blinkend ── */}
+      {/* ── Geburtstage: ganz oben, dezent, sanft pulsierend ── */}
       {todayBirthdays.length > 0 && (
         <Animated.View style={[styles.birthdayCard, { opacity: birthdayBlinkAnim }]}>
           <Text style={styles.birthdayIcon}>🎂</Text>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.birthdayHeading}>Geburtstag heute!</Text>
-            {todayBirthdays.map((b) => (
-              <Text key={b.id} style={styles.birthdayText} numberOfLines={1}>
-                {b.name}{b.year != null ? ` (wird ${new Date().getFullYear() - b.year})` : ''}
-              </Text>
-            ))}
-          </View>
+          <Text style={styles.birthdayText} numberOfLines={1}>
+            {todayBirthdays
+              .map((b) => `${b.name}${b.year != null ? ` (${new Date().getFullYear() - b.year})` : ''}`)
+              .join(', ')}
+          </Text>
         </Animated.View>
       )}
 
@@ -956,30 +953,23 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
       paddingHorizontal: 16,
     },
 
-    // Birthday – ganz oben, prominent, blinkend
+    // Birthday – ganz oben, dezent und schlank
     birthdayCard: {
       flexDirection: 'row',
       alignItems: 'center',
-      backgroundColor: isDark ? 'rgba(255,149,0,0.18)' : '#FFE0B2',
+      backgroundColor: isDark ? 'rgba(255,149,0,0.10)' : '#FFF3E0',
       marginHorizontal: 16,
       marginTop: 4,
-      marginBottom: 8,
-      borderRadius: 14,
-      padding: 16,
-      gap: 12,
-      borderWidth: 2,
-      borderColor: '#FF9500',
+      marginBottom: 6,
+      borderRadius: 10,
+      paddingVertical: 8,
+      paddingHorizontal: 12,
+      gap: 8,
+      borderLeftWidth: 3,
+      borderLeftColor: '#FF9500',
     },
-    birthdayIcon: { fontSize: 30 },
-    birthdayHeading: {
-      fontSize: 15,
-      fontWeight: '800',
-      color: '#FF9500',
-      textTransform: 'uppercase',
-      letterSpacing: 0.5,
-      marginBottom: 2,
-    },
-    birthdayText: { fontSize: 16, fontWeight: '700', color: isDark ? '#FFC06A' : '#7A4100' },
+    birthdayIcon: { fontSize: 16 },
+    birthdayText: { flex: 1, fontSize: 13, fontWeight: '600', color: isDark ? '#FFC06A' : '#7A4100' },
 
     // Mail
     mailRow: {
