@@ -54,7 +54,7 @@ const DARK_NEON: ThemeColors = {
   surfaceHigh:   '#0E0E28',   // deutlich heller als surface
   text:          '#DCDCEE',   // gedämpftes kühles Weiß (weniger Blendung auf Schwarz)
   textSecondary: '#9090CC',   // lesbares Blau-Lila (war viel zu dunkel)
-  textMuted:     '#383858',   // sichtbar, aber zurückgezogen
+  textMuted:     '#7B7BBB',   // WCAG: 4.85:1 auf surfaceHigh (war #383858 → 1.7:1)
   accent:        '#2299FF',   // elektrisches Blau
   accentNeon:    '#00EEFF',   // volles Cyan-Neon
   success:       '#00FF88',   // Neon-Grün
@@ -65,7 +65,7 @@ const DARK_NEON: ThemeColors = {
   tabBarBorder:  '#16163A',
   header:        '#02020A',
   inputBackground: '#0E0E28',
-  placeholder:   '#2A2A50',
+  placeholder:   '#7272D8',   // WCAG: 4.60:1 auf inputBackground (war #2A2A50 → 1.4:1)
   glowAccent:  'rgba(0, 238, 255, 0.65)',
   glowDanger:  'rgba(255, 17, 119, 0.65)',
   glowSuccess: 'rgba(0, 255, 136, 0.55)',
@@ -77,7 +77,7 @@ const DARK_SOFT: ThemeColors = {
   surfaceHigh: '#2C2C2C',
   text: '#F5F5F5',
   textSecondary: '#B0B0B0',  // war #888 – deutlich heller
-  textMuted: '#787878',      // war #505 – besser lesbar
+  textMuted: '#969696',      // WCAG: 4.72:1 auf surfaceHigh (war #787878 → 3.2:1)
   accent: '#5BA8FF',
   accentNeon: '#5BA8FF',
   success: '#4CC98A',
@@ -88,7 +88,7 @@ const DARK_SOFT: ThemeColors = {
   tabBarBorder: '#3A3A3A',
   header: '#141414',
   inputBackground: '#202020',
-  placeholder: '#686868',
+  placeholder: '#888888',    // WCAG: 4.60:1 auf inputBackground (war #686868 → 2.9:1)
   glowAccent: 'transparent',
   glowDanger: 'transparent',
   glowSuccess: 'transparent',
@@ -103,7 +103,7 @@ const DARK_MONO: ThemeColors = {
   surfaceHigh:   '#181818',
   text:          '#FFFFFF',   // reines Weiß
   textSecondary: '#B4B4B4',
-  textMuted:     '#6A6A6A',
+  textMuted:     '#858585',   // WCAG: 4.81:1 auf surfaceHigh (war #6A6A6A → 3.3:1)
   accent:        '#FFFFFF',
   accentNeon:    '#FFFFFF',   // weißer „Neon"-Akzent + Glow
   success:       '#DADADA',   // helles Grau
@@ -114,7 +114,7 @@ const DARK_MONO: ThemeColors = {
   tabBarBorder:  '#2A2A2A',
   header:        '#000000',
   inputBackground: '#181818',
-  placeholder:   '#555555',
+  placeholder:   '#818181',   // WCAG: 4.56:1 auf inputBackground (war #555555 → 2.4:1)
   glowAccent:  'rgba(255, 255, 255, 0.55)',
   glowDanger:  'rgba(255, 255, 255, 0.45)',
   glowSuccess: 'rgba(255, 255, 255, 0.45)',
