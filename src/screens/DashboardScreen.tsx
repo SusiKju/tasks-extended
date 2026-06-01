@@ -141,7 +141,7 @@ function TaskChip({
   scale?: 'lg' | 'md' | 'sm';
   blink?: boolean;
 }) {
-  const { isDark } = useTheme();
+  const { isDark, isMono } = useTheme();
   const label = chipDueLabel(task);
   const isImportant = task.important;
 
@@ -162,7 +162,11 @@ function TaskChip({
   // Farbe rein nach Priorität: wichtige Tasks rot, normale blau.
   // Dark-Themes: Tasks-Tab-Stil – keine Füllung, nur Rahmen + Schrift in der
   // Chip-Farbe (+ Glow). Light: solide Füllung mit lesbarem Text wie bisher.
-  const chipColor   = isImportant ? C.important : C.tasks;
+  // Schwarz-Weiß-Theme: alles monochrom (weiß) – einzige Ausnahme bleibt Rot
+  // für wichtige Tasks, die heute fällig sind (= blink).
+  const chipColor   = isMono
+    ? (blink ? C.important : '#FFFFFF')
+    : (isImportant ? C.important : C.tasks);
   const borderColor = chipColor;
   const bgColor     = isDark ? chipColor + '18' : chipColor;
   const textColor   = isDark ? chipColor : readableTextOn(chipColor);
@@ -394,7 +398,7 @@ const padStyles = StyleSheet.create({
 export function DashboardScreen() {
   const router = useRouter();
   const { tasks, notes, settings, scratchpad, scratchpadUpdatedAt, setScratchpad, birthdays: storeBirthdays } = useStore();
-  const { colors, isDark, theme } = useTheme();
+  const { colors, isDark, theme, mono } = useTheme();
   const { syncScratchpad, syncDriveNotes } = useGoogleDriveNotesSync();
   const { syncTasks } = useGoogleTasksSync();
   const { syncBirthdays } = useGoogleContactsBirthdaysSync();
@@ -739,7 +743,7 @@ export function DashboardScreen() {
           <SectionLabel title="Termine der nächsten 2 Tage" colors={colors} />
           {calLoading ? (
             <View style={[styles.card, styles.loadingRow]}>
-              <ActivityIndicator color={C.calendar} size="small" />
+              <ActivityIndicator color={mono(C.calendar)} size="small" />
             </View>
           ) : calEvents.length === 0 ? (
             <View style={[styles.card, styles.emptyRow]}>
@@ -754,7 +758,7 @@ export function DashboardScreen() {
 
             const renderEvent = (event: CalendarEvent, i: number, arr: CalendarEvent[], prominent: boolean) => {
               const { time } = formatEventTime(event);
-              const eventColor = event.color ?? C.calendar;
+              const eventColor = mono(event.color ?? C.calendar);
               return (
                 <View
                   key={event.id}
@@ -884,7 +888,7 @@ export function DashboardScreen() {
             contentContainerStyle={styles.noteScroll}
           >
             {recentNotes.map((note) => (
-              <View key={note.id} style={[styles.noteCard, { backgroundColor: note.color }]}>
+              <View key={note.id} style={[styles.noteCard, { backgroundColor: mono(note.color) }]}>
                 {note.title ? (
                   <Text style={styles.noteCardTitle} numberOfLines={1}>
                     {note.title}

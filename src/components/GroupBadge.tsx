@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Group } from '../types';
+import { useTheme } from '../utils/theme';
 
 interface Props {
   group: Group;
@@ -8,10 +9,12 @@ interface Props {
 }
 
 export function GroupBadge({ group, small = false }: Props) {
+  const { mono } = useTheme();
+  const color = mono(group.color);
   return (
-    <View style={[styles.badge, { backgroundColor: group.color + '22', borderColor: group.color }, small && styles.small]}>
-      <View style={[styles.dot, { backgroundColor: group.color }]} />
-      <Text style={[styles.label, { color: group.color }, small && styles.smallLabel]}>
+    <View style={[styles.badge, { backgroundColor: color + '22', borderColor: color }, small && styles.small]}>
+      <View style={[styles.dot, { backgroundColor: color }]} />
+      <Text style={[styles.label, { color }, small && styles.smallLabel]}>
         {group.name}
       </Text>
     </View>

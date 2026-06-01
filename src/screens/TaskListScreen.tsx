@@ -40,7 +40,7 @@ export function TaskListScreen() {
   const [search, setSearch] = useState('');
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const { colors, isDark } = useTheme();
+  const { colors, isDark, mono } = useTheme();
   const styles = useMemo(() => makeStyles(colors, isDark), [colors, isDark]);
 
   const toggleSelection = useCallback((id: string) => {
@@ -238,17 +238,17 @@ export function TaskListScreen() {
             style={[
               styles.chip,
               selectedGroupId === g.id && {
-                backgroundColor: g.color + '22',
-                borderColor: g.color,
+                backgroundColor: mono(g.color) + '22',
+                borderColor: mono(g.color),
               },
             ]}
             onPress={() => setSelectedGroupId(g.id === selectedGroupId ? null : g.id)}
           >
-            <View style={[styles.chipDot, { backgroundColor: g.color }]} />
+            <View style={[styles.chipDot, { backgroundColor: mono(g.color) }]} />
             <Text
               style={[
                 styles.chipText,
-                selectedGroupId === g.id && { color: g.color, fontWeight: '600' },
+                selectedGroupId === g.id && { color: mono(g.color), fontWeight: '600' },
               ]}
             >
               {g.name}
@@ -279,7 +279,7 @@ export function TaskListScreen() {
           )}
           renderSectionHeader={({ section }) => (
             <View style={styles.sectionHeader}>
-              <View style={[styles.sectionDot, { backgroundColor: section.color }]} />
+              <View style={[styles.sectionDot, { backgroundColor: mono(section.color) }]} />
               <Text style={styles.sectionTitle}>{section.title}</Text>
               <Text style={styles.sectionCount}>{section.data.length}</Text>
             </View>

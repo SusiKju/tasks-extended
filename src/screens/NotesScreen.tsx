@@ -54,6 +54,7 @@ interface NoteModalProps {
 }
 
 function NoteModal({ visible, note, onSave, onClose, colors, styles }: NoteModalProps) {
+  const { mono } = useTheme();
   const groups = useStore((s) => s.groups);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
@@ -227,7 +228,7 @@ function NoteModal({ visible, note, onSave, onClose, colors, styles }: NoteModal
             {groups.map((g) => (
               <Pressable
                 key={g.id}
-                style={[styles.groupChip, { borderColor: g.color, backgroundColor: selectedGroupId === g.id ? g.color : colors.surface }]}
+                style={[styles.groupChip, { borderColor: mono(g.color), backgroundColor: selectedGroupId === g.id ? mono(g.color) : colors.surface }]}
                 onPress={() => setSelectedGroupId(g.id)}
               >
                 <Text style={[styles.groupChipText, { color: selectedGroupId === g.id ? '#fff' : colors.text }]}>{g.name}</Text>
@@ -253,6 +254,7 @@ interface NoteCardProps {
 }
 
 function NoteCard({ note, onPress, onLongPress, onToggleItem, groupName, groupColor, styles }: NoteCardProps) {
+  const { mono } = useTheme();
   const maxItems = note.title ? 3 : 4;
   const [imageUri, setImageUri] = useState<string | null>(null);
 
@@ -270,7 +272,7 @@ function NoteCard({ note, onPress, onLongPress, onToggleItem, groupName, groupCo
 
   return (
     <Pressable
-      style={({ pressed }) => [styles.noteCard, { backgroundColor: note.color }, pressed && { opacity: 0.85 }]}
+      style={({ pressed }) => [styles.noteCard, { backgroundColor: mono(note.color) }, pressed && { opacity: 0.85 }]}
       onPress={onPress}
       onLongPress={onLongPress}
       android_ripple={{ color: 'rgba(0,0,0,0.1)' }}
@@ -338,7 +340,7 @@ function NoteCard({ note, onPress, onLongPress, onToggleItem, groupName, groupCo
       )}
 
       {groupName ? (
-        <View style={[styles.noteGroupBadge, { backgroundColor: groupColor ?? '#888' }]}>
+        <View style={[styles.noteGroupBadge, { backgroundColor: mono(groupColor ?? '#888') }]}>
           <Text style={styles.noteGroupText} numberOfLines={1}>{groupName}</Text>
         </View>
       ) : null}
@@ -361,7 +363,7 @@ function SectionHeader({ label, colors }: { label: string; colors: ThemeColors }
 // ─── Notes Screen ─────────────────────────────────────────────────────────────
 
 export function NotesScreen() {
-  const { colors, isDark } = useTheme();
+  const { colors, isDark, mono } = useTheme();
   const styles = useMemo(() => makeStyles(colors, isDark), [colors, isDark]);
   const { notes, groups, addNote, updateNote, deleteNote } = useStore();
 
@@ -548,7 +550,7 @@ export function NotesScreen() {
             {usedGroups.map((g) => (
               <Pressable
                 key={g.id}
-                style={[styles.groupFilterChip, filterGroupId === g.id && { backgroundColor: g.color }]}
+                style={[styles.groupFilterChip, filterGroupId === g.id && { backgroundColor: mono(g.color) }]}
                 onPress={() => setFilterGroupId(filterGroupId === g.id ? null : g.id)}
               >
                 <Text style={[styles.groupFilterText, { color: filterGroupId === g.id ? '#fff' : colors.textSecondary }]}>{g.name}</Text>

@@ -61,7 +61,7 @@ export function SettingsScreen() {
   const { syncTasks } = useGoogleTasksSync();
   const { syncDriveNotes } = useGoogleDriveNotesSync();
   const { syncBirthdays } = useGoogleContactsBirthdaysSync();
-  const { colors } = useTheme();
+  const { colors, mono } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [loadingCalendar, setLoadingCalendar] = useState(false);
   const [availableCalendars, setAvailableCalendars] = useState<Array<{ id: string; summary: string; primary?: boolean }>>([]);
@@ -660,7 +660,7 @@ export function SettingsScreen() {
             const count = tasks.filter((t) => t.groupId === group.id).length;
             return (
               <View key={group.id} style={styles.groupRow}>
-                <View style={[styles.groupColorStripe, { backgroundColor: group.color }]} />
+                <View style={[styles.groupColorStripe, { backgroundColor: mono(group.color) }]} />
                 <View style={styles.rowContent}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                     <Text style={styles.rowTitle}>{group.name}</Text>

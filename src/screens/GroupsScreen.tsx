@@ -39,7 +39,7 @@ const EMPTY_FORM: GroupFormState = { name: '', color: PRESET_COLORS[0], keywords
 
 export function GroupsScreen() {
   const { groups, tasks, addGroup, updateGroup, deleteGroup } = useStore();
-  const { colors, isDark } = useTheme();
+  const { colors, isDark, mono } = useTheme();
   const styles = useMemo(() => makeStyles(colors, isDark), [colors, isDark]);
 
   const [modalVisible, setModalVisible] = useState(false);
@@ -125,7 +125,7 @@ export function GroupsScreen() {
         }
         renderItem={({ item: group }) => (
           <View style={styles.groupRow}>
-            <View style={[styles.colorStripe, { backgroundColor: group.color }]} />
+            <View style={[styles.colorStripe, { backgroundColor: mono(group.color) }]} />
 
             <View style={styles.groupInfo}>
               <View style={styles.groupNameRow}>

@@ -21,7 +21,7 @@ import { GroupBadge } from '../components/GroupBadge';
 import { AttachmentPreview } from '../components/AttachmentPreview';
 import { formatDate, isOverdue, isDueToday, toGoogleDateISO } from '../utils/dateFormat';
 import { DatePickerModal } from '../components/DatePickerModal';
-import { useTheme, ThemeColors } from '../utils/theme';
+import { useTheme, ThemeColors, toGray } from '../utils/theme';
 import {
   createCalendarEvent,
   updateCalendarEvent,
@@ -37,10 +37,10 @@ export function TaskDetailScreen() {
 
   const { tasks, groups, settings, updateTask, deleteTask, toggleTask } = useStore();
   const { syncTasks } = useGoogleTasksSync();
-  const { colors } = useTheme();
+  const { colors, isMono, mono } = useTheme();
   const task = tasks.find((t) => t.id === id);
 
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const styles = useMemo(() => makeStyles(colors, isMono), [colors, isMono]);
 
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(task?.title ?? '');
@@ -284,7 +284,7 @@ export function TaskDetailScreen() {
         <View style={styles.topActions}>
           {!editing ? (
             <TouchableOpacity onPress={() => setEditing(true)} style={styles.iconBtn}>
-              <Ionicons name="pencil-outline" size={20} color="#4F86F7" />
+              <Ionicons name="pencil-outline" size={20} color={mono('#4F86F7')} />
             </TouchableOpacity>
           ) : (
             <>
@@ -350,11 +350,11 @@ export function TaskDetailScreen() {
               {groups.map((g) => (
                 <TouchableOpacity
                   key={g.id}
-                  style={[styles.metaChip, groupId === g.id && { backgroundColor: g.color + '22', borderColor: g.color }]}
+                  style={[styles.metaChip, groupId === g.id && { backgroundColor: mono(g.color) + '22', borderColor: mono(g.color) }]}
                   onPress={() => setGroupId(g.id)}
                 >
-                  <View style={[styles.dot, { backgroundColor: g.color }]} />
-                  <Text style={[styles.metaChipText, groupId === g.id && { color: g.color }]}>{g.name}</Text>
+                  <View style={[styles.dot, { backgroundColor: mono(g.color) }]} />
+                  <Text style={[styles.metaChipText, groupId === g.id && { color: mono(g.color) }]}>{g.name}</Text>
                 </TouchableOpacity>
               ))}
             </ScrollView>
@@ -423,7 +423,7 @@ export function TaskDetailScreen() {
             style={[styles.importantToggle, important && styles.importantToggleActive]}
             onPress={() => setImportant((v) => !v)}
           >
-            <Ionicons name={important ? 'flag' : 'flag-outline'} size={15} color={important ? '#fff' : '#FF3B30'} />
+            <Ionicons name={important ? 'flag' : 'flag-outline'} size={15} color={important ? '#fff' : mono('#FF3B30')} />
             <Text style={[styles.importantToggleText, important && styles.importantToggleTextActive]}>
               {important ? 'Als wichtig markiert' : 'Als wichtig markieren'}
             </Text>
@@ -459,7 +459,10 @@ export function TaskDetailScreen() {
   );
 }
 
-function makeStyles(c: ThemeColors) {
+function makeStyles(c: ThemeColors, isMono = false) {
+  // Schwarz-Weiß-Theme: das „Wichtig"-Rot wird zur Graustufe. Rot bleibt dort
+  // nur für wichtige, heute fällige Tasks auf dem Dashboard erhalten.
+  const red = isMono ? toGray('#FF3B30') : '#FF3B30';
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: c.background },
     content: { padding: 16, gap: 12, paddingBottom: 60 },
@@ -535,7 +538,7 @@ function makeStyles(c: ThemeColors) {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 6,
-      backgroundColor: '#FF3B30',
+      backgroundColor: red,
       borderRadius: 10,
       paddingHorizontal: 12,
       paddingVertical: 8,
@@ -559,19 +562,19 @@ function makeStyles(c: ThemeColors) {
       alignItems: 'center',
       gap: 8,
       borderWidth: 1.5,
-      borderColor: '#FF3B30',
+      borderColor: red,
       borderRadius: 10,
       paddingHorizontal: 12,
       paddingVertical: 8,
     },
     importantToggleActive: {
-      backgroundColor: '#FF3B30',
-      borderColor: '#FF3B30',
+      backgroundColor: red,
+      borderColor: red,
     },
     importantToggleText: {
       fontSize: 13,
       fontWeight: '600',
-      color: '#FF3B30',
+      color: red,
     },
     importantToggleTextActive: {
       color: '#fff',

@@ -22,15 +22,15 @@ import { DatePickerModal } from '../components/DatePickerModal';
 import { detectGroup } from '../utils/autoGroup';
 import { createCalendarEvent } from '../services/googleCalendar';
 import { useGoogleTasksSync } from '../hooks/useGoogleTasksSync';
-import { useTheme, ThemeColors } from '../utils/theme';
+import { useTheme, ThemeColors, toGray } from '../utils/theme';
 import { formatDate } from '../utils/dateFormat';
 
 export function CreateTaskScreen() {
   const router = useRouter();
   const { groups, settings, addTask } = useStore();
   const { syncTasks } = useGoogleTasksSync();
-  const { colors } = useTheme();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const { colors, isMono, mono } = useTheme();
+  const styles = useMemo(() => makeStyles(colors, isMono), [colors, isMono]);
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -267,7 +267,7 @@ export function CreateTaskScreen() {
         onPress={() => setImportant((v) => !v)}
         activeOpacity={0.75}
       >
-        <Ionicons name={important ? 'flag' : 'flag-outline'} size={18} color={important ? '#fff' : '#FF3B30'} />
+        <Ionicons name={important ? 'flag' : 'flag-outline'} size={18} color={important ? '#fff' : mono('#FF3B30')} />
         <Text style={[styles.importantBtnText, important && styles.importantBtnTextActive]}>
           {important ? 'Als wichtig markiert' : 'Als wichtig markieren'}
         </Text>
@@ -368,7 +368,9 @@ export function CreateTaskScreen() {
   );
 }
 
-function makeStyles(c: ThemeColors) {
+function makeStyles(c: ThemeColors, isMono = false) {
+  // Schwarz-Weiß-Theme: „Wichtig"-Rot wird zur Graustufe (siehe Dashboard-Regel).
+  const red = isMono ? toGray('#FF3B30') : '#FF3B30';
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: c.background },
     content: { padding: 16, gap: 12, paddingBottom: 60 },
@@ -473,19 +475,19 @@ function makeStyles(c: ThemeColors) {
       gap: 10,
       borderRadius: 12,
       borderWidth: 1.5,
-      borderColor: '#FF3B30',
+      borderColor: red,
       paddingHorizontal: 14,
       paddingVertical: 12,
       backgroundColor: 'transparent',
     },
     importantBtnActive: {
-      backgroundColor: '#FF3B30',
-      borderColor: '#FF3B30',
+      backgroundColor: red,
+      borderColor: red,
     },
     importantBtnText: {
       fontSize: 14,
       fontWeight: '600',
-      color: '#FF3B30',
+      color: red,
     },
     importantBtnTextActive: {
       color: '#fff',

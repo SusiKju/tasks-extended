@@ -158,6 +158,20 @@ export function readableTextOn(
   return contrast(luminance(dark), lb) >= contrast(luminance(light), lb) ? dark : light;
 }
 
+/**
+ * Wandelt eine beliebige Farbe in ihren Graustufen-Wert mit identischer
+ * relativer Luminanz (WCAG). Damit bleiben unterschiedliche Inhaltsfarben
+ * (Gruppen, Notizen) im Schwarz-Weiß-Theme als unterschiedlich helle Grautöne
+ * unterscheidbar, ohne Farbe zu tragen.
+ */
+export function toGray(hex: string): string {
+  const Y = luminance(hex);
+  const s = Y <= 0.0031308 ? Y * 12.92 : 1.055 * Math.pow(Y, 1 / 2.4) - 0.055;
+  const v = Math.max(0, Math.min(255, Math.round(s * 255)));
+  const hh = v.toString(16).padStart(2, '0').toUpperCase();
+  return `#${hh}${hh}${hh}`;
+}
+
 export function neonGlow(color: string, intensity: 'soft' | 'medium' | 'hard' = 'medium') {
   const cfg = {
     soft:   { opacity: 0.55, radius: 12 },
@@ -182,12 +196,22 @@ export function neonBorder(color: string) {
   };
 }
 
-export function useTheme(): { colors: ThemeColors; theme: Theme; isDark: boolean } {
+export function useTheme(): {
+  colors: ThemeColors;
+  theme: Theme;
+  isDark: boolean;
+  isMono: boolean;
+  /** Im Schwarz-Weiß-Theme jede Farbe zu Graustufe, sonst unverändert. */
+  mono: (hex: string) => string;
+} {
   const theme = useStore((s) => s.settings.theme ?? 'light');
   const colors = useMemo(() => THEMES[theme] ?? LIGHT, [theme]);
+  const isMono = theme === 'dark-mono';
   return {
     colors,
     theme,
     isDark: theme === 'dark-neon' || theme === 'dark-soft' || theme === 'dark-mono',
+    isMono,
+    mono: (hex: string) => (isMono ? toGray(hex) : hex),
   };
 }
