@@ -140,38 +140,41 @@ function TaskChip({
   task,
   onPress,
   isDark,
+  colors,
 }: {
   task: Task;
   onPress: () => void;
   isDark: boolean;
+  colors: ThemeColors;
 }) {
   const urgent = isUrgent(task);
   const label = chipDueLabel(task);
   const isImportant = task.important;
 
-  // Im Dunkelmodus: aufgehelltes Rot mit gutem Kontrast
-  // Reines #FF3B30 auf #141414 hat zu wenig Helligkeit → #FF8A80 ist deutlich lesbarer
-  const importantText  = isDark ? '#FF8A80' : C.important;
-  const importantBg    = isDark ? 'rgba(255,80,60,0.22)' : C.important + '12';
-  const importantBorder= isDark ? 'rgba(255,100,80,0.65)' : C.important + '50';
+  // Farben direkt aus dem Theme – funktioniert für alle Themes korrekt:
+  // Neon: danger=#FF1177 (Magenta), warning=#FFE600, accentNeon=#00EEFF
+  // Dark-Soft: danger=#FF5F57, warning=#F5A623
+  // Light: danger=#FF3B30
+  const dangerColor = colors.danger;
+  const taskColor   = isDark ? colors.accentNeon : C.tasks;
 
   const bgColor = isImportant
-    ? importantBg
+    ? dangerColor + (isDark ? '28' : '14')
     : urgent
-    ? (isDark ? 'rgba(255,80,60,0.18)' : C.overdue + '10')
-    : C.tasks + '10';
+    ? dangerColor + (isDark ? '22' : '10')
+    : taskColor   + (isDark ? '18' : '10');
 
   const borderColor = isImportant
-    ? importantBorder
+    ? dangerColor + (isDark ? 'AA' : '55')
     : urgent
-    ? (isDark ? 'rgba(255,100,80,0.55)' : C.overdue + '40')
-    : C.tasks + '35';
+    ? dangerColor + (isDark ? '88' : '40')
+    : taskColor   + (isDark ? '60' : '35');
 
   const textColor = isImportant
-    ? importantText
+    ? dangerColor
     : urgent
-    ? (isDark ? '#FF8A80' : C.overdue)
-    : C.tasks;
+    ? dangerColor
+    : taskColor;
 
   return (
     <Pressable
@@ -223,26 +226,48 @@ const chipStyles = StyleSheet.create({
 
 interface ScratchEntry { text: string; color: string; }
 
-const BUBBLE_PALETTE = [
+// Neutrale dunkle Palette (Light + Dark-Soft)
+const BUBBLE_PALETTE_NEUTRAL = [
   '#1E3A5F', '#2D1B4E', '#1A3A2E', '#3D1F1F',
   '#1F3D30', '#3D2D1F', '#1F2D3D', '#2D3D1F',
   '#3A1F3A', '#1F3A3A', '#2A2040', '#40201A',
 ];
 
-function randomBubbleColor(): string {
-  return BUBBLE_PALETTE[Math.floor(Math.random() * BUBBLE_PALETTE.length)];
+// Neon-Palette: Magenta + Cyan als dominierende Töne
+const BUBBLE_PALETTE_NEON = [
+  '#2A0028', // tief Magenta
+  '#001F2A', // tief Cyan
+  '#001530', // tief Blau
+  '#1E0018', // knalles Magenta-Dunkel
+  '#00181E', // sattes Cyan-Dunkel
+  '#200028', // lila-Magenta
+  '#002018', // Cyan-Grün
+  '#280010', // Magenta-Rot
+  '#001028', // Blau-Cyan
+  '#180020', // Violett-Neon
+];
+
+let _lastNeonPaletteIdx = -1;
+function randomBubbleColor(isNeon = false): string {
+  const palette = isNeon ? BUBBLE_PALETTE_NEON : BUBBLE_PALETTE_NEUTRAL;
+  // kein zweimal hintereinander die gleiche Farbe
+  let idx: number;
+  do { idx = Math.floor(Math.random() * palette.length); }
+  while (idx === _lastNeonPaletteIdx && palette.length > 1);
+  _lastNeonPaletteIdx = idx;
+  return palette[idx];
 }
 
-function parseScratchpad(raw: string): ScratchEntry[] {
-  if (!raw || raw.trim() === '') return [{ text: '', color: randomBubbleColor() }];
+function parseScratchpad(raw: string, isNeon = false): ScratchEntry[] {
+  if (!raw || raw.trim() === '') return [{ text: '', color: randomBubbleColor(isNeon) }];
   try {
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed) && parsed.length > 0) return parsed;
   } catch {}
-  // Plain-text-Fallback: jede Zeile wird eine Bubble
+  const palette = isNeon ? BUBBLE_PALETTE_NEON : BUBBLE_PALETTE_NEUTRAL;
   const lines = raw.split('\n').filter((l) => l.trim() !== '' && !l.startsWith('─'));
-  if (lines.length === 0) return [{ text: '', color: randomBubbleColor() }];
-  return lines.map((text, i) => ({ text, color: BUBBLE_PALETTE[i % BUBBLE_PALETTE.length] }));
+  if (lines.length === 0) return [{ text: '', color: randomBubbleColor(isNeon) }];
+  return lines.map((text, i) => ({ text, color: palette[i % palette.length] }));
 }
 
 function serializeScratchpad(entries: ScratchEntry[]): string {
@@ -250,14 +275,15 @@ function serializeScratchpad(entries: ScratchEntry[]): string {
 }
 
 function Scratchpad({
-  value, onChange,
+  value, onChange, isDark, colors,
 }: {
   value: string;
   onChange: (t: string) => void;
   isDark: boolean;
   colors: ThemeColors;
 }) {
-  const entries = useMemo(() => parseScratchpad(value), [value]);
+  const isNeon = isDark && colors.accentNeon === '#00EEFF';
+  const entries = useMemo(() => parseScratchpad(value, isNeon), [value, isNeon]);
   const inputRefs = useRef<(any)[]>([]);
 
   const updateEntry = useCallback((idx: number, text: string) => {
@@ -267,10 +293,10 @@ function Scratchpad({
 
   const addEntry = useCallback((afterIdx: number) => {
     const next = [...entries];
-    next.splice(afterIdx + 1, 0, { text: '', color: randomBubbleColor() });
+    next.splice(afterIdx + 1, 0, { text: '', color: randomBubbleColor(isNeon) });
     onChange(serializeScratchpad(next));
     setTimeout(() => inputRefs.current[afterIdx + 1]?.focus(), 40);
-  }, [entries, onChange]);
+  }, [entries, onChange, isNeon]);
 
   const removeEntry = useCallback((idx: number) => {
     if (entries.length <= 1) { updateEntry(0, ''); return; }
@@ -288,7 +314,11 @@ function Scratchpad({
   return (
     <View style={padStyles.container}>
       {entries.map((entry, idx) => (
-        <View key={idx} style={[padStyles.bubble, { backgroundColor: entry.color }]}>
+        <View key={idx} style={[
+          padStyles.bubble,
+          { backgroundColor: entry.color },
+          isNeon && { borderWidth: 1, borderColor: entry.color.slice(0,7) + '80' },
+        ]}>
           <Text style={padStyles.bullet}>•</Text>
           <TextInput
             ref={(r) => { inputRefs.current[idx] = r; }}
@@ -535,6 +565,7 @@ export function DashboardScreen() {
                   key={task.id}
                   task={task}
                   isDark={isDark}
+                  colors={colors}
                   onPress={() => router.push(`/task/${task.id}` as any)}
                 />
               ))}
