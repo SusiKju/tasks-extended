@@ -121,22 +121,16 @@ export async function writePushTriggerAll(): Promise<void> {
   await Promise.all(CHILDREN.map((id) => writePushTrigger(id)));
 }
 
-/** Hört auf Push-Trigger für ein Kind. Gibt Browser-Notification aus. */
-export function subscribeToPushTrigger(childId: ChildId): Unsubscribe {
+/** Hört auf Push-Trigger für ein Kind. Ruft onTrigger() auf wenn ein neuer Trigger ankommt. */
+export function subscribeToPushTrigger(childId: ChildId, onTrigger: () => void): Unsubscribe {
   return onSnapshot(doc(db, 'pushTriggers', childId), (snap) => {
     if (!snap.exists()) return;
     const data = snap.data();
     if (!data?.triggeredAt) return;
-    // Nur neue Trigger zeigen (nicht beim ersten Laden)
     const triggered = new Date(data.triggeredAt).getTime();
     const age = Date.now() - triggered;
     if (age > 60_000) return; // älter als 60s → ignorieren
-    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
-      new Notification(`Hey ${CHILD_NAMES[childId]}! 👋`, {
-        body: 'Schau mal kurz in deine Aufgaben rein.',
-        icon: '/tasks-extended/icons/icon-192x192.png',
-      });
-    }
+    onTrigger();
   });
 }
 

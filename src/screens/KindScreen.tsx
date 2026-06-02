@@ -47,6 +47,7 @@ export default function KindScreen({ onExitChildMode }: Props) {
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState(false);
   const [notifPermission, setNotifPermission] = useState<'granted' | 'denied' | 'default' | 'unsupported'>('unsupported');
+  const [toast, setToast] = useState(false);
 
   // Gespeicherte Kind-ID laden
   useEffect(() => {
@@ -67,7 +68,10 @@ export default function KindScreen({ onExitChildMode }: Props) {
         setNotifPermission(Notification.permission as any);
       });
     }
-    const unsubPush = subscribeToPushTrigger(childId);
+    const unsubPush = subscribeToPushTrigger(childId, () => {
+      setToast(true);
+      setTimeout(() => setToast(false), 5000);
+    });
     return () => { unsubTasks(); unsubPush(); };
   }, [childId]);
 
@@ -141,6 +145,13 @@ export default function KindScreen({ onExitChildMode }: Props) {
           <Ionicons name="lock-closed-outline" size={14} color={colors.textMuted} />
         </TouchableOpacity>
       </View>
+
+      {/* Push-Toast */}
+      {toast && (
+        <View style={s.toast}>
+          <Text style={s.toastText}>👋 Schau mal kurz in deine Aufgaben rein!</Text>
+        </View>
+      )}
 
       {/* Benachrichtigungs-Status */}
       {notifPermission === 'default' && (
@@ -228,6 +239,12 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
     headerTitle: { fontSize: 26, fontWeight: '800', color: colors.text },
     headerSub: { fontSize: 14, color: colors.textSecondary, marginTop: 4 },
     pinBtn: { position: 'absolute', top: 60, right: 20, padding: 8, opacity: 0.4 },
+    // Toast
+    toast: {
+      backgroundColor: colors.accentNeon, padding: 14, paddingHorizontal: 20,
+      alignItems: 'center',
+    },
+    toastText: { color: '#000', fontWeight: '700', fontSize: 15 },
     // Benachrichtigungs-Banner
     notifBanner: {
       flexDirection: 'row', alignItems: 'center', gap: 8,
