@@ -772,6 +772,9 @@ export function DashboardScreen() {
             const renderEvent = (event: CalendarEvent, i: number, arr: CalendarEvent[], prominent: boolean) => {
               const { time } = formatEventTime(event);
               const eventColor = mono(event.color ?? C.calendar);
+              // Mono-Theme: echte Kalenderfarbe als Punkt zeigen (nicht graustufen),
+              // damit die Kategorie auf einen Blick erkennbar bleibt (TE-86).
+              const realColor = event.color ?? C.calendar;
               // Dark-Mono: Termintext & Zeit immer strahlend weiß – das gedämpfte
               // Grau (textSecondary) ist auf Schwarz schlecht lesbar (TE-88).
               const eventTextColor = isMono
@@ -785,12 +788,21 @@ export function DashboardScreen() {
                     i < arr.length - 1 && styles.rowDivider,
                   ]}
                 >
-                  {/* Farbbalken */}
-                  <View style={[styles.calBar, {
-                    backgroundColor: eventColor,
-                    width: prominent ? 4 : 3,
-                    opacity: prominent ? 1 : 0.6,
-                  }]} />
+                  {/* Mono: farbiger Punkt (echte Kalenderfarbe); sonst Farbbalken */}
+                  {isMono ? (
+                    <View style={[styles.calDot, {
+                      backgroundColor: realColor,
+                      width: prominent ? 10 : 8,
+                      height: prominent ? 10 : 8,
+                      opacity: prominent ? 1 : 0.7,
+                    }]} />
+                  ) : (
+                    <View style={[styles.calBar, {
+                      backgroundColor: eventColor,
+                      width: prominent ? 4 : 3,
+                      opacity: prominent ? 1 : 0.6,
+                    }]} />
+                  )}
                   {/* Zeit */}
                   <View style={prominent ? styles.calTimeLg : styles.calTimeSm}>
                     <Text style={[
@@ -1085,6 +1097,7 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
     calHourLg: { fontSize: 15, fontWeight: '700' },
     calHourSm: { fontSize: 12, fontWeight: '500' },
     calBar: { borderRadius: 2, alignSelf: 'stretch', minHeight: 24 },
+    calDot: { borderRadius: 999, alignSelf: 'center' },
     calTitleLg: { fontSize: 14, fontWeight: '600' },
     calTitleSm: { fontSize: 12, fontWeight: '400' },
     calSub: { fontSize: 11, marginTop: 2 },
