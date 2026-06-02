@@ -33,17 +33,10 @@
       "googleServicesFile": "./google-services.json"
     },
     "updates": {
-      "url": "https://u.expo.dev/d2992d41-b8a8-42de-b1d9-f6848a6485b6",
-      "enabled": true,
-      "checkAutomatically": "ON_LOAD",
-      "fallbackToCacheTimeout": 0
-    },
-    "runtimeVersion": {
-      "policy": "appVersion"
+      "enabled": false
     },
     "plugins": [
       "expo-router",
-      "expo-updates",
       [
         "expo-notifications",
         {
