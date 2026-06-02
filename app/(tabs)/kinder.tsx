@@ -108,7 +108,12 @@ export default function KinderScreen() {
   const handleSendNow = useCallback(async () => {
     setSending(true);
     try {
+      // Web: Firestore-Trigger (App muss offen sein)
+      // Native: Expo Push Service (echter Hintergrund-Push)
       await writePushTriggerAll();
+      if (Platform.OS !== 'web') {
+        await sendReminderToAllChildren().catch(() => {});
+      }
       crossInfo('✓ Push gesendet', 'Alle Kinder wurden benachrichtigt.');
     } catch (e: any) {
       crossInfo('Fehler', e?.message ?? 'Push konnte nicht gesendet werden.');
@@ -179,6 +184,9 @@ export default function KinderScreen() {
             onPress={async () => {
               try {
                 await writePushTrigger(selectedChild);
+                if (Platform.OS !== 'web') {
+                  await sendReminderToChild(selectedChild).catch(() => {});
+                }
                 crossInfo('✓ Push gesendet', `${CHILD_NAMES[selectedChild]} wurde benachrichtigt.`);
               } catch (e: any) {
                 crossInfo('Fehler', e?.message ?? 'Push fehlgeschlagen.');
