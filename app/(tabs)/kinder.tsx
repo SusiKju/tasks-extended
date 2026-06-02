@@ -8,7 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../src/utils/theme';
 import {
   ChildId, CHILDREN, CHILD_NAMES, ChildTask,
-  subscribeToChildTasks, addTask, deleteTask,
+  subscribeToChildTasks, addTask, updateTask, deleteTask,
   getReminderTimes, setReminderTimes,
 } from '../../src/services/kinderTasks';
 import { sendReminderToAllChildren } from '../../src/services/pushNotifications';
@@ -31,6 +31,7 @@ export default function KinderScreen() {
   const [sending, setSending] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [setupModalVisible, setSetupModalVisible] = useState(false);
+  const [editingTask, setEditingTask] = useState<{ id: string; title: string } | null>(null);
 
   // Firestore-Listener für alle Kinder
   useEffect(() => {
@@ -66,6 +67,12 @@ export default function KinderScreen() {
       { text: 'Löschen', style: 'destructive', onPress: () => deleteTask(selectedChild, taskId) },
     ]);
   }, [selectedChild]);
+
+  const handleSaveEdit = useCallback(async () => {
+    if (!editingTask || !editingTask.title.trim()) return;
+    await updateTask(selectedChild, editingTask.id, { title: editingTask.title.trim() });
+    setEditingTask(null);
+  }, [selectedChild, editingTask]);
 
   const handleSaveTimes = useCallback(async () => {
     const times = timesInput.split(',').map((t) => t.trim()).filter(Boolean);
@@ -153,6 +160,9 @@ export default function KinderScreen() {
               color={task.done ? colors.success : colors.textMuted}
             />
             <Text style={[s.taskTitle, task.done && s.taskDone]}>{task.title}</Text>
+            <TouchableOpacity onPress={() => setEditingTask({ id: task.id, title: task.title })}>
+              <Ionicons name="pencil-outline" size={18} color={colors.accentNeon} />
+            </TouchableOpacity>
             <TouchableOpacity onPress={() => handleDeleteTask(task.id)}>
               <Ionicons name="trash-outline" size={18} color={colors.danger} />
             </TouchableOpacity>
@@ -185,6 +195,27 @@ export default function KinderScreen() {
           <Text style={s.timesText}>{reminderTimes.join('  ·  ')}</Text>
         )}
       </View>
+
+      {/* Edit-Modal */}
+      <Modal visible={!!editingTask} transparent animationType="fade">
+        <Pressable style={s.modalOverlay} onPress={() => setEditingTask(null)}>
+          <Pressable style={s.modalBox} onPress={() => {}}>
+            <Text style={s.modalTitle}>Aufgabe bearbeiten</Text>
+            <TextInput
+              style={s.input}
+              value={editingTask?.title ?? ''}
+              onChangeText={(t) => setEditingTask((e) => e ? { ...e, title: t } : e)}
+              autoFocus
+              returnKeyType="done"
+              onSubmitEditing={handleSaveEdit}
+              placeholderTextColor={colors.placeholder}
+            />
+            <TouchableOpacity style={s.saveBtn} onPress={handleSaveEdit}>
+              <Text style={s.saveBtnText}>Speichern</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {/* Kinder-Gerät einrichten */}
       <TouchableOpacity style={s.setupBtn} onPress={() => setSetupModalVisible(true)}>
