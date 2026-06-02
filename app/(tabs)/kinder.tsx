@@ -1,0 +1,247 @@
+import React, { useEffect, useState, useCallback } from 'react';
+import {
+  View, Text, StyleSheet, ScrollView, TouchableOpacity,
+  TextInput, Alert, ActivityIndicator, RefreshControl,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '../../src/utils/theme';
+import {
+  ChildId, CHILDREN, CHILD_NAMES, ChildTask,
+  subscribeToChildTasks, addTask, deleteTask,
+  getReminderTimes, setReminderTimes,
+} from '../../src/services/kinderTasks';
+import { sendReminderToAllChildren } from '../../src/services/pushNotifications';
+import { format } from 'date-fns';
+
+const TODAY = format(new Date(), 'yyyy-MM-dd');
+
+export default function KinderScreen() {
+  const { colors } = useTheme();
+  const s = styles(colors);
+
+  const [selectedChild, setSelectedChild] = useState<ChildId>('lenny');
+  const [tasksByChild, setTasksByChild] = useState<Record<ChildId, ChildTask[]>>({
+    lenny: [], emil: [], hannes: [], liddy: [],
+  });
+  const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [reminderTimes, setReminderTimesState] = useState<string[]>(['15:00', '17:00']);
+  const [editingTimes, setEditingTimes] = useState(false);
+  const [timesInput, setTimesInput] = useState('15:00, 17:00');
+  const [sending, setSending] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Firestore-Listener für alle Kinder
+  useEffect(() => {
+    const unsubs = CHILDREN.map((childId) =>
+      subscribeToChildTasks(childId, TODAY, (tasks) => {
+        setTasksByChild((prev) => ({ ...prev, [childId]: tasks }));
+      })
+    );
+    return () => unsubs.forEach((u) => u());
+  }, []);
+
+  useEffect(() => {
+    getReminderTimes().then((times) => {
+      setReminderTimesState(times);
+      setTimesInput(times.join(', '));
+    });
+  }, []);
+
+  const handleAddTask = useCallback(async () => {
+    if (!newTaskTitle.trim()) return;
+    await addTask(selectedChild, {
+      title: newTaskTitle.trim(),
+      done: false,
+      date: TODAY,
+      createdAt: new Date().toISOString(),
+    });
+    setNewTaskTitle('');
+  }, [selectedChild, newTaskTitle]);
+
+  const handleDeleteTask = useCallback((taskId: string) => {
+    Alert.alert('Aufgabe löschen?', '', [
+      { text: 'Abbrechen', style: 'cancel' },
+      { text: 'Löschen', style: 'destructive', onPress: () => deleteTask(selectedChild, taskId) },
+    ]);
+  }, [selectedChild]);
+
+  const handleSaveTimes = useCallback(async () => {
+    const times = timesInput.split(',').map((t) => t.trim()).filter(Boolean);
+    await setReminderTimes(times);
+    setReminderTimesState(times);
+    setEditingTimes(false);
+  }, [timesInput]);
+
+  const handleSendNow = useCallback(async () => {
+    setSending(true);
+    try {
+      await sendReminderToAllChildren();
+      Alert.alert('✓ Push gesendet', 'Alle Kinder wurden benachrichtigt.');
+    } catch {
+      Alert.alert('Fehler', 'Push konnte nicht gesendet werden.');
+    } finally {
+      setSending(false);
+    }
+  }, []);
+
+  const tasks = tasksByChild[selectedChild];
+  const done = tasks.filter((t) => t.done).length;
+
+  return (
+    <ScrollView
+      style={{ flex: 1, backgroundColor: colors.background }}
+      contentContainerStyle={s.container}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => setRefreshing(false)} />}
+    >
+      {/* Kind-Auswahl */}
+      <View style={s.childRow}>
+        {CHILDREN.map((childId) => {
+          const childTasks = tasksByChild[childId];
+          const childDone = childTasks.filter((t) => t.done).length;
+          const isSelected = childId === selectedChild;
+          return (
+            <TouchableOpacity
+              key={childId}
+              style={[s.childChip, isSelected && { backgroundColor: colors.accentNeon }]}
+              onPress={() => setSelectedChild(childId)}
+            >
+              <Text style={[s.childName, isSelected && { color: '#000' }]}>
+                {CHILD_NAMES[childId]}
+              </Text>
+              <Text style={[s.childProgress, isSelected && { color: '#000' }]}>
+                {childDone}/{childTasks.length}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      {/* Neue Aufgabe */}
+      <View style={s.section}>
+        <Text style={s.sectionTitle}>Aufgabe für {CHILD_NAMES[selectedChild]} hinzufügen</Text>
+        <View style={s.inputRow}>
+          <TextInput
+            style={s.input}
+            placeholder="Neue Aufgabe..."
+            placeholderTextColor={colors.placeholder}
+            value={newTaskTitle}
+            onChangeText={setNewTaskTitle}
+            onSubmitEditing={handleAddTask}
+            returnKeyType="done"
+          />
+          <TouchableOpacity style={s.addBtn} onPress={handleAddTask}>
+            <Ionicons name="add" size={22} color="#fff" />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Aufgabenliste + Status */}
+      <View style={s.section}>
+        <Text style={s.sectionTitle}>
+          Heute — {done}/{tasks.length} erledigt
+        </Text>
+        {tasks.length === 0 && (
+          <Text style={s.empty}>Noch keine Aufgaben für heute.</Text>
+        )}
+        {tasks.map((task) => (
+          <View key={task.id} style={s.taskRow}>
+            <Ionicons
+              name={task.done ? 'checkmark-circle' : 'ellipse-outline'}
+              size={22}
+              color={task.done ? colors.success : colors.textMuted}
+            />
+            <Text style={[s.taskTitle, task.done && s.taskDone]}>{task.title}</Text>
+            <TouchableOpacity onPress={() => handleDeleteTask(task.id)}>
+              <Ionicons name="trash-outline" size={18} color={colors.danger} />
+            </TouchableOpacity>
+          </View>
+        ))}
+      </View>
+
+      {/* Erinnerungszeiten */}
+      <View style={s.section}>
+        <View style={s.row}>
+          <Text style={s.sectionTitle}>Erinnerungszeiten</Text>
+          <TouchableOpacity onPress={() => setEditingTimes(!editingTimes)}>
+            <Ionicons name="pencil-outline" size={18} color={colors.accentNeon} />
+          </TouchableOpacity>
+        </View>
+        {editingTimes ? (
+          <>
+            <Text style={s.hint}>Kommagetrennt, z.B. "08:00, 15:00, 17:00"</Text>
+            <TextInput
+              style={s.input}
+              value={timesInput}
+              onChangeText={setTimesInput}
+              placeholderTextColor={colors.placeholder}
+            />
+            <TouchableOpacity style={s.saveBtn} onPress={handleSaveTimes}>
+              <Text style={s.saveBtnText}>Speichern</Text>
+            </TouchableOpacity>
+          </>
+        ) : (
+          <Text style={s.timesText}>{reminderTimes.join('  ·  ')}</Text>
+        )}
+      </View>
+
+      {/* Push jetzt senden */}
+      <TouchableOpacity style={s.pushBtn} onPress={handleSendNow} disabled={sending}>
+        {sending ? (
+          <ActivityIndicator color="#fff" />
+        ) : (
+          <>
+            <Ionicons name="notifications-outline" size={20} color="#fff" />
+            <Text style={s.pushBtnText}>Jetzt Push senden</Text>
+          </>
+        )}
+      </TouchableOpacity>
+    </ScrollView>
+  );
+}
+
+const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
+  StyleSheet.create({
+    container: { padding: 16, gap: 8, paddingBottom: 40 },
+    childRow: { flexDirection: 'row', gap: 8, marginBottom: 8 },
+    childChip: {
+      flex: 1, alignItems: 'center', paddingVertical: 10,
+      borderRadius: 12, backgroundColor: colors.surface,
+      borderWidth: 1, borderColor: colors.border,
+    },
+    childName: { fontSize: 14, fontWeight: '700', color: colors.text },
+    childProgress: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
+    section: {
+      backgroundColor: colors.surface, borderRadius: 14, padding: 14,
+      borderWidth: 1, borderColor: colors.border, gap: 8,
+    },
+    sectionTitle: { fontSize: 14, fontWeight: '700', color: colors.text },
+    inputRow: { flexDirection: 'row', gap: 8 },
+    input: {
+      flex: 1, backgroundColor: colors.inputBackground, borderRadius: 10,
+      paddingHorizontal: 12, paddingVertical: 10, color: colors.text,
+      borderWidth: 1, borderColor: colors.border, fontSize: 14,
+    },
+    addBtn: {
+      backgroundColor: colors.accentNeon, borderRadius: 10,
+      paddingHorizontal: 14, justifyContent: 'center',
+    },
+    taskRow: {
+      flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6,
+    },
+    taskTitle: { flex: 1, fontSize: 14, color: colors.text },
+    taskDone: { textDecorationLine: 'line-through', color: colors.textMuted },
+    empty: { fontSize: 13, color: colors.textMuted, fontStyle: 'italic' },
+    row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    hint: { fontSize: 12, color: colors.textMuted },
+    timesText: { fontSize: 16, color: colors.accentNeon, fontWeight: '600' },
+    saveBtn: {
+      backgroundColor: colors.accentNeon, borderRadius: 10,
+      paddingVertical: 10, alignItems: 'center',
+    },
+    saveBtnText: { color: '#000', fontWeight: '700', fontSize: 14 },
+    pushBtn: {
+      flexDirection: 'row', backgroundColor: colors.accent, borderRadius: 14,
+      paddingVertical: 14, justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 8,
+    },
+    pushBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
+  });

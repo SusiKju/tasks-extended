@@ -9,6 +9,8 @@ import { useGoogleTasksSync } from '../src/hooks/useGoogleTasksSync';
 import { useGoogleDriveNotesSync } from '../src/hooks/useGoogleDriveNotesSync';
 import { useGoogleContactsBirthdaysSync } from '../src/hooks/useGoogleContactsBirthdaysSync';
 import { getValidAccessToken } from '../src/services/googleCalendar';
+import { scheduleCheckIfNeeded, stopScheduledPush } from '../src/services/scheduledPush';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function RootLayout() {
   const { colors, theme } = useTheme();
@@ -69,9 +71,15 @@ export default function RootLayout() {
       getValidAccessToken().catch(() => {});
     }, 4 * 60_000);
 
+    // Scheduled Push nur im Eltern-Modus starten
+    AsyncStorage.getItem('kinder_child_id').then((childId) => {
+      if (!childId) scheduleCheckIfNeeded();
+    });
+
     return () => {
       sub.remove();
       clearInterval(keepAlive);
+      stopScheduledPush();
     };
   }, []);
 

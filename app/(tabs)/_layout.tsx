@@ -77,6 +77,15 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="kinder"
+        options={{
+          title: 'Kinder',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="people-outline" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="settings"
         options={{
           title: 'Einstellungen',
