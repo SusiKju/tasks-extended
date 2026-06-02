@@ -14,6 +14,9 @@
       "channel": "preview",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_GOOGLE_CLIENT_ID": "934256455571-17enurq4g64r6akbvlcnf8dkn6imukep.apps.googleusercontent.com"
       }
     },
     "production": {
