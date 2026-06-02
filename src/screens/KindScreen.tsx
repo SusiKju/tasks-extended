@@ -46,6 +46,7 @@ export default function KindScreen({ onExitChildMode }: Props) {
   const [pinModalVisible, setPinModalVisible] = useState(false);
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState(false);
+  const [notifPermission, setNotifPermission] = useState<'granted' | 'denied' | 'default' | 'unsupported'>('unsupported');
 
   // Gespeicherte Kind-ID laden
   useEffect(() => {
@@ -59,8 +60,13 @@ export default function KindScreen({ onExitChildMode }: Props) {
   useEffect(() => {
     if (!childId) return;
     const unsubTasks = subscribeToChildTasks(childId, TODAY, setTasks);
-    // Web-Benachrichtigungen: Berechtigung anfragen + Trigger-Listener
-    requestWebNotificationPermission();
+    // Web-Benachrichtigungen: Berechtigung anfragen + Status merken
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && 'Notification' in window) {
+      setNotifPermission(Notification.permission as any);
+      requestWebNotificationPermission().then(() => {
+        setNotifPermission(Notification.permission as any);
+      });
+    }
     const unsubPush = subscribeToPushTrigger(childId);
     return () => { unsubTasks(); unsubPush(); };
   }, [childId]);
@@ -136,6 +142,28 @@ export default function KindScreen({ onExitChildMode }: Props) {
         </TouchableOpacity>
       </View>
 
+      {/* Benachrichtigungs-Status */}
+      {notifPermission === 'default' && (
+        <TouchableOpacity
+          style={s.notifBanner}
+          onPress={async () => {
+            await requestWebNotificationPermission();
+            if (Platform.OS === 'web' && 'Notification' in window) {
+              setNotifPermission(Notification.permission as any);
+            }
+          }}
+        >
+          <Ionicons name="notifications-off-outline" size={16} color={colors.warningFg} />
+          <Text style={[s.notifBannerText, { color: colors.warningFg }]}>Benachrichtigungen aktivieren — hier tippen</Text>
+        </TouchableOpacity>
+      )}
+      {notifPermission === 'denied' && (
+        <View style={[s.notifBanner, { backgroundColor: colors.danger }]}>
+          <Ionicons name="notifications-off-outline" size={16} color={colors.dangerFg} />
+          <Text style={[s.notifBannerText, { color: colors.dangerFg }]}>Benachrichtigungen blockiert — in Browser-Einstellungen erlauben</Text>
+        </View>
+      )}
+
       <ScrollView contentContainerStyle={s.list}>
         {tasks.length === 0 && (
           <Text style={s.empty}>Heute keine Aufgaben 🎉</Text>
@@ -148,7 +176,7 @@ export default function KindScreen({ onExitChildMode }: Props) {
             activeOpacity={0.7}
           >
             <View style={[s.checkbox, task.done && s.checkboxDone]}>
-              {task.done && <Ionicons name="checkmark" size={18} color="#fff" />}
+              {task.done && <Ionicons name="checkmark" size={18} color={colors.successFg} />}
             </View>
             <Text style={[s.taskText, task.done && s.taskTextDone]}>{task.title}</Text>
           </TouchableOpacity>
@@ -200,6 +228,12 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
     headerTitle: { fontSize: 26, fontWeight: '800', color: colors.text },
     headerSub: { fontSize: 14, color: colors.textSecondary, marginTop: 4 },
     pinBtn: { position: 'absolute', top: 60, right: 20, padding: 8, opacity: 0.4 },
+    // Benachrichtigungs-Banner
+    notifBanner: {
+      flexDirection: 'row', alignItems: 'center', gap: 8,
+      backgroundColor: colors.warning ?? '#FF9500', padding: 12, paddingHorizontal: 16,
+    },
+    notifBannerText: { flex: 1, fontSize: 13, fontWeight: '600' },
     // Aufgabenliste
     list: { padding: 16, gap: 12, paddingBottom: 40 },
     taskCard: {

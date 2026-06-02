@@ -163,7 +163,7 @@ export default function KinderScreen() {
             returnKeyType="done"
           />
           <TouchableOpacity style={s.addBtn} onPress={handleAddTask}>
-            <Ionicons name="add" size={22} color="#fff" />
+            <Ionicons name="add" size={22} color={colors.accentFg} />
           </TouchableOpacity>
         </View>
       </View>
@@ -293,10 +293,10 @@ export default function KinderScreen() {
       {/* Push jetzt senden */}
       <TouchableOpacity style={s.pushBtn} onPress={handleSendNow} disabled={sending}>
         {sending ? (
-          <ActivityIndicator color="#fff" />
+          <ActivityIndicator color={colors.accentFg} />
         ) : (
           <>
-            <Ionicons name="notifications-outline" size={20} color="#fff" />
+            <Ionicons name="notifications-outline" size={20} color={colors.accentFg} />
             <Text style={s.pushBtnText}>Jetzt Push senden</Text>
           </>
         )}
@@ -349,7 +349,7 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
       flexDirection: 'row', backgroundColor: colors.accent, borderRadius: 14,
       paddingVertical: 14, justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 8,
     },
-    pushBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
+    pushBtnText: { color: colors.accentFg, fontWeight: '700', fontSize: 15 },
     pushChildBtn: {
       flexDirection: 'row', alignItems: 'center', gap: 4,
       borderWidth: 1, borderColor: colors.accentNeon, borderRadius: 8,
