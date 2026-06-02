@@ -33,7 +33,10 @@ export async function registerPushToken(childId: ChildId): Promise<void> {
     return;
   }
 
-  const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
+  const projectId =
+    Constants.expoConfig?.extra?.eas?.projectId ??
+    Constants.easConfig?.projectId ??
+    'd2992d41-b8a8-42de-b1d9-f6848a6485b6';
   const token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
   await savePushToken(childId, token);
 }
