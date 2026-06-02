@@ -61,6 +61,10 @@ export default function KindScreen({ onExitChildMode }: Props) {
   useEffect(() => {
     if (!childId) return;
     const unsubTasks = subscribeToChildTasks(childId, TODAY, setTasks);
+    // Push-Token immer registrieren (auch wenn Onboarding übersprungen wurde)
+    if (Platform.OS !== 'web') {
+      registerPushToken(childId).catch(console.warn);
+    }
     // Web-Benachrichtigungen: Berechtigung anfragen + Status merken
     if (Platform.OS === 'web' && typeof window !== 'undefined' && 'Notification' in window) {
       setNotifPermission(Notification.permission as any);
