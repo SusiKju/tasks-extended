@@ -130,7 +130,7 @@ export function subscribeToPushTrigger(childId: ChildId): Unsubscribe {
     // Nur neue Trigger zeigen (nicht beim ersten Laden)
     const triggered = new Date(data.triggeredAt).getTime();
     const age = Date.now() - triggered;
-    if (age > 10_000) return; // älter als 10s → ignorieren
+    if (age > 60_000) return; // älter als 60s → ignorieren
     if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
       new Notification(`Hey ${CHILD_NAMES[childId]}! 👋`, {
         body: 'Schau mal kurz in deine Aufgaben rein.',
