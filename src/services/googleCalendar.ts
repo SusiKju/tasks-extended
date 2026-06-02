@@ -7,7 +7,7 @@ import { useStore } from '../store';
 
 WebBrowser.maybeCompleteAuthSession();
 
-const GOOGLE_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID ?? '';
+const GOOGLE_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID ?? '934256455571-posu4ic37t03v4krthiph71pik127ljn.apps.googleusercontent.com';
 
 const SCOPES = [
   'https://www.googleapis.com/auth/calendar.events',
