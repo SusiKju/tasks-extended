@@ -11,7 +11,7 @@ import {
   subscribeToChildTasks, addTask, updateTask, deleteTask,
   getReminderTimes, setReminderTimes,
 } from '../../src/services/kinderTasks';
-import { sendReminderToAllChildren } from '../../src/services/pushNotifications';
+import { sendReminderToAllChildren, sendReminderToChild } from '../../src/services/pushNotifications';
 import { format } from 'date-fns';
 
 const TODAY = format(new Date(), 'yyyy-MM-dd');
@@ -64,7 +64,15 @@ export default function KinderScreen() {
   const handleDeleteTask = useCallback((taskId: string) => {
     Alert.alert('Aufgabe löschen?', '', [
       { text: 'Abbrechen', style: 'cancel' },
-      { text: 'Löschen', style: 'destructive', onPress: () => deleteTask(selectedChild, taskId) },
+      {
+        text: 'Löschen', style: 'destructive', onPress: async () => {
+          try {
+            await deleteTask(selectedChild, taskId);
+          } catch (e: any) {
+            Alert.alert('Fehler beim Löschen', e?.message ?? String(e));
+          }
+        }
+      },
     ]);
   }, [selectedChild]);
 
@@ -146,9 +154,25 @@ export default function KinderScreen() {
 
       {/* Aufgabenliste + Status */}
       <View style={s.section}>
-        <Text style={s.sectionTitle}>
-          Heute — {done}/{tasks.length} erledigt
-        </Text>
+        <View style={s.row}>
+          <Text style={s.sectionTitle}>
+            Heute — {done}/{tasks.length} erledigt
+          </Text>
+          <TouchableOpacity
+            style={s.pushChildBtn}
+            onPress={async () => {
+              try {
+                await sendReminderToChild(selectedChild);
+                Alert.alert('✓ Push gesendet', `${CHILD_NAMES[selectedChild]} wurde benachrichtigt.`);
+              } catch (e: any) {
+                Alert.alert('Fehler', e?.message ?? 'Push fehlgeschlagen.');
+              }
+            }}
+          >
+            <Ionicons name="notifications-outline" size={14} color={colors.accentNeon} />
+            <Text style={s.pushChildBtnText}>Push</Text>
+          </TouchableOpacity>
+        </View>
         {tasks.length === 0 && (
           <Text style={s.empty}>Noch keine Aufgaben für heute.</Text>
         )}
@@ -310,6 +334,12 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
       paddingVertical: 14, justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 8,
     },
     pushBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
+    pushChildBtn: {
+      flexDirection: 'row', alignItems: 'center', gap: 4,
+      borderWidth: 1, borderColor: colors.accentNeon, borderRadius: 8,
+      paddingHorizontal: 10, paddingVertical: 5,
+    },
+    pushChildBtnText: { fontSize: 12, fontWeight: '700', color: colors.accentNeon },
     setupBtn: {
       flexDirection: 'row', alignItems: 'center', gap: 10,
       backgroundColor: colors.surface, borderRadius: 14, padding: 14,

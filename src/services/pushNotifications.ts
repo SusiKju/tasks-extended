@@ -59,6 +59,14 @@ export async function sendReminderToAllChildren(): Promise<void> {
   await Promise.all(promises);
 }
 
+/** Sendet Push an ein einzelnes Kind. */
+export async function sendReminderToChild(childId: ChildId): Promise<void> {
+  const tokens = await getPushTokens();
+  const token = tokens[childId];
+  if (!token) throw new Error(`Kein Push-Token für ${CHILD_NAMES[childId]} gespeichert.`);
+  await sendPush(token, CHILD_NAMES[childId]);
+}
+
 /** Gibt die konfigurierten Erinnerungszeiten als { hour, minute }[] zurück. */
 export async function getReminderSchedule(): Promise<{ hour: number; minute: number }[]> {
   const times = await getReminderTimes();
