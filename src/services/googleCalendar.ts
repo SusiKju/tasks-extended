@@ -3,6 +3,7 @@ import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
 import { Task } from '../types';
 import { formatDate, localDateStr } from '../utils/dateFormat';
+import { useStore } from '../store';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -23,6 +24,89 @@ const TASKS_API = 'https://tasks.googleapis.com/tasks/v1';
 export interface CalendarAuthResult {
   accessToken: string;
   refreshToken: string | null;
+  /** Token lifetime in seconds, used to compute googleTokenExpiry. */
+  expiresIn: number;
+}
+
+interface TokenRefreshResult {
+  accessToken: string;
+  expiresIn: number;
+}
+
+// ── Google Identity Services (GIS) — Web token flow ──────────────────────────
+// Der Browser bekommt by design nie ein Refresh-Token. GIS löst das über den
+// Token-Client: er fordert kurzlebige (1 h) Access-Tokens an und kann sie mit
+// prompt:'' still im Hintergrund erneuern, solange die Google-Session lebt.
+
+let gisScriptPromise: Promise<void> | null = null;
+
+function loadGisScript(): Promise<void> {
+  if (Platform.OS !== 'web' || typeof document === 'undefined') {
+    return Promise.reject(new Error('GIS ist nur im Web verfügbar'));
+  }
+  if ((window as any).google?.accounts?.oauth2) return Promise.resolve();
+  if (gisScriptPromise) return gisScriptPromise;
+
+  gisScriptPromise = new Promise<void>((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = 'https://accounts.google.com/gsi/client';
+    script.async = true;
+    script.defer = true;
+    script.onload = () => resolve();
+    script.onerror = () => {
+      gisScriptPromise = null;
+      reject(new Error('GIS-Script konnte nicht geladen werden'));
+    };
+    document.head.appendChild(script);
+  });
+  return gisScriptPromise;
+}
+
+let webTokenClient: any = null;
+
+async function getWebTokenClient(): Promise<any> {
+  await loadGisScript();
+  const oauth2 = (window as any).google?.accounts?.oauth2;
+  if (!oauth2) throw new Error('GIS oauth2 nicht verfügbar');
+  if (!webTokenClient) {
+    webTokenClient = oauth2.initTokenClient({
+      client_id: GOOGLE_CLIENT_ID,
+      scope: SCOPES.join(' '),
+      callback: () => {}, // wird pro Anfrage gesetzt
+    });
+  }
+  return webTokenClient;
+}
+
+/**
+ * Fordert via GIS ein Access-Token an.
+ * - prompt: 'consent' → expliziter Login (Popup, alle Scopes neu bestätigen).
+ * - prompt: ''        → stiller Refresh ohne UI, sofern Session & Consent leben.
+ */
+async function requestWebToken(prompt: '' | 'consent'): Promise<TokenRefreshResult | null> {
+  let client: any;
+  try {
+    client = await getWebTokenClient();
+  } catch (e) {
+    console.warn('[GoogleLogin] GIS nicht verfügbar:', e);
+    return null;
+  }
+
+  return new Promise<TokenRefreshResult | null>((resolve) => {
+    client.callback = (resp: any) => {
+      if (resp?.error || !resp?.access_token) {
+        resolve(null);
+        return;
+      }
+      resolve({ accessToken: resp.access_token, expiresIn: Number(resp.expires_in) || 3600 });
+    };
+    client.error_callback = () => resolve(null);
+    try {
+      client.requestAccessToken({ prompt });
+    } catch {
+      resolve(null);
+    }
+  });
 }
 
 export async function signInWithGoogle(): Promise<CalendarAuthResult | null> {
@@ -30,58 +114,46 @@ export async function signInWithGoogle(): Promise<CalendarAuthResult | null> {
     throw new Error('EXPO_PUBLIC_GOOGLE_CLIENT_ID ist nicht konfiguriert. Siehe .env.example.');
   }
 
-  const isWeb = Platform.OS === 'web';
+  // ── Web: GIS Token-Client (still erneuerbar, kein Refresh-Token nötig) ──────
+  if (Platform.OS === 'web') {
+    const res = await requestWebToken('consent');
+    if (!res) {
+      console.warn('[GoogleLogin] kein Web-Token erhalten');
+      return null;
+    }
+    return { accessToken: res.accessToken, refreshToken: null, expiresIn: res.expiresIn };
+  }
 
+  // ── Native: PKCE code flow mit serverseitigem Exchange ──────────────────────
   try {
-    console.log('[GoogleLogin] fetchDiscovery start, platform:', Platform.OS);
     const discovery = await AuthSession.fetchDiscoveryAsync('https://accounts.google.com');
     if (!discovery) {
       console.warn('[GoogleLogin] discovery null');
       return null;
     }
 
-    const redirectUri = Platform.OS === 'web'
-      ? 'https://susikju.github.io/tasks-extended/'
-      : AuthSession.makeRedirectUri({ scheme: 'tasksextended' });
-    console.log('[GoogleLogin] redirectUri:', redirectUri);
+    const redirectUri = AuthSession.makeRedirectUri({ scheme: 'tasksextended' });
 
     const request = new AuthSession.AuthRequest({
       clientId: GOOGLE_CLIENT_ID,
       scopes: SCOPES,
       redirectUri,
-      // Web: implicit flow (Token) — CORS blockiert direkten Token-Exchange vom Browser
-      // Native: PKCE code flow mit serverseitigem Exchange
-      responseType: isWeb ? AuthSession.ResponseType.Token : AuthSession.ResponseType.Code,
-      usePKCE: !isWeb,
-      // Force consent screen so Google always issues a token with ALL requested scopes.
-      // Without this, Google may silently reuse a prior session consented before
-      // drive.file was added, producing a 403 on Drive API calls.
-      // access_type=offline is only valid for the code flow (native), not implicit (web).
-      extraParams: isWeb ? { prompt: 'consent' } : { prompt: 'consent', access_type: 'offline' },
+      responseType: AuthSession.ResponseType.Code,
+      usePKCE: true,
+      // Force consent so Google always issues a token with ALL requested scopes
+      // and returns a refresh_token (access_type=offline).
+      extraParams: { prompt: 'consent', access_type: 'offline' },
     });
 
-    console.log('[GoogleLogin] promptAsync start');
     const result = await request.promptAsync(discovery);
-    console.log('[GoogleLogin] promptAsync result type:', result.type);
-
     if (result.type !== 'success') return null;
 
-    if (isWeb) {
-      const accessToken = result.params.access_token;
-      if (!accessToken) {
-        console.warn('[GoogleLogin] kein access_token im Web-Result');
-        return null;
-      }
-      return { accessToken, refreshToken: null };
-    }
-
-    const tokenResponse = await exchangeCodeForTokens(
+    return await exchangeCodeForTokens(
       result.params.code,
       request.codeVerifier ?? '',
       redirectUri,
       GOOGLE_CLIENT_ID
     );
-    return tokenResponse;
   } catch (e) {
     console.error('[GoogleLogin] signInWithGoogle error:', e);
     throw e;
@@ -113,33 +185,64 @@ async function exchangeCodeForTokens(
     return {
       accessToken: data.access_token,
       refreshToken: data.refresh_token ?? null,
+      expiresIn: Number(data.expires_in) || 3600,
     };
   } catch {
     return null;
   }
 }
 
-export async function refreshAccessToken(refreshToken: string, clientId: string): Promise<string | null> {
+// Native-Refresh über das gespeicherte Refresh-Token.
+async function refreshNativeToken(refreshToken: string): Promise<TokenRefreshResult | null> {
   try {
     const response = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
         refresh_token: refreshToken,
-        client_id: clientId,
+        client_id: GOOGLE_CLIENT_ID,
         grant_type: 'refresh_token',
       }).toString(),
     });
 
     const data = await response.json();
-    return data.access_token ?? null;
+    if (!data.access_token) return null;
+    return { accessToken: data.access_token, expiresIn: Number(data.expires_in) || 3600 };
   } catch {
     return null;
   }
 }
 
-export async function refreshGoogleToken(refreshToken: string): Promise<string | null> {
-  return refreshAccessToken(refreshToken, GOOGLE_CLIENT_ID);
+/**
+ * Zentrale Token-Beschaffung. Gibt ein gültiges Access-Token zurück und erneuert
+ * es bei Bedarf transparent — im Web still via GIS, nativ via Refresh-Token.
+ * Schreibt das frische Token + Ablaufzeit zurück in den Store.
+ *
+ * @param force  true erzwingt einen Refresh (z. B. nach einem 401).
+ */
+export async function getValidAccessToken(force = false): Promise<string | null> {
+  const { settings, updateSettings } = useStore.getState();
+  const current = settings.googleAccessToken;
+  if (!current) return null;
+
+  const expiry = settings.googleTokenExpiry ?? 0;
+  // 5 min Puffer, damit das Token nicht mitten in einem Request abläuft.
+  const needsRefresh = force || Date.now() > expiry - 5 * 60 * 1000;
+  if (!needsRefresh) return current;
+
+  let refreshed: TokenRefreshResult | null = null;
+  if (Platform.OS === 'web') {
+    refreshed = await requestWebToken('').catch(() => null);
+  } else if (settings.googleRefreshToken) {
+    refreshed = await refreshNativeToken(settings.googleRefreshToken).catch(() => null);
+  }
+
+  if (!refreshed) return current; // Refresh fehlgeschlagen → altes Token behalten
+  updateSettings({
+    googleAccessToken: refreshed.accessToken,
+    googleTokenExpiry: Date.now() + refreshed.expiresIn * 1000,
+  });
+  return refreshed.accessToken;
 }
 
 async function calendarFetch(

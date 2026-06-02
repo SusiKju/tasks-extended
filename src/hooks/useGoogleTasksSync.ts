@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { useStore } from '../store';
 import {
-  refreshGoogleToken,
+  getValidAccessToken,
   listTaskLists,
   listGoogleTasksById,
   createGoogleTask,
@@ -23,17 +23,16 @@ export interface SyncResult {
  */
 async function withTokenRefresh(
   token: string,
-  refreshToken: string | null,
   onRefreshed: (newToken: string) => void,
   action: (t: string) => Promise<string | boolean | null>
 ): Promise<{ result: string | boolean | null; token: string }> {
   const result = await action(token).catch(() => null);
   if (result !== null && result !== false) return { result, token };
 
-  // First attempt failed — try refreshing the token once
-  if (!refreshToken) return { result: null, token };
-  const newToken = await refreshGoogleToken(refreshToken).catch(() => null);
-  if (!newToken) return { result: null, token };
+  // First attempt failed — force a token refresh once and retry.
+  // Works on web (GIS silent) and native (refresh token).
+  const newToken = await getValidAccessToken(true);
+  if (!newToken || newToken === token) return { result: null, token };
 
   onRefreshed(newToken);
   const retried = await action(newToken).catch(() => null);
@@ -54,7 +53,8 @@ export function useGoogleTasksSync() {
 
     if (!settings.googleCalendarEnabled || !settings.googleAccessToken) return null;
 
-    let token = settings.googleAccessToken;
+    // Proaktiv ein gültiges Token holen (Web: GIS still, nativ: Refresh-Token).
+    let token = (await getValidAccessToken()) ?? settings.googleAccessToken;
     const onTokenRefreshed = (t: string) => {
       token = t;
       updateSettings({ googleAccessToken: t });
@@ -62,12 +62,12 @@ export function useGoogleTasksSync() {
 
     // ── 1. Get the first Google Tasks list ─────────────────────────────────────
     let taskLists = await listTaskLists(token).catch(() => [] as Array<{ id: string; title: string }>);
-    if (taskLists.length === 0 && settings.googleRefreshToken) {
-      // Could be an expired token — refresh and retry once
-      const newToken = await refreshGoogleToken(settings.googleRefreshToken).catch(() => null);
-      if (newToken) {
+    if (taskLists.length === 0) {
+      // Could be an expired token — force refresh and retry once
+      const newToken = await getValidAccessToken(true);
+      if (newToken && newToken !== token) {
         onTokenRefreshed(newToken);
-        taskLists = await listTaskLists(token).catch(() => []);
+        taskLists = await listTaskLists(newToken).catch(() => []);
       }
     }
     if (taskLists.length === 0) return null;
@@ -80,7 +80,6 @@ export function useGoogleTasksSync() {
     for (const googleId of deletedIds) {
       const { result } = await withTokenRefresh(
         token,
-        settings.googleRefreshToken,
         onTokenRefreshed,
         (t) => deleteGoogleTask(t, taskListId, googleId)
       );
@@ -149,7 +148,6 @@ export function useGoogleTasksSync() {
         // New local task — push to Google Tasks
         const { result: newId } = await withTokenRefresh(
           token,
-          settings.googleRefreshToken,
           onTokenRefreshed,
           (t) => createGoogleTask(
             t,
@@ -191,7 +189,6 @@ export function useGoogleTasksSync() {
         if (Object.keys(updates).length > 0) {
           await withTokenRefresh(
             token,
-            settings.googleRefreshToken,
             onTokenRefreshed,
             (t) => updateGoogleTask(t, taskListId, local.googleEventId!, updates)
           ).catch(() => {});

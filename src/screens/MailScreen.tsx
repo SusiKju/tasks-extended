@@ -14,7 +14,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useStore } from '../store';
 import { useTheme, ThemeColors } from '../utils/theme';
-import { signInWithGoogle } from '../services/googleCalendar';
+import { signInWithGoogle, getValidAccessToken } from '../services/googleCalendar';
 import { fetchRecentMails, trashMail, MailMessage } from '../services/googleMail';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -129,7 +129,20 @@ export function MailScreen() {
       setLoaded(true);
     } catch (e: any) {
       if (e?.message === 'UNAUTHORIZED') {
-        updateSettings({ googleAccessToken: null, googleRefreshToken: null, googleCalendarEnabled: false });
+        // Erst stillen Refresh versuchen (Web via GIS, nativ via Refresh-Token),
+        // bevor der Login verworfen wird.
+        const refreshed = await getValidAccessToken(true);
+        if (refreshed && refreshed !== token) {
+          try {
+            const result = await fetchRecentMails(refreshed);
+            setMails(result);
+            setLoaded(true);
+            return;
+          } catch {
+            // fällt unten in den Logout-Pfad
+          }
+        }
+        updateSettings({ googleAccessToken: null, googleRefreshToken: null, googleTokenExpiry: null, googleCalendarEnabled: false });
         setError('Sitzung abgelaufen. Bitte neu verbinden.');
       } else {
         setError('E-Mails konnten nicht geladen werden.');
@@ -146,7 +159,7 @@ export function MailScreen() {
     try {
       const auth = await signInWithGoogle();
       if (!auth) { setError('Anmeldung abgebrochen.'); return; }
-      updateSettings({ googleAccessToken: auth.accessToken, googleRefreshToken: auth.refreshToken, googleCalendarEnabled: true });
+      updateSettings({ googleAccessToken: auth.accessToken, googleRefreshToken: auth.refreshToken, googleTokenExpiry: Date.now() + auth.expiresIn * 1000, googleCalendarEnabled: true });
       await loadMails(auth.accessToken);
     } catch {
       setError('Anmeldung fehlgeschlagen.');

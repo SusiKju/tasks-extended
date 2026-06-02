@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { useStore } from '../store';
-import { refreshGoogleToken } from '../services/googleCalendar';
+import { getValidAccessToken } from '../services/googleCalendar';
 import {
   listDriveNotes,
   uploadDriveNotesBatch,
@@ -44,18 +44,8 @@ async function runScratchpadSync(token: string): Promise<void> {
 }
 
 async function getValidToken(): Promise<string | null> {
-  const { settings, updateSettings } = useStore.getState();
-  if (!settings.googleAccessToken) return null;
-
-  let token = settings.googleAccessToken;
-  if (settings.googleRefreshToken) {
-    const refreshed = await refreshGoogleToken(settings.googleRefreshToken).catch(() => null);
-    if (refreshed) {
-      token = refreshed;
-      updateSettings({ googleAccessToken: refreshed });
-    }
-  }
-  return token;
+  // Erneuert bei Bedarf still (Web via GIS, nativ via Refresh-Token).
+  return getValidAccessToken();
 }
 
 // ── Hook ──────────────────────────────────────────────────────────────────────
@@ -74,7 +64,6 @@ export function useGoogleDriveNotesSync() {
       settings,
       notes,
       deletedDriveNoteFileIds,
-      updateSettings,
       addNote,
       updateNote,
       removeDeletedDriveNoteFileIds,
@@ -82,14 +71,9 @@ export function useGoogleDriveNotesSync() {
 
     if (!overrideToken && !settings.googleAccessToken) return null;
 
-    let token = overrideToken ?? settings.googleAccessToken!;
-    if (!overrideToken && settings.googleRefreshToken) {
-      const refreshed = await refreshGoogleToken(settings.googleRefreshToken).catch(() => null);
-      if (refreshed) {
-        token = refreshed;
-        updateSettings({ googleAccessToken: refreshed });
-      }
-    }
+    // Stillen Refresh erlauben, wenn kein expliziter Token mitgegeben wurde.
+    const token = overrideToken ?? (await getValidAccessToken());
+    if (!token) return null;
 
     // ── Scratchpad: immer zuerst, unabhängig vom Notes-Sync ──────────────────
     await runScratchpadSync(token).catch(() => {});

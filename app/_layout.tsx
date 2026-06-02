@@ -8,6 +8,7 @@ import { useStore } from '../src/store';
 import { useGoogleTasksSync } from '../src/hooks/useGoogleTasksSync';
 import { useGoogleDriveNotesSync } from '../src/hooks/useGoogleDriveNotesSync';
 import { useGoogleContactsBirthdaysSync } from '../src/hooks/useGoogleContactsBirthdaysSync';
+import { getValidAccessToken } from '../src/services/googleCalendar';
 
 export default function RootLayout() {
   const { colors, theme } = useTheme();
@@ -49,15 +50,29 @@ export default function RootLayout() {
         const now = Date.now();
         if (now - lastSyncAt.current > 60_000) {
           lastSyncAt.current = now;
-          syncRef.current().catch(() => {});
-          syncNotesRef.current().catch(() => {});
-          syncBirthdaysRef.current().catch(() => {});
+          // Beim Zurückkommen Token still auffrischen, dann syncen.
+          getValidAccessToken().catch(() => null).then(() => {
+            syncRef.current().catch(() => {});
+            syncNotesRef.current().catch(() => {});
+            syncBirthdaysRef.current().catch(() => {});
+          });
         }
       }
     };
 
     const sub = AppState.addEventListener('change', onStateChange);
-    return () => sub.remove();
+
+    // Token im Hintergrund am Leben halten: getValidAccessToken erneuert nur,
+    // wenn das Token in <5 min abläuft. 4-min-Intervall fängt das rechtzeitig ab,
+    // sodass der Web-Login nicht nach 1 h stirbt.
+    const keepAlive = setInterval(() => {
+      getValidAccessToken().catch(() => {});
+    }, 4 * 60_000);
+
+    return () => {
+      sub.remove();
+      clearInterval(keepAlive);
+    };
   }, []);
 
   return (

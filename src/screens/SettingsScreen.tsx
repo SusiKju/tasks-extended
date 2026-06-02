@@ -35,7 +35,6 @@ const EMPTY_GROUP_FORM: GroupFormState = { name: '', color: PRESET_COLORS[0], ke
 import {
   signInWithGoogle,
   listCalendars,
-  refreshGoogleToken,
 } from '../services/googleCalendar';
 import { useGoogleTasksSync } from '../hooks/useGoogleTasksSync';
 import { useGoogleDriveNotesSync } from '../hooks/useGoogleDriveNotesSync';
@@ -107,6 +106,7 @@ export function SettingsScreen() {
       updateSettings({
         googleAccessToken: auth.accessToken,
         googleRefreshToken: auth.refreshToken,
+        googleTokenExpiry: Date.now() + auth.expiresIn * 1000,
         googleCalendarEnabled: true,
         googleCalendarId: primary.id,
         googleCalendarName: primary.summary,
@@ -145,6 +145,7 @@ export function SettingsScreen() {
       googleCalendarEnabled: false,
       googleAccessToken: null,
       googleRefreshToken: null,
+      googleTokenExpiry: null,
       googleCalendarId: null,
       googleCalendarName: null,
       googleNotesEnabled: false,

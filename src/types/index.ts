@@ -53,6 +53,8 @@ export interface AppSettings {
   googleClientId: string | null;
   googleAccessToken: string | null;
   googleRefreshToken: string | null;
+  /** Unix-ms-Zeitpunkt, an dem das Access-Token abläuft (für stillen Refresh). */
+  googleTokenExpiry: number | null;
   googleCalendarId: string | null;
   googleCalendarName: string | null;
   autoGroupEnabled: boolean;

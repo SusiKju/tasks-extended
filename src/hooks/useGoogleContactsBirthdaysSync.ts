@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { useStore } from '../store';
-import { refreshGoogleToken } from '../services/googleCalendar';
+import { getValidAccessToken } from '../services/googleCalendar';
 import { listContactBirthdays } from '../services/googleContacts';
 
 /**
@@ -17,19 +17,19 @@ import { listContactBirthdays } from '../services/googleContacts';
  */
 export function useGoogleContactsBirthdaysSync() {
   const syncBirthdays = useCallback(async (overrideToken?: string): Promise<number | null> => {
-    const { settings, updateSettings, setBirthdays } = useStore.getState();
+    const { setBirthdays } = useStore.getState();
 
-    const token = overrideToken ?? settings.googleAccessToken;
+    // Stillen Refresh erlauben (Web via GIS, nativ via Refresh-Token).
+    const token = overrideToken ?? (await getValidAccessToken());
     if (!token) return null;
 
     // First attempt with the current token.
     let result = await listContactBirthdays(token).catch(() => null);
 
-    // null = auth failure → refresh once and retry.
-    if (result === null && settings.googleRefreshToken) {
-      const newToken = await refreshGoogleToken(settings.googleRefreshToken).catch(() => null);
-      if (newToken) {
-        updateSettings({ googleAccessToken: newToken });
+    // null = auth failure → force refresh once and retry.
+    if (result === null && !overrideToken) {
+      const newToken = await getValidAccessToken(true);
+      if (newToken && newToken !== token) {
         result = await listContactBirthdays(newToken).catch(() => null);
       }
     }

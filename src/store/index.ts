@@ -82,6 +82,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   googleClientId: null,
   googleAccessToken: null,
   googleRefreshToken: null,
+  googleTokenExpiry: null,
   googleCalendarId: null,
   googleCalendarName: null,
   autoGroupEnabled: true,
@@ -230,7 +231,7 @@ export const useStore = create<TaskState>()(
     }),
     {
       name: 'tasks-extended-store',
-      version: 11,
+      version: 12,
       migrate: (persistedState: any, version: number) => {
         if (version < 1 && persistedState?.tasks) {
           persistedState.tasks = persistedState.tasks.map((t: any) => ({
@@ -276,6 +277,12 @@ export const useStore = create<TaskState>()(
             persistedState.settings.googleBirthdaysEnabled =
               persistedState.settings.googleBirthdaysEnabled ?? false;
           }
+        }
+        if (version < 12 && persistedState?.settings) {
+          // Altes Web-Token kennt keine Ablaufzeit → als abgelaufen markieren,
+          // damit der erste Sync sofort einen stillen GIS-Refresh auslöst.
+          persistedState.settings.googleTokenExpiry =
+            persistedState.settings.googleTokenExpiry ?? null;
         }
         return persistedState;
       },
