@@ -32,6 +32,7 @@ import {
   getReminderTimes, setReminderTimes,
 } from '../../src/services/kinderTasks';
 import { sendReminderToAllChildren, sendReminderToChild } from '../../src/services/pushNotifications';
+import { writePushTrigger, writePushTriggerAll } from '../../src/services/kinderTasks';
 import { format } from 'date-fns';
 
 const TODAY = format(new Date(), 'yyyy-MM-dd');
@@ -107,7 +108,7 @@ export default function KinderScreen() {
   const handleSendNow = useCallback(async () => {
     setSending(true);
     try {
-      await sendReminderToAllChildren();
+      await writePushTriggerAll();
       crossInfo('✓ Push gesendet', 'Alle Kinder wurden benachrichtigt.');
     } catch (e: any) {
       crossInfo('Fehler', e?.message ?? 'Push konnte nicht gesendet werden.');
@@ -177,7 +178,7 @@ export default function KinderScreen() {
             style={s.pushChildBtn}
             onPress={async () => {
               try {
-                await sendReminderToChild(selectedChild);
+                await writePushTrigger(selectedChild);
                 crossInfo('✓ Push gesendet', `${CHILD_NAMES[selectedChild]} wurde benachrichtigt.`);
               } catch (e: any) {
                 crossInfo('Fehler', e?.message ?? 'Push fehlgeschlagen.');

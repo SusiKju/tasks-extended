@@ -106,6 +106,40 @@ export async function getPushTokens(): Promise<Record<ChildId, string | null>> {
   return result as Record<ChildId, string | null>;
 }
 
+// ─── Web-Push-Trigger ────────────────────────────────────────────────────────
+
+/** Schreibt einen Push-Trigger für ein Kind in Firestore. */
+export async function writePushTrigger(childId: ChildId): Promise<void> {
+  await setDoc(doc(db, 'pushTriggers', childId), {
+    triggeredAt: new Date().toISOString(),
+    childName: CHILD_NAMES[childId],
+  });
+}
+
+/** Schreibt Push-Trigger für alle Kinder. */
+export async function writePushTriggerAll(): Promise<void> {
+  await Promise.all(CHILDREN.map((id) => writePushTrigger(id)));
+}
+
+/** Hört auf Push-Trigger für ein Kind. Gibt Browser-Notification aus. */
+export function subscribeToPushTrigger(childId: ChildId): Unsubscribe {
+  return onSnapshot(doc(db, 'pushTriggers', childId), (snap) => {
+    if (!snap.exists()) return;
+    const data = snap.data();
+    if (!data?.triggeredAt) return;
+    // Nur neue Trigger zeigen (nicht beim ersten Laden)
+    const triggered = new Date(data.triggeredAt).getTime();
+    const age = Date.now() - triggered;
+    if (age > 10_000) return; // älter als 10s → ignorieren
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+      new Notification(`Hey ${CHILD_NAMES[childId]}! 👋`, {
+        body: 'Schau mal kurz in deine Aufgaben rein.',
+        icon: '/tasks-extended/icons/icon-192x192.png',
+      });
+    }
+  });
+}
+
 // ─── Erinnerungszeiten ───────────────────────────────────────────────────────
 
 export async function getReminderTimes(): Promise<string[]> {

@@ -14,9 +14,18 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../utils/theme';
 import {
   ChildId, CHILDREN, CHILD_NAMES, ChildTask,
-  subscribeToChildTasks, toggleTask,
+  subscribeToChildTasks, toggleTask, subscribeToPushTrigger,
 } from '../services/kinderTasks';
 import { registerPushToken } from '../services/pushNotifications';
+import { Platform } from 'react-native';
+
+async function requestWebNotificationPermission(): Promise<void> {
+  if (Platform.OS !== 'web') return;
+  if (typeof window === 'undefined' || !('Notification' in window)) return;
+  if (Notification.permission === 'default') {
+    await Notification.requestPermission();
+  }
+}
 import { format } from 'date-fns';
 
 const TODAY = format(new Date(), 'yyyy-MM-dd');
@@ -49,8 +58,11 @@ export default function KindScreen({ onExitChildMode }: Props) {
   // Firestore-Listener sobald Kind bekannt
   useEffect(() => {
     if (!childId) return;
-    const unsub = subscribeToChildTasks(childId, TODAY, setTasks);
-    return unsub;
+    const unsubTasks = subscribeToChildTasks(childId, TODAY, setTasks);
+    // Web-Benachrichtigungen: Berechtigung anfragen + Trigger-Listener
+    requestWebNotificationPermission();
+    const unsubPush = subscribeToPushTrigger(childId);
+    return () => { unsubTasks(); unsubPush(); };
   }, [childId]);
 
   const handleSelectChild = useCallback(async (id: ChildId) => {
