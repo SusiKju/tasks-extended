@@ -331,7 +331,7 @@ function makeStyles(colors: ThemeColors) {
       paddingVertical: 8,
       borderRadius: 10,
     },
-    deleteBtnText: { color: '#fff', fontWeight: '600', fontSize: 13 },
+    deleteBtnText: { color: colors.dangerFg, fontWeight: '600', fontSize: 13 },
 
     // Misc
     emptyTitle: { fontSize: 18, fontWeight: '600', color: colors.text, marginTop: 16, marginBottom: 8, textAlign: 'center' },
@@ -339,9 +339,9 @@ function makeStyles(colors: ThemeColors) {
     loadingText: { marginTop: 16, fontSize: 14, color: colors.textSecondary },
     errorText: { color: colors.danger, fontSize: 13, marginBottom: 16, textAlign: 'center' },
     errorBanner: { backgroundColor: colors.danger, padding: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-    errorBannerText: { color: '#fff', fontSize: 13, flex: 1 },
-    retryText: { color: '#fff', fontWeight: '700', fontSize: 13, marginLeft: 12 },
+    errorBannerText: { color: colors.dangerFg, fontSize: 13, flex: 1 },
+    retryText: { color: colors.dangerFg, fontWeight: '700', fontSize: 13, marginLeft: 12 },
     connectButton: { backgroundColor: colors.accentNeon, paddingHorizontal: 24, paddingVertical: 14, borderRadius: 12, minWidth: 200, alignItems: 'center' },
-    connectButtonText: { color: '#fff', fontWeight: '700', fontSize: 16 },
+    connectButtonText: { color: colors.accentFg, fontWeight: '700', fontSize: 16 },
   });
 }

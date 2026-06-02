@@ -121,7 +121,7 @@ export function DatePickerModal({ visible, value, onConfirm, onCancel, colors }:
                       style={[
                         s.dayText,
                         isTodayCell(day) && !isSelected(day) && { color: colors.accent, fontWeight: '700' },
-                        isSelected(day) && { color: '#fff', fontWeight: '700' },
+                        isSelected(day) && { color: colors.accentFg, fontWeight: '700' },
                       ]}
                     >
                       {day}
@@ -227,6 +227,6 @@ function makeStyles(c: ThemeColors) {
       paddingVertical: 10,
       borderRadius: 10,
     },
-    confirmText: { fontSize: 15, fontWeight: '600', color: '#fff' },
+    confirmText: { fontSize: 15, fontWeight: '600', color: c.accentFg },
   });
 }

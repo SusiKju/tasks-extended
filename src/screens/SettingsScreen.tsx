@@ -850,7 +850,7 @@ function makeStyles(c: ThemeColors) {
     },
     thresholdBtnActive: { backgroundColor: c.accent, borderColor: c.accent },
     thresholdBtnText: { fontSize: 12, color: c.textSecondary },
-    thresholdBtnTextActive: { color: '#fff', fontWeight: '600' },
+    thresholdBtnTextActive: { color: c.accentFg, fontWeight: '600' },
     calendarInfo: {
       backgroundColor: c.surface,
       borderRadius: 12,
@@ -903,7 +903,7 @@ function makeStyles(c: ThemeColors) {
       paddingVertical: 8,
       borderRadius: 10,
     },
-    confirmBtnText: { fontSize: 14, fontWeight: '600', color: '#fff' },
+    confirmBtnText: { fontSize: 14, fontWeight: '600', color: c.dangerFg },
     syncBtn: {
       backgroundColor: c.accent,
       borderRadius: 12,
@@ -913,7 +913,7 @@ function makeStyles(c: ThemeColors) {
       justifyContent: 'center',
       gap: 8,
     },
-    syncBtnText: { color: '#fff', fontSize: 14, fontWeight: '600' },
+    syncBtnText: { color: c.accentFg, fontSize: 14, fontWeight: '600' },
     calendarPickerRow: {
       flexDirection: 'row',
       alignItems: 'center',

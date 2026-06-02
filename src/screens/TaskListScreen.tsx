@@ -497,7 +497,7 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
     bulkDeleteText: {
       fontSize: 14,
       fontWeight: '600',
-      color: '#fff',
+      color: c.dangerFg,
     },
   });
 }

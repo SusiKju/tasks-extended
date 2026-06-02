@@ -518,7 +518,7 @@ function makeStyles(c: ThemeColors, isMono = false) {
     },
     metaChipActive: { backgroundColor: c.accent, borderColor: c.accent },
     metaChipText: { fontSize: 13, color: c.textSecondary },
-    metaChipTextActive: { color: '#fff', fontWeight: '600' },
+    metaChipTextActive: { color: c.accentFg, fontWeight: '600' },
     dot: { width: 6, height: 6, borderRadius: 3 },
     dateBtn: {
       flex: 1,

@@ -23,6 +23,8 @@ export interface ThemeColors {
   glowAccent: string;
   glowDanger: string;
   glowSuccess: string;
+  accentFg: string;
+  dangerFg: string;
 }
 
 const LIGHT: ThemeColors = {
@@ -46,6 +48,8 @@ const LIGHT: ThemeColors = {
   glowAccent: 'transparent',
   glowDanger: 'transparent',
   glowSuccess: 'transparent',
+  accentFg: '#FFFFFF',
+  dangerFg: '#FFFFFF',
 };
 
 const DARK_NEON: ThemeColors = {
@@ -69,6 +73,8 @@ const DARK_NEON: ThemeColors = {
   glowAccent:  'rgba(0, 238, 255, 0.65)',
   glowDanger:  'rgba(255, 17, 119, 0.65)',
   glowSuccess: 'rgba(0, 255, 136, 0.55)',
+  accentFg: '#FFFFFF',
+  dangerFg: '#FFFFFF',
 };
 
 const DARK_SOFT: ThemeColors = {
@@ -92,6 +98,8 @@ const DARK_SOFT: ThemeColors = {
   glowAccent: 'transparent',
   glowDanger: 'transparent',
   glowSuccess: 'transparent',
+  accentFg: '#FFFFFF',
+  dangerFg: '#FFFFFF',
 };
 
 // Schwarz-Weiß: Kopie des Neon-Themes (gleiche Glow-/Outline-Mechanik via isDark),
@@ -118,6 +126,8 @@ const DARK_MONO: ThemeColors = {
   glowAccent:  'rgba(255, 255, 255, 0.55)',
   glowDanger:  'rgba(255, 255, 255, 0.45)',
   glowSuccess: 'rgba(255, 255, 255, 0.45)',
+  accentFg: '#000000',
+  dangerFg: '#000000',
 };
 
 export const THEMES: Record<Theme, ThemeColors> = {

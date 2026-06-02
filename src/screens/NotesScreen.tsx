@@ -17,7 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'react-native';
 import { useStore } from '../store';
 import { Note } from '../types';
-import { useTheme, ThemeColors, neonGlow } from '../utils/theme';
+import { useTheme, ThemeColors, neonGlow, readableTextOn } from '../utils/theme';
 import { loadImage } from '../utils/imageStore';
 import { useGoogleDriveNotesSync } from '../hooks/useGoogleDriveNotesSync';
 
@@ -223,7 +223,7 @@ function NoteModal({ visible, note, onSave, onClose, colors, styles }: NoteModal
               style={[styles.groupChip, { borderColor: colors.border, backgroundColor: selectedGroupId === null ? colors.accent : colors.surface }]}
               onPress={() => setSelectedGroupId(null)}
             >
-              <Text style={[styles.groupChipText, { color: selectedGroupId === null ? '#fff' : colors.textSecondary }]}>Keine</Text>
+              <Text style={[styles.groupChipText, { color: selectedGroupId === null ? colors.accentFg : colors.textSecondary }]}>Keine</Text>
             </Pressable>
             {groups.map((g) => (
               <Pressable
@@ -231,7 +231,7 @@ function NoteModal({ visible, note, onSave, onClose, colors, styles }: NoteModal
                 style={[styles.groupChip, { borderColor: mono(g.color), backgroundColor: selectedGroupId === g.id ? mono(g.color) : colors.surface }]}
                 onPress={() => setSelectedGroupId(g.id)}
               >
-                <Text style={[styles.groupChipText, { color: selectedGroupId === g.id ? '#fff' : colors.text }]}>{g.name}</Text>
+                <Text style={[styles.groupChipText, { color: selectedGroupId === g.id ? readableTextOn(mono(g.color)) : colors.text }]}>{g.name}</Text>
               </Pressable>
             ))}
           </ScrollView>
@@ -341,7 +341,7 @@ function NoteCard({ note, onPress, onLongPress, onToggleItem, groupName, groupCo
 
       {groupName ? (
         <View style={[styles.noteGroupBadge, { backgroundColor: mono(groupColor ?? '#888') }]}>
-          <Text style={styles.noteGroupText} numberOfLines={1}>{groupName}</Text>
+          <Text style={[styles.noteGroupText, { color: readableTextOn(mono(groupColor ?? '#888')) }]} numberOfLines={1}>{groupName}</Text>
         </View>
       ) : null}
     </Pressable>
@@ -545,7 +545,7 @@ export function NotesScreen() {
               style={[styles.groupFilterChip, filterGroupId === null && { backgroundColor: colors.accent }]}
               onPress={() => setFilterGroupId(null)}
             >
-              <Text style={[styles.groupFilterText, { color: filterGroupId === null ? '#fff' : colors.textSecondary }]}>Alle</Text>
+              <Text style={[styles.groupFilterText, { color: filterGroupId === null ? colors.accentFg : colors.textSecondary }]}>Alle</Text>
             </Pressable>
             {usedGroups.map((g) => (
               <Pressable
@@ -553,7 +553,7 @@ export function NotesScreen() {
                 style={[styles.groupFilterChip, filterGroupId === g.id && { backgroundColor: mono(g.color) }]}
                 onPress={() => setFilterGroupId(filterGroupId === g.id ? null : g.id)}
               >
-                <Text style={[styles.groupFilterText, { color: filterGroupId === g.id ? '#fff' : colors.textSecondary }]}>{g.name}</Text>
+                <Text style={[styles.groupFilterText, { color: filterGroupId === g.id ? readableTextOn(mono(g.color)) : colors.textSecondary }]}>{g.name}</Text>
               </Pressable>
             ))}
           </ScrollView>
@@ -566,7 +566,7 @@ export function NotesScreen() {
               onPress={() => setFilterLabel(null)}
             >
               <Ionicons name="pricetag-outline" size={11} color={filterLabel === null ? '#fff' : colors.textSecondary} />
-              <Text style={[styles.labelChipText, { color: filterLabel === null ? '#fff' : colors.textSecondary }]}>Alle Labels</Text>
+              <Text style={[styles.labelChipText, { color: filterLabel === null ? colors.accentFg : colors.textSecondary }]}>Alle Labels</Text>
             </Pressable>
             {usedLabels.map((label) => (
               <Pressable
@@ -575,7 +575,7 @@ export function NotesScreen() {
                 onPress={() => setFilterLabel(filterLabel === label ? null : label)}
               >
                 <Ionicons name="pricetag-outline" size={11} color={filterLabel === label ? '#fff' : colors.textSecondary} />
-                <Text style={[styles.labelChipText, { color: filterLabel === label ? '#fff' : colors.textSecondary }]}>{label}</Text>
+                <Text style={[styles.labelChipText, { color: filterLabel === label ? colors.accentFg : colors.textSecondary }]}>{label}</Text>
               </Pressable>
             ))}
           </ScrollView>

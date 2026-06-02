@@ -1,9 +1,29 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  TextInput, Alert, ActivityIndicator, RefreshControl, Modal, Pressable,
+  TextInput, Alert, ActivityIndicator, RefreshControl, Modal, Pressable, Platform,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+
+/** Alert funktioniert auf Web nicht — window.confirm als Fallback */
+function crossAlert(title: string, message: string, onConfirm: () => void, destructive = false) {
+  if (Platform.OS === 'web') {
+    if (window.confirm(`${title}${message ? '\n' + message : ''}`)) onConfirm();
+  } else {
+    Alert.alert(title, message, [
+      { text: 'Abbrechen', style: 'cancel' },
+      { text: destructive ? 'Löschen' : 'OK', style: destructive ? 'destructive' : 'default', onPress: onConfirm },
+    ]);
+  }
+}
+
+function crossInfo(title: string, message: string) {
+  if (Platform.OS === 'web') {
+    window.alert(`${title}\n${message}`);
+  } else {
+    Alert.alert(title, message);
+  }
+}
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../src/utils/theme';
 import {
@@ -62,18 +82,13 @@ export default function KinderScreen() {
   }, [selectedChild, newTaskTitle]);
 
   const handleDeleteTask = useCallback((taskId: string) => {
-    Alert.alert('Aufgabe löschen?', '', [
-      { text: 'Abbrechen', style: 'cancel' },
-      {
-        text: 'Löschen', style: 'destructive', onPress: async () => {
-          try {
-            await deleteTask(selectedChild, taskId);
-          } catch (e: any) {
-            Alert.alert('Fehler beim Löschen', e?.message ?? String(e));
-          }
-        }
-      },
-    ]);
+    crossAlert('Aufgabe löschen?', '', async () => {
+      try {
+        await deleteTask(selectedChild, taskId);
+      } catch (e: any) {
+        crossInfo('Fehler beim Löschen', e?.message ?? String(e));
+      }
+    }, true);
   }, [selectedChild]);
 
   const handleSaveEdit = useCallback(async () => {
@@ -93,9 +108,9 @@ export default function KinderScreen() {
     setSending(true);
     try {
       await sendReminderToAllChildren();
-      Alert.alert('✓ Push gesendet', 'Alle Kinder wurden benachrichtigt.');
-    } catch {
-      Alert.alert('Fehler', 'Push konnte nicht gesendet werden.');
+      crossInfo('✓ Push gesendet', 'Alle Kinder wurden benachrichtigt.');
+    } catch (e: any) {
+      crossInfo('Fehler', e?.message ?? 'Push konnte nicht gesendet werden.');
     } finally {
       setSending(false);
     }
@@ -163,9 +178,9 @@ export default function KinderScreen() {
             onPress={async () => {
               try {
                 await sendReminderToChild(selectedChild);
-                Alert.alert('✓ Push gesendet', `${CHILD_NAMES[selectedChild]} wurde benachrichtigt.`);
+                crossInfo('✓ Push gesendet', `${CHILD_NAMES[selectedChild]} wurde benachrichtigt.`);
               } catch (e: any) {
-                Alert.alert('Fehler', e?.message ?? 'Push fehlgeschlagen.');
+                crossInfo('Fehler', e?.message ?? 'Push fehlgeschlagen.');
               }
             }}
           >
@@ -261,7 +276,7 @@ export default function KinderScreen() {
                 onPress={async () => {
                   await AsyncStorage.setItem('kinder_child_id', id);
                   setSetupModalVisible(false);
-                  Alert.alert(
+                  crossInfo(
                     `✓ Gerät für ${CHILD_NAMES[id]} eingerichtet`,
                     'Die App wechselt beim nächsten Start in den Kinder-Modus. Jetzt die App neu starten.'
                   );

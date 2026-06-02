@@ -456,7 +456,7 @@ function makeStyles(c: ThemeColors, isMono = false) {
     groupChipSelected: { backgroundColor: c.accent, borderColor: c.accent },
     groupDot: { width: 6, height: 6, borderRadius: 3 },
     groupChipText: { fontSize: 13, color: c.textSecondary },
-    groupChipTextSelected: { color: '#fff', fontWeight: '600' },
+    groupChipTextSelected: { color: c.accentFg, fontWeight: '600' },
     suggestion: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -513,6 +513,6 @@ function makeStyles(c: ThemeColors, isMono = false) {
       marginTop: 8,
     },
     saveBtnDisabled: { opacity: 0.6 },
-    saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+    saveBtnText: { color: c.accentFg, fontSize: 16, fontWeight: '700' },
   });
 }
