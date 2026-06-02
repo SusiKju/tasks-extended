@@ -5,17 +5,18 @@
 
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 import { savePushToken, getPushTokens, getReminderTimes, ChildId, CHILD_NAMES } from './kinderTasks';
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
+if (Platform.OS !== 'web') {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: false,
+    }),
+  });
+}
 
 /** Einmalig beim App-Start aufrufen (Kind-Modus). Registriert den Push-Token. */
 export async function registerPushToken(childId: ChildId): Promise<void> {
@@ -32,7 +33,8 @@ export async function registerPushToken(childId: ChildId): Promise<void> {
     return;
   }
 
-  const token = (await Notifications.getExpoPushTokenAsync()).data;
+  const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
+  const token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
   await savePushToken(childId, token);
 }
 
