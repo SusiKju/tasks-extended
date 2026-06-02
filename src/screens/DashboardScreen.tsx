@@ -360,7 +360,7 @@ function Scratchpad({
             ? { backgroundColor: colors.surfaceHigh, borderWidth: 1, borderColor: colors.border }
             : { backgroundColor: entry.color },
         ]}>
-          <Text style={[padStyles.bullet, { color: isMono ? monoDotColor(idx) : fg + '99' }]}>•</Text>
+          <View style={[padStyles.bullet, { backgroundColor: isMono ? monoDotColor(idx) : fg + '99' }]} />
           <TextInput
             ref={(r) => { inputRefs.current[idx] = r; }}
             style={[padStyles.bubbleInput, { color: fg }]}
@@ -393,9 +393,10 @@ const padStyles = StyleSheet.create({
     gap: 5,
   },
   bullet: {
-    color: 'rgba(255,255,255,0.5)',
-    fontSize: 12,
-    lineHeight: 18,
+    width: 12,
+    height: 12,
+    borderRadius: 999,
+    flexShrink: 0,
   },
   bubbleInput: {
     flex: 1,
@@ -792,8 +793,8 @@ export function DashboardScreen() {
                   {isMono ? (
                     <View style={[styles.calDot, {
                       backgroundColor: realColor,
-                      width: prominent ? 10 : 8,
-                      height: prominent ? 10 : 8,
+                      width: prominent ? 12 : 10,
+                      height: prominent ? 12 : 10,
                       opacity: prominent ? 1 : 0.7,
                     }]} />
                   ) : (
