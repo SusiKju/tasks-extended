@@ -132,7 +132,9 @@ export async function signInWithGoogle(): Promise<CalendarAuthResult | null> {
       return null;
     }
 
-    const redirectUri = AuthSession.makeRedirectUri({ scheme: 'tasksextended' });
+    const redirectUri = Platform.OS === 'web'
+      ? AuthSession.makeRedirectUri({})
+      : 'https://auth.expo.io/@susikju/tasks-extended';
 
     const request = new AuthSession.AuthRequest({
       clientId: GOOGLE_CLIENT_ID,
