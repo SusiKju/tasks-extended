@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  TextInput, Alert, ActivityIndicator, RefreshControl,
+  TextInput, Alert, ActivityIndicator, RefreshControl, Modal, Pressable,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../src/utils/theme';
 import {
@@ -29,6 +30,7 @@ export default function KinderScreen() {
   const [timesInput, setTimesInput] = useState('15:00, 17:00');
   const [sending, setSending] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [setupModalVisible, setSetupModalVisible] = useState(false);
 
   // Firestore-Listener für alle Kinder
   useEffect(() => {
@@ -184,6 +186,39 @@ export default function KinderScreen() {
         )}
       </View>
 
+      {/* Kinder-Gerät einrichten */}
+      <TouchableOpacity style={s.setupBtn} onPress={() => setSetupModalVisible(true)}>
+        <Ionicons name="phone-portrait-outline" size={18} color={colors.accentNeon} />
+        <Text style={s.setupBtnText}>Dieses Gerät als Kinder-Gerät einrichten</Text>
+        <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+      </TouchableOpacity>
+
+      {/* Setup-Modal: Kind auswählen */}
+      <Modal visible={setupModalVisible} transparent animationType="fade">
+        <Pressable style={s.modalOverlay} onPress={() => setSetupModalVisible(false)}>
+          <Pressable style={s.modalBox} onPress={() => {}}>
+            <Text style={s.modalTitle}>Für wen ist dieses Gerät?</Text>
+            <Text style={s.modalHint}>Danach wechselt die App in den Kinder-Modus.</Text>
+            {CHILDREN.map((id) => (
+              <TouchableOpacity
+                key={id}
+                style={s.modalChildBtn}
+                onPress={async () => {
+                  await AsyncStorage.setItem('kinder_child_id', id);
+                  setSetupModalVisible(false);
+                  Alert.alert(
+                    `✓ Gerät für ${CHILD_NAMES[id]} eingerichtet`,
+                    'Die App wechselt beim nächsten Start in den Kinder-Modus. Jetzt die App neu starten.'
+                  );
+                }}
+              >
+                <Text style={s.modalChildBtnText}>{CHILD_NAMES[id]}</Text>
+              </TouchableOpacity>
+            ))}
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       {/* Push jetzt senden */}
       <TouchableOpacity style={s.pushBtn} onPress={handleSendNow} disabled={sending}>
         {sending ? (
@@ -244,4 +279,19 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
       paddingVertical: 14, justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 8,
     },
     pushBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
+    setupBtn: {
+      flexDirection: 'row', alignItems: 'center', gap: 10,
+      backgroundColor: colors.surface, borderRadius: 14, padding: 14,
+      borderWidth: 1, borderColor: colors.border, marginTop: 8,
+    },
+    setupBtnText: { flex: 1, fontSize: 14, color: colors.accentNeon, fontWeight: '600' },
+    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
+    modalBox: { backgroundColor: colors.surface, borderRadius: 20, padding: 24, width: 300, gap: 10 },
+    modalTitle: { fontSize: 18, fontWeight: '700', color: colors.text, textAlign: 'center' },
+    modalHint: { fontSize: 13, color: colors.textMuted, textAlign: 'center', marginBottom: 4 },
+    modalChildBtn: {
+      backgroundColor: colors.inputBackground, borderRadius: 12,
+      paddingVertical: 14, alignItems: 'center', borderWidth: 1, borderColor: colors.border,
+    },
+    modalChildBtnText: { fontSize: 18, fontWeight: '700', color: colors.text },
   });

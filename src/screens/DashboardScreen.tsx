@@ -272,6 +272,16 @@ function randomBubbleColor(isNeon = false): string {
 
 const NEON_FIRST_COLOR = '#FF1177';
 
+/**
+ * Stabiler, pseudo-zufälliger Punkt-Farbton pro Eintrags-Position für das
+ * Mono-Theme (TE-87). Deterministisch über die Position → flackert nicht beim
+ * Tippen und braucht keine persistierte Farbe, sieht aber zufällig gestreut aus.
+ */
+function monoDotColor(idx: number): string {
+  const h = ((idx + 1) * 2654435761) >>> 0; // Knuth-Multiplikativ-Hash
+  return BUBBLE_PALETTE_NEON[h % BUBBLE_PALETTE_NEON.length];
+}
+
 function parseScratchpad(raw: string, isNeon = false): ScratchEntry[] {
   const firstColor = isNeon ? NEON_FIRST_COLOR : randomBubbleColor(false);
   if (!raw || raw.trim() === '') return [{ text: '', color: firstColor }];
@@ -350,7 +360,7 @@ function Scratchpad({
             ? { backgroundColor: colors.surfaceHigh, borderWidth: 1, borderColor: colors.border }
             : { backgroundColor: entry.color },
         ]}>
-          <Text style={[padStyles.bullet, { color: fg + '99' }]}>•</Text>
+          <Text style={[padStyles.bullet, { color: isMono ? monoDotColor(idx) : fg + '99' }]}>•</Text>
           <TextInput
             ref={(r) => { inputRefs.current[idx] = r; }}
             style={[padStyles.bubbleInput, { color: fg }]}
@@ -401,7 +411,7 @@ const padStyles = StyleSheet.create({
 export function DashboardScreen() {
   const router = useRouter();
   const { tasks, notes, settings, scratchpad, scratchpadUpdatedAt, setScratchpad, birthdays: storeBirthdays } = useStore();
-  const { colors, isDark, theme, mono } = useTheme();
+  const { colors, isDark, theme, mono, isMono } = useTheme();
   const { syncScratchpad, syncDriveNotes } = useGoogleDriveNotesSync();
   const { syncTasks } = useGoogleTasksSync();
   const { syncBirthdays } = useGoogleContactsBirthdaysSync();
@@ -762,6 +772,11 @@ export function DashboardScreen() {
             const renderEvent = (event: CalendarEvent, i: number, arr: CalendarEvent[], prominent: boolean) => {
               const { time } = formatEventTime(event);
               const eventColor = mono(event.color ?? C.calendar);
+              // Dark-Mono: Termintext & Zeit immer strahlend weiß – das gedämpfte
+              // Grau (textSecondary) ist auf Schwarz schlecht lesbar (TE-88).
+              const eventTextColor = isMono
+                ? colors.text
+                : (prominent ? colors.text : colors.textSecondary);
               return (
                 <View
                   key={event.id}
@@ -780,7 +795,7 @@ export function DashboardScreen() {
                   <View style={prominent ? styles.calTimeLg : styles.calTimeSm}>
                     <Text style={[
                       prominent ? styles.calHourLg : styles.calHourSm,
-                      { color: prominent ? colors.text : colors.textSecondary }
+                      { color: eventTextColor }
                     ]}>{time}</Text>
                   </View>
                   {/* Titel */}
@@ -788,7 +803,7 @@ export function DashboardScreen() {
                     <Text
                       style={[
                         prominent ? styles.calTitleLg : styles.calTitleSm,
-                        { color: prominent ? colors.text : colors.textSecondary }
+                        { color: eventTextColor }
                       ]}
                       numberOfLines={1}
                     >
