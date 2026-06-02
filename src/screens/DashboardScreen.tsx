@@ -169,7 +169,9 @@ function TaskChip({
     : (isImportant ? C.important : C.tasks);
   const borderColor = chipColor;
   const bgColor     = isDark ? chipColor + '18' : chipColor;
-  const textColor   = isDark ? chipColor : readableTextOn(chipColor);
+  const textColor   = isMono && (blink || isImportant)
+    ? '#FFFFFF'
+    : (isDark ? chipColor : readableTextOn(chipColor));
 
   const fontSize   = scale === 'lg' ? 13 : scale === 'md' ? 11 : 10;
   const padV       = scale === 'lg' ? 7  : scale === 'md' ? 5  : 4;
