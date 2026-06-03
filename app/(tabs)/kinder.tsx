@@ -30,7 +30,7 @@ import { useStore } from '../../src/store';
 import {
   ChildId, CHILDREN, CHILD_NAMES, ChildTask,
   subscribeToChildTasks, addTask, updateTask, deleteTask,
-  getReminderTimes, setReminderTimes,
+  getReminderTimes, setReminderTimes, getCompletedHistory,
 } from '../../src/services/kinderTasks';
 import { sendHtmlMail } from '../../src/services/googleMail';
 import { sendReminderToAllChildren, sendReminderToChild } from '../../src/services/pushNotifications';
@@ -57,6 +57,9 @@ export default function KinderScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [setupModalVisible, setSetupModalVisible] = useState(false);
   const [editingTask, setEditingTask] = useState<{ id: string; title: string } | null>(null);
+  const [historyChild, setHistoryChild] = useState<ChildId | null>(null);
+  const [history, setHistory] = useState<ChildTask[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   // Firestore-Listener für alle Kinder
   useEffect(() => {
@@ -197,6 +200,20 @@ export default function KinderScreen() {
     setEditingTask(null);
   }, [selectedChild, editingTask]);
 
+  const handleOpenHistory = useCallback(async (childId: ChildId) => {
+    setHistoryChild(childId);
+    setHistoryLoading(true);
+    setHistory([]);
+    try {
+      const items = await getCompletedHistory(childId);
+      setHistory(items);
+    } catch (e: any) {
+      crossInfo('Fehler', e?.message ?? 'Verlauf konnte nicht geladen werden.');
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, []);
+
   const handleSaveTimes = useCallback(async () => {
     const times = timesInput.split(',').map((t) => t.trim()).filter(Boolean);
     await setReminderTimes(times);
@@ -278,19 +295,28 @@ export default function KinderScreen() {
           <Text style={s.sectionTitle}>
             Heute — {done}/{tasks.length} erledigt
           </Text>
-          <TouchableOpacity
-            style={s.pushChildBtn}
-            onPress={() => handlePushMail(selectedChild)}
-            disabled={mailingChild === selectedChild}
-          >
-            {mailingChild === selectedChild
-              ? <ActivityIndicator size="small" color={colors.accentNeon} />
-              : <>
-                  <Ionicons name="mail-outline" size={14} color={colors.accentNeon} />
-                  <Text style={s.pushChildBtnText}>Push & Mail</Text>
-                </>
-            }
-          </TouchableOpacity>
+          <View style={s.headerBtnRow}>
+            <TouchableOpacity
+              style={s.pushChildBtn}
+              onPress={() => handleOpenHistory(selectedChild)}
+            >
+              <Ionicons name="time-outline" size={14} color={colors.accentNeon} />
+              <Text style={s.pushChildBtnText}>Verlauf</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={s.pushChildBtn}
+              onPress={() => handlePushMail(selectedChild)}
+              disabled={mailingChild === selectedChild}
+            >
+              {mailingChild === selectedChild
+                ? <ActivityIndicator size="small" color={colors.accentNeon} />
+                : <>
+                    <Ionicons name="mail-outline" size={14} color={colors.accentNeon} />
+                    <Text style={s.pushChildBtnText}>Push & Mail</Text>
+                  </>
+              }
+            </TouchableOpacity>
+          </View>
         </View>
         {tasks.length === 0 && (
           <Text style={s.empty}>Noch keine Aufgaben für heute.</Text>
@@ -356,6 +382,53 @@ export default function KinderScreen() {
             <TouchableOpacity style={s.saveBtn} onPress={handleSaveEdit}>
               <Text style={s.saveBtnText}>Speichern</Text>
             </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* History-Modal */}
+      <Modal visible={!!historyChild} transparent animationType="slide">
+        <Pressable style={s.modalOverlay} onPress={() => setHistoryChild(null)}>
+          <Pressable style={s.historyBox} onPress={() => {}}>
+            <View style={s.row}>
+              <Text style={s.modalTitle}>
+                Verlauf{historyChild ? ` — ${CHILD_NAMES[historyChild]}` : ''}
+              </Text>
+              <TouchableOpacity onPress={() => setHistoryChild(null)}>
+                <Ionicons name="close" size={22} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+            {historyLoading ? (
+              <ActivityIndicator color={colors.accentNeon} style={{ marginVertical: 24 }} />
+            ) : history.length === 0 ? (
+              <Text style={s.empty}>Noch keine erledigten Aufgaben.</Text>
+            ) : (
+              <ScrollView style={{ maxHeight: 420 }}>
+                {(() => {
+                  let lastDate = '';
+                  return history.map((t) => {
+                    const showDate = t.date !== lastDate;
+                    lastDate = t.date;
+                    const [y, m, d] = t.date.split('-');
+                    const time = t.completedAt
+                      ? format(new Date(t.completedAt), 'HH:mm')
+                      : null;
+                    return (
+                      <View key={t.id}>
+                        {showDate && (
+                          <Text style={s.historyDate}>{`${d}.${m}.${y}`}</Text>
+                        )}
+                        <View style={s.historyRow}>
+                          <Ionicons name="checkmark-circle" size={18} color={colors.success} />
+                          <Text style={s.historyTitle}>{t.title}</Text>
+                          <Text style={s.historyTime}>{time ?? '—'}</Text>
+                        </View>
+                      </View>
+                    );
+                  });
+                })()}
+              </ScrollView>
+            )}
           </Pressable>
         </Pressable>
       </Modal>
@@ -457,12 +530,27 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
       paddingVertical: 14, justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 8,
     },
     pushBtnText: { color: colors.accentFg, fontWeight: '700', fontSize: 15 },
+    headerBtnRow: { flexDirection: 'row', gap: 8 },
     pushChildBtn: {
       flexDirection: 'row', alignItems: 'center', gap: 4,
       borderWidth: 1, borderColor: colors.accentNeon, borderRadius: 8,
       paddingHorizontal: 10, paddingVertical: 5,
     },
     pushChildBtnText: { fontSize: 12, fontWeight: '700', color: colors.accentNeon },
+    historyBox: {
+      backgroundColor: colors.surface, borderRadius: 20, padding: 20,
+      width: 340, maxWidth: '92%', gap: 10,
+    },
+    historyDate: {
+      fontSize: 12, fontWeight: '700', color: colors.textMuted,
+      textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 12, marginBottom: 4,
+    },
+    historyRow: {
+      flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6,
+      borderBottomWidth: 1, borderColor: colors.border,
+    },
+    historyTitle: { flex: 1, fontSize: 14, color: colors.text },
+    historyTime: { fontSize: 13, fontWeight: '600', color: colors.accentNeon },
     setupBtn: {
       flexDirection: 'row', alignItems: 'center', gap: 10,
       backgroundColor: colors.surface, borderRadius: 14, padding: 14,

@@ -36,6 +36,8 @@ export interface ChildTask {
   done: boolean;
   date: string; // ISO-Datum: "2026-06-02"
   createdAt: string;
+  /** ISO-Zeitstempel, wann die Aufgabe abgehakt wurde. null/undefined = noch offen. */
+  completedAt?: string | null;
 }
 
 // ─── Aufgaben lesen ──────────────────────────────────────────────────────────
@@ -88,7 +90,25 @@ export async function toggleTask(
   taskId: string,
   done: boolean
 ): Promise<void> {
-  await updateDoc(doc(db, 'children', childId, 'tasks', taskId), { done });
+  await updateDoc(doc(db, 'children', childId, 'tasks', taskId), {
+    done,
+    completedAt: done ? new Date().toISOString() : null,
+  });
+}
+
+// ─── History (Eltern) ────────────────────────────────────────────────────────
+
+/**
+ * Alle erledigten Aufgaben eines Kindes datumsübergreifend.
+ * Sortiert nach Erledigungszeitpunkt absteigend (neuste zuerst).
+ * Alt-Daten ohne `completedAt` fallen auf `date` zurück.
+ */
+export async function getCompletedHistory(childId: ChildId): Promise<ChildTask[]> {
+  const snap = await getDocs(collection(db, 'children', childId, 'tasks'));
+  return snap.docs
+    .map((d) => ({ id: d.id, ...d.data() } as ChildTask))
+    .filter((t) => t.done)
+    .sort((a, b) => (b.completedAt ?? b.date).localeCompare(a.completedAt ?? a.date));
 }
 
 // ─── Push-Token ──────────────────────────────────────────────────────────────
