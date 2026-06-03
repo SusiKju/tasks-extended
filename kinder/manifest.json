@@ -1,0 +1,12 @@
+{
+  "name": "Nachrichten von Papa",
+  "short_name": "Papa",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#f0f4ff",
+  "theme_color": "#4f86f7",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
