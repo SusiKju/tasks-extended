@@ -90,6 +90,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   googleNotesEnabled: false,
   googleBirthdaysEnabled: false,
   selectedCalendarIds: [],
+  childEmails: {},
 };
 
 export const useStore = create<TaskState>()(

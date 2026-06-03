@@ -703,6 +703,32 @@ export function SettingsScreen() {
         </Pressable>
       </View>
 
+      {/* Kinder E-Mail-Adressen */}
+      <View style={styles.section}>
+        <Text style={styles.sectionHeader}>Kinder E-Mail-Adressen</Text>
+        <Text style={[styles.rowValue, { fontSize: 12, marginBottom: 4 }]}>
+          Gmail-Adressen für Benachrichtigungen beim Erstellen von Kinder-Aufgaben.
+        </Text>
+        {(['lenny', 'emil', 'hannes', 'liddy'] as const).map((childId) => (
+          <View key={childId} style={styles.row}>
+            <Text style={[styles.rowTitle, { flex: 1 }]}>
+              {childId.charAt(0).toUpperCase() + childId.slice(1)}
+            </Text>
+            <TextInput
+              style={[styles.settingInput, { flex: 2 }]}
+              placeholder="gmail@gmail.com"
+              placeholderTextColor={colors.placeholder}
+              value={settings.childEmails?.[childId] ?? ''}
+              onChangeText={(v) =>
+                updateSettings({ childEmails: { ...settings.childEmails, [childId]: v } })
+              }
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+          </View>
+        ))}
+      </View>
+
       {/* App info */}
       <View style={styles.section}>
         <Text style={styles.sectionHeader}>App</Text>
@@ -839,6 +865,11 @@ function makeStyles(c: ThemeColors) {
     rowTitle: { fontSize: 15, color: c.text },
     rowSubtitle: { fontSize: 13, color: c.textSecondary, marginTop: 2 },
     rowValue: { fontSize: 15, color: c.textSecondary },
+    settingInput: {
+      fontSize: 14, color: c.text, backgroundColor: c.inputBackground,
+      borderWidth: 1, borderColor: c.border, borderRadius: 8,
+      paddingHorizontal: 10, paddingVertical: 6,
+    },
     thresholdButtons: { flexDirection: 'row', gap: 6 },
     thresholdBtn: {
       paddingHorizontal: 10,

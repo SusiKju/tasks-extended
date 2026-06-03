@@ -62,6 +62,7 @@ export interface AppSettings {
   googleNotesEnabled: boolean;
   googleBirthdaysEnabled: boolean;
   selectedCalendarIds: string[];
+  childEmails: Partial<Record<string, string>>;
 }
 
 export interface NoteChecklistItem {

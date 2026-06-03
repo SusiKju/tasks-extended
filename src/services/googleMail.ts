@@ -83,3 +83,35 @@ export async function archiveMail(accessToken: string, messageId: string): Promi
   });
   return res.ok;
 }
+
+/** Sendet eine einfache Text-E-Mail über die Gmail API. */
+export async function sendMail(
+  accessToken: string,
+  to: string,
+  subject: string,
+  body: string
+): Promise<boolean> {
+  const raw = [
+    `To: ${to}`,
+    'Content-Type: text/plain; charset=utf-8',
+    `Subject: ${subject}`,
+    '',
+    body,
+  ].join('\r\n');
+
+  // Base64url-kodieren (RFC 4648)
+  const encoded = btoa(unescape(encodeURIComponent(raw)))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+
+  const res = await gmailPost('/users/me/messages/send', accessToken, { raw: encoded });
+  return res.ok;
+}
+
+export async function archiveMail(accessToken: string, messageId: string): Promise<boolean> {
+  const res = await gmailPost(`/users/me/messages/${messageId}/modify`, accessToken, {
+    removeLabelIds: ['INBOX'],
+  });
+  return res.ok;
+}

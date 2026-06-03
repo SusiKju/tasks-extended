@@ -26,11 +26,13 @@ function crossInfo(title: string, message: string) {
 }
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../src/utils/theme';
+import { useStore } from '../../src/store';
 import {
   ChildId, CHILDREN, CHILD_NAMES, ChildTask,
   subscribeToChildTasks, addTask, updateTask, deleteTask,
   getReminderTimes, setReminderTimes,
 } from '../../src/services/kinderTasks';
+import { sendMail } from '../../src/services/googleMail';
 import { sendReminderToAllChildren, sendReminderToChild } from '../../src/services/pushNotifications';
 import { writePushTrigger, writePushTriggerAll } from '../../src/services/kinderTasks';
 import { format } from 'date-fns';
@@ -41,11 +43,13 @@ export default function KinderScreen() {
   const { colors } = useTheme();
   const s = styles(colors);
 
+  const { settings } = useStore();
   const [selectedChild, setSelectedChild] = useState<ChildId>('lenny');
   const [tasksByChild, setTasksByChild] = useState<Record<ChildId, ChildTask[]>>({
     lenny: [], emil: [], hannes: [], liddy: [],
   });
   const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [sendEmail, setSendEmail] = useState(false);
   const [reminderTimes, setReminderTimesState] = useState<string[]>(['15:00', '17:00']);
   const [editingTimes, setEditingTimes] = useState(false);
   const [timesInput, setTimesInput] = useState('15:00, 17:00');
@@ -73,14 +77,27 @@ export default function KinderScreen() {
 
   const handleAddTask = useCallback(async () => {
     if (!newTaskTitle.trim()) return;
+    const title = newTaskTitle.trim();
     await addTask(selectedChild, {
-      title: newTaskTitle.trim(),
+      title,
       done: false,
       date: TODAY,
       createdAt: new Date().toISOString(),
     });
     setNewTaskTitle('');
-  }, [selectedChild, newTaskTitle]);
+
+    if (sendEmail && settings.googleAccessToken) {
+      const email = settings.childEmails?.[selectedChild];
+      if (email) {
+        sendMail(
+          settings.googleAccessToken,
+          email,
+          `Neue Aufgabe: ${title}`,
+          `Hallo ${CHILD_NAMES[selectedChild]}!\n\nDu hast heute eine neue Aufgabe:\n\n  ${title}\n\nViele Grüße\nPapa`
+        ).catch(() => {});
+      }
+    }
+  }, [selectedChild, newTaskTitle, sendEmail, settings]);
 
   const handleDeleteTask = useCallback((taskId: string) => {
     crossAlert('Aufgabe löschen?', '', async () => {
@@ -171,6 +188,19 @@ export default function KinderScreen() {
             <Ionicons name="add" size={22} color={colors.accentFg} />
           </TouchableOpacity>
         </View>
+        {/* E-Mail-Haken */}
+        {settings.childEmails?.[selectedChild] ? (
+          <TouchableOpacity style={s.emailToggle} onPress={() => setSendEmail((v) => !v)}>
+            <Ionicons
+              name={sendEmail ? 'checkbox' : 'square-outline'}
+              size={18}
+              color={sendEmail ? colors.accentNeon : colors.textMuted}
+            />
+            <Text style={[s.emailToggleText, sendEmail && { color: colors.accentNeon }]}>
+              E-Mail an {CHILD_NAMES[selectedChild]} schicken
+            </Text>
+          </TouchableOpacity>
+        ) : null}
       </View>
 
       {/* Aufgabenliste + Status */}
@@ -339,6 +369,10 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
       backgroundColor: colors.accentNeon, borderRadius: 10,
       paddingHorizontal: 14, justifyContent: 'center',
     },
+    emailToggle: {
+      flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4,
+    },
+    emailToggleText: { fontSize: 13, color: colors.textMuted },
     taskRow: {
       flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6,
     },
