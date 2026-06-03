@@ -393,6 +393,21 @@ export function TaskDetailScreen() {
           )}
         </View>
 
+        {/* Schnellauswahl Fälligkeitsdatum */}
+        {editing && (
+          <View style={styles.quickRow}>
+            {[
+              { label: 'Heute', date: () => new Date() },
+              { label: 'Morgen', date: () => { const d = new Date(); d.setDate(d.getDate() + 1); return d; } },
+              { label: 'Diese Woche', date: () => { const d = new Date(); d.setDate(d.getDate() + ((7 - d.getDay()) % 7)); return d; } },
+            ].map((q) => (
+              <TouchableOpacity key={q.label} style={styles.quickChip} onPress={() => setDueDate(q.date())}>
+                <Text style={styles.quickChipText}>{q.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
         {/* Uhrzeit */}
         <View style={styles.metaRow}>
           <Ionicons name="time-outline" size={16} color={colors.textSecondary} />
@@ -436,6 +451,12 @@ export function TaskDetailScreen() {
             <Text style={[styles.metaText, { color: colors.accent }]}>Mit Google Kalender synchronisiert</Text>
           </View>
         ) : null}
+
+        {/* Erstelldatum (read-only) */}
+        <View style={styles.metaRow}>
+          <Ionicons name="create-outline" size={16} color={colors.textSecondary} />
+          <Text style={styles.metaText}>Erstellt: {formatDate(task.createdAt, settings.dateFormat)}</Text>
+        </View>
       </View>
 
       {/* Attachments */}
@@ -533,6 +554,27 @@ function makeStyles(c: ThemeColors, isMono = false) {
     dateBtnText: {
       flex: 1,
       fontSize: 14,
+    },
+    quickRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 6,
+      marginLeft: 24,
+    },
+    quickChip: {
+      flexGrow: 1,
+      flexBasis: '30%',
+      alignItems: 'center',
+      paddingVertical: 7,
+      borderRadius: 8,
+      backgroundColor: c.surfaceHigh,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    quickChipText: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: c.accent,
     },
     importantBanner: {
       flexDirection: 'row',
