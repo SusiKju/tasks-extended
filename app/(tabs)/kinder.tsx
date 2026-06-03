@@ -32,7 +32,7 @@ import {
   subscribeToChildTasks, addTask, updateTask, deleteTask,
   getReminderTimes, setReminderTimes,
 } from '../../src/services/kinderTasks';
-import { sendMail } from '../../src/services/googleMail';
+import { sendHtmlMail } from '../../src/services/googleMail';
 import { sendReminderToAllChildren, sendReminderToChild } from '../../src/services/pushNotifications';
 import { writePushTrigger, writePushTriggerAll } from '../../src/services/kinderTasks';
 import { format } from 'date-fns';
@@ -49,7 +49,7 @@ export default function KinderScreen() {
     lenny: [], emil: [], hannes: [], liddy: [],
   });
   const [newTaskTitle, setNewTaskTitle] = useState('');
-  const [sendEmail, setSendEmail] = useState(false);
+  const [mailingChild, setMailingChild] = useState<ChildId | null>(null);
   const [reminderTimes, setReminderTimesState] = useState<string[]>(['15:00', '17:00']);
   const [editingTimes, setEditingTimes] = useState(false);
   const [timesInput, setTimesInput] = useState('15:00, 17:00');
@@ -85,19 +85,101 @@ export default function KinderScreen() {
       createdAt: new Date().toISOString(),
     });
     setNewTaskTitle('');
+  }, [selectedChild, newTaskTitle]);
 
-    if (sendEmail && settings.googleAccessToken) {
-      const email = settings.childEmails?.[selectedChild];
-      if (email) {
-        sendMail(
-          settings.googleAccessToken,
-          email,
-          `Neue Aufgabe: ${title}`,
-          `Hallo ${CHILD_NAMES[selectedChild]}!\n\nDu hast heute eine neue Aufgabe:\n\n  ${title}\n\nViele Grüße\nPapa`
-        ).catch(() => {});
-      }
+  const handlePushMail = useCallback(async (childId: ChildId) => {
+    const email = (settings.childEmails ?? {})[childId];
+    if (!email || !settings.googleAccessToken) {
+      crossInfo('E-Mail nicht konfiguriert', 'Bitte E-Mail-Adresse in den Einstellungen eintragen und Google-Konto verbinden.');
+      return;
     }
-  }, [selectedChild, newTaskTitle, sendEmail, settings]);
+    setMailingChild(childId);
+    try {
+      // Firestore-Push (App offen)
+      await writePushTrigger(childId);
+      if (Platform.OS !== 'web') {
+        await sendReminderToChild(childId).catch(() => {});
+      }
+
+      // Offene Aufgaben für heute
+      const openTasks = tasksByChild[childId].filter((t) => !t.done);
+      const doneTasks = tasksByChild[childId].filter((t) => t.done);
+      const name = CHILD_NAMES[childId];
+      const appUrl = 'https://susikju.github.io/tasks-extended/kinder';
+
+      const taskRows = (tasks: ChildTask[], done: boolean) =>
+        tasks.map((t) => `
+          <tr>
+            <td style="padding:10px 12px;border-bottom:1px solid #f0f0f0;font-size:15px;color:${done ? '#aaa' : '#1a1a2e'};${done ? 'text-decoration:line-through;' : ''}">
+              <span style="font-size:18px;margin-right:8px">${done ? '✅' : '⭕'}</span>${t.title}
+            </td>
+          </tr>`).join('');
+
+      const html = `<!DOCTYPE html>
+<html lang="de">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f0f4ff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+  <div style="max-width:480px;margin:32px auto;background:white;border-radius:20px;overflow:hidden;box-shadow:0 4px 24px rgba(79,134,247,0.12)">
+    <!-- Header -->
+    <div style="background:linear-gradient(135deg,#4f86f7,#6ea3ff);padding:32px 28px;text-align:center">
+      <div style="font-size:48px;margin-bottom:8px">📋</div>
+      <h1 style="margin:0;color:white;font-size:22px;font-weight:800">Hey ${name}! 👋</h1>
+      <p style="margin:8px 0 0;color:rgba(255,255,255,0.85);font-size:15px">
+        ${openTasks.length === 0
+          ? 'Du hast heute alles erledigt! 🎉'
+          : `Du hast noch <strong>${openTasks.length} Aufgabe${openTasks.length !== 1 ? 'n' : ''}</strong> für heute`}
+      </p>
+    </div>
+
+    <!-- Aufgabenliste -->
+    <div style="padding:20px 16px">
+      ${openTasks.length > 0 ? `
+        <p style="margin:0 0 12px;font-size:13px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:0.5px">Noch offen</p>
+        <table width="100%" cellpadding="0" cellspacing="0" style="border-radius:12px;overflow:hidden;border:1px solid #eee">
+          ${taskRows(openTasks, false)}
+        </table>` : ''}
+
+      ${doneTasks.length > 0 ? `
+        <p style="margin:${openTasks.length > 0 ? '20px' : '0'} 0 12px;font-size:13px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:0.5px">Schon geschafft 🏆</p>
+        <table width="100%" cellpadding="0" cellspacing="0" style="border-radius:12px;overflow:hidden;border:1px solid #eee">
+          ${taskRows(doneTasks, true)}
+        </table>` : ''}
+
+      ${openTasks.length === 0 && doneTasks.length === 0 ? `
+        <p style="text-align:center;color:#aaa;font-size:15px;padding:20px 0">Noch keine Aufgaben für heute.</p>` : ''}
+    </div>
+
+    <!-- CTA Button -->
+    <div style="padding:8px 28px 32px;text-align:center">
+      <a href="${appUrl}" style="display:inline-block;background:#4f86f7;color:white;text-decoration:none;border-radius:14px;padding:14px 32px;font-size:16px;font-weight:700">
+        Aufgaben ansehen →
+      </a>
+    </div>
+
+    <!-- Footer -->
+    <div style="background:#f8f9ff;padding:16px 28px;text-align:center;border-top:1px solid #eee">
+      <p style="margin:0;font-size:12px;color:#aaa">Gesendet von Papa ❤️</p>
+    </div>
+  </div>
+</body>
+</html>`;
+
+      await sendHtmlMail(
+        settings.googleAccessToken,
+        email,
+        openTasks.length > 0
+          ? `📋 ${openTasks.length} Aufgabe${openTasks.length !== 1 ? 'n' : ''} für heute, ${name}!`
+          : `🎉 Alles erledigt, ${name}!`,
+        html
+      );
+
+      crossInfo('✓ Gesendet', `Push + E-Mail an ${name} verschickt.`);
+    } catch (e: any) {
+      crossInfo('Fehler', e?.message ?? 'Konnte nicht senden.');
+    } finally {
+      setMailingChild(null);
+    }
+  }, [settings, tasksByChild]);
 
   const handleDeleteTask = useCallback((taskId: string) => {
     crossAlert('Aufgabe löschen?', '', async () => {
@@ -188,19 +270,6 @@ export default function KinderScreen() {
             <Ionicons name="add" size={22} color={colors.accentFg} />
           </TouchableOpacity>
         </View>
-        {/* E-Mail-Haken */}
-        {settings.childEmails?.[selectedChild] ? (
-          <TouchableOpacity style={s.emailToggle} onPress={() => setSendEmail((v) => !v)}>
-            <Ionicons
-              name={sendEmail ? 'checkbox' : 'square-outline'}
-              size={18}
-              color={sendEmail ? colors.accentNeon : colors.textMuted}
-            />
-            <Text style={[s.emailToggleText, sendEmail && { color: colors.accentNeon }]}>
-              E-Mail an {CHILD_NAMES[selectedChild]} schicken
-            </Text>
-          </TouchableOpacity>
-        ) : null}
       </View>
 
       {/* Aufgabenliste + Status */}
@@ -211,20 +280,16 @@ export default function KinderScreen() {
           </Text>
           <TouchableOpacity
             style={s.pushChildBtn}
-            onPress={async () => {
-              try {
-                await writePushTrigger(selectedChild);
-                if (Platform.OS !== 'web') {
-                  await sendReminderToChild(selectedChild).catch(() => {});
-                }
-                crossInfo('✓ Push gesendet', `${CHILD_NAMES[selectedChild]} wurde benachrichtigt.`);
-              } catch (e: any) {
-                crossInfo('Fehler', e?.message ?? 'Push fehlgeschlagen.');
-              }
-            }}
+            onPress={() => handlePushMail(selectedChild)}
+            disabled={mailingChild === selectedChild}
           >
-            <Ionicons name="notifications-outline" size={14} color={colors.accentNeon} />
-            <Text style={s.pushChildBtnText}>Push</Text>
+            {mailingChild === selectedChild
+              ? <ActivityIndicator size="small" color={colors.accentNeon} />
+              : <>
+                  <Ionicons name="mail-outline" size={14} color={colors.accentNeon} />
+                  <Text style={s.pushChildBtnText}>Push & Mail</Text>
+                </>
+            }
           </TouchableOpacity>
         </View>
         {tasks.length === 0 && (
@@ -335,7 +400,7 @@ export default function KinderScreen() {
         ) : (
           <>
             <Ionicons name="notifications-outline" size={20} color={colors.accentFg} />
-            <Text style={s.pushBtnText}>Jetzt Push senden</Text>
+            <Text style={s.pushBtnText}>App-Push an alle (nur wenn App offen)</Text>
           </>
         )}
       </TouchableOpacity>

@@ -84,6 +84,32 @@ export async function archiveMail(accessToken: string, messageId: string): Promi
   return res.ok;
 }
 
+/** Sendet eine HTML-E-Mail über die Gmail API. */
+export async function sendHtmlMail(
+  accessToken: string,
+  to: string,
+  subject: string,
+  htmlBody: string
+): Promise<boolean> {
+  const boundary = 'boundary_' + Math.random().toString(36).slice(2);
+  const raw = [
+    `To: ${to}`,
+    `Subject: =?utf-8?B?${btoa(unescape(encodeURIComponent(subject)))}?=`,
+    'MIME-Version: 1.0',
+    `Content-Type: text/html; charset=utf-8`,
+    '',
+    htmlBody,
+  ].join('\r\n');
+
+  const encoded = btoa(unescape(encodeURIComponent(raw)))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+
+  const res = await gmailPost('/users/me/messages/send', accessToken, { raw: encoded });
+  return res.ok;
+}
+
 /** Sendet eine einfache Text-E-Mail über die Gmail API. */
 export async function sendMail(
   accessToken: string,
@@ -99,7 +125,6 @@ export async function sendMail(
     body,
   ].join('\r\n');
 
-  // Base64url-kodieren (RFC 4648)
   const encoded = btoa(unescape(encodeURIComponent(raw)))
     .replace(/\+/g, '-')
     .replace(/\//g, '_')
