@@ -1,8 +1,10 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Redirect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { View, ActivityIndicator } from 'react-native';
+import { View, ActivityIndicator, Platform } from 'react-native';
 import KindScreen from '../src/screens/KindScreen';
+
+const VALID_CHILDREN = ['lenny', 'emil', 'hannes', 'liddy'];
 
 export default function Index() {
   const [loading, setLoading] = useState(true);
@@ -15,7 +17,18 @@ export default function Index() {
     });
   }, []);
 
-  useEffect(() => { check(); }, []);
+  useEffect(() => {
+    // Auf Web: ?child=X aus URL lesen und direkt in Kind-Modus wechseln
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const childParam = params.get('child');
+      if (childParam && VALID_CHILDREN.includes(childParam)) {
+        AsyncStorage.setItem('kinder_child_id', childParam).then(check);
+        return;
+      }
+    }
+    check();
+  }, []);
 
   if (loading) {
     return (
