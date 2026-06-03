@@ -105,7 +105,7 @@ export default function KinderScreen() {
       const openTasks = tasksByChild[childId].filter((t) => !t.done);
       const doneTasks = tasksByChild[childId].filter((t) => t.done);
       const name = CHILD_NAMES[childId];
-      const appUrl = 'https://susikju.github.io/tasks-extended/kinder';
+      const appUrl = `https://susikju.github.io/tasks-extended/kinder?child=${childId}`;
 
       const taskRows = (tasks: ChildTask[], done: boolean) =>
         tasks.map((t) => `

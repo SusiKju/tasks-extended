@@ -11,76 +11,252 @@
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       background: #f0f4ff;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
       min-height: 100vh;
-      padding: 24px;
       color: #1a1a2e;
     }
-    .card {
-      background: white;
-      border-radius: 20px;
-      padding: 32px 28px;
-      max-width: 360px;
-      width: 100%;
-      box-shadow: 0 4px 24px rgba(79,134,247,0.12);
+
+    /* ── Task-Modus ── */
+    #task-view { display: none; }
+    #subscribe-view { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; padding: 24px; }
+
+    .header {
+      background: linear-gradient(135deg, #4f86f7, #6ea3ff);
+      padding: 40px 24px 28px;
       text-align: center;
+      color: white;
+    }
+    .header-emoji { font-size: 52px; margin-bottom: 8px; }
+    .header h1 { font-size: 24px; font-weight: 800; margin-bottom: 4px; }
+    .header p { font-size: 15px; opacity: 0.85; }
+
+    .progress-bar-wrap { background: rgba(255,255,255,0.25); border-radius: 99px; height: 8px; margin-top: 16px; overflow: hidden; }
+    .progress-bar { background: white; height: 100%; border-radius: 99px; transition: width 0.5s ease; }
+
+    .section { padding: 20px 16px 8px; }
+    .section-label { font-size: 11px; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 10px; }
+
+    .task-card {
+      background: white;
+      border-radius: 16px;
+      padding: 16px;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      box-shadow: 0 2px 12px rgba(79,134,247,0.07);
+      cursor: pointer;
+      transition: transform 0.1s, opacity 0.2s;
+      border: 1.5px solid transparent;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .task-card:active { transform: scale(0.98); }
+    .task-card.done { opacity: 0.55; }
+    .task-card.done .task-title { text-decoration: line-through; color: #aaa; }
+
+    .checkbox {
+      width: 30px; height: 30px; border-radius: 50%;
+      border: 2.5px solid #d0d8f0;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+      transition: all 0.2s;
+      font-size: 16px;
+    }
+    .task-card.done .checkbox {
+      background: #22c55e; border-color: #22c55e; color: white;
+    }
+    .task-title { font-size: 16px; font-weight: 600; color: #1a1a2e; flex: 1; }
+
+    .confetti-overlay {
+      position: fixed; inset: 0; pointer-events: none; z-index: 999;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 48px; opacity: 0; transition: opacity 0.3s;
+    }
+    .confetti-overlay.show { opacity: 1; }
+
+    .empty { text-align: center; padding: 40px 20px; color: #aaa; font-size: 16px; }
+    .loading { text-align: center; padding: 60px 20px; color: #aaa; font-size: 15px; }
+
+    /* ── Subscribe-Modus ── */
+    .card {
+      background: white; border-radius: 20px; padding: 32px 28px;
+      max-width: 360px; width: 100%;
+      box-shadow: 0 4px 24px rgba(79,134,247,0.12); text-align: center;
     }
     .icon { font-size: 56px; margin-bottom: 12px; }
-    h1 { font-size: 22px; font-weight: 700; margin-bottom: 8px; }
-    p { font-size: 15px; color: #555; line-height: 1.5; margin-bottom: 24px; }
+    h1.sub { font-size: 22px; font-weight: 700; margin-bottom: 8px; }
+    p.sub { font-size: 15px; color: #555; line-height: 1.5; margin-bottom: 24px; }
     button {
-      background: #4f86f7;
-      color: white;
-      border: none;
-      border-radius: 12px;
-      padding: 14px 28px;
-      font-size: 16px;
-      font-weight: 600;
-      cursor: pointer;
-      width: 100%;
-      transition: background 0.2s;
+      background: #4f86f7; color: white; border: none; border-radius: 12px;
+      padding: 14px 28px; font-size: 16px; font-weight: 600;
+      cursor: pointer; width: 100%; transition: background 0.2s;
     }
     button:hover { background: #3a6fd8; }
     button:disabled { background: #a0b8f0; cursor: default; }
-    #status {
-      margin-top: 20px;
-      font-size: 14px;
-      color: #4f86f7;
-      min-height: 20px;
-    }
+    #status { margin-top: 20px; font-size: 14px; color: #4f86f7; min-height: 20px; }
     .success { color: #22c55e !important; }
     .error   { color: #ef4444 !important; }
   </style>
 </head>
 <body>
+
+<!-- ── Task-Ansicht ── -->
+<div id="task-view">
+  <div class="header">
+    <div class="header-emoji" id="header-emoji">📋</div>
+    <h1 id="header-title">Laden…</h1>
+    <p id="header-sub"></p>
+    <div class="progress-bar-wrap">
+      <div class="progress-bar" id="progress-bar" style="width:0%"></div>
+    </div>
+  </div>
+  <div id="task-list-open" class="section">
+    <div class="section-label">Noch offen</div>
+    <div id="open-tasks"><div class="loading">Aufgaben laden…</div></div>
+  </div>
+  <div id="task-list-done" class="section" style="display:none">
+    <div class="section-label">Schon geschafft 🏆</div>
+    <div id="done-tasks"></div>
+  </div>
+</div>
+
+<!-- ── Subscribe-Ansicht ── -->
+<div id="subscribe-view">
   <div class="card">
     <div class="icon">📬</div>
-    <h1>Nachrichten von Papa</h1>
-    <p>Tippe auf den Knopf, damit Papa dir Nachrichten schicken kann – auch wenn du die Seite nicht geöffnet hast.</p>
+    <h1 class="sub">Nachrichten von Papa</h1>
+    <p class="sub">Tippe auf den Knopf, damit Papa dir Nachrichten schicken kann – auch wenn du die Seite nicht geöffnet hast.</p>
     <button id="btn" onclick="subscribe()">Benachrichtigungen erlauben</button>
     <div id="status"></div>
   </div>
+</div>
 
-  <script>
-    // ── Konfiguration ───────────────────────────────────────────────
-    const NTFY_TOPIC = 'papa-zu-kind-AENDERE-MICH'; // <-- deinen Topic eintragen
-    // ────────────────────────────────────────────────────────────────
+<div class="confetti-overlay" id="confetti"></div>
 
+<script type="module">
+  // ── Firebase Konfiguration ───────────────────────────────────────
+  import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+  import { getFirestore, collection, getDocs, doc, updateDoc, onSnapshot }
+    from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyCj035wtqQmy602C9iQAGbg_LzxXXjx4kU",
+    authDomain: "tasks-extended-34507.firebaseapp.com",
+    projectId: "tasks-extended-34507",
+    storageBucket: "tasks-extended-34507.firebasestorage.app",
+    messagingSenderId: "425277313752",
+    appId: "1:425277313752:web:d43d2f3791591896e47dad"
+  };
+  const app = initializeApp(firebaseConfig);
+  const db  = getFirestore(app);
+
+  // ── ntfy Topic für Push ──────────────────────────────────────────
+  const NTFY_TOPIC = 'papa-zu-kind-AENDERE-MICH';
+
+  // ── Child-Namen ──────────────────────────────────────────────────
+  const CHILD_NAMES = { lenny: 'Lenny', emil: 'Emil', hannes: 'Hannes', liddy: 'Liddy' };
+  const TODAY = new Date().toISOString().slice(0, 10);
+
+  // ── URL-Parameter lesen ──────────────────────────────────────────
+  const params   = new URLSearchParams(location.search);
+  const childId  = params.get('child');
+  const childName = childId && CHILD_NAMES[childId] ? CHILD_NAMES[childId] : null;
+
+  if (childName) {
+    // ── Task-Modus ───────────────────────────────────────────────
+    document.getElementById('subscribe-view').style.display = 'none';
+    document.getElementById('task-view').style.display = 'block';
+    document.getElementById('header-title').textContent = `Hey ${childName}! 👋`;
+
+    let allTasks = [];
+
+    function render(tasks) {
+      allTasks = tasks.filter(t => t.date === TODAY);
+      const open = allTasks.filter(t => !t.done);
+      const done = allTasks.filter(t =>  t.done);
+
+      // Header
+      const pct = allTasks.length ? Math.round(done.length / allTasks.length * 100) : 0;
+      document.getElementById('progress-bar').style.width = pct + '%';
+      if (allTasks.length === 0) {
+        document.getElementById('header-sub').textContent = 'Noch keine Aufgaben heute.';
+        document.getElementById('header-emoji').textContent = '😊';
+      } else if (open.length === 0) {
+        document.getElementById('header-sub').textContent = 'Alles erledigt – mega! 🎉';
+        document.getElementById('header-emoji').textContent = '🏆';
+      } else {
+        document.getElementById('header-sub').textContent =
+          `${done.length} von ${allTasks.length} erledigt`;
+        document.getElementById('header-emoji').textContent = '📋';
+      }
+
+      // Offene Aufgaben
+      const openEl = document.getElementById('open-tasks');
+      if (open.length === 0) {
+        openEl.innerHTML = `<div class="empty">Alle Aufgaben erledigt! 🎉</div>`;
+        document.getElementById('task-list-open').style.display = 'block';
+      } else {
+        openEl.innerHTML = open.map(t => taskCard(t, false)).join('');
+        document.getElementById('task-list-open').style.display = 'block';
+      }
+
+      // Erledigte Aufgaben
+      const doneEl = document.getElementById('done-tasks');
+      if (done.length > 0) {
+        doneEl.innerHTML = done.map(t => taskCard(t, true)).join('');
+        document.getElementById('task-list-done').style.display = 'block';
+      } else {
+        document.getElementById('task-list-done').style.display = 'none';
+      }
+
+      // Click-Handler
+      document.querySelectorAll('.task-card').forEach(card => {
+        card.addEventListener('click', () => toggleTask(card.dataset.id, card.dataset.done === 'true'));
+      });
+    }
+
+    function taskCard(t, done) {
+      return `<div class="task-card ${done ? 'done' : ''}" data-id="${t.id}" data-done="${done}">
+        <div class="checkbox">${done ? '✓' : ''}</div>
+        <span class="task-title">${t.title}</span>
+      </div>`;
+    }
+
+    async function toggleTask(taskId, currentDone) {
+      const newDone = !currentDone;
+      try {
+        await updateDoc(doc(db, 'children', childId, 'tasks', taskId), { done: newDone });
+        if (newDone) showConfetti();
+      } catch (e) {
+        console.error('Toggle fehlgeschlagen', e);
+      }
+    }
+
+    function showConfetti() {
+      const el = document.getElementById('confetti');
+      const emojis = ['🎉','⭐','✨','🏆','🎊'];
+      el.textContent = emojis[Math.floor(Math.random() * emojis.length)];
+      el.classList.add('show');
+      setTimeout(() => el.classList.remove('show'), 1200);
+    }
+
+    // Echtzeit-Listener
+    onSnapshot(collection(db, 'children', childId, 'tasks'), snap => {
+      const tasks = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      render(tasks);
+    });
+
+  } else {
+    // ── Subscribe-Modus (kein ?child Parameter) ──────────────────
     const btn    = document.getElementById('btn');
     const status = document.getElementById('status');
 
-    async function subscribe() {
+    window.subscribe = async function() {
       if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
         setStatus('error', 'Dein Browser unterstützt Push leider nicht.');
         return;
       }
       btn.disabled = true;
-
       try {
-        // 1. Zuerst Permission anfragen (löst den System-Dialog aus)
         setStatus('', 'Bitte im Dialog "Zulassen" tippen…');
         const perm = await Notification.requestPermission();
         if (perm !== 'granted') {
@@ -88,79 +264,57 @@
           btn.disabled = false;
           return;
         }
-
         setStatus('', 'Wird eingerichtet…');
-
-        // 2. Service Worker registrieren (mit Timeout)
         const reg = await Promise.race([
           navigator.serviceWorker.register('sw.js'),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('Service Worker Timeout')), 8000))
+          new Promise((_, r) => setTimeout(() => r(new Error('SW Timeout')), 8000))
         ]);
-
-        // Warten bis SW aktiv (max 10s)
         await Promise.race([
           navigator.serviceWorker.ready,
-          new Promise((_, reject) => setTimeout(() => reject(new Error('SW ready Timeout')), 10000))
+          new Promise((_, r) => setTimeout(() => r(new Error('SW ready Timeout')), 10000))
         ]);
-
-        // 3. VAPID-Key von ntfy.sh holen
         const vapidRes = await fetch('https://ntfy.sh/v1/webpush');
-        if (!vapidRes.ok) throw new Error('VAPID-Key konnte nicht geladen werden');
-        const vapidData = await vapidRes.json();
-        const vapidKey = urlBase64ToUint8Array(vapidData.vapid_public_key);
-
-        // 4. Push-Subscription beim Browser anlegen
+        if (!vapidRes.ok) throw new Error('VAPID-Key Fehler');
+        const { vapid_public_key } = await vapidRes.json();
         const sub = await reg.pushManager.subscribe({
           userVisibleOnly: true,
-          applicationServerKey: vapidKey
+          applicationServerKey: urlBase64ToUint8Array(vapid_public_key)
         });
-
-        // 5. Subscription bei ntfy.sh registrieren
-        const subRes = await fetch('https://ntfy.sh/v1/webpush', {
+        const r = await fetch('https://ntfy.sh/v1/webpush', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            topic: NTFY_TOPIC,
-            subscription: sub.toJSON()
-          })
+          body: JSON.stringify({ topic: NTFY_TOPIC, subscription: sub.toJSON() })
         });
-        if (!subRes.ok) throw new Error('ntfy-Registrierung fehlgeschlagen: ' + subRes.status);
-
-        setStatus('success', '✅ Alles bereit! Papa kann dir jetzt Nachrichten schicken.');
+        if (!r.ok) throw new Error('ntfy Fehler ' + r.status);
+        setStatus('success', '✅ Alles bereit! Papa kann dir Nachrichten schicken.');
         btn.textContent = 'Schon angemeldet ✓';
-
       } catch (e) {
         console.error(e);
         setStatus('error', 'Fehler: ' + e.message);
         btn.disabled = false;
       }
-    }
-
-    function urlBase64ToUint8Array(base64String) {
-      const padding = '='.repeat((4 - base64String.length % 4) % 4);
-      const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-      const rawData = atob(base64);
-      return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)));
-    }
+    };
 
     function setStatus(type, msg) {
       status.textContent = msg;
       status.className = type;
     }
 
-    // Beim Laden prüfen ob schon angemeldet
-    window.addEventListener('load', async () => {
-      if (!('serviceWorker' in navigator)) return;
-      try {
-        const reg = await navigator.serviceWorker.register('sw.js');
-        const sub = await reg.pushManager.getSubscription();
-        if (sub) {
-          btn.textContent = 'Schon angemeldet ✓';
-          btn.disabled = true;
-          setStatus('success', '✅ Bereit! Papa kann dir Nachrichten schicken.');
-        }
-      } catch (e) { /* ignorieren beim Laden */ }
-    });
-  </script>
+    function urlBase64ToUint8Array(b64) {
+      const pad = '='.repeat((4 - b64.length % 4) % 4);
+      const raw = atob((b64 + pad).replace(/-/g, '+').replace(/_/g, '/'));
+      return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+    }
+
+    navigator.serviceWorker?.register('sw.js').then(async reg => {
+      const sub = await reg.pushManager.getSubscription();
+      if (sub) {
+        btn.textContent = 'Schon angemeldet ✓';
+        btn.disabled = true;
+        setStatus('success', '✅ Bereit! Papa kann dir Nachrichten schicken.');
+      }
+    }).catch(() => {});
+  }
+</script>
 </body>
 </html>
