@@ -108,10 +108,3 @@ export async function sendMail(
   const res = await gmailPost('/users/me/messages/send', accessToken, { raw: encoded });
   return res.ok;
 }
-
-export async function archiveMail(accessToken: string, messageId: string): Promise<boolean> {
-  const res = await gmailPost(`/users/me/messages/${messageId}/modify`, accessToken, {
-    removeLabelIds: ['INBOX'],
-  });
-  return res.ok;
-}
