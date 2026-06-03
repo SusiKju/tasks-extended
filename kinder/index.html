@@ -78,12 +78,10 @@
         return;
       }
       btn.disabled = true;
-      setStatus('', 'Einen Moment…');
 
       try {
-        const reg = await navigator.serviceWorker.register('sw.js');
-        await navigator.serviceWorker.ready;
-
+        // 1. Zuerst Permission anfragen (löst den System-Dialog aus)
+        setStatus('', 'Bitte im Dialog "Zulassen" tippen…');
         const perm = await Notification.requestPermission();
         if (perm !== 'granted') {
           setStatus('error', 'Benachrichtigungen wurden abgelehnt.');
@@ -91,35 +89,51 @@
           return;
         }
 
-        // ntfy.sh Web Push subscribe endpoint
+        setStatus('', 'Wird eingerichtet…');
+
+        // 2. Service Worker registrieren (mit Timeout)
+        const reg = await Promise.race([
+          navigator.serviceWorker.register('sw.js'),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Service Worker Timeout')), 8000))
+        ]);
+
+        // Warten bis SW aktiv (max 10s)
+        await Promise.race([
+          navigator.serviceWorker.ready,
+          new Promise((_, reject) => setTimeout(() => reject(new Error('SW ready Timeout')), 10000))
+        ]);
+
+        // 3. VAPID-Key von ntfy.sh holen
+        const vapidRes = await fetch('https://ntfy.sh/v1/webpush');
+        if (!vapidRes.ok) throw new Error('VAPID-Key konnte nicht geladen werden');
+        const vapidData = await vapidRes.json();
+        const vapidKey = urlBase64ToUint8Array(vapidData.vapid_public_key);
+
+        // 4. Push-Subscription beim Browser anlegen
         const sub = await reg.pushManager.subscribe({
           userVisibleOnly: true,
-          applicationServerKey: await getNtfyPublicKey()
+          applicationServerKey: vapidKey
         });
 
-        // Subscription an ntfy schicken
-        await fetch(`https://ntfy.sh/${NTFY_TOPIC}`, {
-          method: 'POST',
+        // 5. Subscription bei ntfy.sh registrieren
+        const subRes = await fetch('https://ntfy.sh/v1/webpush', {
+          method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'subscribe', subscription: sub })
+          body: JSON.stringify({
+            topic: NTFY_TOPIC,
+            subscription: sub.toJSON()
+          })
         });
+        if (!subRes.ok) throw new Error('ntfy-Registrierung fehlgeschlagen: ' + subRes.status);
 
         setStatus('success', '✅ Alles bereit! Papa kann dir jetzt Nachrichten schicken.');
         btn.textContent = 'Schon angemeldet ✓';
+
       } catch (e) {
         console.error(e);
         setStatus('error', 'Fehler: ' + e.message);
         btn.disabled = false;
       }
-    }
-
-    async function getNtfyPublicKey() {
-      const res = await fetch(`https://ntfy.sh/${NTFY_TOPIC}/json?since=0&limit=0`, { method: 'GET' });
-      // ntfy liefert VAPID key über /webpush endpoint
-      const r2 = await fetch(`https://ntfy.sh/webpush?topic=${NTFY_TOPIC}`);
-      const data = await r2.json();
-      const raw = data.vapidPublicKey;
-      return urlBase64ToUint8Array(raw);
     }
 
     function urlBase64ToUint8Array(base64String) {
@@ -136,15 +150,16 @@
 
     // Beim Laden prüfen ob schon angemeldet
     window.addEventListener('load', async () => {
-      if ('serviceWorker' in navigator) {
+      if (!('serviceWorker' in navigator)) return;
+      try {
         const reg = await navigator.serviceWorker.register('sw.js');
-        const sub = await reg.pushManager.getSubscription?.();
+        const sub = await reg.pushManager.getSubscription();
         if (sub) {
           btn.textContent = 'Schon angemeldet ✓';
           btn.disabled = true;
           setStatus('success', '✅ Bereit! Papa kann dir Nachrichten schicken.');
         }
-      }
+      } catch (e) { /* ignorieren beim Laden */ }
     });
   </script>
 </body>
