@@ -234,6 +234,10 @@
   // ── ntfy Topic für Push ──────────────────────────────────────────
   const NTFY_TOPIC = 'papa-zu-kind-AENDERE-MICH';
 
+  // VAPID-Public-Key von ntfy.sh (stabil, aus https://ntfy.sh/config.js → web_push_public_key).
+  // ntfy hat keinen GET-Endpunkt für den Key – früherer GET /v1/webpush lieferte 404 ("VAPID-Key Fehler").
+  const NTFY_VAPID_PUBLIC_KEY = 'BEMjM0sNxh41x0a6Lz3YaqkJ7AUhZefxsOQgw-at69i0fM1CybVBcj7-QQXf4N_tPCgFnOXdRbQ5jrSrr9Yg9Lc';
+
   // ── Child-Namen ──────────────────────────────────────────────────
   const CHILD_NAMES = { lenny: 'Lenny', emil: 'Emil', hannes: 'Hannes', liddy: 'Liddy' };
 
@@ -502,17 +506,21 @@
           navigator.serviceWorker.ready,
           new Promise((_, r) => setTimeout(() => r(new Error('SW ready Timeout')), 10000))
         ]);
-        const vapidRes = await fetch('https://ntfy.sh/v1/webpush');
-        if (!vapidRes.ok) throw new Error('VAPID-Key Fehler');
-        const { vapid_public_key } = await vapidRes.json();
         const sub = await reg.pushManager.subscribe({
           userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(vapid_public_key)
+          applicationServerKey: urlBase64ToUint8Array(NTFY_VAPID_PUBLIC_KEY)
         });
+        // ntfy Web-Push-Subscribe: POST /v1/webpush mit { endpoint, auth, p256dh, topics }
+        const subJson = sub.toJSON();
         const r = await fetch('https://ntfy.sh/v1/webpush', {
-          method: 'PUT',
+          method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ topic: NTFY_TOPIC, subscription: sub.toJSON() })
+          body: JSON.stringify({
+            endpoint: subJson.endpoint,
+            auth: subJson.keys.auth,
+            p256dh: subJson.keys.p256dh,
+            topics: [NTFY_TOPIC]
+          })
         });
         if (!r.ok) throw new Error('ntfy Fehler ' + r.status);
         setStatus('success', '✅ Alles bereit! Papa kann dir Nachrichten schicken.');

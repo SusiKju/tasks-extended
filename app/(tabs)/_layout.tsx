@@ -77,7 +77,7 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="kinder"
+        name="kids"
         options={{
           title: 'Kinder',
           tabBarIcon: ({ color, size }) => (
