@@ -210,21 +210,23 @@ export default function KindScreen({ onExitChildMode }: Props) {
         </TouchableOpacity>
       </View>
 
-      {/* Schatzkiste-Belohnung (TE-100) */}
-      <View style={[s.reward, chestStage.full && s.rewardFull]}>
-        <Animated.Text style={[s.chest, { transform: [{ scale: chestScale }] }]}>
-          {chestStage.emoji}
-        </Animated.Text>
-        <View style={s.rewardBody}>
-          <Text style={s.coins}>
-            🪙 <Animated.Text style={[s.coinNum, { transform: [{ scale: coinScale }] }]}>{done}</Animated.Text>
-          </Text>
-          <Text style={s.rewardMsg}>{chestStage.msg}</Text>
-          <View style={s.rewardBarTrack}>
-            <View style={[s.rewardBarFill, { width: `${Math.round(progress * 100)}%` }]} />
+      {/* Schatzkiste-Belohnung (TE-100) – nur wenn KEINE eigene Belohnung definiert ist (TE-108) */}
+      {!reward && (
+        <View style={[s.reward, chestStage.full && s.rewardFull]}>
+          <Animated.Text style={[s.chest, { transform: [{ scale: chestScale }] }]}>
+            {chestStage.emoji}
+          </Animated.Text>
+          <View style={s.rewardBody}>
+            <Text style={s.coins}>
+              🪙 <Animated.Text style={[s.coinNum, { transform: [{ scale: coinScale }] }]}>{done}</Animated.Text>
+            </Text>
+            <Text style={s.rewardMsg}>{chestStage.msg}</Text>
+            <View style={s.rewardBarTrack}>
+              <View style={[s.rewardBarFill, { width: `${Math.round(progress * 100)}%` }]} />
+            </View>
           </View>
         </View>
-      </View>
+      )}
 
       {/* Freigeschaltete Belohnung (TE-101/TE-106) – Typ groß, lesefreundlich */}
       {reward && allDone && (

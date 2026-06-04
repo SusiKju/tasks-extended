@@ -328,6 +328,9 @@
     // sonst als Ausblick ("schaff alles und du bekommst …").
     function renderRewardUnlock() {
       const el = document.getElementById('reward-unlock');
+      // Schatzkiste und definierte Belohnung schließen sich aus (TE-108):
+      // Sobald eine Belohnung definiert ist, verschwindet die Schatzkiste.
+      document.getElementById('reward').style.display = currentReward ? 'none' : 'flex';
       const allDone = allTasks.length > 0 && allTasks.every(t => t.done);
       if (!currentReward || allTasks.length === 0) {
         el.style.display = 'none';
