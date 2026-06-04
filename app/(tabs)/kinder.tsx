@@ -261,9 +261,12 @@ export default function KinderScreen() {
 
   const handleSaveReward = useCallback(async () => {
     const title = draftRewardTitle.trim();
-    if (!title) return;
+    // Titel ist optional — der Belohnungstyp allein reicht (TE-106).
+    const reward = title
+      ? { type: draftRewardType, title }
+      : { type: draftRewardType };
     try {
-      await setChildReward(selectedChild, { type: draftRewardType, title });
+      await setChildReward(selectedChild, reward);
       setRewardModalVisible(false);
     } catch (e: any) {
       crossInfo('Fehler', e?.message ?? 'Belohnung konnte nicht gespeichert werden.');
@@ -441,10 +444,9 @@ export default function KinderScreen() {
           <View style={[s.rewardCard, rewardUnlocked && s.rewardCardUnlocked]}>
             <Text style={s.rewardEmoji}>{REWARD_TYPES[currentReward.type].emoji}</Text>
             <View style={{ flex: 1 }}>
-              <Text style={s.rewardTitle}>{currentReward.title}</Text>
+              <Text style={s.rewardTitle}>{REWARD_TYPES[currentReward.type].label}</Text>
+              {!!currentReward.title && <Text style={s.rewardDetail}>{currentReward.title}</Text>}
               <Text style={s.rewardMeta}>
-                {REWARD_TYPES[currentReward.type].label}
-                {' · '}
                 {rewardUnlocked ? '🎉 freigeschaltet' : `noch ${tasks.length - done} offen`}
               </Text>
             </View>
@@ -525,11 +527,12 @@ export default function KinderScreen() {
                 );
               })}
             </View>
+            <Text style={s.modalHint}>Details optional — Typ allein reicht.</Text>
             <TextInput
               style={s.input}
               value={draftRewardTitle}
               onChangeText={setDraftRewardTitle}
-              placeholder="z.B. 1 Folge Paw Patrol"
+              placeholder="Optional: z.B. 1 Folge Paw Patrol"
               placeholderTextColor={colors.placeholder}
               autoFocus
               returnKeyType="done"
@@ -743,7 +746,8 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
     },
     rewardCardUnlocked: { borderColor: colors.success, backgroundColor: 'rgba(48,185,85,0.10)' },
     rewardEmoji: { fontSize: 30 },
-    rewardTitle: { fontSize: 15, fontWeight: '700', color: colors.text },
+    rewardTitle: { fontSize: 16, fontWeight: '800', color: colors.text },
+    rewardDetail: { fontSize: 13, color: colors.textSecondary, marginTop: 1 },
     rewardMeta: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
     rewardTypeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginVertical: 4 },
     rewardTypeChip: {

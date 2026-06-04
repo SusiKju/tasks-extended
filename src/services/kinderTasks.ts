@@ -48,22 +48,22 @@ export interface ChildTask {
 // Belohnung wird freigeschaltet, sobald das Kind an einem Tag ALLE Aufgaben
 // erledigt hat ("Alle Tagesaufgaben"-Logik). Pro Kind eine stehende Belohnung.
 
-export type RewardType = 'tv_series' | 'tv_movie' | 'screen_time' | 'sweet' | 'outing' | 'other';
+export type RewardType = 'tv_series' | 'tv_movie' | 'screen_time' | 'sweet' | 'other';
 
-/** Vordefinierte Belohnungstypen mit Emoji + Label (Auswahlliste in der Eltern-UI). */
+/** Vordefinierte Belohnungstypen mit Emoji + Label (Auswahlliste in der Eltern-UI).
+ *  Das Label ist die Hauptaussage für das Kind (auch ohne Lesen erkennbar am Emoji). */
 export const REWARD_TYPES: Record<RewardType, { emoji: string; label: string }> = {
   tv_series:   { emoji: '📺', label: 'TV-Serie' },
   tv_movie:    { emoji: '🎬', label: 'TV-Film' },
-  screen_time: { emoji: '🎮', label: 'Spielzeit' },
-  sweet:       { emoji: '🍬', label: 'Süßigkeit' },
-  outing:      { emoji: '🎡', label: 'Ausflug' },
+  screen_time: { emoji: '📱', label: 'Handyzeit' },
+  sweet:       { emoji: '🍬', label: 'Süßigkeiten' },
   other:       { emoji: '🎁', label: 'Sonstiges' },
 };
 
 export interface ChildReward {
   type: RewardType;
-  /** Freier Titel, z. B. "1 Folge Paw Patrol". */
-  title: string;
+  /** Optionaler Freitext als Detail, z. B. "1 Folge Paw Patrol". Leer = nur der Typ zählt. */
+  title?: string;
 }
 
 // ─── Aktivitätslog (TE-97) ────────────────────────────────────────────────────

@@ -226,23 +226,26 @@ export default function KindScreen({ onExitChildMode }: Props) {
         </View>
       </View>
 
-      {/* Freigeschaltete Belohnung (TE-101) */}
+      {/* Freigeschaltete Belohnung (TE-101/TE-106) – Typ groß, lesefreundlich */}
       {reward && allDone && (
         <View style={s.rewardUnlock}>
           <Text style={s.rewardUnlockEmoji}>{REWARD_TYPES[reward.type].emoji}</Text>
           <View style={{ flex: 1 }}>
-            <Text style={s.rewardUnlockLabel}>🎉 Freigeschaltet!</Text>
-            <Text style={s.rewardUnlockTitle}>{reward.title}</Text>
+            <Text style={s.rewardUnlockLabel}>🎉 Du hast gewonnen:</Text>
+            <Text style={s.rewardUnlockTitle}>{REWARD_TYPES[reward.type].label}</Text>
+            {!!reward.title && <Text style={s.rewardUnlockDetail}>{reward.title}</Text>}
           </View>
         </View>
       )}
-      {/* Belohnung in Aussicht, solange noch offen (TE-101) */}
+      {/* Belohnung in Aussicht, solange noch offen (TE-101/TE-106) */}
       {reward && !allDone && total > 0 && (
         <View style={s.rewardTeaser}>
           <Text style={s.rewardTeaserEmoji}>{REWARD_TYPES[reward.type].emoji}</Text>
-          <Text style={s.rewardTeaserText}>
-            Schaff alle Aufgaben und du bekommst: <Text style={s.rewardTeaserStrong}>{reward.title}</Text>
-          </Text>
+          <View style={{ flex: 1 }}>
+            <Text style={s.rewardTeaserText}>Schaff alles und du bekommst:</Text>
+            <Text style={s.rewardTeaserStrong}>{REWARD_TYPES[reward.type].label}</Text>
+            {!!reward.title && <Text style={s.rewardTeaserDetail}>{reward.title}</Text>}
+          </View>
         </View>
       )}
 
@@ -371,18 +374,20 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
       backgroundColor: '#E8FBEF', borderRadius: 20,
       borderWidth: 2, borderColor: colors.success,
     },
-    rewardUnlockEmoji: { fontSize: 40 },
-    rewardUnlockLabel: { fontSize: 13, fontWeight: '700', color: '#1E8E45' },
-    rewardUnlockTitle: { fontSize: 19, fontWeight: '800', color: '#14532D', marginTop: 2 },
+    rewardUnlockEmoji: { fontSize: 56 },
+    rewardUnlockLabel: { fontSize: 15, fontWeight: '700', color: '#1E8E45' },
+    rewardUnlockTitle: { fontSize: 26, fontWeight: '900', color: '#14532D', marginTop: 2 },
+    rewardUnlockDetail: { fontSize: 15, fontWeight: '600', color: '#1E8E45', marginTop: 2 },
     rewardTeaser: {
-      flexDirection: 'row', alignItems: 'center', gap: 12,
+      flexDirection: 'row', alignItems: 'center', gap: 14,
       marginHorizontal: 16, marginTop: -4, marginBottom: 4, padding: 14,
       backgroundColor: colors.surface, borderRadius: 16,
       borderWidth: 1, borderColor: colors.border,
     },
-    rewardTeaserEmoji: { fontSize: 26 },
-    rewardTeaserText: { flex: 1, fontSize: 14, color: colors.textSecondary },
-    rewardTeaserStrong: { fontWeight: '800', color: colors.text },
+    rewardTeaserEmoji: { fontSize: 40 },
+    rewardTeaserText: { fontSize: 14, color: colors.textSecondary },
+    rewardTeaserStrong: { fontSize: 20, fontWeight: '900', color: colors.text, marginTop: 1 },
+    rewardTeaserDetail: { fontSize: 13, color: colors.textSecondary, marginTop: 1 },
     // Toast
     toast: {
       backgroundColor: colors.accentNeon, padding: 14, paddingHorizontal: 20,

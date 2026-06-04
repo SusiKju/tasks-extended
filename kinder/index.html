@@ -119,12 +119,15 @@
     .reward-unlock.teaser {
       background: #f6f7fb; border: 1px solid #e5e7eb;
     }
-    .reward-unlock .ru-emoji { font-size: 38px; line-height: 1; flex-shrink: 0; }
+    .reward-unlock .ru-emoji { font-size: 56px; line-height: 1; flex-shrink: 0; }
     .reward-unlock .ru-body { flex: 1; min-width: 0; }
-    .reward-unlock .ru-label { font-size: 13px; font-weight: 700; color: #1e8e45; }
-    .reward-unlock .ru-title { font-size: 18px; font-weight: 800; color: #14532d; margin-top: 2px; }
+    .reward-unlock .ru-label { font-size: 15px; font-weight: 700; color: #1e8e45; }
+    .reward-unlock .ru-title { font-size: 26px; font-weight: 900; color: #14532d; margin-top: 2px; }
+    .reward-unlock .ru-detail { font-size: 15px; font-weight: 600; color: #1e8e45; margin-top: 2px; }
+    .reward-unlock.teaser .ru-emoji { font-size: 40px; }
     .reward-unlock.teaser .ru-text { font-size: 14px; color: #6b7280; }
-    .reward-unlock.teaser .ru-text strong { color: #1a1a2e; }
+    .reward-unlock.teaser .ru-strong { font-size: 20px; font-weight: 900; color: #1a1a2e; margin-top: 1px; }
+    .reward-unlock.teaser .ru-detail { font-size: 13px; font-weight: 600; color: #6b7280; }
 
     .spark {
       position: fixed; pointer-events: none; z-index: 998;
@@ -238,9 +241,8 @@
   const REWARD_TYPES = {
     tv_series:   { emoji: '📺', label: 'TV-Serie' },
     tv_movie:    { emoji: '🎬', label: 'TV-Film' },
-    screen_time: { emoji: '🎮', label: 'Spielzeit' },
-    sweet:       { emoji: '🍬', label: 'Süßigkeit' },
-    outing:      { emoji: '🎡', label: 'Ausflug' },
+    screen_time: { emoji: '📱', label: 'Handyzeit' },
+    sweet:       { emoji: '🍬', label: 'Süßigkeiten' },
     other:       { emoji: '🎁', label: 'Sonstiges' },
   };
   const TODAY = new Date().toISOString().slice(0, 10);
@@ -332,21 +334,27 @@
         return;
       }
       const meta = REWARD_TYPES[currentReward.type] || REWARD_TYPES.other;
-      const title = currentReward.title || meta.label;
+      // Typ-Wort ist die Hauptaussage (auch ohne Lesen am Emoji erkennbar),
+      // freier Titel ist optionale Unterzeile (TE-106).
+      const detail = currentReward.title
+        ? `<div class="ru-detail">${currentReward.title}</div>` : '';
       if (allDone) {
         el.className = 'reward-unlock unlocked';
         el.innerHTML = `
           <div class="ru-emoji">${meta.emoji}</div>
           <div class="ru-body">
-            <div class="ru-label">🎉 Freigeschaltet!</div>
-            <div class="ru-title">${title}</div>
+            <div class="ru-label">🎉 Du hast gewonnen:</div>
+            <div class="ru-title">${meta.label}</div>
+            ${detail}
           </div>`;
       } else {
         el.className = 'reward-unlock teaser';
         el.innerHTML = `
           <div class="ru-emoji">${meta.emoji}</div>
           <div class="ru-body">
-            <div class="ru-text">Schaff alle Aufgaben und du bekommst: <strong>${title}</strong></div>
+            <div class="ru-text">Schaff alles und du bekommst:</div>
+            <div class="ru-strong">${meta.label}</div>
+            ${detail}
           </div>`;
       }
       el.style.display = 'flex';
