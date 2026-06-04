@@ -23,7 +23,13 @@ import { useGoogleContactsBirthdaysSync } from '../hooks/useGoogleContactsBirthd
 import { isOverdue } from '../utils/dateFormat';
 import { fetchRecentMails, MailMessage } from '../services/googleMail';
 import { listUpcomingEvents, CalendarEvent } from '../services/googleCalendar';
+import {
+  ChildId, CHILDREN, CHILD_NAMES, ChildTask, subscribeToChildTasks,
+} from '../services/kinderTasks';
 import { Task } from '../types';
+import { format } from 'date-fns';
+
+const TODAY = format(new Date(), 'yyyy-MM-dd');
 
 // ─── Colors ───────────────────────────────────────────────────────────────────
 const C = {
@@ -488,6 +494,26 @@ export function DashboardScreen() {
   const [calEvents, setCalEvents] = useState<CalendarEvent[]>([]);
   const [calLoading, setCalLoading] = useState(false);
 
+  // Heutige Aufgaben aller Kinder (TE-110) – ein Echtzeit-Listener pro Kind,
+  // analog zum Kids-Tab. Abschnitt erscheint nur, wenn mindestens eine Aufgabe da ist.
+  const [childTasks, setChildTasks] = useState<Record<ChildId, ChildTask[]>>({
+    lenny: [], emil: [], hannes: [], liddy: [],
+  });
+  useEffect(() => {
+    const unsubs = CHILDREN.map((childId) =>
+      subscribeToChildTasks(childId, TODAY, (tasks) =>
+        setChildTasks((prev) => ({ ...prev, [childId]: tasks }))
+      )
+    );
+    return () => unsubs.forEach((u) => u());
+  }, []);
+
+  // Nur Kinder mit mindestens einer Aufgabe; ganzer Abschnitt entfällt, wenn leer.
+  const childrenWithTasks = useMemo(
+    () => CHILDREN.filter((id) => childTasks[id].length > 0),
+    [childTasks]
+  );
+
   // Tasks nach Fälligkeit gruppieren
   const taskGroups = useMemo(() => {
     const open = tasks.filter((t) => !t.completed);
@@ -752,6 +778,58 @@ export function DashboardScreen() {
         </View>
 
       </View>
+
+      {/* ── Aufgaben der Kinder (TE-110) ── */}
+      {childrenWithTasks.length > 0 && (
+        <View style={styles.section}>
+          <SectionLabel
+            title="Aufgaben der Kinder"
+            onMore={() => router.push('/(tabs)/kids' as any)}
+            colors={colors}
+          />
+          <View style={{ gap: 10 }}>
+            {childrenWithTasks.map((childId) => {
+              const list = childTasks[childId];
+              const doneCount = list.filter((t) => t.done).length;
+              return (
+                <View key={childId}>
+                  <Text style={[styles.dayLabel, { color: colors.textMuted }]}>
+                    {CHILD_NAMES[childId]} · {doneCount}/{list.length}
+                  </Text>
+                  <Pressable
+                    style={[styles.card, { borderLeftWidth: 0 }]}
+                    onPress={() => router.push('/(tabs)/kids' as any)}
+                  >
+                    {list.map((task, i) => (
+                      <View
+                        key={task.id}
+                        style={[styles.kidRow, i < list.length - 1 && styles.rowDivider]}
+                      >
+                        <Ionicons
+                          name={task.done ? 'checkmark-circle' : task.rejected ? 'close-circle' : 'ellipse-outline'}
+                          size={18}
+                          color={task.done ? colors.success : task.rejected ? colors.danger : colors.textMuted}
+                        />
+                        <Text
+                          style={[
+                            styles.kidTaskText,
+                            { color: colors.text },
+                            task.done && styles.kidTaskDone,
+                            task.rejected && { color: colors.danger },
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {task.title}
+                        </Text>
+                      </View>
+                    ))}
+                  </Pressable>
+                </View>
+              );
+            })}
+          </View>
+        </View>
+      )}
 
       {/* ── Kalender ── */}
       {settings.googleCalendarEnabled && (
@@ -1110,6 +1188,17 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
     calDay: { fontSize: 9, fontWeight: '700' as const, textTransform: 'uppercase' as const, letterSpacing: 0.5 },
     calHour: { fontSize: 14, fontWeight: '700' as const },
     calTitle: { fontSize: 14, fontWeight: '500' as const },
+
+    // Aufgaben der Kinder (TE-110)
+    kidRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+    },
+    kidTaskText: { flex: 1, fontSize: 13, fontWeight: '500' },
+    kidTaskDone: { textDecorationLine: 'line-through', color: c.textMuted },
 
     // Notes
     noteScroll: { paddingHorizontal: 16, gap: 10 },
