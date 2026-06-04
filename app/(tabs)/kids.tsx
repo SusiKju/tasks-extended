@@ -441,7 +441,11 @@ export default function KinderScreen() {
           </TouchableOpacity>
         </View>
         {currentReward ? (
-          <View style={[s.rewardCard, rewardUnlocked && s.rewardCardUnlocked]}>
+          <TouchableOpacity
+            style={[s.rewardCard, rewardUnlocked && s.rewardCardUnlocked]}
+            onPress={handleOpenRewardModal}
+            activeOpacity={0.7}
+          >
             <Text style={s.rewardEmoji}>{REWARD_TYPES[currentReward.type].emoji}</Text>
             <View style={{ flex: 1 }}>
               <Text style={s.rewardTitle}>{REWARD_TYPES[currentReward.type].label}</Text>
@@ -450,7 +454,8 @@ export default function KinderScreen() {
                 {rewardUnlocked ? '🎉 freigeschaltet' : `noch ${tasks.length - done} offen`}
               </Text>
             </View>
-          </View>
+            <Ionicons name="pencil-outline" size={16} color={colors.textMuted} />
+          </TouchableOpacity>
         ) : (
           <Text style={s.hint}>
             Noch keine Belohnung. Tippe auf ＋, um eine festzulegen — sie wird freigeschaltet,
