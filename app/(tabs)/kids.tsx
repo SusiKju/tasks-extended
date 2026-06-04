@@ -31,7 +31,7 @@ import {
   ChildId, CHILDREN, CHILD_NAMES, ChildTask,
   ActivityEntry, ActivityAction,
   ChildReward, RewardType, REWARD_TYPES,
-  subscribeToChildTasks, addTask, updateTask, deleteTask, deleteCompletedTasks,
+  subscribeToChildTasks, addTask, updateTask, deleteTask, deleteCompletedTasks, rejectTask,
   subscribeToChildReward, setChildReward,
   getReminderTimes, setReminderTimes, getActivityLog,
 } from '../../src/services/kinderTasks';
@@ -229,6 +229,20 @@ export default function KinderScreen() {
     }, true);
   }, [selectedChild]);
 
+  const handleRejectTask = useCallback((taskId: string, title: string) => {
+    crossAlert(
+      'Aufgabe ablehnen?',
+      'Sie wird wieder auf „offen" gesetzt und beim Kind rot angezeigt.',
+      async () => {
+        try {
+          await rejectTask(selectedChild, taskId, { title });
+        } catch (e: any) {
+          crossInfo('Fehler', e?.message ?? String(e));
+        }
+      }
+    );
+  }, [selectedChild]);
+
   const handleDeleteCompleted = useCallback(() => {
     const count = tasksByChild[selectedChild].filter((t) => t.done).length;
     crossAlert(
@@ -416,12 +430,21 @@ export default function KinderScreen() {
         )}
         {tasks.map((task) => (
           <View key={task.id} style={s.taskRow}>
-            <Ionicons
-              name={task.done ? 'checkmark-circle' : 'ellipse-outline'}
-              size={22}
-              color={task.done ? colors.success : colors.textMuted}
-            />
-            <Text style={[s.taskTitle, task.done && s.taskDone]}>{task.title}</Text>
+            {/* Abgehakte Aufgaben sind antippbar → ablehnen (zurücksetzen). (TE-103) */}
+            <TouchableOpacity
+              onPress={() => task.done && handleRejectTask(task.id, task.title)}
+              disabled={!task.done}
+            >
+              <Ionicons
+                name={task.done ? 'checkmark-circle' : task.rejected ? 'close-circle' : 'ellipse-outline'}
+                size={22}
+                color={task.done ? colors.success : task.rejected ? colors.danger : colors.textMuted}
+              />
+            </TouchableOpacity>
+            <Text style={[s.taskTitle, task.done && s.taskDone, task.rejected && s.taskRejected]}>
+              {task.title}
+            </Text>
+            {task.rejected && <Text style={s.rejectedTag}>abgelehnt</Text>}
             <TouchableOpacity onPress={() => setEditingTask({ id: task.id, title: task.title })}>
               <Ionicons name="pencil-outline" size={18} color={colors.accentNeon} />
             </TouchableOpacity>
@@ -692,6 +715,12 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
     },
     taskTitle: { flex: 1, fontSize: 14, color: colors.text },
     taskDone: { textDecorationLine: 'line-through', color: colors.textMuted },
+    taskRejected: { color: colors.danger, fontWeight: '700' },
+    rejectedTag: {
+      fontSize: 10, fontWeight: '800', color: colors.dangerFg ?? '#fff',
+      backgroundColor: colors.danger, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2,
+      textTransform: 'uppercase', letterSpacing: 0.5, overflow: 'hidden',
+    },
     empty: { fontSize: 13, color: colors.textMuted, fontStyle: 'italic' },
     row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     hint: { fontSize: 12, color: colors.textMuted },

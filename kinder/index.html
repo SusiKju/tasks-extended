@@ -52,6 +52,12 @@
     .task-card:active { transform: scale(0.98); }
     .task-card.done { opacity: 0.55; }
     .task-card.done .task-title { text-decoration: line-through; color: #aaa; }
+    /* Vom Elternteil abgelehnt (TE-103) */
+    .task-card.rejected { border-color: #ef4444; background: #fff5f5; }
+    .task-card.rejected .task-title { color: #ef4444; }
+    .task-card.rejected .checkbox { background: #ef4444; border-color: #ef4444; color: white; }
+    .task-body { flex: 1; display: flex; flex-direction: column; gap: 3px; }
+    .reject-hint { font-size: 13px; font-weight: 700; color: #ef4444; }
 
     .checkbox {
       width: 30px; height: 30px; border-radius: 50%;
@@ -434,9 +440,14 @@
     }
 
     function taskCard(t, done) {
-      return `<div class="task-card ${done ? 'done' : ''}" data-id="${t.id}" data-done="${done}" data-title="${encodeURIComponent(t.title)}">
-        <div class="checkbox">${done ? '✓' : ''}</div>
-        <span class="task-title">${t.title}</span>
+      // Vom Elternteil abgelehnt (TE-103): offen + rot markiert.
+      const rejected = !done && t.rejected;
+      return `<div class="task-card ${done ? 'done' : ''} ${rejected ? 'rejected' : ''}" data-id="${t.id}" data-done="${done}" data-title="${encodeURIComponent(t.title)}">
+        <div class="checkbox">${done ? '✓' : (rejected ? '✗' : '')}</div>
+        <div class="task-body">
+          <span class="task-title">${t.title}</span>
+          ${rejected ? '<span class="reject-hint">❌ Nicht akzeptiert – bitte nochmal machen</span>' : ''}
+        </div>
       </div>`;
     }
 

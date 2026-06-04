@@ -42,6 +42,9 @@ export interface ChildTask {
   createdAt: string;
   /** ISO-Zeitstempel, wann die Aufgabe abgehakt wurde. null/undefined = noch offen. */
   completedAt?: string | null;
+  /** true = Eltern haben die abgehakte Aufgabe abgelehnt (zurückgesetzt). Wird in der
+   *  Kinder-Ansicht rot dargestellt. Sobald das Kind erneut abhakt, wird das Flag gelöscht. (TE-103) */
+  rejected?: boolean;
 }
 
 // ─── Belohnungspakete (TE-101) ────────────────────────────────────────────────
@@ -179,12 +182,39 @@ export async function toggleTask(
   await updateDoc(doc(db, 'children', childId, 'tasks', taskId), {
     done,
     completedAt: done ? new Date().toISOString() : null,
+    // Eine Aktion des Kindes hebt eine Eltern-Ablehnung immer auf (TE-103).
+    rejected: false,
   });
   await logActivity(childId, {
     action: done ? 'completed' : 'reopened',
     taskId,
     taskTitle: opts?.title ?? '',
     actor: opts?.actor ?? 'child',
+    at: new Date().toISOString(),
+  });
+}
+
+// ─── Ablehnen (Eltern) ───────────────────────────────────────────────────────
+
+/**
+ * Eltern setzen eine vom Kind abgehakte Aufgabe wieder auf "offen" und markieren sie
+ * als abgelehnt (`rejected`). Das Kind sieht sie dann rot ("nicht akzeptiert"). Sobald
+ * das Kind sie erneut abhakt, löscht `toggleTask` das Flag wieder. (TE-103) */
+export async function rejectTask(
+  childId: ChildId,
+  taskId: string,
+  opts?: { title?: string }
+): Promise<void> {
+  await updateDoc(doc(db, 'children', childId, 'tasks', taskId), {
+    done: false,
+    completedAt: null,
+    rejected: true,
+  });
+  await logActivity(childId, {
+    action: 'reopened',
+    taskId,
+    taskTitle: opts?.title ?? '',
+    actor: 'parent',
     at: new Date().toISOString(),
   });
 }

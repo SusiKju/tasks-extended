@@ -287,14 +287,22 @@ export default function KindScreen({ onExitChildMode }: Props) {
         {tasks.map((task) => (
           <TouchableOpacity
             key={task.id}
-            style={[s.taskCard, task.done && s.taskCardDone]}
+            style={[s.taskCard, task.done && s.taskCardDone, task.rejected && s.taskCardRejected]}
             onPress={() => handleToggle(task)}
             activeOpacity={0.7}
           >
-            <View style={[s.checkbox, task.done && s.checkboxDone]}>
+            <View style={[s.checkbox, task.done && s.checkboxDone, task.rejected && s.checkboxRejected]}>
               {task.done && <Ionicons name="checkmark" size={18} color={colors.successFg} />}
+              {task.rejected && <Ionicons name="close" size={18} color={colors.dangerFg} />}
             </View>
-            <Text style={[s.taskText, task.done && s.taskTextDone]}>{task.title}</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={[s.taskText, task.done && s.taskTextDone, task.rejected && s.taskTextRejected]}>
+                {task.title}
+              </Text>
+              {task.rejected && (
+                <Text style={s.rejectedHint}>❌ Nicht akzeptiert – bitte nochmal machen</Text>
+              )}
+            </View>
           </TouchableOpacity>
         ))}
       </ScrollView>
@@ -410,13 +418,18 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
       borderWidth: 1, borderColor: colors.border,
     },
     taskCardDone: { opacity: 0.6, borderColor: colors.success },
+    // Vom Elternteil abgelehnte Aufgabe (TE-103): deutlich rot.
+    taskCardRejected: { borderColor: colors.danger, borderWidth: 2, backgroundColor: 'rgba(239,68,68,0.08)' },
     checkbox: {
       width: 32, height: 32, borderRadius: 16, borderWidth: 2.5,
       borderColor: colors.border, justifyContent: 'center', alignItems: 'center',
     },
     checkboxDone: { backgroundColor: colors.success, borderColor: colors.success },
+    checkboxRejected: { backgroundColor: colors.danger, borderColor: colors.danger },
     taskText: { flex: 1, fontSize: 18, fontWeight: '600', color: colors.text },
     taskTextDone: { textDecorationLine: 'line-through', color: colors.textMuted },
+    taskTextRejected: { color: colors.danger },
+    rejectedHint: { fontSize: 13, fontWeight: '700', color: colors.danger, marginTop: 4 },
     empty: { textAlign: 'center', fontSize: 18, color: colors.textMuted, marginTop: 60 },
     // PIN-Modal
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
