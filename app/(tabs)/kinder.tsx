@@ -31,7 +31,7 @@ import {
   ChildId, CHILDREN, CHILD_NAMES, ChildTask,
   ActivityEntry, ActivityAction,
   ChildReward, RewardType, REWARD_TYPES,
-  subscribeToChildTasks, addTask, updateTask, deleteTask,
+  subscribeToChildTasks, addTask, updateTask, deleteTask, deleteCompletedTasks,
   subscribeToChildReward, setChildReward,
   getReminderTimes, setReminderTimes, getActivityLog,
 } from '../../src/services/kinderTasks';
@@ -229,6 +229,22 @@ export default function KinderScreen() {
     }, true);
   }, [selectedChild]);
 
+  const handleDeleteCompleted = useCallback(() => {
+    const count = tasksByChild[selectedChild].filter((t) => t.done).length;
+    crossAlert(
+      `${count} erledigte Aufgabe${count !== 1 ? 'n' : ''} löschen?`,
+      'Diese Aufgaben werden dauerhaft entfernt.',
+      async () => {
+        try {
+          await deleteCompletedTasks(selectedChild, tasksByChild[selectedChild]);
+        } catch (e: any) {
+          crossInfo('Fehler beim Löschen', e?.message ?? String(e));
+        }
+      },
+      true
+    );
+  }, [selectedChild, tasksByChild]);
+
   const handleSaveEdit = useCallback(async () => {
     if (!editingTask || !editingTask.title.trim()) return;
     const title = editingTask.title.trim();
@@ -381,6 +397,15 @@ export default function KinderScreen() {
                   </>
               }
             </TouchableOpacity>
+            {done > 0 && (
+              <TouchableOpacity
+                style={[s.pushChildBtn, { borderColor: colors.danger }]}
+                onPress={handleDeleteCompleted}
+              >
+                <Ionicons name="trash-outline" size={14} color={colors.danger} />
+                <Text style={[s.pushChildBtnText, { color: colors.danger }]}>Erledigt löschen</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
         {tasks.length === 0 && (

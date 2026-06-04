@@ -158,6 +158,16 @@ export async function deleteTask(
   });
 }
 
+export async function deleteCompletedTasks(
+  childId: ChildId,
+  tasks: ChildTask[]
+): Promise<void> {
+  const completed = tasks.filter((t) => t.done);
+  await Promise.all(
+    completed.map((t) => deleteTask(childId, t.id, { actor: 'parent', title: t.title }))
+  );
+}
+
 // ─── Abhaken (Kind) ──────────────────────────────────────────────────────────
 
 export async function toggleTask(
