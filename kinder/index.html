@@ -195,7 +195,7 @@
 <script type="module">
   // ── Firebase Konfiguration ───────────────────────────────────────
   import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-  import { getFirestore, collection, getDocs, doc, updateDoc, onSnapshot }
+  import { getFirestore, collection, getDocs, doc, setDoc, updateDoc, onSnapshot }
     from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
   const firebaseConfig = {
@@ -271,7 +271,11 @@
 
       // Click-Handler
       document.querySelectorAll('.task-card').forEach(card => {
-        card.addEventListener('click', () => toggleTask(card.dataset.id, card.dataset.done === 'true'));
+        card.addEventListener('click', () => toggleTask(
+          card.dataset.id,
+          card.dataset.done === 'true',
+          decodeURIComponent(card.dataset.title || '')
+        ));
       });
 
       // ── Schatzkiste-Belohnung ──
@@ -352,16 +356,33 @@
     }
 
     function taskCard(t, done) {
-      return `<div class="task-card ${done ? 'done' : ''}" data-id="${t.id}" data-done="${done}">
+      return `<div class="task-card ${done ? 'done' : ''}" data-id="${t.id}" data-done="${done}" data-title="${encodeURIComponent(t.title)}">
         <div class="checkbox">${done ? '✓' : ''}</div>
         <span class="task-title">${t.title}</span>
       </div>`;
     }
 
-    async function toggleTask(taskId, currentDone) {
+    async function toggleTask(taskId, currentDone, title) {
       const newDone = !currentDone;
+      const now = new Date().toISOString();
       try {
-        await updateDoc(doc(db, 'children', childId, 'tasks', taskId), { done: newDone });
+        await updateDoc(doc(db, 'children', childId, 'tasks', taskId), {
+          done: newDone,
+          completedAt: newDone ? now : null,
+        });
+        // Aktivitätslog (TE-97): Urheber = Kind
+        try {
+          const ref = doc(collection(db, 'children', childId, 'activity'));
+          await setDoc(ref, {
+            action: newDone ? 'completed' : 'reopened',
+            taskId,
+            taskTitle: title || '',
+            actor: 'child',
+            at: now,
+          });
+        } catch (logErr) {
+          console.warn('Aktivitätslog fehlgeschlagen', logErr);
+        }
       } catch (e) {
         console.error('Toggle fehlgeschlagen', e);
       }

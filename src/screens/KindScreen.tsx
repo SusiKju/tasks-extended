@@ -88,7 +88,7 @@ export default function KindScreen({ onExitChildMode }: Props) {
 
   const handleToggle = useCallback(async (task: ChildTask) => {
     if (!childId) return;
-    await toggleTask(childId, task.id, !task.done);
+    await toggleTask(childId, task.id, !task.done, { actor: 'child', title: task.title });
   }, [childId]);
 
   const handlePinSubmit = useCallback(async () => {

@@ -3,9 +3,10 @@
  * Alle Firestore-Operationen für das Kinder-Aufgaben-System.
  *
  * Firestore-Struktur:
- *   children/{childId}/tasks/{taskId}  → ChildTask
- *   children/{childId}/pushToken       → string
- *   config/reminders                   → { times: string[] }
+ *   children/{childId}/tasks/{taskId}     → ChildTask
+ *   children/{childId}/activity/{autoId}  → ActivityEntry
+ *   children/{childId}/pushToken          → string
+ *   config/reminders                      → { times: string[] }
  */
 
 import {
@@ -17,6 +18,9 @@ import {
   deleteDoc,
   onSnapshot,
   getDoc,
+  query,
+  orderBy,
+  limit,
   Unsubscribe,
 } from 'firebase/firestore';
 import { db } from './firebase';
@@ -38,6 +42,25 @@ export interface ChildTask {
   createdAt: string;
   /** ISO-Zeitstempel, wann die Aufgabe abgehakt wurde. null/undefined = noch offen. */
   completedAt?: string | null;
+}
+
+// ─── Aktivitätslog (TE-97) ────────────────────────────────────────────────────
+
+/** Wer hat die Aktion ausgeführt. */
+export type Actor = 'parent' | 'child';
+
+/** Welche Aktion wurde protokolliert. */
+export type ActivityAction = 'created' | 'completed' | 'reopened' | 'edited' | 'deleted';
+
+export interface ActivityEntry {
+  id: string;
+  action: ActivityAction;
+  taskId: string;
+  /** Titel-Snapshot zum Zeitpunkt der Aktion (wichtig bei `deleted`). */
+  taskTitle: string;
+  actor: Actor;
+  /** ISO-Zeitstempel der Aktion. */
+  at: string;
 }
 
 // ─── Aufgaben lesen ──────────────────────────────────────────────────────────
@@ -65,22 +88,52 @@ export function subscribeToChildTasks(
 
 // ─── Aufgaben schreiben (Eltern) ─────────────────────────────────────────────
 
-export async function addTask(childId: ChildId, task: Omit<ChildTask, 'id'>): Promise<string> {
+export async function addTask(
+  childId: ChildId,
+  task: Omit<ChildTask, 'id'>,
+  actor: Actor = 'parent'
+): Promise<string> {
   const ref = doc(collection(db, 'children', childId, 'tasks'));
   await setDoc(ref, task);
+  await logActivity(childId, {
+    action: 'created',
+    taskId: ref.id,
+    taskTitle: task.title,
+    actor,
+    at: new Date().toISOString(),
+  });
   return ref.id;
 }
 
 export async function updateTask(
   childId: ChildId,
   taskId: string,
-  updates: Partial<ChildTask>
+  updates: Partial<ChildTask>,
+  opts?: { actor?: Actor; title?: string }
 ): Promise<void> {
   await updateDoc(doc(db, 'children', childId, 'tasks', taskId), updates as Record<string, unknown>);
+  await logActivity(childId, {
+    action: 'edited',
+    taskId,
+    taskTitle: opts?.title ?? updates.title ?? '',
+    actor: opts?.actor ?? 'parent',
+    at: new Date().toISOString(),
+  });
 }
 
-export async function deleteTask(childId: ChildId, taskId: string): Promise<void> {
+export async function deleteTask(
+  childId: ChildId,
+  taskId: string,
+  opts?: { actor?: Actor; title?: string }
+): Promise<void> {
   await deleteDoc(doc(db, 'children', childId, 'tasks', taskId));
+  await logActivity(childId, {
+    action: 'deleted',
+    taskId,
+    taskTitle: opts?.title ?? '',
+    actor: opts?.actor ?? 'parent',
+    at: new Date().toISOString(),
+  });
 }
 
 // ─── Abhaken (Kind) ──────────────────────────────────────────────────────────
@@ -88,11 +141,19 @@ export async function deleteTask(childId: ChildId, taskId: string): Promise<void
 export async function toggleTask(
   childId: ChildId,
   taskId: string,
-  done: boolean
+  done: boolean,
+  opts?: { actor?: Actor; title?: string }
 ): Promise<void> {
   await updateDoc(doc(db, 'children', childId, 'tasks', taskId), {
     done,
     completedAt: done ? new Date().toISOString() : null,
+  });
+  await logActivity(childId, {
+    action: done ? 'completed' : 'reopened',
+    taskId,
+    taskTitle: opts?.title ?? '',
+    actor: opts?.actor ?? 'child',
+    at: new Date().toISOString(),
   });
 }
 
@@ -109,6 +170,36 @@ export async function getCompletedHistory(childId: ChildId): Promise<ChildTask[]
     .map((d) => ({ id: d.id, ...d.data() } as ChildTask))
     .filter((t) => t.done)
     .sort((a, b) => (b.completedAt ?? b.date).localeCompare(a.completedAt ?? a.date));
+}
+
+// ─── Aktivitätslog lesen/schreiben (TE-97) ───────────────────────────────────
+
+/** Schreibt ein Event in den Aktivitätslog eines Kindes. Fehler werden geschluckt
+ *  (ein fehlgeschlagenes Log darf die eigentliche Mutation nie blockieren). */
+export async function logActivity(
+  childId: ChildId,
+  entry: Omit<ActivityEntry, 'id'>
+): Promise<void> {
+  try {
+    const ref = doc(collection(db, 'children', childId, 'activity'));
+    await setDoc(ref, entry);
+  } catch (e) {
+    console.warn('logActivity fehlgeschlagen', e);
+  }
+}
+
+/**
+ * Aktivitätslog eines Kindes, neuste zuerst.
+ * Auf die letzten `max` Events begrenzt (Default 100).
+ */
+export async function getActivityLog(childId: ChildId, max = 100): Promise<ActivityEntry[]> {
+  const q = query(
+    collection(db, 'children', childId, 'activity'),
+    orderBy('at', 'desc'),
+    limit(max)
+  );
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as ActivityEntry));
 }
 
 // ─── Push-Token ──────────────────────────────────────────────────────────────

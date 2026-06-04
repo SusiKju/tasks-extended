@@ -29,8 +29,9 @@ import { useTheme } from '../../src/utils/theme';
 import { useStore } from '../../src/store';
 import {
   ChildId, CHILDREN, CHILD_NAMES, ChildTask,
+  ActivityEntry, ActivityAction,
   subscribeToChildTasks, addTask, updateTask, deleteTask,
-  getReminderTimes, setReminderTimes, getCompletedHistory,
+  getReminderTimes, setReminderTimes, getActivityLog,
 } from '../../src/services/kinderTasks';
 import { sendHtmlMail } from '../../src/services/googleMail';
 import { sendReminderToAllChildren, sendReminderToChild } from '../../src/services/pushNotifications';
@@ -38,6 +39,21 @@ import { writePushTrigger, writePushTriggerAll } from '../../src/services/kinder
 import { format } from 'date-fns';
 
 const TODAY = format(new Date(), 'yyyy-MM-dd');
+
+type ThemeColors = ReturnType<typeof useTheme>['colors'];
+
+/** Darstellung je Aktivitäts-Typ im Verlauf (Icon, Label, Farbe). */
+const ACTIVITY_UI: Record<ActivityAction, {
+  icon: string;
+  label: string;
+  color: (c: ThemeColors) => string;
+}> = {
+  created:   { icon: 'add-circle',         label: 'Erstellt',   color: (c) => c.accentNeon },
+  completed: { icon: 'checkmark-circle',   label: 'Abgehakt',   color: (c) => c.success },
+  reopened:  { icon: 'arrow-undo-circle',  label: 'Reaktiviert', color: (c) => c.textMuted },
+  edited:    { icon: 'create',             label: 'Bearbeitet', color: (c) => c.accentNeon },
+  deleted:   { icon: 'trash',              label: 'Gelöscht',   color: (c) => c.danger },
+};
 
 export default function KinderScreen() {
   const { colors } = useTheme();
@@ -58,7 +74,7 @@ export default function KinderScreen() {
   const [setupModalVisible, setSetupModalVisible] = useState(false);
   const [editingTask, setEditingTask] = useState<{ id: string; title: string } | null>(null);
   const [historyChild, setHistoryChild] = useState<ChildId | null>(null);
-  const [history, setHistory] = useState<ChildTask[]>([]);
+  const [history, setHistory] = useState<ActivityEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
 
   // Firestore-Listener für alle Kinder
@@ -184,10 +200,10 @@ export default function KinderScreen() {
     }
   }, [settings, tasksByChild]);
 
-  const handleDeleteTask = useCallback((taskId: string) => {
+  const handleDeleteTask = useCallback((taskId: string, title: string) => {
     crossAlert('Aufgabe löschen?', '', async () => {
       try {
-        await deleteTask(selectedChild, taskId);
+        await deleteTask(selectedChild, taskId, { actor: 'parent', title });
       } catch (e: any) {
         crossInfo('Fehler beim Löschen', e?.message ?? String(e));
       }
@@ -196,7 +212,8 @@ export default function KinderScreen() {
 
   const handleSaveEdit = useCallback(async () => {
     if (!editingTask || !editingTask.title.trim()) return;
-    await updateTask(selectedChild, editingTask.id, { title: editingTask.title.trim() });
+    const title = editingTask.title.trim();
+    await updateTask(selectedChild, editingTask.id, { title }, { actor: 'parent', title });
     setEditingTask(null);
   }, [selectedChild, editingTask]);
 
@@ -205,7 +222,7 @@ export default function KinderScreen() {
     setHistoryLoading(true);
     setHistory([]);
     try {
-      const items = await getCompletedHistory(childId);
+      const items = await getActivityLog(childId);
       setHistory(items);
     } catch (e: any) {
       crossInfo('Fehler', e?.message ?? 'Verlauf konnte nicht geladen werden.');
@@ -332,7 +349,7 @@ export default function KinderScreen() {
             <TouchableOpacity onPress={() => setEditingTask({ id: task.id, title: task.title })}>
               <Ionicons name="pencil-outline" size={18} color={colors.accentNeon} />
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => handleDeleteTask(task.id)}>
+            <TouchableOpacity onPress={() => handleDeleteTask(task.id, task.title)}>
               <Ionicons name="trash-outline" size={18} color={colors.danger} />
             </TouchableOpacity>
           </View>
@@ -401,27 +418,34 @@ export default function KinderScreen() {
             {historyLoading ? (
               <ActivityIndicator color={colors.accentNeon} style={{ marginVertical: 24 }} />
             ) : history.length === 0 ? (
-              <Text style={s.empty}>Noch keine erledigten Aufgaben.</Text>
+              <Text style={s.empty}>Noch keine Aktivität.</Text>
             ) : (
               <ScrollView style={{ maxHeight: 420 }}>
                 {(() => {
                   let lastDate = '';
-                  return history.map((t) => {
-                    const showDate = t.date !== lastDate;
-                    lastDate = t.date;
-                    const [y, m, d] = t.date.split('-');
-                    const time = t.completedAt
-                      ? format(new Date(t.completedAt), 'HH:mm')
-                      : null;
+                  return history.map((e) => {
+                    const day = e.at.slice(0, 10); // "yyyy-MM-dd"
+                    const showDate = day !== lastDate;
+                    lastDate = day;
+                    const [y, m, d] = day.split('-');
+                    const time = format(new Date(e.at), 'HH:mm');
+                    const ui = ACTIVITY_UI[e.action];
                     return (
-                      <View key={t.id}>
+                      <View key={e.id}>
                         {showDate && (
                           <Text style={s.historyDate}>{`${d}.${m}.${y}`}</Text>
                         )}
                         <View style={s.historyRow}>
-                          <Ionicons name="checkmark-circle" size={18} color={colors.success} />
-                          <Text style={s.historyTitle}>{t.title}</Text>
-                          <Text style={s.historyTime}>{time ?? '—'}</Text>
+                          <Ionicons name={ui.icon as any} size={18} color={ui.color(colors)} />
+                          <View style={{ flex: 1 }}>
+                            <Text style={s.historyTitle} numberOfLines={2}>
+                              {e.taskTitle || '(ohne Titel)'}
+                            </Text>
+                            <Text style={s.historyMeta}>
+                              {ui.label} · {e.actor === 'child' ? '🧒 Kind' : '👤 Eltern'}
+                            </Text>
+                          </View>
+                          <Text style={s.historyTime}>{time}</Text>
                         </View>
                       </View>
                     );
@@ -549,7 +573,8 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
       flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6,
       borderBottomWidth: 1, borderColor: colors.border,
     },
-    historyTitle: { flex: 1, fontSize: 14, color: colors.text },
+    historyTitle: { fontSize: 14, color: colors.text },
+    historyMeta: { fontSize: 11, color: colors.textMuted, marginTop: 1 },
     historyTime: { fontSize: 13, fontWeight: '600', color: colors.accentNeon },
     setupBtn: {
       flexDirection: 'row', alignItems: 'center', gap: 10,
