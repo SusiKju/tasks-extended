@@ -28,6 +28,7 @@ jobs:
         env:
           EXPO_PUBLIC_GOOGLE_CLIENT_ID: ${{ secrets.EXPO_PUBLIC_GOOGLE_CLIENT_ID }}
       - run: cp dist/index.html dist/404.html
+      - run: cp -r kinder dist/kinder
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
