@@ -108,6 +108,24 @@
     .reward-bar-wrap { background: rgba(184,134,11,0.18); border-radius: 99px; height: 7px; margin-top: 9px; overflow: hidden; }
     .reward-bar { background: linear-gradient(90deg,#f0b429,#d4a017); height: 100%; border-radius: 99px; width: 0%; transition: width 0.5s ease; }
 
+    /* ── Belohnungspaket (TE-101) ── */
+    .reward-unlock {
+      margin: 0 16px 4px; padding: 16px 18px; border-radius: 18px;
+      display: flex; align-items: center; gap: 14px;
+    }
+    .reward-unlock.unlocked {
+      background: #e8fbef; border: 2px solid #22c55e;
+    }
+    .reward-unlock.teaser {
+      background: #f6f7fb; border: 1px solid #e5e7eb;
+    }
+    .reward-unlock .ru-emoji { font-size: 38px; line-height: 1; flex-shrink: 0; }
+    .reward-unlock .ru-body { flex: 1; min-width: 0; }
+    .reward-unlock .ru-label { font-size: 13px; font-weight: 700; color: #1e8e45; }
+    .reward-unlock .ru-title { font-size: 18px; font-weight: 800; color: #14532d; margin-top: 2px; }
+    .reward-unlock.teaser .ru-text { font-size: 14px; color: #6b7280; }
+    .reward-unlock.teaser .ru-text strong { color: #1a1a2e; }
+
     .spark {
       position: fixed; pointer-events: none; z-index: 998;
       font-size: 22px; will-change: transform, opacity;
@@ -169,6 +187,7 @@
       <div class="reward-bar-wrap"><div class="reward-bar" id="reward-bar"></div></div>
     </div>
   </div>
+  <div class="reward-unlock" id="reward-unlock" style="display:none"></div>
   <div id="task-list-open" class="section">
     <div class="section-label">Noch offen</div>
     <div id="open-tasks"><div class="loading">Aufgaben laden…</div></div>
@@ -214,6 +233,16 @@
 
   // ── Child-Namen ──────────────────────────────────────────────────
   const CHILD_NAMES = { lenny: 'Lenny', emil: 'Emil', hannes: 'Hannes', liddy: 'Liddy' };
+
+  // ── Belohnungstypen (TE-101, gespiegelt aus kinderTasks.ts) ──────
+  const REWARD_TYPES = {
+    tv_series:   { emoji: '📺', label: 'TV-Serie' },
+    tv_movie:    { emoji: '🎬', label: 'TV-Film' },
+    screen_time: { emoji: '🎮', label: 'Spielzeit' },
+    sweet:       { emoji: '🍬', label: 'Süßigkeit' },
+    outing:      { emoji: '🎡', label: 'Ausflug' },
+    other:       { emoji: '🎁', label: 'Sonstiges' },
+  };
   const TODAY = new Date().toISOString().slice(0, 10);
 
   // ── URL-Parameter lesen ──────────────────────────────────────────
@@ -229,6 +258,7 @@
 
     let allTasks = [];
     let prevDoneCount = null;
+    let currentReward = null;
 
     function render(tasks) {
       allTasks = tasks.filter(t => t.date === TODAY);
@@ -287,6 +317,39 @@
         else burstSparkles();
       }
       prevDoneCount = done.length;
+
+      // ── Belohnungspaket (TE-101) ──
+      renderRewardUnlock();
+    }
+
+    // Belohnung anzeigen: freigeschaltet wenn alle Tagesaufgaben erledigt,
+    // sonst als Ausblick ("schaff alles und du bekommst …").
+    function renderRewardUnlock() {
+      const el = document.getElementById('reward-unlock');
+      const allDone = allTasks.length > 0 && allTasks.every(t => t.done);
+      if (!currentReward || allTasks.length === 0) {
+        el.style.display = 'none';
+        return;
+      }
+      const meta = REWARD_TYPES[currentReward.type] || REWARD_TYPES.other;
+      const title = currentReward.title || meta.label;
+      if (allDone) {
+        el.className = 'reward-unlock unlocked';
+        el.innerHTML = `
+          <div class="ru-emoji">${meta.emoji}</div>
+          <div class="ru-body">
+            <div class="ru-label">🎉 Freigeschaltet!</div>
+            <div class="ru-title">${title}</div>
+          </div>`;
+      } else {
+        el.className = 'reward-unlock teaser';
+        el.innerHTML = `
+          <div class="ru-emoji">${meta.emoji}</div>
+          <div class="ru-body">
+            <div class="ru-text">Schaff alle Aufgaben und du bekommst: <strong>${title}</strong></div>
+          </div>`;
+      }
+      el.style.display = 'flex';
     }
 
     function rewardStage(doneCount, total) {
@@ -392,6 +455,12 @@
     onSnapshot(collection(db, 'children', childId, 'tasks'), snap => {
       const tasks = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       render(tasks);
+    });
+
+    // Belohnungs-Listener (TE-101): Belohnung liegt auf children/{childId}.reward
+    onSnapshot(doc(db, 'children', childId), snap => {
+      currentReward = snap.exists() ? (snap.data().reward ?? null) : null;
+      renderRewardUnlock();
     });
 
   } else {

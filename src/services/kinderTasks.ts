@@ -44,6 +44,28 @@ export interface ChildTask {
   completedAt?: string | null;
 }
 
+// ─── Belohnungspakete (TE-101) ────────────────────────────────────────────────
+// Belohnung wird freigeschaltet, sobald das Kind an einem Tag ALLE Aufgaben
+// erledigt hat ("Alle Tagesaufgaben"-Logik). Pro Kind eine stehende Belohnung.
+
+export type RewardType = 'tv_series' | 'tv_movie' | 'screen_time' | 'sweet' | 'outing' | 'other';
+
+/** Vordefinierte Belohnungstypen mit Emoji + Label (Auswahlliste in der Eltern-UI). */
+export const REWARD_TYPES: Record<RewardType, { emoji: string; label: string }> = {
+  tv_series:   { emoji: '📺', label: 'TV-Serie' },
+  tv_movie:    { emoji: '🎬', label: 'TV-Film' },
+  screen_time: { emoji: '🎮', label: 'Spielzeit' },
+  sweet:       { emoji: '🍬', label: 'Süßigkeit' },
+  outing:      { emoji: '🎡', label: 'Ausflug' },
+  other:       { emoji: '🎁', label: 'Sonstiges' },
+};
+
+export interface ChildReward {
+  type: RewardType;
+  /** Freier Titel, z. B. "1 Folge Paw Patrol". */
+  title: string;
+}
+
 // ─── Aktivitätslog (TE-97) ────────────────────────────────────────────────────
 
 /** Wer hat die Aktion ausgeführt. */
@@ -215,6 +237,29 @@ export async function getPushTokens(): Promise<Record<ChildId, string | null>> {
     result[childId] = snap.exists() ? (snap.data()?.pushToken ?? null) : null;
   }
   return result as Record<ChildId, string | null>;
+}
+
+// ─── Belohnung lesen/schreiben (TE-101) ──────────────────────────────────────
+// Liegt auf dem Kind-Dokument `children/{childId}` (Feld `reward`), analog zu
+// `pushToken`. `null` = keine Belohnung gesetzt.
+
+export async function setChildReward(childId: ChildId, reward: ChildReward | null): Promise<void> {
+  await setDoc(doc(db, 'children', childId), { reward }, { merge: true });
+}
+
+export async function getChildReward(childId: ChildId): Promise<ChildReward | null> {
+  const snap = await getDoc(doc(db, 'children', childId));
+  return snap.exists() ? ((snap.data()?.reward as ChildReward | undefined) ?? null) : null;
+}
+
+/** Echtzeit-Listener für die Belohnung eines Kindes. */
+export function subscribeToChildReward(
+  childId: ChildId,
+  onChange: (reward: ChildReward | null) => void
+): Unsubscribe {
+  return onSnapshot(doc(db, 'children', childId), (snap) => {
+    onChange(snap.exists() ? ((snap.data()?.reward as ChildReward | undefined) ?? null) : null);
+  });
 }
 
 // ─── Web-Push-Trigger ────────────────────────────────────────────────────────

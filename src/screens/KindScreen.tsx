@@ -4,17 +4,19 @@
  * Zeigt: Namensauswahl (Onboarding) → Aufgabenliste → PIN-Rückweg.
  */
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  Alert, ActivityIndicator, Modal, TextInput, Pressable,
+  Alert, ActivityIndicator, Modal, TextInput, Pressable, Animated, Easing,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../utils/theme';
 import {
   ChildId, CHILDREN, CHILD_NAMES, ChildTask,
+  ChildReward, REWARD_TYPES,
   subscribeToChildTasks, toggleTask, subscribeToPushTrigger,
+  subscribeToChildReward,
 } from '../services/kinderTasks';
 import { registerPushToken } from '../services/pushNotifications';
 import { Platform } from 'react-native';
@@ -32,6 +34,19 @@ const TODAY = format(new Date(), 'yyyy-MM-dd');
 const STORAGE_KEY = 'kinder_child_id';
 const PARENT_PIN = '1234'; // TODO: aus Einstellungen lesen
 
+// ── Schatzkiste-Belohnung ────────────────────────────────────────────────────
+// Spiegelt rewardStage() aus kinder/index.html, damit App- und Web-Ansicht
+// identisches Belohnungs-Feedback zeigen (siehe TE-100).
+interface RewardStage { emoji: string; msg: string; full?: boolean }
+function rewardStage(doneCount: number, total: number): RewardStage {
+  if (total === 0)     return { emoji: '📦', msg: 'Noch keine Aufgaben heute' };
+  if (doneCount === 0) return { emoji: '📦', msg: "Noch leer – los geht's!" };
+  const frac = doneCount / total;
+  if (frac >= 1)   return { emoji: '🧰💎', msg: 'Voll! Du hast den Schatz geknackt! 🎉', full: true };
+  if (frac >= 0.5) return { emoji: '💰', msg: 'Schon halb voll – weiter so!' };
+  return { emoji: '🪙', msg: 'Füllt sich… sammle mehr Münzen!' };
+}
+
 interface Props {
   onExitChildMode?: () => void;
 }
@@ -42,12 +57,18 @@ export default function KindScreen({ onExitChildMode }: Props) {
 
   const [childId, setChildId] = useState<ChildId | null>(null);
   const [tasks, setTasks] = useState<ChildTask[]>([]);
+  const [reward, setReward] = useState<ChildReward | null>(null);
   const [loading, setLoading] = useState(true);
   const [pinModalVisible, setPinModalVisible] = useState(false);
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState(false);
   const [notifPermission, setNotifPermission] = useState<'granted' | 'denied' | 'default' | 'unsupported'>('unsupported');
   const [toast, setToast] = useState(false);
+
+  // Schatzkiste-Animation (TE-100)
+  const chestScale = useRef(new Animated.Value(1)).current;
+  const coinScale = useRef(new Animated.Value(1)).current;
+  const prevDoneRef = useRef<number | null>(null);
 
   // Gespeicherte Kind-ID laden
   useEffect(() => {
@@ -76,8 +97,29 @@ export default function KindScreen({ onExitChildMode }: Props) {
       setToast(true);
       setTimeout(() => setToast(false), 5000);
     });
-    return () => { unsubTasks(); unsubPush(); };
+    const unsubReward = subscribeToChildReward(childId, setReward);
+    return () => { unsubTasks(); unsubPush(); unsubReward(); };
   }, [childId]);
+
+  // Schatzkiste-Animation auslösen, sobald eine Aufgabe NEU abgehakt wurde (TE-100)
+  useEffect(() => {
+    const doneNow = tasks.filter((t) => t.done).length;
+    if (prevDoneRef.current !== null && doneNow > prevDoneRef.current) {
+      chestScale.setValue(1);
+      coinScale.setValue(1);
+      Animated.parallel([
+        Animated.sequence([
+          Animated.timing(chestScale, { toValue: 1.35, duration: 150, easing: Easing.out(Easing.ease), useNativeDriver: true }),
+          Animated.spring(chestScale, { toValue: 1, friction: 4, useNativeDriver: true }),
+        ]),
+        Animated.sequence([
+          Animated.timing(coinScale, { toValue: 1.5, duration: 150, easing: Easing.out(Easing.ease), useNativeDriver: true }),
+          Animated.spring(coinScale, { toValue: 1, friction: 4, useNativeDriver: true }),
+        ]),
+      ]).start();
+    }
+    prevDoneRef.current = doneNow;
+  }, [tasks, chestScale, coinScale]);
 
   const handleSelectChild = useCallback(async (id: ChildId) => {
     await AsyncStorage.setItem(STORAGE_KEY, id);
@@ -136,19 +178,73 @@ export default function KindScreen({ onExitChildMode }: Props) {
   }
 
   // ── Aufgabenliste ────────────────────────────────────────────────────────
+  const total = tasks.length;
   const done = tasks.filter((t) => t.done).length;
+  const allDone = total > 0 && done === total;
+  const headerEmoji = total === 0 ? '😊' : allDone ? '🏆' : done > 0 ? '🎉' : '📋';
+  const progress = total > 0 ? done / total : 0;
+  const headerSub = total === 0
+    ? 'Heute keine Aufgaben'
+    : allDone
+      ? 'Alles erledigt – mega! 🎉'
+      : `${done} von ${total} Aufgaben erledigt`;
+
+  // Schatzkiste-Belohnung (TE-100)
+  const reward = rewardStage(done, total);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       {/* Header */}
       <View style={s.header}>
+        <Text style={s.headerEmoji}>{headerEmoji}</Text>
         <Text style={s.headerTitle}>Hey {CHILD_NAMES[childId]}! 🌟</Text>
-        <Text style={s.headerSub}>{done} von {tasks.length} Aufgaben erledigt</Text>
+        <Text style={s.headerSub}>{headerSub}</Text>
+        {total > 0 && (
+          <View style={s.progressTrack}>
+            <View style={[s.progressFill, { width: `${Math.round(progress * 100)}%` }]} />
+          </View>
+        )}
         {/* Dezenter PIN-Button */}
         <TouchableOpacity style={s.pinBtn} onPress={() => setPinModalVisible(true)}>
           <Ionicons name="lock-closed-outline" size={14} color={colors.textMuted} />
         </TouchableOpacity>
       </View>
+
+      {/* Schatzkiste-Belohnung (TE-100) */}
+      <View style={[s.reward, reward.full && s.rewardFull]}>
+        <Animated.Text style={[s.chest, { transform: [{ scale: chestScale }] }]}>
+          {reward.emoji}
+        </Animated.Text>
+        <View style={s.rewardBody}>
+          <Text style={s.coins}>
+            🪙 <Animated.Text style={[s.coinNum, { transform: [{ scale: coinScale }] }]}>{done}</Animated.Text>
+          </Text>
+          <Text style={s.rewardMsg}>{reward.msg}</Text>
+          <View style={s.rewardBarTrack}>
+            <View style={[s.rewardBarFill, { width: `${Math.round(progress * 100)}%` }]} />
+          </View>
+        </View>
+      </View>
+
+      {/* Freigeschaltete Belohnung (TE-101) */}
+      {reward && allDone && (
+        <View style={s.rewardUnlock}>
+          <Text style={s.rewardUnlockEmoji}>{REWARD_TYPES[reward.type].emoji}</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={s.rewardUnlockLabel}>🎉 Freigeschaltet!</Text>
+            <Text style={s.rewardUnlockTitle}>{reward.title}</Text>
+          </View>
+        </View>
+      )}
+      {/* Belohnung in Aussicht, solange noch offen (TE-101) */}
+      {reward && !allDone && total > 0 && (
+        <View style={s.rewardTeaser}>
+          <Text style={s.rewardTeaserEmoji}>{REWARD_TYPES[reward.type].emoji}</Text>
+          <Text style={s.rewardTeaserText}>
+            Schaff alle Aufgaben und du bekommst: <Text style={s.rewardTeaserStrong}>{reward.title}</Text>
+          </Text>
+        </View>
+      )}
 
       {/* Push-Toast */}
       {toast && (
@@ -239,10 +335,54 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
     },
     nameBtnText: { fontSize: 24, fontWeight: '800', color: '#000' },
     // Header
-    header: { padding: 20, paddingTop: 60, backgroundColor: colors.surface, borderBottomWidth: 1, borderColor: colors.border },
-    headerTitle: { fontSize: 26, fontWeight: '800', color: colors.text },
-    headerSub: { fontSize: 14, color: colors.textSecondary, marginTop: 4 },
+    header: { padding: 20, paddingTop: 60, alignItems: 'center', backgroundColor: colors.surface, borderBottomWidth: 1, borderColor: colors.border },
+    headerEmoji: { fontSize: 48, marginBottom: 6 },
+    headerTitle: { fontSize: 28, fontWeight: '800', color: colors.text, textAlign: 'center' },
+    headerSub: { fontSize: 15, color: colors.textSecondary, marginTop: 4, textAlign: 'center' },
+    progressTrack: { width: '100%', height: 12, borderRadius: 6, backgroundColor: colors.surfaceHigh, marginTop: 14, overflow: 'hidden' },
+    progressFill: { height: '100%', borderRadius: 6, backgroundColor: colors.success },
     pinBtn: { position: 'absolute', top: 60, right: 20, padding: 8, opacity: 0.4 },
+    // Schatzkiste-Belohnung (TE-100)
+    reward: {
+      flexDirection: 'row', alignItems: 'center', gap: 16,
+      margin: 16, padding: 18,
+      backgroundColor: '#FFF3D6', borderRadius: 20,
+      shadowColor: '#D4A017', shadowOpacity: 0.25, shadowRadius: 14,
+      shadowOffset: { width: 0, height: 2 }, elevation: 3,
+    },
+    rewardFull: {
+      backgroundColor: '#FFD56B',
+      shadowOpacity: 0.6, shadowRadius: 24,
+    },
+    chest: { fontSize: 50, lineHeight: 58 },
+    rewardBody: { flex: 1, minWidth: 0 },
+    coins: { fontSize: 22, fontWeight: '800', color: '#B8860B' },
+    coinNum: { fontSize: 22, fontWeight: '800', color: '#B8860B' },
+    rewardMsg: { fontSize: 14, color: '#9A7B1A', fontWeight: '600', marginTop: 3 },
+    rewardBarTrack: {
+      height: 8, borderRadius: 99, marginTop: 9, overflow: 'hidden',
+      backgroundColor: 'rgba(184,134,11,0.18)',
+    },
+    rewardBarFill: { height: '100%', borderRadius: 99, backgroundColor: '#D4A017' },
+    // Freigeschaltete / angekündigte Belohnung (TE-101)
+    rewardUnlock: {
+      flexDirection: 'row', alignItems: 'center', gap: 14,
+      marginHorizontal: 16, marginTop: -4, marginBottom: 4, padding: 16,
+      backgroundColor: '#E8FBEF', borderRadius: 20,
+      borderWidth: 2, borderColor: colors.success,
+    },
+    rewardUnlockEmoji: { fontSize: 40 },
+    rewardUnlockLabel: { fontSize: 13, fontWeight: '700', color: '#1E8E45' },
+    rewardUnlockTitle: { fontSize: 19, fontWeight: '800', color: '#14532D', marginTop: 2 },
+    rewardTeaser: {
+      flexDirection: 'row', alignItems: 'center', gap: 12,
+      marginHorizontal: 16, marginTop: -4, marginBottom: 4, padding: 14,
+      backgroundColor: colors.surface, borderRadius: 16,
+      borderWidth: 1, borderColor: colors.border,
+    },
+    rewardTeaserEmoji: { fontSize: 26 },
+    rewardTeaserText: { flex: 1, fontSize: 14, color: colors.textSecondary },
+    rewardTeaserStrong: { fontWeight: '800', color: colors.text },
     // Toast
     toast: {
       backgroundColor: colors.accentNeon, padding: 14, paddingHorizontal: 20,
@@ -256,19 +396,19 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
     },
     notifBannerText: { flex: 1, fontSize: 13, fontWeight: '600' },
     // Aufgabenliste
-    list: { padding: 16, gap: 12, paddingBottom: 40 },
+    list: { padding: 16, gap: 14, paddingBottom: 40 },
     taskCard: {
-      flexDirection: 'row', alignItems: 'center', gap: 14,
-      backgroundColor: colors.surface, borderRadius: 16, padding: 18,
+      flexDirection: 'row', alignItems: 'center', gap: 16,
+      backgroundColor: colors.surface, borderRadius: 20, padding: 20,
       borderWidth: 1, borderColor: colors.border,
     },
-    taskCardDone: { opacity: 0.6 },
+    taskCardDone: { opacity: 0.6, borderColor: colors.success },
     checkbox: {
-      width: 28, height: 28, borderRadius: 14, borderWidth: 2,
+      width: 32, height: 32, borderRadius: 16, borderWidth: 2.5,
       borderColor: colors.border, justifyContent: 'center', alignItems: 'center',
     },
     checkboxDone: { backgroundColor: colors.success, borderColor: colors.success },
-    taskText: { flex: 1, fontSize: 17, fontWeight: '600', color: colors.text },
+    taskText: { flex: 1, fontSize: 18, fontWeight: '600', color: colors.text },
     taskTextDone: { textDecorationLine: 'line-through', color: colors.textMuted },
     empty: { textAlign: 'center', fontSize: 18, color: colors.textMuted, marginTop: 60 },
     // PIN-Modal
