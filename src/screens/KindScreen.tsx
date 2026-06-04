@@ -190,7 +190,7 @@ export default function KindScreen({ onExitChildMode }: Props) {
       : `${done} von ${total} Aufgaben erledigt`;
 
   // Schatzkiste-Belohnung (TE-100)
-  const reward = rewardStage(done, total);
+  const chestStage = rewardStage(done, total);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -211,15 +211,15 @@ export default function KindScreen({ onExitChildMode }: Props) {
       </View>
 
       {/* Schatzkiste-Belohnung (TE-100) */}
-      <View style={[s.reward, reward.full && s.rewardFull]}>
+      <View style={[s.reward, chestStage.full && s.rewardFull]}>
         <Animated.Text style={[s.chest, { transform: [{ scale: chestScale }] }]}>
-          {reward.emoji}
+          {chestStage.emoji}
         </Animated.Text>
         <View style={s.rewardBody}>
           <Text style={s.coins}>
             🪙 <Animated.Text style={[s.coinNum, { transform: [{ scale: coinScale }] }]}>{done}</Animated.Text>
           </Text>
-          <Text style={s.rewardMsg}>{reward.msg}</Text>
+          <Text style={s.rewardMsg}>{chestStage.msg}</Text>
           <View style={s.rewardBarTrack}>
             <View style={[s.rewardBarFill, { width: `${Math.round(progress * 100)}%` }]} />
           </View>
