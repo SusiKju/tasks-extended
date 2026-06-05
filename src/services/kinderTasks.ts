@@ -45,6 +45,10 @@ export interface ChildTask {
   /** true = Eltern haben die abgehakte Aufgabe abgelehnt (zurückgesetzt). Wird in der
    *  Kinder-Ansicht rot dargestellt. Sobald das Kind erneut abhakt, wird das Flag gelöscht. (TE-103) */
   rejected?: boolean;
+  /** Gemeinsame ID aller Kopien einer Gruppenaufgabe (an mehrere Kinder zugleich vergeben).
+   *  null/undefined = normale Einzelaufgabe. Jede Kopie bleibt pro Kind eigenständig
+   *  (eigener Status, eigene Belohnungslogik). (TE-111) */
+  groupId?: string | null;
 }
 
 // ─── Belohnungspakete (TE-101) ────────────────────────────────────────────────

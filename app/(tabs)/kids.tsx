@@ -38,6 +38,7 @@ import {
 import { sendHtmlMail } from '../../src/services/googleMail';
 import { sendReminderToAllChildren, sendReminderToChild } from '../../src/services/pushNotifications';
 import { writePushTrigger, writePushTriggerAll } from '../../src/services/kinderTasks';
+import uuid from 'react-native-uuid';
 import { format } from 'date-fns';
 
 const TODAY = format(new Date(), 'yyyy-MM-dd');
@@ -67,6 +68,11 @@ export default function KinderScreen() {
     lenny: [], emil: [], hannes: [], liddy: [],
   });
   const [newTaskTitle, setNewTaskTitle] = useState('');
+  // Gruppenaufgabe (TE-111): dieselbe Aufgabe an mehrere ausgewählte Kinder.
+  const [groupMode, setGroupMode] = useState(false);
+  const [groupSelection, setGroupSelection] = useState<Record<ChildId, boolean>>({
+    lenny: false, emil: false, hannes: false, liddy: false,
+  });
   const [mailingChild, setMailingChild] = useState<ChildId | null>(null);
   const [reminderTimes, setReminderTimesState] = useState<string[]>(['15:00', '17:00']);
   const [editingTimes, setEditingTimes] = useState(false);
@@ -124,6 +130,39 @@ export default function KinderScreen() {
     });
     setNewTaskTitle('');
   }, [selectedChild, newTaskTitle]);
+
+  const toggleGroupChild = useCallback((childId: ChildId) => {
+    setGroupSelection((prev) => ({ ...prev, [childId]: !prev[childId] }));
+  }, []);
+
+  // Gruppenaufgabe an alle ausgewählten Kinder verteilen — eine gemeinsame groupId,
+  // aber je Kind eine eigenständige Kopie (eigener Status, eigene Belohnungslogik). (TE-111)
+  const handleAddGroupTask = useCallback(async () => {
+    const title = newTaskTitle.trim();
+    if (!title) return;
+    const targets = CHILDREN.filter((id) => groupSelection[id]);
+    if (targets.length === 0) {
+      crossInfo('Keine Kinder gewählt', 'Bitte mindestens ein Kind für die Gruppenaufgabe auswählen.');
+      return;
+    }
+    const groupId = uuid.v4() as string;
+    try {
+      await Promise.all(
+        targets.map((id) =>
+          addTask(id, {
+            title,
+            done: false,
+            date: TODAY,
+            createdAt: new Date().toISOString(),
+            groupId,
+          })
+        )
+      );
+      setNewTaskTitle('');
+    } catch (e: any) {
+      crossInfo('Fehler', e?.message ?? 'Gruppenaufgabe konnte nicht angelegt werden.');
+    }
+  }, [newTaskTitle, groupSelection]);
 
   const handlePushMail = useCallback(async (childId: ChildId) => {
     const email = (settings.childEmails ?? {})[childId];
@@ -368,20 +407,64 @@ export default function KinderScreen() {
         })}
       </View>
 
-      {/* Neue Aufgabe */}
+      {/* Neue Aufgabe — einzeln oder als Gruppenaufgabe (TE-111) */}
       <View style={s.section}>
-        <Text style={s.sectionTitle}>Aufgabe für {CHILD_NAMES[selectedChild]} hinzufügen</Text>
+        {/* Umschalter Einzeln / Gruppe */}
+        <View style={s.modeToggle}>
+          <TouchableOpacity
+            style={[s.modeBtn, !groupMode && s.modeBtnActive]}
+            onPress={() => setGroupMode(false)}
+          >
+            <Ionicons name="person-outline" size={14} color={!groupMode ? '#000' : colors.textMuted} />
+            <Text style={[s.modeBtnText, !groupMode && s.modeBtnTextActive]}>Einzeln</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[s.modeBtn, groupMode && s.modeBtnActive]}
+            onPress={() => setGroupMode(true)}
+          >
+            <Ionicons name="people-outline" size={14} color={groupMode ? '#000' : colors.textMuted} />
+            <Text style={[s.modeBtnText, groupMode && s.modeBtnTextActive]}>Gruppe</Text>
+          </TouchableOpacity>
+        </View>
+
+        {groupMode ? (
+          <>
+            <Text style={s.sectionTitle}>Gruppenaufgabe für ausgewählte Kinder</Text>
+            <View style={s.groupChips}>
+              {CHILDREN.map((childId) => {
+                const sel = groupSelection[childId];
+                return (
+                  <TouchableOpacity
+                    key={childId}
+                    style={[s.groupChip, sel && { borderColor: colors.accentNeon, backgroundColor: colors.accentNeon }]}
+                    onPress={() => toggleGroupChild(childId)}
+                  >
+                    <Ionicons
+                      name={sel ? 'checkmark-circle' : 'ellipse-outline'}
+                      size={15}
+                      color={sel ? '#000' : colors.textMuted}
+                    />
+                    <Text style={[s.groupChipText, sel && { color: '#000' }]}>{CHILD_NAMES[childId]}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </>
+        ) : (
+          <Text style={s.sectionTitle}>Aufgabe für {CHILD_NAMES[selectedChild]} hinzufügen</Text>
+        )}
+
         <View style={s.inputRow}>
           <TextInput
             style={s.input}
-            placeholder="Neue Aufgabe..."
+            placeholder={groupMode ? 'Neue Gruppenaufgabe...' : 'Neue Aufgabe...'}
             placeholderTextColor={colors.placeholder}
             value={newTaskTitle}
             onChangeText={setNewTaskTitle}
-            onSubmitEditing={handleAddTask}
+            onSubmitEditing={groupMode ? handleAddGroupTask : handleAddTask}
             returnKeyType="done"
           />
-          <TouchableOpacity style={s.addBtn} onPress={handleAddTask}>
+          <TouchableOpacity style={s.addBtn} onPress={groupMode ? handleAddGroupTask : handleAddTask}>
             <Ionicons name="add" size={22} color={colors.accentFg} />
           </TouchableOpacity>
         </View>
@@ -414,15 +497,6 @@ export default function KinderScreen() {
                   </>
               }
             </TouchableOpacity>
-            {done > 0 && (
-              <TouchableOpacity
-                style={[s.pushChildBtn, { borderColor: colors.danger }]}
-                onPress={handleDeleteCompleted}
-              >
-                <Ionicons name="trash-outline" size={14} color={colors.danger} />
-                <Text style={[s.pushChildBtnText, { color: colors.danger }]}>Erledigt löschen</Text>
-              </TouchableOpacity>
-            )}
           </View>
         </View>
         {tasks.length === 0 && (
@@ -444,6 +518,12 @@ export default function KinderScreen() {
             <Text style={[s.taskTitle, task.done && s.taskDone, task.rejected && s.taskRejected]}>
               {task.title}
             </Text>
+            {task.groupId && (
+              <View style={s.groupTag}>
+                <Ionicons name="people" size={11} color={colors.accentNeon} />
+                <Text style={s.groupTagText}>Gruppe</Text>
+              </View>
+            )}
             {task.rejected && <Text style={s.rejectedTag}>abgelehnt</Text>}
             <TouchableOpacity onPress={() => setEditingTask({ id: task.id, title: task.title })}>
               <Ionicons name="pencil-outline" size={18} color={colors.accentNeon} />
@@ -453,6 +533,17 @@ export default function KinderScreen() {
             </TouchableOpacity>
           </View>
         ))}
+        {done > 0 && (
+          <View style={{ alignItems: 'flex-end', paddingRight: 16, paddingBottom: 12, marginTop: 12 }}>
+            <TouchableOpacity
+              style={[s.pushChildBtn, { borderColor: colors.danger }]}
+              onPress={handleDeleteCompleted}
+            >
+              <Ionicons name="trash-outline" size={14} color={colors.danger} />
+              <Text style={[s.pushChildBtnText, { color: colors.danger }]}>Erledigt löschen</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
 
       {/* Belohnung (TE-101) */}
@@ -697,6 +788,29 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
     },
     sectionTitle: { fontSize: 14, fontWeight: '700', color: colors.text },
     inputRow: { flexDirection: 'row', gap: 8 },
+    // Gruppenaufgabe (TE-111)
+    modeToggle: { flexDirection: 'row', gap: 6, marginBottom: 2 },
+    modeBtn: {
+      flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+      paddingVertical: 8, borderRadius: 10,
+      borderWidth: 1, borderColor: colors.border, backgroundColor: colors.inputBackground,
+    },
+    modeBtnActive: { backgroundColor: colors.accentNeon, borderColor: colors.accentNeon },
+    modeBtnText: { fontSize: 13, fontWeight: '700', color: colors.textMuted },
+    modeBtnTextActive: { color: '#000' },
+    groupChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+    groupChip: {
+      flexDirection: 'row', alignItems: 'center', gap: 6,
+      borderWidth: 1, borderColor: colors.border, borderRadius: 10,
+      paddingHorizontal: 10, paddingVertical: 8, backgroundColor: colors.inputBackground,
+    },
+    groupChipText: { fontSize: 13, fontWeight: '600', color: colors.text },
+    groupTag: {
+      flexDirection: 'row', alignItems: 'center', gap: 3,
+      borderWidth: 1, borderColor: colors.accentNeon, borderRadius: 6,
+      paddingHorizontal: 6, paddingVertical: 2,
+    },
+    groupTagText: { fontSize: 10, fontWeight: '800', color: colors.accentNeon, textTransform: 'uppercase', letterSpacing: 0.5 },
     input: {
       flex: 1, backgroundColor: colors.inputBackground, borderRadius: 10,
       paddingHorizontal: 12, paddingVertical: 10, color: colors.text,
