@@ -33,6 +33,13 @@ export const CHILD_NAMES: Record<ChildId, string> = {
   hannes: 'Hannes',
   liddy: 'Liddy',
 };
+/** Kurzkürzel für kompakte Anzeige, z. B. Teilnehmer einer Gruppenaufgabe. (TE-113) */
+export const CHILD_SHORT: Record<ChildId, string> = {
+  lenny: 'Len',
+  emil: 'Emi',
+  hannes: 'Han',
+  liddy: 'Lid',
+};
 
 export interface ChildTask {
   id: string;

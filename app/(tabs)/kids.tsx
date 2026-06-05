@@ -28,7 +28,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../src/utils/theme';
 import { useStore } from '../../src/store';
 import {
-  ChildId, CHILDREN, CHILD_NAMES, ChildTask,
+  ChildId, CHILDREN, CHILD_NAMES, CHILD_SHORT, ChildTask,
   ActivityEntry, ActivityAction,
   ChildReward, RewardType, REWARD_TYPES,
   subscribeToChildTasks, addTask, updateTask, deleteTask, deleteCompletedTasks, rejectTask,
@@ -378,6 +378,13 @@ export default function KinderScreen() {
   const currentReward = rewardsByChild[selectedChild];
   const rewardUnlocked = tasks.length > 0 && done === tasks.length;
 
+  // Teilnehmer einer Gruppenaufgabe aus der gemeinsamen groupId ableiten (TE-113):
+  // alle Kinder, die heute eine Aufgabe mit derselben groupId haben, in fester
+  // CHILDREN-Reihenfolge als Kürzel.
+  const groupShorts = (groupId: string): string[] =>
+    CHILDREN.filter((id) => tasksByChild[id].some((t) => t.groupId === groupId))
+      .map((id) => CHILD_SHORT[id]);
+
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.background }}
@@ -521,7 +528,7 @@ export default function KinderScreen() {
             {task.groupId && (
               <View style={s.groupTag}>
                 <Ionicons name="people" size={11} color={colors.accentNeon} />
-                <Text style={s.groupTagText}>Gruppe</Text>
+                <Text style={s.groupTagText}>{groupShorts(task.groupId).join('·')}</Text>
               </View>
             )}
             {task.rejected && <Text style={s.rejectedTag}>abgelehnt</Text>}
@@ -810,7 +817,7 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
       borderWidth: 1, borderColor: colors.accentNeon, borderRadius: 6,
       paddingHorizontal: 6, paddingVertical: 2,
     },
-    groupTagText: { fontSize: 10, fontWeight: '800', color: colors.accentNeon, textTransform: 'uppercase', letterSpacing: 0.5 },
+    groupTagText: { fontSize: 11, fontWeight: '800', color: colors.accentNeon, letterSpacing: 0.3 },
     input: {
       flex: 1, backgroundColor: colors.inputBackground, borderRadius: 10,
       paddingHorizontal: 12, paddingVertical: 10, color: colors.text,
