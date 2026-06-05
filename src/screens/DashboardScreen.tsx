@@ -508,10 +508,36 @@ export function DashboardScreen() {
     return () => unsubs.forEach((u) => u());
   }, []);
 
-  // Nur Kinder mit mindestens einer Aufgabe; ganzer Abschnitt entfällt, wenn leer.
+  // Gruppenaufgaben (TE-115): Kopien mit gemeinsamer groupId über die Kinder hinweg
+  // zu je einer Gruppe bündeln – jede wird zu einer eigenen Extrakarte.
+  const groupTasks = useMemo(() => {
+    const map = new Map<string, { groupId: string; title: string; entries: { childId: ChildId; task: ChildTask }[] }>();
+    for (const childId of CHILDREN) {
+      for (const task of childTasks[childId]) {
+        if (!task.groupId) continue;
+        let g = map.get(task.groupId);
+        if (!g) { g = { groupId: task.groupId, title: task.title, entries: [] }; map.set(task.groupId, g); }
+        g.entries.push({ childId, task });
+      }
+    }
+    // Teilnehmer in fester CHILDREN-Reihenfolge.
+    for (const g of map.values()) {
+      g.entries.sort((a, b) => CHILDREN.indexOf(a.childId) - CHILDREN.indexOf(b.childId));
+    }
+    return [...map.values()];
+  }, [childTasks]);
+
+  // Einzelaufgaben je Kind (ohne Gruppenaufgaben) für die zweispaltige Anzeige.
+  const individualByChild = useMemo(() => {
+    const out = {} as Record<ChildId, ChildTask[]>;
+    for (const id of CHILDREN) out[id] = childTasks[id].filter((t) => !t.groupId);
+    return out;
+  }, [childTasks]);
+
+  // Nur Kinder mit mindestens einer Einzelaufgabe.
   const childrenWithTasks = useMemo(
-    () => CHILDREN.filter((id) => childTasks[id].length > 0),
-    [childTasks]
+    () => CHILDREN.filter((id) => individualByChild[id].length > 0),
+    [individualByChild]
   );
 
   // Tasks nach Fälligkeit gruppieren
@@ -779,55 +805,102 @@ export function DashboardScreen() {
 
       </View>
 
-      {/* ── Aufgaben der Kinder (TE-110) ── */}
-      {childrenWithTasks.length > 0 && (
+      {/* ── Aufgaben der Kinder (TE-110/TE-115) ── */}
+      {(childrenWithTasks.length > 0 || groupTasks.length > 0) && (
         <View style={styles.section}>
           <SectionLabel
             title="Aufgaben der Kinder"
             onMore={() => router.push('/(tabs)/kids' as any)}
             colors={colors}
           />
-          <View style={{ gap: 10 }}>
-            {childrenWithTasks.map((childId) => {
-              const list = childTasks[childId];
-              const doneCount = list.filter((t) => t.done).length;
-              return (
-                <View key={childId}>
-                  <Text style={[styles.dayLabel, { color: colors.textMuted }]}>
-                    {CHILD_NAMES[childId]} · {doneCount}/{list.length}
-                  </Text>
-                  <Pressable
-                    style={[styles.card, { borderLeftWidth: 0 }]}
-                    onPress={() => router.push('/(tabs)/kids' as any)}
-                  >
-                    {list.map((task, i) => (
-                      <View
-                        key={task.id}
-                        style={[styles.kidRow, i < list.length - 1 && styles.rowDivider]}
-                      >
-                        <Ionicons
-                          name={task.done ? 'checkmark-circle' : task.rejected ? 'close-circle' : 'ellipse-outline'}
-                          size={18}
-                          color={task.done ? colors.success : task.rejected ? colors.danger : colors.textMuted}
-                        />
-                        <Text
-                          style={[
-                            styles.kidTaskText,
-                            { color: colors.text },
-                            task.done && styles.kidTaskDone,
-                            task.rejected && { color: colors.danger },
-                          ]}
-                          numberOfLines={1}
+
+          {/* Einzelne Kinder – zweispaltig (TE-115) */}
+          {childrenWithTasks.length > 0 && (
+            <View style={styles.kidGrid}>
+              {childrenWithTasks.map((childId) => {
+                const list = individualByChild[childId];
+                const doneCount = list.filter((t) => t.done).length;
+                return (
+                  <View key={childId} style={styles.kidCol}>
+                    <Text style={[styles.dayLabel, styles.kidColLabel, { color: colors.textMuted }]}>
+                      {CHILD_NAMES[childId]} · {doneCount}/{list.length}
+                    </Text>
+                    <Pressable
+                      style={[styles.card, styles.kidCard]}
+                      onPress={() => router.push('/(tabs)/kids' as any)}
+                    >
+                      {list.map((task, i) => (
+                        <View
+                          key={task.id}
+                          style={[styles.kidRow, i < list.length - 1 && styles.rowDivider]}
                         >
-                          {task.title}
-                        </Text>
-                      </View>
-                    ))}
-                  </Pressable>
-                </View>
-              );
-            })}
-          </View>
+                          <Ionicons
+                            name={task.done ? 'checkmark-circle' : task.rejected ? 'close-circle' : 'ellipse-outline'}
+                            size={18}
+                            color={task.done ? colors.success : task.rejected ? colors.danger : colors.textMuted}
+                          />
+                          <Text
+                            style={[
+                              styles.kidTaskText,
+                              { color: colors.text },
+                              task.done && styles.kidTaskDone,
+                              task.rejected && { color: colors.danger },
+                            ]}
+                            numberOfLines={1}
+                          >
+                            {task.title}
+                          </Text>
+                        </View>
+                      ))}
+                    </Pressable>
+                  </View>
+                );
+              })}
+            </View>
+          )}
+
+          {/* Gruppenarbeiten – je eine Extrakarte (TE-115) */}
+          {groupTasks.map((g) => {
+            const doneCount = g.entries.filter((e) => e.task.done).length;
+            return (
+              <View key={g.groupId} style={{ marginTop: 10 }}>
+                <Text style={[styles.dayLabel, { color: colors.accentNeon }]}>
+                  👥 Gruppenarbeit · {doneCount}/{g.entries.length}
+                </Text>
+                <Pressable
+                  style={[styles.card, { borderLeftWidth: 0 }]}
+                  onPress={() => router.push('/(tabs)/kids' as any)}
+                >
+                  <Text style={[styles.groupTitle, { color: colors.text }]} numberOfLines={2}>
+                    {g.title}
+                  </Text>
+                  {g.entries.map((e, i) => (
+                    <View
+                      key={e.childId}
+                      style={[styles.kidRow, i < g.entries.length - 1 && styles.rowDivider]}
+                    >
+                      <Ionicons
+                        name={e.task.done ? 'checkmark-circle' : e.task.rejected ? 'close-circle' : 'ellipse-outline'}
+                        size={18}
+                        color={e.task.done ? colors.success : e.task.rejected ? colors.danger : colors.textMuted}
+                      />
+                      <Text
+                        style={[
+                          styles.kidTaskText,
+                          { color: colors.text },
+                          e.task.done && styles.kidTaskDone,
+                          e.task.rejected && { color: colors.danger },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {CHILD_NAMES[e.childId]}
+                      </Text>
+                    </View>
+                  ))}
+                </Pressable>
+              </View>
+            );
+          })}
         </View>
       )}
 
@@ -1189,7 +1262,7 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
     calHour: { fontSize: 14, fontWeight: '700' as const },
     calTitle: { fontSize: 14, fontWeight: '500' as const },
 
-    // Aufgaben der Kinder (TE-110)
+    // Aufgaben der Kinder (TE-110/TE-115)
     kidRow: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -1199,6 +1272,25 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
     },
     kidTaskText: { flex: 1, fontSize: 13, fontWeight: '500' },
     kidTaskDone: { textDecorationLine: 'line-through', color: c.textMuted },
+    // Zweispaltiges Kinder-Grid (TE-115)
+    kidGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      justifyContent: 'space-between',
+      paddingHorizontal: 16,
+      rowGap: 10,
+    },
+    kidCol: { width: '48%' },
+    kidColLabel: { paddingHorizontal: 0 },
+    kidCard: { marginHorizontal: 0, borderLeftWidth: 0 },
+    // Gruppenarbeit-Karte (TE-115)
+    groupTitle: {
+      fontSize: 14,
+      fontWeight: '700',
+      paddingHorizontal: 14,
+      paddingTop: 12,
+      paddingBottom: 4,
+    },
 
     // Notes
     noteScroll: { paddingHorizontal: 16, gap: 10 },
