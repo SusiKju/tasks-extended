@@ -299,6 +299,19 @@ export default function KindScreen({ onExitChildMode }: Props) {
               <Text style={[s.taskText, task.done && s.taskTextDone, task.rejected && s.taskTextRejected]}>
                 {task.title}
               </Text>
+              {(() => {
+                // Gruppenaufgabe (TE-114/TE-116): andere teilnehmende Kinder anzeigen.
+                const others = (task.groupChildren ?? [])
+                  .filter((id) => id !== childId)
+                  .map((id) => CHILD_NAMES[id]);
+                if (others.length) {
+                  return <Text style={s.groupHint}>👥 Zusammen mit {others.join(', ')}</Text>;
+                }
+                if (task.groupId) {
+                  return <Text style={s.groupHint}>👥 Gruppenaufgabe</Text>;
+                }
+                return null;
+              })()}
               {task.rejected && (
                 <Text style={s.rejectedHint}>❌ Nicht akzeptiert – bitte nochmal machen</Text>
               )}
@@ -430,6 +443,13 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
     taskTextDone: { textDecorationLine: 'line-through', color: colors.textMuted },
     taskTextRejected: { color: colors.danger },
     rejectedHint: { fontSize: 13, fontWeight: '700', color: colors.danger, marginTop: 4 },
+    // Gruppenaufgabe-Hinweis (TE-114/TE-116)
+    groupHint: {
+      alignSelf: 'flex-start', marginTop: 6,
+      fontSize: 14, fontWeight: '700', color: colors.accentNeon,
+      backgroundColor: colors.surfaceHigh, borderRadius: 10,
+      paddingHorizontal: 10, paddingVertical: 4, overflow: 'hidden',
+    },
     empty: { textAlign: 'center', fontSize: 18, color: colors.textMuted, marginTop: 60 },
     // PIN-Modal
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
