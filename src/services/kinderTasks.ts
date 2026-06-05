@@ -56,6 +56,10 @@ export interface ChildTask {
    *  null/undefined = normale Einzelaufgabe. Jede Kopie bleibt pro Kind eigenständig
    *  (eigener Status, eigene Belohnungslogik). (TE-111) */
   groupId?: string | null;
+  /** Alle bei dieser Gruppenaufgabe teilnehmenden Kinder (zum Erstellzeitpunkt).
+   *  Auf jeder Kopie gespeichert, damit Eltern- UND Kinder-App die Teilnehmer ohne
+   *  Cross-Collection-Zugriff anzeigen können. (TE-113/TE-114) */
+  groupChildren?: ChildId[];
 }
 
 // ─── Belohnungspakete (TE-101) ────────────────────────────────────────────────

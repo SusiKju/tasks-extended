@@ -155,6 +155,7 @@ export default function KinderScreen() {
             date: TODAY,
             createdAt: new Date().toISOString(),
             groupId,
+            groupChildren: targets,
           })
         )
       );
@@ -378,12 +379,15 @@ export default function KinderScreen() {
   const currentReward = rewardsByChild[selectedChild];
   const rewardUnlocked = tasks.length > 0 && done === tasks.length;
 
-  // Teilnehmer einer Gruppenaufgabe aus der gemeinsamen groupId ableiten (TE-113):
-  // alle Kinder, die heute eine Aufgabe mit derselben groupId haben, in fester
-  // CHILDREN-Reihenfolge als Kürzel.
-  const groupShorts = (groupId: string): string[] =>
-    CHILDREN.filter((id) => tasksByChild[id].some((t) => t.groupId === groupId))
-      .map((id) => CHILD_SHORT[id]);
+  // Teilnehmer-Kürzel einer Gruppenaufgabe (TE-113/TE-114): bevorzugt die auf der
+  // Aufgabe gespeicherte Teilnehmerliste; Fallback (Alt-Aufgaben ohne groupChildren)
+  // ist die Ableitung aus der gemeinsamen groupId über die heutigen Aufgaben.
+  const groupShorts = (task: ChildTask): string[] => {
+    const ids = task.groupChildren?.length
+      ? CHILDREN.filter((id) => task.groupChildren!.includes(id))
+      : CHILDREN.filter((id) => tasksByChild[id].some((t) => t.groupId === task.groupId));
+    return ids.map((id) => CHILD_SHORT[id]);
+  };
 
   return (
     <ScrollView
@@ -528,7 +532,7 @@ export default function KinderScreen() {
             {task.groupId && (
               <View style={s.groupTag}>
                 <Ionicons name="people" size={11} color={colors.accentNeon} />
-                <Text style={s.groupTagText}>{groupShorts(task.groupId).join('·')}</Text>
+                <Text style={s.groupTagText}>{groupShorts(task).join('·')}</Text>
               </View>
             )}
             {task.rejected && <Text style={s.rejectedTag}>abgelehnt</Text>}

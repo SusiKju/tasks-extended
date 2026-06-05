@@ -58,6 +58,14 @@
     .task-card.rejected .checkbox { background: #ef4444; border-color: #ef4444; color: white; }
     .task-body { flex: 1; display: flex; flex-direction: column; gap: 3px; }
     .reject-hint { font-size: 13px; font-weight: 700; color: #ef4444; }
+    /* Gruppenaufgabe (TE-114): Hinweis auf gemeinsame Aufgabe + Teilnehmer */
+    .group-hint {
+      display: inline-flex; align-items: center; gap: 5px;
+      align-self: flex-start;
+      font-size: 13px; font-weight: 700; color: #4f86f7;
+      background: rgba(79,134,247,0.12); border-radius: 8px;
+      padding: 3px 9px; margin-top: 1px;
+    }
 
     .checkbox {
       width: 30px; height: 30px; border-radius: 50%;
@@ -442,10 +450,19 @@
     function taskCard(t, done) {
       // Vom Elternteil abgelehnt (TE-103): offen + rot markiert.
       const rejected = !done && t.rejected;
+      // Gruppenaufgabe (TE-114): andere teilnehmende Kinder anzeigen. Fallback auf
+      // generischen Hinweis, falls eine Alt-Aufgabe nur groupId ohne Teilnehmerliste hat.
+      const others = Array.isArray(t.groupChildren)
+        ? t.groupChildren.filter(id => id !== childId).map(id => CHILD_NAMES[id] || id)
+        : [];
+      const groupHint = others.length
+        ? `<span class="group-hint">👥 Zusammen mit ${others.join(', ')}</span>`
+        : (t.groupId ? '<span class="group-hint">👥 Gruppenaufgabe</span>' : '');
       return `<div class="task-card ${done ? 'done' : ''} ${rejected ? 'rejected' : ''}" data-id="${t.id}" data-done="${done}" data-title="${encodeURIComponent(t.title)}">
         <div class="checkbox">${done ? '✓' : (rejected ? '✗' : '')}</div>
         <div class="task-body">
           <span class="task-title">${t.title}</span>
+          ${groupHint}
           ${rejected ? '<span class="reject-hint">❌ Nicht akzeptiert – bitte nochmal machen</span>' : ''}
         </div>
       </div>`;
