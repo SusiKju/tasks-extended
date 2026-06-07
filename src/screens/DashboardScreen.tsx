@@ -27,6 +27,14 @@ import {
   ChildId, CHILDREN, CHILD_NAMES, ChildTask, subscribeToChildTasks,
 } from '../services/kinderTasks';
 import { Task } from '../types';
+
+// Kleine Avatar-Farben pro Kind (TE-110 Dashboard-Avatare)
+const CHILD_AVATAR_COLORS: Record<ChildId, string> = {
+  lenny: '#4f86f7',
+  emil: '#f76e4f',
+  hannes: '#22c55e',
+  liddy: '#d946ef',
+};
 import { format } from 'date-fns';
 
 const TODAY = format(new Date(), 'yyyy-MM-dd');
@@ -822,9 +830,14 @@ export function DashboardScreen() {
                 const doneCount = list.filter((t) => t.done).length;
                 return (
                   <View key={childId} style={styles.kidCol}>
-                    <Text style={[styles.dayLabel, styles.kidColLabel, { color: colors.textMuted }]}>
-                      {CHILD_NAMES[childId]} · {doneCount}/{list.length}
-                    </Text>
+                    <View style={styles.kidLabelRow}>
+                      <View style={[styles.kidAvatar, { backgroundColor: CHILD_AVATAR_COLORS[childId] }]}>
+                        <Text style={styles.kidAvatarText}>{CHILD_NAMES[childId].charAt(0)}</Text>
+                      </View>
+                      <Text style={[styles.dayLabel, styles.kidColLabel, { color: colors.textMuted }]}>
+                        {CHILD_NAMES[childId]} · {doneCount}/{list.length}
+                      </Text>
+                    </View>
                     <Pressable
                       style={[styles.card, styles.kidCard]}
                       onPress={() => router.push('/(tabs)/kids' as any)}
@@ -1282,6 +1295,15 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
     },
     kidCol: { width: '48%' },
     kidColLabel: { paddingHorizontal: 0 },
+    kidLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
+    kidAvatar: {
+      width: 22,
+      height: 22,
+      borderRadius: 11,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    kidAvatarText: { fontSize: 11, fontWeight: '800', color: '#fff' },
     kidCard: { marginHorizontal: 0, borderLeftWidth: 0 },
     // Gruppenarbeit-Karte (TE-115)
     groupTitle: {
