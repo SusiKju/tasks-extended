@@ -74,6 +74,7 @@ export default function KinderScreen() {
     lenny: false, emil: false, hannes: false, liddy: false,
   });
   const [mailingChild, setMailingChild] = useState<ChildId | null>(null);
+  const [sendingAllMail, setSendingAllMail] = useState(false);
   const [reminderTimes, setReminderTimesState] = useState<string[]>(['15:00', '17:00']);
   const [editingTimes, setEditingTimes] = useState(false);
   const [timesInput, setTimesInput] = useState('15:00, 17:00');
@@ -165,13 +166,14 @@ export default function KinderScreen() {
     }
   }, [newTaskTitle, groupSelection]);
 
-  const handlePushMail = useCallback(async (childId: ChildId) => {
+  // Baut die HTML-Mail + verschickt Push & E-Mail für genau ein Kind.
+  // Wird sowohl vom Einzel-Button als auch vom "Push & Mail an alle"-Button genutzt (TE-118).
+  // Gibt zurück, ob tatsächlich gesendet wurde ('sent'), das Kind keine E-Mail/Token hat
+  // ('skipped') oder ein Fehler auftrat ('error').
+  const sendTaskMailToChild = useCallback(async (childId: ChildId): Promise<'sent' | 'skipped' | 'error'> => {
     const email = (settings.childEmails ?? {})[childId];
-    if (!email || !settings.googleAccessToken) {
-      crossInfo('E-Mail nicht konfiguriert', 'Bitte E-Mail-Adresse in den Einstellungen eintragen und Google-Konto verbinden.');
-      return;
-    }
-    setMailingChild(childId);
+    if (!email || !settings.googleAccessToken) return 'skipped';
+
     try {
       // Firestore-Push (App offen)
       await writePushTrigger(childId);
@@ -179,7 +181,6 @@ export default function KinderScreen() {
         await sendReminderToChild(childId).catch(() => {});
       }
 
-      // Offene Aufgaben für heute
       const openTasks = tasksByChild[childId].filter((t) => !t.done);
       const doneTasks = tasksByChild[childId].filter((t) => t.done);
       const name = CHILD_NAMES[childId];
@@ -204,8 +205,8 @@ export default function KinderScreen() {
       <h1 style="margin:0;color:white;font-size:22px;font-weight:800">Hey ${name}! 👋</h1>
       <p style="margin:8px 0 0;color:rgba(255,255,255,0.85);font-size:15px">
         ${openTasks.length === 0
-          ? 'Du hast heute alles erledigt! 🎉'
-          : `Du hast noch <strong>${openTasks.length} Aufgabe${openTasks.length !== 1 ? 'n' : ''}</strong> für heute`}
+          ? 'Du hast alles erledigt! 🎉'
+          : `Du hast noch <strong>${openTasks.length} Aufgabe${openTasks.length !== 1 ? 'n' : ''}</strong> offen`}
       </p>
     </div>
 
@@ -224,7 +225,7 @@ export default function KinderScreen() {
         </table>` : ''}
 
       ${openTasks.length === 0 && doneTasks.length === 0 ? `
-        <p style="text-align:center;color:#aaa;font-size:15px;padding:20px 0">Noch keine Aufgaben für heute.</p>` : ''}
+        <p style="text-align:center;color:#aaa;font-size:15px;padding:20px 0">Aktuell keine Aufgaben.</p>` : ''}
     </div>
 
     <!-- CTA Button -->
@@ -246,18 +247,55 @@ export default function KinderScreen() {
         settings.googleAccessToken,
         email,
         openTasks.length > 0
-          ? `📋 ${openTasks.length} Aufgabe${openTasks.length !== 1 ? 'n' : ''} für heute, ${name}!`
+          ? `📋 ${openTasks.length} Aufgabe${openTasks.length !== 1 ? 'n' : ''} offen, ${name}!`
           : `🎉 Alles erledigt, ${name}!`,
         html
       );
-
-      crossInfo('✓ Gesendet', `Push + E-Mail an ${name} verschickt.`);
+      return 'sent';
     } catch (e: any) {
-      crossInfo('Fehler', e?.message ?? 'Konnte nicht senden.');
+      return 'error';
+    }
+  }, [settings, tasksByChild]);
+
+  const handlePushMail = useCallback(async (childId: ChildId) => {
+    const email = (settings.childEmails ?? {})[childId];
+    if (!email || !settings.googleAccessToken) {
+      crossInfo('E-Mail nicht konfiguriert', 'Bitte E-Mail-Adresse in den Einstellungen eintragen und Google-Konto verbinden.');
+      return;
+    }
+    setMailingChild(childId);
+    try {
+      const result = await sendTaskMailToChild(childId);
+      if (result === 'sent') {
+        crossInfo('✓ Gesendet', `Push + E-Mail an ${CHILD_NAMES[childId]} verschickt.`);
+      } else {
+        crossInfo('Fehler', 'Konnte nicht senden.');
+      }
     } finally {
       setMailingChild(null);
     }
-  }, [settings, tasksByChild]);
+  }, [settings, sendTaskMailToChild]);
+
+  // "Push & Mail an alle" (TE-118): schickt Push + personalisierte Aufgaben-Mail
+  // an jedes Kind mit hinterlegter E-Mail-Adresse, eines nach dem anderen.
+  const handleSendAllMail = useCallback(async () => {
+    setSendingAllMail(true);
+    try {
+      let sent = 0, skipped = 0, failed = 0;
+      for (const childId of CHILDREN) {
+        const result = await sendTaskMailToChild(childId);
+        if (result === 'sent') sent++;
+        else if (result === 'skipped') skipped++;
+        else failed++;
+      }
+      const parts = [`${sent} verschickt`];
+      if (skipped > 0) parts.push(`${skipped} ohne E-Mail-Adresse übersprungen`);
+      if (failed > 0) parts.push(`${failed} fehlgeschlagen`);
+      crossInfo('✓ Push & Mail an alle', parts.join(' · '));
+    } finally {
+      setSendingAllMail(false);
+    }
+  }, [sendTaskMailToChild]);
 
   const handleDeleteTask = useCallback((taskId: string, title: string) => {
     crossAlert('Aufgabe löschen?', '', async () => {
@@ -382,6 +420,13 @@ export default function KinderScreen() {
   // Teilnehmer-Kürzel einer Gruppenaufgabe (TE-113/TE-114): bevorzugt die auf der
   // Aufgabe gespeicherte Teilnehmerliste; Fallback (Alt-Aufgaben ohne groupChildren)
   // ist die Ableitung aus der gemeinsamen groupId über die heutigen Aufgaben.
+  // Fälligkeitsanzeige (TE-117): "TT.MM." statt überfällig versteckter Aufgaben.
+  const dueLabel = (task: ChildTask): string | null => {
+    if (task.done || task.date === TODAY) return null;
+    const [, m, d] = task.date.split('-');
+    return `fällig ${d}.${m}.`;
+  };
+
   const groupShorts = (task: ChildTask): string[] => {
     const ids = task.groupChildren?.length
       ? CHILDREN.filter((id) => task.groupChildren!.includes(id))
@@ -485,7 +530,7 @@ export default function KinderScreen() {
       <View style={s.section}>
         <View style={s.row}>
           <Text style={s.sectionTitle}>
-            Heute — {done}/{tasks.length} erledigt
+            Aufgaben — {done}/{tasks.length} erledigt
           </Text>
           <View style={s.headerBtnRow}>
             <TouchableOpacity
@@ -511,7 +556,7 @@ export default function KinderScreen() {
           </View>
         </View>
         {tasks.length === 0 && (
-          <Text style={s.empty}>Noch keine Aufgaben für heute.</Text>
+          <Text style={s.empty}>Aktuell keine offenen Aufgaben.</Text>
         )}
         {tasks.map((task) => (
           <View key={task.id} style={s.taskRow}>
@@ -536,6 +581,7 @@ export default function KinderScreen() {
               </View>
             )}
             {task.rejected && <Text style={s.rejectedTag}>abgelehnt</Text>}
+            {dueLabel(task) && <Text style={s.overdueTag}>{dueLabel(task)}</Text>}
             <TouchableOpacity onPress={() => setEditingTask({ id: task.id, title: task.title })}>
               <Ionicons name="pencil-outline" size={18} color={colors.accentNeon} />
             </TouchableOpacity>
@@ -778,6 +824,22 @@ export default function KinderScreen() {
           </>
         )}
       </TouchableOpacity>
+
+      {/* Push & Mail an alle (TE-118) */}
+      <TouchableOpacity
+        style={[s.pushBtn, { marginTop: 10, backgroundColor: colors.accentNeon }]}
+        onPress={handleSendAllMail}
+        disabled={sendingAllMail}
+      >
+        {sendingAllMail ? (
+          <ActivityIndicator color="#000" />
+        ) : (
+          <>
+            <Ionicons name="mail-outline" size={20} color="#000" />
+            <Text style={[s.pushBtnText, { color: '#000' }]}>Push & Mail an alle</Text>
+          </>
+        )}
+      </TouchableOpacity>
     </ScrollView>
   );
 }
@@ -845,6 +907,13 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
       fontSize: 10, fontWeight: '800', color: colors.dangerFg ?? '#fff',
       backgroundColor: colors.danger, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2,
       textTransform: 'uppercase', letterSpacing: 0.5, overflow: 'hidden',
+    },
+    // Fälligkeits-/Überfällig-Hinweis (TE-117): Aufgaben verschwinden nicht mehr
+    // durch Tageswechsel, sondern bleiben sichtbar und werden als überfällig markiert.
+    overdueTag: {
+      fontSize: 10, fontWeight: '800', color: '#fff',
+      backgroundColor: '#f59e0b', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2,
+      textTransform: 'uppercase', letterSpacing: 0.3, overflow: 'hidden',
     },
     empty: { fontSize: 13, color: colors.textMuted, fontStyle: 'italic' },
     row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },

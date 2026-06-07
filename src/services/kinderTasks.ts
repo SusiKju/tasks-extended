@@ -112,7 +112,14 @@ export async function getTasksForChild(childId: ChildId, date: string): Promise<
     .filter((t) => t.date === date);
 }
 
-/** Echtzeit-Listener für Eltern-Tab (alle Aufgaben aller Kinder für heute) */
+/**
+ * Echtzeit-Listener für Eltern-/Kind-Tab.
+ *
+ * Liefert alle noch offenen Aufgaben (unabhängig vom Datum, damit überfällige
+ * Aufgaben sichtbar bleiben, bis ein Elternteil sie löscht oder das Kind sie
+ * abhakt) plus alle für `date` (i.d.R. heute) erledigten Aufgaben. So
+ * "verschwinden" Aufgaben nie einfach durch Tageswechsel (TE-117).
+ */
 export function subscribeToChildTasks(
   childId: ChildId,
   date: string,
@@ -121,7 +128,9 @@ export function subscribeToChildTasks(
   return onSnapshot(collection(db, 'children', childId, 'tasks'), (snap) => {
     const tasks = snap.docs
       .map((d) => ({ id: d.id, ...d.data() } as ChildTask))
-      .filter((t) => t.date === date);
+      .filter((t) => !t.done || t.date === date)
+      // Älteste fällige Aufgaben zuerst, damit Überfälliges oben auffällt.
+      .sort((a, b) => a.date.localeCompare(b.date));
     onChange(tasks);
   });
 }
