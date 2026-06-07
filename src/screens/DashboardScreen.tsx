@@ -1330,7 +1330,7 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
     },
     kidCol: { width: '48%' },
     kidColLabel: { paddingHorizontal: 0 },
-    kidLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
+    kidLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4, paddingHorizontal: 16 },
     kidAvatar: {
       width: 22,
       height: 22,
@@ -1339,7 +1339,7 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
       justifyContent: 'center',
     },
     kidAvatarText: { fontSize: 11, fontWeight: '800', color: '#fff' },
-    kidCard: { marginHorizontal: 0, borderLeftWidth: 0 },
+    kidCard: { marginHorizontal: 16, borderLeftWidth: 0 },
     // Gruppenarbeit-Karte (TE-115)
     groupTitle: {
       fontSize: 14,
