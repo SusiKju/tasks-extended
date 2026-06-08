@@ -1,22 +1,30 @@
 /**
- * CountdownStrip.tsx (TE-128)
+ * CountdownStrip.tsx (TE-128 / TE-130)
  *
  * Filigrane, quadratische Countdown-Karten oberhalb der Termine auf dem
  * Dashboard – für motivierende Ereignisse wie "Gemeinsamer Urlaub". Zeigt die
  * verbleibenden Tage groß und zentral; ein "+"-Kärtchen legt neue Countdowns
  * an. Antippen einer Karte öffnet sie zum Bearbeiten/Löschen.
  *
- * Daten liegen lokal im Zustand-Store (siehe store/index.ts, Countdown-Typ in
- * types/index.ts) – bewusst leichtgewichtig, kein Firestore nötig.
+ * TE-130: Die Countdowns werden über Firestore mit der Partnerin geteilt
+ * (gleiches Muster wie die geteilte Notizliste in SharedNotepad.tsx) – beide
+ * sehen dieselben Karten in Echtzeit. Dafür wird wie dort einmalig der eigene
+ * Anzeigename (settings.myName) abgefragt, damit Einträge zuordenbar sind.
  */
 
-import React, { useMemo, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, TextInput, Modal } from 'react-native';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import { View, Text, StyleSheet, Pressable, ScrollView, TextInput, Modal, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useStore } from '../store';
 import { ThemeColors } from '../utils/theme';
-import { Countdown } from '../types';
 import { DatePickerModal } from './DatePickerModal';
+import {
+  SharedCountdown,
+  subscribeToSharedCountdowns,
+  addSharedCountdown,
+  updateSharedCountdown,
+  deleteSharedCountdown,
+} from '../services/sharedCountdowns';
 
 const COUNTDOWN_EMOJIS = ['✈️', '🏖️', '🎉', '🎂', '❤️', '🎄', '🏡', '⭐'];
 
@@ -33,7 +41,7 @@ function formatDateDe(isoDate: string): string {
   return new Date(isoDate + 'T00:00:00').toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
-function CountdownCard({ countdown, colors, onPress }: { countdown: Countdown; colors: ThemeColors; onPress: () => void }) {
+function CountdownCard({ countdown, colors, onPress }: { countdown: SharedCountdown; colors: ThemeColors; onPress: () => void }) {
   const days = daysUntil(countdown.targetDate);
   const isPast = days < 0;
   const isToday = days === 0;
@@ -86,18 +94,38 @@ function AddCard({ colors, onPress }: { colors: ThemeColors; onPress: () => void
 }
 
 export function CountdownStrip({ colors }: { colors: ThemeColors }) {
-  const { countdowns, addCountdown, updateCountdown, deleteCountdown } = useStore();
-  const [editing, setEditing] = useState<Countdown | null>(null);
+  const { settings, updateSettings } = useStore();
+  const [items, setItems] = useState<SharedCountdown[] | null>(null);
+  const [loadError, setLoadError] = useState(false);
+  const [editing, setEditing] = useState<SharedCountdown | null>(null);
   const [formVisible, setFormVisible] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
   const [emojiDraft, setEmojiDraft] = useState<string | null>(COUNTDOWN_EMOJIS[0]);
   const [dateDraft, setDateDraft] = useState<Date | null>(null);
   const [datePickerVisible, setDatePickerVisible] = useState(false);
+  const [nameDraft, setNameDraft] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    const unsub = subscribeToSharedCountdowns(
+      (next) => { setLoadError(false); setItems(next); },
+      () => { setLoadError(true); setItems([]); }
+    );
+    return unsub;
+  }, []);
+
+  const myName = settings.myName?.trim() || null;
 
   const sorted = useMemo(
-    () => [...countdowns].sort((a, b) => daysUntil(a.targetDate) - daysUntil(b.targetDate)),
-    [countdowns]
+    () => [...(items ?? [])].sort((a, b) => daysUntil(a.targetDate) - daysUntil(b.targetDate)),
+    [items]
   );
+
+  const handleSaveName = useCallback(() => {
+    const trimmed = nameDraft.trim();
+    if (!trimmed) return;
+    updateSettings({ myName: trimmed });
+  }, [nameDraft, updateSettings]);
 
   const openNew = useCallback(() => {
     setEditing(null);
@@ -107,7 +135,7 @@ export function CountdownStrip({ colors }: { colors: ThemeColors }) {
     setFormVisible(true);
   }, []);
 
-  const openEdit = useCallback((c: Countdown) => {
+  const openEdit = useCallback((c: SharedCountdown) => {
     setEditing(c);
     setTitleDraft(c.title);
     setEmojiDraft(c.emoji ?? null);
@@ -115,40 +143,58 @@ export function CountdownStrip({ colors }: { colors: ThemeColors }) {
     setFormVisible(true);
   }, []);
 
-  const handleSave = useCallback(() => {
+  const handleSave = useCallback(async () => {
     const title = titleDraft.trim();
-    if (!title || !dateDraft) return;
+    if (!title || !dateDraft || !myName) return;
     const isoDate = `${dateDraft.getFullYear()}-${String(dateDraft.getMonth() + 1).padStart(2, '0')}-${String(dateDraft.getDate()).padStart(2, '0')}`;
-    if (editing) {
-      updateCountdown(editing.id, { title, emoji: emojiDraft, targetDate: isoDate });
-    } else {
-      addCountdown({
-        id: `cd-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        title,
-        emoji: emojiDraft,
-        targetDate: isoDate,
-        createdAt: new Date().toISOString(),
-      });
+    setBusy(true);
+    try {
+      if (editing) {
+        await updateSharedCountdown(editing.id, { title, emoji: emojiDraft, targetDate: isoDate });
+      } else {
+        await addSharedCountdown(title, isoDate, emojiDraft, myName);
+      }
+      setFormVisible(false);
+    } catch {
+    } finally {
+      setBusy(false);
     }
-    setFormVisible(false);
-  }, [editing, titleDraft, emojiDraft, dateDraft, addCountdown, updateCountdown]);
+  }, [editing, titleDraft, emojiDraft, dateDraft, myName]);
 
-  const handleDelete = useCallback(() => {
-    if (editing) deleteCountdown(editing.id);
-    setFormVisible(false);
-  }, [editing, deleteCountdown]);
+  const handleDelete = useCallback(async () => {
+    if (!editing) return;
+    setBusy(true);
+    try {
+      await deleteSharedCountdown(editing.id);
+      setFormVisible(false);
+    } catch {
+    } finally {
+      setBusy(false);
+    }
+  }, [editing]);
 
   const accent = colors.accentNeon;
-  const canSave = titleDraft.trim().length > 0 && !!dateDraft;
+  const canSave = titleDraft.trim().length > 0 && !!dateDraft && !busy;
 
   return (
     <View style={styles.wrap}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        {sorted.map((c) => (
-          <CountdownCard key={c.id} countdown={c} colors={colors} onPress={() => openEdit(c)} />
-        ))}
-        <AddCard colors={colors} onPress={openNew} />
-      </ScrollView>
+      {loadError ? (
+        <View style={styles.errorRow}>
+          <Ionicons name="cloud-offline-outline" size={15} color={colors.danger} />
+          <Text style={[styles.errorText, { color: colors.danger }]}>
+            Countdowns können nicht geladen werden – fehlende Firestore-Berechtigung für „shared". Bitte Regeln in der Firebase-Konsole prüfen.
+          </Text>
+        </View>
+      ) : items === null ? (
+        <ActivityIndicator color={accent} style={{ marginVertical: 10, marginLeft: 16 }} />
+      ) : (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+          {sorted.map((c) => (
+            <CountdownCard key={c.id} countdown={c} colors={colors} onPress={() => openEdit(c)} />
+          ))}
+          <AddCard colors={colors} onPress={openNew} />
+        </ScrollView>
+      )}
 
       <Modal visible={formVisible} animationType="fade" transparent onRequestClose={() => setFormVisible(false)}>
         <Pressable style={styles.backdrop} onPress={() => setFormVisible(false)}>
@@ -161,63 +207,99 @@ export function CountdownStrip({ colors }: { colors: ThemeColors }) {
                 <Ionicons name="close" size={20} color={colors.textMuted} />
               </Pressable>
             </View>
-            <Text style={[formStyles_subtitle(colors)]}>
-              Gib ein, worauf ihr euch freut – z. B. „Gemeinsamer Urlaub" – und bis wann es noch dauert. Das soll motivieren! 💪
-            </Text>
 
-            <TextInput
-              style={[styles.input, { color: colors.text, backgroundColor: colors.inputBackground, borderColor: colors.border }]}
-              placeholder="z. B. Gemeinsamer Urlaub"
-              placeholderTextColor={colors.placeholder}
-              value={titleDraft}
-              onChangeText={setTitleDraft}
-            />
-
-            <View style={styles.emojiRow}>
-              {COUNTDOWN_EMOJIS.map((e) => {
-                const selected = emojiDraft === e;
-                return (
+            {!myName ? (
+              // Einmaliger Mini-Dialog: Name festlegen, damit Karten zuordenbar sind (TE-130).
+              <View style={styles.namePrompt}>
+                <Text style={[styles.namePromptText, { color: colors.textSecondary }]}>
+                  Diese Countdowns werden mit deiner Partnerin geteilt. Wie heißt du? So sieht man, wer eine Karte angelegt hat.
+                </Text>
+                <View style={styles.nameRow}>
+                  <TextInput
+                    style={[styles.nameInput, { color: colors.text, backgroundColor: colors.inputBackground, borderColor: colors.border }]}
+                    placeholder="z. B. Matthias"
+                    placeholderTextColor={colors.placeholder}
+                    value={nameDraft}
+                    onChangeText={setNameDraft}
+                    onSubmitEditing={handleSaveName}
+                    returnKeyType="done"
+                  />
                   <Pressable
-                    key={e}
-                    onPress={() => setEmojiDraft(selected ? null : e)}
-                    style={[
-                      styles.emojiChip,
-                      { borderColor: selected ? accent : colors.border, backgroundColor: selected ? accent + '22' : 'transparent' },
-                    ]}
-                    hitSlop={4}
+                    style={[styles.saveNameBtn, { backgroundColor: accent, opacity: nameDraft.trim() ? 1 : 0.4 }]}
+                    onPress={handleSaveName}
+                    disabled={!nameDraft.trim()}
                   >
-                    <Text style={styles.emojiChipText}>{e}</Text>
+                    <Ionicons name="checkmark" size={18} color="#fff" />
                   </Pressable>
-                );
-              })}
-            </View>
+                </View>
+              </View>
+            ) : (
+              <>
+                <Text style={[formStyles_subtitle(colors)]}>
+                  Gib ein, worauf ihr euch freut – z. B. „Gemeinsamer Urlaub" – und bis wann es noch dauert. Das soll motivieren! 💪
+                </Text>
 
-            <Pressable
-              onPress={() => setDatePickerVisible(true)}
-              style={[styles.dateBtn, { borderColor: colors.border, backgroundColor: colors.inputBackground }]}
-            >
-              <Ionicons name="calendar-outline" size={16} color={colors.textMuted} />
-              <Text style={[styles.dateBtnText, { color: dateDraft ? colors.text : colors.placeholder }]}>
-                {dateDraft ? formatDateDe(`${dateDraft.getFullYear()}-${String(dateDraft.getMonth() + 1).padStart(2, '0')}-${String(dateDraft.getDate()).padStart(2, '0')}`) : 'Zieldatum wählen …'}
-              </Text>
-            </Pressable>
+                <TextInput
+                  style={[styles.input, { color: colors.text, backgroundColor: colors.inputBackground, borderColor: colors.border }]}
+                  placeholder="z. B. Gemeinsamer Urlaub"
+                  placeholderTextColor={colors.placeholder}
+                  value={titleDraft}
+                  onChangeText={setTitleDraft}
+                />
 
-            <View style={styles.formActions}>
-              {editing && (
-                <Pressable onPress={handleDelete} hitSlop={8} style={styles.deleteBtn}>
-                  <Ionicons name="trash-outline" size={16} color={colors.danger} />
-                  <Text style={[styles.deleteBtnText, { color: colors.danger }]}>Löschen</Text>
+                <View style={styles.emojiRow}>
+                  {COUNTDOWN_EMOJIS.map((e) => {
+                    const selected = emojiDraft === e;
+                    return (
+                      <Pressable
+                        key={e}
+                        onPress={() => setEmojiDraft(selected ? null : e)}
+                        style={[
+                          styles.emojiChip,
+                          { borderColor: selected ? accent : colors.border, backgroundColor: selected ? accent + '22' : 'transparent' },
+                        ]}
+                        hitSlop={4}
+                      >
+                        <Text style={styles.emojiChipText}>{e}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+
+                <Pressable
+                  onPress={() => setDatePickerVisible(true)}
+                  style={[styles.dateBtn, { borderColor: colors.border, backgroundColor: colors.inputBackground }]}
+                >
+                  <Ionicons name="calendar-outline" size={16} color={colors.textMuted} />
+                  <Text style={[styles.dateBtnText, { color: dateDraft ? colors.text : colors.placeholder }]}>
+                    {dateDraft ? formatDateDe(`${dateDraft.getFullYear()}-${String(dateDraft.getMonth() + 1).padStart(2, '0')}-${String(dateDraft.getDate()).padStart(2, '0')}`) : 'Zieldatum wählen …'}
+                  </Text>
                 </Pressable>
-              )}
-              <View style={{ flex: 1 }} />
-              <Pressable
-                onPress={handleSave}
-                disabled={!canSave}
-                style={[styles.saveBtn, { backgroundColor: accent, opacity: canSave ? 1 : 0.4 }]}
-              >
-                <Text style={styles.saveBtnText}>Speichern</Text>
-              </Pressable>
-            </View>
+
+                {editing && editing.addedBy ? (
+                  <Text style={[styles.addedByText, { color: colors.textMuted }]}>
+                    Angelegt von {editing.addedBy}
+                  </Text>
+                ) : null}
+
+                <View style={styles.formActions}>
+                  {editing && (
+                    <Pressable onPress={handleDelete} hitSlop={8} style={styles.deleteBtn} disabled={busy}>
+                      <Ionicons name="trash-outline" size={16} color={colors.danger} />
+                      <Text style={[styles.deleteBtnText, { color: colors.danger }]}>Löschen</Text>
+                    </Pressable>
+                  )}
+                  <View style={{ flex: 1 }} />
+                  <Pressable
+                    onPress={handleSave}
+                    disabled={!canSave}
+                    style={[styles.saveBtn, { backgroundColor: accent, opacity: canSave ? 1 : 0.4 }]}
+                  >
+                    <Text style={styles.saveBtnText}>Speichern</Text>
+                  </Pressable>
+                </View>
+              </>
+            )}
           </Pressable>
         </Pressable>
       </Modal>
@@ -244,6 +326,9 @@ const styles = StyleSheet.create({
   wrap: { marginBottom: 4 },
   scrollContent: { paddingHorizontal: 16, gap: 10 },
 
+  errorRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingVertical: 6 },
+  errorText: { fontSize: 11, flex: 1, lineHeight: 15 },
+
   // "Filigran": dünner Rahmen, große Eckenrundung, kein Schatten/Füllfarbe-Wumms.
   card: {
     width: CARD_SIZE,
@@ -269,16 +354,23 @@ const styles = StyleSheet.create({
   formHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   formTitle: { fontSize: 16, fontWeight: '800' },
 
+  namePrompt: { gap: 8, paddingTop: 4, paddingBottom: 4 },
+  namePromptText: { fontSize: 12.5, lineHeight: 18 },
+  nameRow: { flexDirection: 'row', gap: 8 },
+  nameInput: { flex: 1, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14 },
+  saveNameBtn: { width: 42, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+
   input: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, marginBottom: 12 },
 
   emojiRow: { flexDirection: 'row', gap: 6, flexWrap: 'wrap', marginBottom: 12 },
   emojiChip: { width: 36, height: 36, borderRadius: 18, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
   emojiChipText: { fontSize: 17 },
 
-  dateBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 11, marginBottom: 16 },
+  dateBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 11, marginBottom: 8 },
   dateBtnText: { fontSize: 14 },
+  addedByText: { fontSize: 11, marginBottom: 8 },
 
-  formActions: { flexDirection: 'row', alignItems: 'center' },
+  formActions: { flexDirection: 'row', alignItems: 'center', marginTop: 8 },
   deleteBtn: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   deleteBtnText: { fontSize: 13, fontWeight: '700' },
   saveBtn: { borderRadius: 10, paddingHorizontal: 18, paddingVertical: 10 },
