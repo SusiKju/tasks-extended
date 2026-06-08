@@ -334,8 +334,8 @@ const styles = StyleSheet.create({
 
   // Sticker-Auswahl beim Hinzufügen (TE-124)
   emojiRow: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
-  emojiChip: { width: 34, height: 34, borderRadius: 17, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
-  emojiChipText: { fontSize: 16 },
+  emojiChip: { minWidth: 34, height: 34, borderRadius: 17, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 },
+  emojiChipText: { fontSize: 14 },
 
   emptyRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 10 },
   emptyText: { fontSize: 13 },

@@ -38,7 +38,7 @@ export interface SharedNoteItem {
 }
 
 /** Vorausgewählte Sticker zur Auswahl beim Hinzufügen eines Eintrags (TE-124). */
-export const SHARED_NOTE_EMOJIS = ['🛒', '🎁', '❤️', '🏠', '📅', '✨'];
+export const SHARED_NOTE_EMOJIS = ['🛒', '🎁', '❤️', '🏠', '📅', '✨', '🧒🧒🧒🧒'];
 
 /** Vorausgewählte Reaktionen, mit denen man liebevoll auf einen Eintrag antworten kann (TE-124). */
 export const SHARED_NOTE_REACTIONS = ['❤️', '😘', '🤗', '👍'];
