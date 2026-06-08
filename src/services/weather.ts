@@ -128,57 +128,90 @@ export function weatherDayLabel(isoDate: string, index: number): string {
   return `${weekday}, ${dayMonth}.`;
 }
 
+/** Ein einzelnes Kleidungsstück/Utensil zum Anziehen – groß bebildert per Emoji. */
+export interface ClothingItem {
+  /** Großes Emoji als visuelles Symbol – auf einen Blick erkennbar, auch für Kinder. */
+  emoji: string;
+  /** Kurzer Name des Kleidungsstücks, z. B. "T-Shirt", "Mütze". */
+  label: string;
+}
+
 /**
- * Liefert kurze, kindgerechte Anziehtipps für einen Tag, basierend auf
- * Höchst-/Tiefsttemperatur, Wettercode und Wind im Schulzeit-Fenster.
+ * Liefert eine Liste konkreter, bebilderter Kleidungsstücke für einen Tag –
+ * basierend auf Höchst-/Tiefsttemperatur, Wettercode und Wind im
+ * Schulzeit-Fenster. Bewusst als Symbol+Wort-Paare (statt Sätze) aufbereitet,
+ * damit Kinder auf den ersten Blick erkennen, was sie anziehen sollen.
  * Wird im Dialog angezeigt, der beim Antippen der Temperatur erscheint.
  */
-export function clothingAdvice(day: DailyWeather): string[] {
+export function clothingItems(day: DailyWeather): ClothingItem[] {
   const { tempMax, tempMin, weatherCode, windSpeedMax } = day;
-  const tips: string[] = [];
+  const items: ClothingItem[] = [];
 
-  // Grundempfehlung nach Temperatur
-  if (tempMax >= 28) {
-    tips.push('Heute wird es richtig heiß – am besten eine kurze Hose und ein luftiges T-Shirt.');
-  } else if (tempMax >= 23) {
-    tips.push('Heute reicht eine kurze Hose und ein T-Shirt.');
-  } else if (tempMax >= 18) {
-    tips.push('Ein T-Shirt reicht aus – eine leichte Jacke für später kann aber nicht schaden.');
-  } else if (tempMax >= 13) {
-    tips.push('Zieh lieber eine leichte Jacke oder einen dünnen Pullover an.');
-  } else if (tempMax >= 7) {
-    tips.push('Zieh lieber einen warmen Pullover und eine Jacke an.');
-  } else if (tempMax >= 0) {
-    tips.push('Heute braucht es die dicke Winterjacke. Vergiss die Mütze nicht.');
+  const isSunny = weatherCode <= 2;
+  const isRainy = (weatherCode >= 51 && weatherCode <= 67) || (weatherCode >= 80 && weatherCode <= 82);
+  const isSnowy = (weatherCode >= 71 && weatherCode <= 77) || (weatherCode >= 85 && weatherCode <= 86);
+
+  // Oberteil – die Hauptempfehlung nach Temperatur
+  if (tempMax >= 24) {
+    items.push({ emoji: '👕', label: 'Kurzärmeliges T-Shirt' });
+  } else if (tempMax >= 17) {
+    items.push({ emoji: '👕', label: 'T-Shirt' });
+    items.push({ emoji: '🧥', label: 'Dünne Jacke zum Drüberziehen' });
+  } else if (tempMax >= 10) {
+    items.push({ emoji: '🥼', label: 'Langärmeliges Shirt' });
+    items.push({ emoji: '🧶', label: 'Pullover' });
+  } else if (tempMax >= 2) {
+    items.push({ emoji: '🧶', label: 'Warmer Pullover' });
+    items.push({ emoji: '🧥', label: 'Winterjacke' });
   } else {
-    tips.push(`Nimm Handschuhe und eine Mütze mit, es werden bis zu ${tempMax}°C.`);
+    items.push({ emoji: '🧥', label: 'Dicke Winterjacke' });
+    items.push({ emoji: '🧣', label: 'Schal' });
+  }
+
+  // Hose
+  if (tempMax >= 22) {
+    items.push({ emoji: '🩳', label: 'Kurze Hose' });
+  } else {
+    items.push({ emoji: '👖', label: 'Lange Hose' });
+  }
+
+  // Kopf: Mütze bei Kälte, Sonnenkappe bei Hitze + Sonne
+  if (tempMax <= 5) {
+    items.push({ emoji: '🧢', label: 'Mütze' });
+  } else if (tempMax >= 23 && isSunny) {
+    items.push({ emoji: '🧢', label: 'Mütze gegen die Sonne' });
+  }
+
+  // Hände: Handschuhe bei Frost
+  if (tempMax <= 0) {
+    items.push({ emoji: '🧤', label: 'Handschuhe' });
   }
 
   // Sonnenschutz bei Hitze und viel Sonne
-  if (tempMax >= 22 && weatherCode <= 2) {
-    tips.push('Heute wird es sehr sonnig. Denk an eine Mütze mit Schirm – und vielleicht sogar Sonnencreme.');
+  if (tempMax >= 22 && isSunny) {
+    items.push({ emoji: '🧴', label: 'Sonnencreme' });
+    items.push({ emoji: '🕶️', label: 'Sonnenbrille' });
   }
 
-  // Niederschlag
-  if ((weatherCode >= 51 && weatherCode <= 67) || (weatherCode >= 80 && weatherCode <= 82)) {
-    tips.push('Es kann regnen – Regenjacke und Gummistiefel besser nicht vergessen.');
-  } else if ((weatherCode >= 71 && weatherCode <= 77) || (weatherCode >= 85 && weatherCode <= 86)) {
-    tips.push('Bei Schnee sind warme, wasserfeste Schuhe und Handschuhe eine gute Idee.');
-  } else if (weatherCode === 45 || weatherCode === 48) {
-    tips.push('Bei Nebel lieber etwas Auffälliges anziehen, damit man gut zu sehen ist.');
+  // Regen- bzw. Schneeschutz
+  if (isRainy) {
+    items.push({ emoji: '☂️', label: 'Regenschirm oder Regenjacke' });
+    items.push({ emoji: '🥾', label: 'Gummistiefel' });
+  } else if (isSnowy) {
+    items.push({ emoji: '🥾', label: 'Warme, wasserfeste Schuhe' });
   }
 
-  // Wind
-  if (windSpeedMax >= 35) {
-    tips.push('Es wird ziemlich windig – eine winddichte Jacke ist sinnvoll.');
+  // Wind: zusätzlich winddichte Jacke, falls noch keine Jacke vorgeschlagen wurde
+  if (windSpeedMax >= 35 && !items.some((i) => i.label.toLowerCase().includes('jacke'))) {
+    items.push({ emoji: '🧥', label: 'Winddichte Jacke' });
   }
 
-  // Großer Unterschied zwischen Morgen und Mittag
-  if (tempMax - tempMin >= 8) {
-    tips.push('Morgens ist es deutlich kühler als mittags – am besten etwas zum Drüberziehen einpacken.');
+  // Großer Unterschied zwischen Morgen und Mittag: etwas zum Drüberziehen
+  if (tempMax - tempMin >= 8 && !items.some((i) => i.label.toLowerCase().includes('drüberziehen'))) {
+    items.push({ emoji: '🧥', label: 'Etwas zum Drüberziehen für den Morgen' });
   }
 
-  return tips;
+  return items;
 }
 
 /** Anzeigetext für das berücksichtigte Zeitfenster, z. B. in Untertiteln (TE-129). */

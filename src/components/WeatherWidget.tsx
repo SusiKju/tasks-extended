@@ -15,7 +15,7 @@ import {
   fetchWeatherForecast,
   weatherIconAndLabel,
   weatherDayLabel,
-  clothingAdvice,
+  clothingItems,
   SCHOOL_WINDOW_LABEL,
   DailyWeather,
   WeatherForecast,
@@ -125,11 +125,13 @@ export function WeatherWidget({ colors }: { colors: ThemeColors }) {
             <Text style={[styles.modalSubtitle, { color: colors.textMuted }]}>
               {today.tempMax}° / {today.tempMin}° für {SCHOOL_WINDOW_LABEL}
             </Text>
-            <View style={{ marginTop: 10, gap: 8 }}>
-              {clothingAdvice(today).map((tip, i) => (
-                <View key={i} style={styles.adviceRow}>
-                  <Ionicons name="shirt-outline" size={16} color={colors.accent} style={{ marginTop: 1 }} />
-                  <Text style={[styles.adviceText, { color: colors.text }]}>{tip}</Text>
+            <View style={styles.adviceGrid}>
+              {clothingItems(today).map((item, i) => (
+                <View key={i} style={[styles.adviceCard, { backgroundColor: colors.surfaceHigh, borderColor: colors.border }]}>
+                  <Text style={styles.adviceEmoji}>{item.emoji}</Text>
+                  <Text style={[styles.adviceLabel, { color: colors.text }]} numberOfLines={2}>
+                    {item.label}
+                  </Text>
                 </View>
               ))}
             </View>
@@ -172,8 +174,27 @@ const styles = StyleSheet.create({
   modalTitle: { fontSize: 16, fontWeight: '800' },
   modalSubtitle: { fontSize: 12, marginTop: 4, lineHeight: 17 },
 
-  adviceRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
-  adviceText: { fontSize: 14, lineHeight: 20, flex: 1 },
+  adviceGrid: {
+    marginTop: 14,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    justifyContent: 'space-between',
+  },
+  adviceCard: {
+    width: '31%',
+    minWidth: 92,
+    aspectRatio: 0.95,
+    borderRadius: 16,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+    paddingVertical: 10,
+    gap: 8,
+  },
+  adviceEmoji: { fontSize: 38, lineHeight: 44 },
+  adviceLabel: { fontSize: 12.5, fontWeight: '600', textAlign: 'center', lineHeight: 16 },
 
   modalRow: {
     flexDirection: 'row',
