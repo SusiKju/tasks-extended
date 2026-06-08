@@ -15,6 +15,7 @@ import {
   fetchWeatherForecast,
   weatherIconAndLabel,
   weatherDayLabel,
+  clothingAdvice,
   SCHOOL_WINDOW_LABEL,
   DailyWeather,
   WeatherForecast,
@@ -45,6 +46,7 @@ function DayRow({ day, index, colors }: { day: DailyWeather; index: number; colo
 export function WeatherWidget({ colors }: { colors: ThemeColors }) {
   const [forecast, setForecast] = useState<WeatherForecast | null | undefined>(undefined);
   const [modalVisible, setModalVisible] = useState(false);
+  const [adviceVisible, setAdviceVisible] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -72,9 +74,17 @@ export function WeatherWidget({ colors }: { colors: ThemeColors }) {
         hitSlop={6}
       >
         <Ionicons name={icon as any} size={16} color={colors.textSecondary} />
-        <Text style={[styles.chipTemp, { color: colors.text }]}>
-          {today.tempMax}° <Text style={{ color: colors.textMuted }}>/ {today.tempMin}°</Text>
-        </Text>
+        <Pressable
+          onPress={(e) => {
+            e.stopPropagation();
+            setAdviceVisible(true);
+          }}
+          hitSlop={6}
+        >
+          <Text style={[styles.chipTemp, { color: colors.text }]}>
+            {today.tempMax}° <Text style={{ color: colors.textMuted }}>/ {today.tempMin}°</Text>
+          </Text>
+        </Pressable>
         <View style={styles.chipWind}>
           <Ionicons name="navigate-outline" size={11} color={colors.textMuted} />
           <Text style={[styles.chipWindText, { color: colors.textMuted }]}>{today.windSpeedMax} km/h</Text>
@@ -97,6 +107,30 @@ export function WeatherWidget({ colors }: { colors: ThemeColors }) {
             <View style={{ marginTop: 6 }}>
               {forecast.days.map((day, i) => (
                 <DayRow key={day.date} day={day} index={i} colors={colors} />
+              ))}
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal visible={adviceVisible} animationType="fade" transparent onRequestClose={() => setAdviceVisible(false)}>
+        <Pressable style={styles.backdrop} onPress={() => setAdviceVisible(false)}>
+          <Pressable style={[styles.modalCard, { backgroundColor: colors.surface, borderColor: colors.border }]} onPress={() => {}}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: colors.text }]}>Was zieh ich heute an?</Text>
+              <Pressable onPress={() => setAdviceVisible(false)} hitSlop={10}>
+                <Ionicons name="close" size={20} color={colors.textMuted} />
+              </Pressable>
+            </View>
+            <Text style={[styles.modalSubtitle, { color: colors.textMuted }]}>
+              {today.tempMax}° / {today.tempMin}° für {SCHOOL_WINDOW_LABEL}
+            </Text>
+            <View style={{ marginTop: 10, gap: 8 }}>
+              {clothingAdvice(today).map((tip, i) => (
+                <View key={i} style={styles.adviceRow}>
+                  <Ionicons name="shirt-outline" size={16} color={colors.accent} style={{ marginTop: 1 }} />
+                  <Text style={[styles.adviceText, { color: colors.text }]}>{tip}</Text>
+                </View>
               ))}
             </View>
           </Pressable>
@@ -137,6 +171,9 @@ const styles = StyleSheet.create({
   modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   modalTitle: { fontSize: 16, fontWeight: '800' },
   modalSubtitle: { fontSize: 12, marginTop: 4, lineHeight: 17 },
+
+  adviceRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+  adviceText: { fontSize: 14, lineHeight: 20, flex: 1 },
 
   modalRow: {
     flexDirection: 'row',

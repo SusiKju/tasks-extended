@@ -128,5 +128,58 @@ export function weatherDayLabel(isoDate: string, index: number): string {
   return `${weekday}, ${dayMonth}.`;
 }
 
+/**
+ * Liefert kurze, kindgerechte Anziehtipps für einen Tag, basierend auf
+ * Höchst-/Tiefsttemperatur, Wettercode und Wind im Schulzeit-Fenster.
+ * Wird im Dialog angezeigt, der beim Antippen der Temperatur erscheint.
+ */
+export function clothingAdvice(day: DailyWeather): string[] {
+  const { tempMax, tempMin, weatherCode, windSpeedMax } = day;
+  const tips: string[] = [];
+
+  // Grundempfehlung nach Temperatur
+  if (tempMax >= 28) {
+    tips.push('Heute wird es richtig heiß – am besten eine kurze Hose und ein luftiges T-Shirt.');
+  } else if (tempMax >= 23) {
+    tips.push('Heute reicht eine kurze Hose und ein T-Shirt.');
+  } else if (tempMax >= 18) {
+    tips.push('Ein T-Shirt reicht aus – eine leichte Jacke für später kann aber nicht schaden.');
+  } else if (tempMax >= 13) {
+    tips.push('Zieh lieber eine leichte Jacke oder einen dünnen Pullover an.');
+  } else if (tempMax >= 7) {
+    tips.push('Zieh lieber einen warmen Pullover und eine Jacke an.');
+  } else if (tempMax >= 0) {
+    tips.push('Heute braucht es die dicke Winterjacke. Vergiss die Mütze nicht.');
+  } else {
+    tips.push(`Nimm Handschuhe und eine Mütze mit, es werden bis zu ${tempMax}°C.`);
+  }
+
+  // Sonnenschutz bei Hitze und viel Sonne
+  if (tempMax >= 22 && weatherCode <= 2) {
+    tips.push('Heute wird es sehr sonnig. Denk an eine Mütze mit Schirm – und vielleicht sogar Sonnencreme.');
+  }
+
+  // Niederschlag
+  if ((weatherCode >= 51 && weatherCode <= 67) || (weatherCode >= 80 && weatherCode <= 82)) {
+    tips.push('Es kann regnen – Regenjacke und Gummistiefel besser nicht vergessen.');
+  } else if ((weatherCode >= 71 && weatherCode <= 77) || (weatherCode >= 85 && weatherCode <= 86)) {
+    tips.push('Bei Schnee sind warme, wasserfeste Schuhe und Handschuhe eine gute Idee.');
+  } else if (weatherCode === 45 || weatherCode === 48) {
+    tips.push('Bei Nebel lieber etwas Auffälliges anziehen, damit man gut zu sehen ist.');
+  }
+
+  // Wind
+  if (windSpeedMax >= 35) {
+    tips.push('Es wird ziemlich windig – eine winddichte Jacke ist sinnvoll.');
+  }
+
+  // Großer Unterschied zwischen Morgen und Mittag
+  if (tempMax - tempMin >= 8) {
+    tips.push('Morgens ist es deutlich kühler als mittags – am besten etwas zum Drüberziehen einpacken.');
+  }
+
+  return tips;
+}
+
 /** Anzeigetext für das berücksichtigte Zeitfenster, z. B. in Untertiteln (TE-129). */
 export const SCHOOL_WINDOW_LABEL = `${WINDOW_START_HOUR}–${WINDOW_END_HOUR} Uhr (Schulzeit der Kinder)`;
