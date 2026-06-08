@@ -28,6 +28,7 @@ import {
 } from '../services/kinderTasks';
 import { SharedNotepad } from '../components/SharedNotepad';
 import { WeatherWidget } from '../components/WeatherWidget';
+import { CountdownStrip } from '../components/CountdownStrip';
 import { Task } from '../types';
 
 // Kleine Avatar-Farben pro Kind (TE-110 Dashboard-Avatare)
@@ -833,6 +834,9 @@ export function DashboardScreen() {
         </View>
 
       </View>
+
+      {/* ── Countdowns (TE-128): filigrane, motivierende Karten oberhalb der Termine ── */}
+      <CountdownStrip colors={colors} />
 
       {/* ── Kalender ── */}
       {settings.googleCalendarEnabled && (

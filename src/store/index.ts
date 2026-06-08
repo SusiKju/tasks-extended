@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Task, Group, AppSettings, Attachment, Note, Birthday } from '../types';
+import { Task, Group, AppSettings, Attachment, Note, Birthday, Countdown } from '../types';
 
 interface TaskState {
   _hydrated?: boolean;
@@ -9,6 +9,7 @@ interface TaskState {
   groups: Group[];
   notes: Note[];
   birthdays: Birthday[];
+  countdowns: Countdown[];
   settings: AppSettings;
   scratchpad: string;
   scratchpadUpdatedAt: string;
@@ -43,6 +44,11 @@ interface TaskState {
 
   // Birthday actions
   setBirthdays: (birthdays: Birthday[]) => void;
+
+  // Countdown actions (TE-128)
+  addCountdown: (countdown: Countdown) => void;
+  updateCountdown: (id: string, updates: Partial<Countdown>) => void;
+  deleteCountdown: (id: string) => void;
 
   // Scratchpad
   setScratchpad: (text: string) => void;
@@ -101,6 +107,7 @@ export const useStore = create<TaskState>()(
       groups: DEFAULT_GROUPS,
       notes: [],
       birthdays: [],
+      countdowns: [],
       settings: DEFAULT_SETTINGS,
       scratchpad: '',
       scratchpadUpdatedAt: new Date(0).toISOString(),
@@ -226,6 +233,17 @@ export const useStore = create<TaskState>()(
 
       setBirthdays: (birthdays) => set({ birthdays }),
 
+      addCountdown: (countdown) =>
+        set((state) => ({ countdowns: [...state.countdowns, countdown] })),
+
+      updateCountdown: (id, updates) =>
+        set((state) => ({
+          countdowns: state.countdowns.map((c) => (c.id === id ? { ...c, ...updates } : c)),
+        })),
+
+      deleteCountdown: (id) =>
+        set((state) => ({ countdowns: state.countdowns.filter((c) => c.id !== id) })),
+
       setScratchpad: (text) => set({ scratchpad: text, scratchpadUpdatedAt: new Date().toISOString() }),
 
       updateSettings: (updates) =>
@@ -233,7 +251,7 @@ export const useStore = create<TaskState>()(
     }),
     {
       name: 'tasks-extended-store',
-      version: 13,
+      version: 14,
       migrate: (persistedState: any, version: number) => {
         if (version < 1 && persistedState?.tasks) {
           persistedState.tasks = persistedState.tasks.map((t: any) => ({
@@ -289,6 +307,10 @@ export const useStore = create<TaskState>()(
         if (version < 13 && persistedState?.settings) {
           // Anzeigename für die geteilte Notizliste (TE-121) – neu, Default leer.
           persistedState.settings.myName = persistedState.settings.myName ?? null;
+        }
+        if (version < 14) {
+          // Countdown-Karten fürs Dashboard (TE-128) – neu, Default leer.
+          persistedState.countdowns = persistedState.countdowns ?? [];
         }
         return persistedState;
       },

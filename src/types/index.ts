@@ -46,6 +46,20 @@ export interface Birthday {
   updatedAt: string;
 }
 
+/**
+ * Countdown bis zu einem motivierenden Ereignis, z. B. "Gemeinsamer Urlaub"
+ * (TE-128). Wird als filigrane, quadratische Karte auf dem Dashboard gezeigt.
+ */
+export interface Countdown {
+  id: string;
+  title: string;
+  /** Zieldatum als ISO-Datum (YYYY-MM-DD), ohne Uhrzeit. */
+  targetDate: string;
+  /** Optionaler Sticker, z. B. ✈️ für Urlaub, 🎂 für Geburtstag. */
+  emoji?: string | null;
+  createdAt: string;
+}
+
 export interface AppSettings {
   dateFormat: DateFormat;
   theme: Theme;
