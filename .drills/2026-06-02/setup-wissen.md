@@ -34,6 +34,10 @@ Lenny, Emil, Hannes, Liddy – IDs: `lenny`, `emil`, `hannes`, `liddy`
       match /pushTriggers/{document=**} {
         allow read, write: if true;
       }
+      match /shared/{document=**} {
+        // Geteilte Notizliste der Eltern (TE-121), z. B. Einkaufsliste.
+        allow read, write: if true;
+      }
     }
   }
   ```

@@ -63,6 +63,8 @@ export interface AppSettings {
   googleBirthdaysEnabled: boolean;
   selectedCalendarIds: string[];
   childEmails: Partial<Record<string, string>>;
+  /** Anzeigename für die geteilte Notizliste (TE-121), z. B. "Matthias" oder "Sabine". */
+  myName: string | null;
 }
 
 export interface NoteChecklistItem {

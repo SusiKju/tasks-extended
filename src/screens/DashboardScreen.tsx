@@ -26,6 +26,7 @@ import { listUpcomingEvents, CalendarEvent } from '../services/googleCalendar';
 import {
   ChildId, CHILDREN, CHILD_NAMES, ChildTask, subscribeToChildTasks,
 } from '../services/kinderTasks';
+import { SharedNotepad } from '../components/SharedNotepad';
 import { Task } from '../types';
 
 // Kleine Avatar-Farben pro Kind (TE-110 Dashboard-Avatare)
@@ -961,6 +962,10 @@ export function DashboardScreen() {
           )}
         </View>
       )}
+
+      {/* ── Geteilte Liste (TE-121): bewusst auffällig gestaltete Card, ── */}
+      {/* damit z. B. eine gemeinsame Einkaufsliste mit dem Partner sofort ins Auge fällt. */}
+      <SharedNotepad colors={colors} isDark={isDark} />
 
       {/* ── Kalender ── */}
       {settings.googleCalendarEnabled && (

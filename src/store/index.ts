@@ -91,6 +91,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   googleBirthdaysEnabled: false,
   selectedCalendarIds: [],
   childEmails: {},
+  myName: null,
 };
 
 export const useStore = create<TaskState>()(
@@ -232,7 +233,7 @@ export const useStore = create<TaskState>()(
     }),
     {
       name: 'tasks-extended-store',
-      version: 12,
+      version: 13,
       migrate: (persistedState: any, version: number) => {
         if (version < 1 && persistedState?.tasks) {
           persistedState.tasks = persistedState.tasks.map((t: any) => ({
@@ -284,6 +285,10 @@ export const useStore = create<TaskState>()(
           // damit der erste Sync sofort einen stillen GIS-Refresh auslöst.
           persistedState.settings.googleTokenExpiry =
             persistedState.settings.googleTokenExpiry ?? null;
+        }
+        if (version < 13 && persistedState?.settings) {
+          // Anzeigename für die geteilte Notizliste (TE-121) – neu, Default leer.
+          persistedState.settings.myName = persistedState.settings.myName ?? null;
         }
         return persistedState;
       },
