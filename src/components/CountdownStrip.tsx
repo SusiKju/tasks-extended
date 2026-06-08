@@ -13,7 +13,7 @@
  */
 
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, TextInput, Modal, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ScrollView, TextInput, Modal, ActivityIndicator, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useStore } from '../store';
 import { ThemeColors } from '../utils/theme';
@@ -41,6 +41,15 @@ function formatDateDe(isoDate: string): string {
   return new Date(isoDate + 'T00:00:00').toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
+/** Liebevolle, emotionale Zeile passend zur Restzeit – macht aus einem nüchternen Zähler eine Vorfreude-Anzeige. */
+function motivationLine(days: number, isToday: boolean, isPast: boolean): string {
+  if (isToday) return 'Heute ist es soweit! 🎉';
+  if (isPast) return 'Geschafft 💛';
+  if (days <= 3) return 'Gleich ist es so weit! 🤩';
+  if (days <= 14) return 'Wir freuen uns schon riesig! 🥰';
+  return 'Wir zählen die Tage zusammen ✨';
+}
+
 function CountdownCard({ countdown, colors, onPress }: { countdown: SharedCountdown; colors: ThemeColors; onPress: () => void }) {
   const days = daysUntil(countdown.targetDate);
   const isPast = days < 0;
@@ -54,25 +63,32 @@ function CountdownCard({ countdown, colors, onPress }: { countdown: SharedCountd
         styles.card,
         {
           borderColor: isToday ? accent : colors.border,
-          backgroundColor: colors.surface,
-          opacity: pressed ? 0.7 : isPast ? 0.55 : 1,
+          backgroundColor: isToday ? accent + '14' : colors.surface,
+          opacity: pressed ? 0.7 : isPast ? 0.6 : 1,
         },
       ]}
     >
-      {countdown.emoji ? <Text style={styles.cardEmoji}>{countdown.emoji}</Text> : null}
-      {isToday ? (
-        <Text style={[styles.cardBigLabel, { color: accent }]}>Heute! 🎉</Text>
-      ) : isPast ? (
-        <Text style={[styles.cardBigLabel, { color: colors.textMuted }]}>vorbei</Text>
-      ) : (
-        <>
-          <Text style={[styles.cardNumber, { color: colors.text }]}>{days}</Text>
-          <Text style={[styles.cardUnit, { color: colors.textMuted }]}>{days === 1 ? 'Tag' : 'Tage'}</Text>
-        </>
-      )}
-      <Text style={[styles.cardTitle, { color: colors.textSecondary }]} numberOfLines={2}>
-        {countdown.title}
-      </Text>
+      <View style={[styles.cardEmojiWrap, { backgroundColor: accent + '22' }]}>
+        <Text style={styles.cardEmojiBig}>{countdown.emoji ?? '💛'}</Text>
+      </View>
+      <View style={styles.cardBody}>
+        {isToday ? (
+          <Text style={[styles.cardBigLabel, { color: accent }]} numberOfLines={1}>Heute! 🎉</Text>
+        ) : isPast ? (
+          <Text style={[styles.cardBigLabel, { color: colors.textMuted }]} numberOfLines={1}>vorbei</Text>
+        ) : (
+          <View style={styles.cardNumberRow}>
+            <Text style={[styles.cardNumber, { color: colors.text }]}>{days}</Text>
+            <Text style={[styles.cardUnit, { color: colors.textMuted }]}>{days === 1 ? 'Tag' : 'Tage'}</Text>
+          </View>
+        )}
+        <Text style={[styles.cardTitle, { color: colors.textSecondary }]} numberOfLines={1}>
+          {countdown.title}
+        </Text>
+        <Text style={[styles.cardMotivation, { color: accent }]} numberOfLines={1}>
+          {motivationLine(days, isToday, isPast)}
+        </Text>
+      </View>
     </Pressable>
   );
 }
@@ -87,8 +103,8 @@ function AddCard({ colors, onPress }: { colors: ThemeColors; onPress: () => void
         { borderColor: colors.border, opacity: pressed ? 0.6 : 1 },
       ]}
     >
-      <Ionicons name="add" size={26} color={colors.textMuted} />
-      <Text style={[styles.addCardText, { color: colors.textMuted }]}>Countdown</Text>
+      <Ionicons name="add" size={22} color={colors.textMuted} />
+      <Text style={[styles.addCardText, { color: colors.textMuted }]}>Neue Vorfreude</Text>
     </Pressable>
   );
 }
@@ -320,7 +336,13 @@ function formStyles_subtitle(colors: ThemeColors) {
   return { fontSize: 12, color: colors.textMuted, marginTop: 4, marginBottom: 12, lineHeight: 17 };
 }
 
-const CARD_SIZE = 84;
+// Drei Karten passen nebeneinander auf den Bildschirm – etwas breiter und
+// dafür flacher als zuvor (weniger Höhe auf dem Dashboard, TE-128-Feedback).
+const SCREEN_WIDTH = Dimensions.get('window').width;
+const STRIP_PADDING = 16;
+const CARD_GAP = 10;
+const CARD_WIDTH = (SCREEN_WIDTH - STRIP_PADDING * 2 - CARD_GAP * 2) / 3;
+const CARD_HEIGHT = Math.round(CARD_WIDTH * 0.66);
 
 const styles = StyleSheet.create({
   wrap: { marginBottom: 4 },
@@ -329,24 +351,36 @@ const styles = StyleSheet.create({
   errorRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingVertical: 6 },
   errorText: { fontSize: 11, flex: 1, lineHeight: 15 },
 
-  // "Filigran": dünner Rahmen, große Eckenrundung, kein Schatten/Füllfarbe-Wumms.
+  // "Filigran", aber herzlich: dünner Rahmen, große Eckenrundung, dafür ein
+  // warmer Akzent-Farbton im Hintergrund und eine liebevolle Zeile, die die
+  // Vorfreude zeigt – breiter und flacher als zuvor (TE-128-Feedback).
   card: {
-    width: CARD_SIZE,
-    height: CARD_SIZE,
-    borderRadius: 18,
+    width: CARD_WIDTH,
+    height: CARD_HEIGHT,
+    borderRadius: 16,
     borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    gap: 8,
+  },
+  cardEmojiWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 6,
-    gap: 1,
   },
-  cardEmoji: { fontSize: 16, marginBottom: 1 },
+  cardEmojiBig: { fontSize: 20 },
+  cardBody: { flex: 1, gap: 1 },
+  cardNumberRow: { flexDirection: 'row', alignItems: 'baseline', gap: 3 },
   cardNumber: { fontSize: 22, fontWeight: '800', lineHeight: 24 },
-  cardUnit: { fontSize: 10, marginTop: -2 },
-  cardBigLabel: { fontSize: 13, fontWeight: '800' },
-  cardTitle: { fontSize: 10, fontWeight: '600', textAlign: 'center', marginTop: 2 },
+  cardUnit: { fontSize: 11 },
+  cardBigLabel: { fontSize: 14, fontWeight: '800' },
+  cardTitle: { fontSize: 11, fontWeight: '700' },
+  cardMotivation: { fontSize: 10, fontWeight: '600' },
 
-  addCard: { borderStyle: 'dashed', gap: 4 },
+  addCard: { borderStyle: 'dashed', flexDirection: 'column', gap: 4, justifyContent: 'center' },
   addCardText: { fontSize: 10, fontWeight: '700' },
 
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center', padding: 24 },
