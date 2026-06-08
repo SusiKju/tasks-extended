@@ -33,19 +33,34 @@ export interface SharedNoteItem {
 
 const itemsCollection = () => collection(db, 'shared', 'notepad', 'items');
 
-/** Echtzeit-Listener für die geteilte Liste – älteste zuerst, erledigte ans Ende. */
+/**
+ * Echtzeit-Listener für die geteilte Liste – älteste zuerst, erledigte ans Ende.
+ *
+ * `onError` wird z. B. bei fehlenden Firestore-Regeln für den Pfad `shared/...`
+ * aufgerufen ("permission-denied"). Ohne diesen Handler bliebe der Aufrufer
+ * für immer im Lade-Zustand hängen (Endlos-Spinner), weil `onSnapshot` bei
+ * einem Fehler keinen weiteren Snapshot mehr liefert (TE-121-Fix).
+ */
 export function subscribeToSharedNotes(
-  onChange: (items: SharedNoteItem[]) => void
+  onChange: (items: SharedNoteItem[]) => void,
+  onError?: (error: unknown) => void
 ): Unsubscribe {
-  return onSnapshot(itemsCollection(), (snap) => {
-    const items = snap.docs
-      .map((d) => ({ id: d.id, ...d.data() } as SharedNoteItem))
-      .sort((a, b) => {
-        if (a.done !== b.done) return a.done ? 1 : -1;
-        return a.createdAt.localeCompare(b.createdAt);
-      });
-    onChange(items);
-  });
+  return onSnapshot(
+    itemsCollection(),
+    (snap) => {
+      const items = snap.docs
+        .map((d) => ({ id: d.id, ...d.data() } as SharedNoteItem))
+        .sort((a, b) => {
+          if (a.done !== b.done) return a.done ? 1 : -1;
+          return a.createdAt.localeCompare(b.createdAt);
+        });
+      onChange(items);
+    },
+    (error) => {
+      console.warn('subscribeToSharedNotes fehlgeschlagen', error);
+      onError?.(error);
+    }
+  );
 }
 
 export async function addSharedNote(text: string, addedBy: string): Promise<string> {

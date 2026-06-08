@@ -28,12 +28,16 @@ import {
 export function SharedNotepad({ colors, isDark }: { colors: ThemeColors; isDark: boolean }) {
   const { settings, updateSettings } = useStore();
   const [items, setItems] = useState<SharedNoteItem[] | null>(null);
+  const [loadError, setLoadError] = useState(false);
   const [draft, setDraft] = useState('');
   const [nameDraft, setNameDraft] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
 
   useEffect(() => {
-    const unsub = subscribeToSharedNotes(setItems);
+    const unsub = subscribeToSharedNotes(
+      (next) => { setLoadError(false); setItems(next); },
+      () => { setLoadError(true); setItems([]); }
+    );
     return unsub;
   }, []);
 
@@ -145,7 +149,14 @@ export function SharedNotepad({ colors, isDark }: { colors: ThemeColors; isDark:
             </Pressable>
           </View>
 
-          {items === null ? (
+          {loadError ? (
+            <View style={styles.emptyRow}>
+              <Ionicons name="cloud-offline-outline" size={16} color={colors.danger} />
+              <Text style={[styles.emptyText, { color: colors.danger }]}>
+                Liste kann nicht geladen werden – fehlende Firestore-Berechtigung für „shared". Bitte Regeln in der Firebase-Konsole ergänzen.
+              </Text>
+            </View>
+          ) : items === null ? (
             <ActivityIndicator color={accent} style={{ marginVertical: 14 }} />
           ) : items.length === 0 ? (
             <View style={styles.emptyRow}>
