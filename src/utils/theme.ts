@@ -140,11 +140,44 @@ const DARK_MONO: ThemeColors = {
   successFg: '#000000',
 };
 
+// Komplettes Negativ von DARK_MONO – wirklich JEDE Farbe per Kanal invertiert
+// (255 - Wert), wie ein fotografisches Negativ. Schwarz wird Weiß, Weiß wird
+// Schwarz, jedes Grau kippt auf seinen Gegenwert; selbst Glow-Farben und die
+// "Fg"-Kontrastfarben drehen sich um. Dadurch ist es nicht nur "ein helles
+// Mono-Theme", sondern wortwörtlich das Negativ des Schwarz-Weiß-Neon-Looks.
+const LIGHT_MONO: ThemeColors = {
+  background:    '#FFFFFF',   // Negativ von #000000
+  surface:       '#F5F5F5',   // Negativ von #0A0A0A
+  surfaceHigh:   '#E7E7E7',   // Negativ von #181818
+  text:          '#000000',   // Negativ von #FFFFFF
+  textSecondary: '#4B4B4B',   // Negativ von #B4B4B4
+  textMuted:     '#7A7A7A',   // Negativ von #858585
+  accent:        '#000000',   // Negativ von #FFFFFF
+  accentNeon:    '#000000',   // schwarzer „Neon"-Akzent + Glow – Negativ von #FFFFFF
+  success:       '#252525',   // Negativ von #DADADA
+  warning:       '#575757',   // Negativ von #A8A8A8
+  danger:        '#000000',   // monochrom – Negativ von #FFFFFF
+  border:        '#D5D5D5',   // Negativ von #2A2A2A
+  tabBar:        '#FFFFFF',
+  tabBarBorder:  '#D5D5D5',
+  header:        '#FFFFFF',
+  inputBackground: '#E7E7E7',
+  placeholder:   '#7E7E7E',   // Negativ von #818181
+  glowAccent:  'rgba(0, 0, 0, 0.55)',
+  glowDanger:  'rgba(0, 0, 0, 0.45)',
+  glowSuccess: 'rgba(0, 0, 0, 0.45)',
+  accentFg: '#FFFFFF',
+  dangerFg: '#FFFFFF',
+  warningFg: '#FFFFFF',
+  successFg: '#FFFFFF',
+};
+
 export const THEMES: Record<Theme, ThemeColors> = {
   light: LIGHT,
   'dark-neon': DARK_NEON,
   'dark-soft': DARK_SOFT,
   'dark-mono': DARK_MONO,
+  'light-mono': LIGHT_MONO,
 };
 
 /** Relative Luminanz (WCAG) einer Hex-Farbe (#RGB / #RRGGBB), 0..1. */
@@ -192,6 +225,20 @@ export function toGray(hex: string): string {
   return `#${hh}${hh}${hh}`;
 }
 
+/**
+ * Wie `toGray`, aber zusätzlich invertiert (255 - Wert) – das fotografische
+ * Negativ eines Graustufenwerts. Damit bleiben Inhaltsfarben (Gruppen,
+ * Notizen, Geburtstage) auch im Negativ-Theme `light-mono` unterscheidbar,
+ * landen aber – passend zum hellen Hintergrund – auf der „richtigen" Seite
+ * der Helligkeitsskala statt wie im dunklen Mono-Theme zu wirken.
+ */
+export function toGrayInverted(hex: string): string {
+  const gray = toGray(hex).slice(1);
+  const v = 255 - parseInt(gray.slice(0, 2), 16);
+  const hh = v.toString(16).padStart(2, '0').toUpperCase();
+  return `#${hh}${hh}${hh}`;
+}
+
 export function neonGlow(color: string, intensity: 'soft' | 'medium' | 'hard' = 'medium') {
   const cfg = {
     soft:   { opacity: 0.55, radius: 12 },
@@ -226,12 +273,14 @@ export function useTheme(): {
 } {
   const theme = useStore((s) => s.settings.theme ?? 'light');
   const colors = useMemo(() => THEMES[theme] ?? LIGHT, [theme]);
-  const isMono = theme === 'dark-mono';
+  const isMono = theme === 'dark-mono' || theme === 'light-mono';
   return {
     colors,
     theme,
     isDark: theme === 'dark-neon' || theme === 'dark-soft' || theme === 'dark-mono',
     isMono,
-    mono: (hex: string) => (isMono ? toGray(hex) : hex),
+    // Negativ-Theme braucht invertierte Graustufen (helle statt dunkle Grautöne),
+    // damit Inhaltsfarben auf dem weißen Hintergrund weiterhin gut lesbar bleiben.
+    mono: (hex: string) => (theme === 'light-mono' ? toGrayInverted(hex) : isMono ? toGray(hex) : hex),
   };
 }

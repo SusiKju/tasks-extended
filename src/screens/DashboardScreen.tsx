@@ -343,7 +343,9 @@ function Scratchpad({
   colors: ThemeColors;
 }) {
   const isNeon = isDark && colors.accentNeon === '#00EEFF';
-  const isMono = isDark && colors.accentNeon === '#FFFFFF';
+  // Erkennt beide monochromen Themes (dunkles Schwarz-Weiß UND sein helles
+  // Negativ) – unabhängig von isDark, denn das Negativ-Theme ist hell.
+  const isMono = colors.accentNeon === '#FFFFFF' || colors.accentNeon === '#000000';
   const entries = useMemo(() => parseScratchpad(value, isNeon), [value, isNeon]);
   const inputRefs = useRef<(any)[]>([]);
 
@@ -377,8 +379,11 @@ function Scratchpad({
       {entries.map((entry, idx) => {
         // Neon-Theme: Tasks-Tab-Stil – keine Füllung, Rahmen + Schrift in der
         // Bubble-Farbe + Glow. Bessere Lesbarkeit, einheitlicher Look.
-        // Sonst (dark-soft/neutral): solide Bubble mit weißem Text.
-        const fg = isNeon ? entry.color : '#fff';
+        // Sonst (dark-soft/neutral): solide Bubble mit weißem Text. Im
+        // monochromen Theme – egal ob dunkel oder als Negativ hell – kommt
+        // stattdessen die Theme-Textfarbe zum Einsatz, sonst wäre der Text
+        // im hellen Negativ-Theme weiß auf hell und unleserlich.
+        const fg = isNeon ? entry.color : isMono ? colors.text : '#fff';
         return (
         <View key={idx} style={[
           padStyles.bubble,
@@ -596,7 +601,7 @@ export function DashboardScreen() {
   // Bunter Geburtstags-Stil (rotierender Regenbogen-Rand im AI-Komponenten-Stil):
   // im Neon-Theme und im Schwarz-Weiß-Theme – dort bleibt die Geburtstags-Card
   // bewusst bunt als Ausnahme zum sonst monochromen Look (TE-81).
-  const richBirthday = theme === 'dark-neon' || theme === 'dark-mono';
+  const richBirthday = theme === 'dark-neon' || theme === 'dark-mono' || theme === 'light-mono';
   const rainbowRotate = useRef(new Animated.Value(0)).current;
   // Atmender, farbwechselnder Flammen-Glow (Gemini-Look).
   const flameAnim = useRef(new Animated.Value(0)).current;
