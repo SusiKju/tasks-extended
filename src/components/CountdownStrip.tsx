@@ -12,9 +12,10 @@
  * Anzeigename (settings.myName) abgefragt, damit Einträge zuordenbar sind.
  */
 
-import React, { useEffect, useMemo, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, TextInput, Modal, ActivityIndicator, Dimensions } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import { View, Text, StyleSheet, Pressable, ScrollView, TextInput, Modal, ActivityIndicator, Dimensions, Animated, Easing } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useStore } from '../store';
 import { ThemeColors } from '../utils/theme';
 import { DatePickerModal } from './DatePickerModal';
@@ -50,6 +51,55 @@ function motivationLine(days: number, isToday: boolean, isPast: boolean): string
   return 'Wir zählen die Tage zusammen ✨';
 }
 
+/**
+ * Dezenter Neon-Hintergrundeffekt: ein schräger Lichtstreifen "schwimmt" wie
+ * eine Spiegelung/Welle quer über die Karte – sanfte Endlosschleife, damit
+ * die Kacheln auf den ersten Blick lebendig und ein bisschen magisch wirken.
+ */
+function NeonSweep({ accent }: { accent: string }) {
+  const progress = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(progress, {
+          toValue: 1,
+          duration: 3200,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+        Animated.timing(progress, {
+          toValue: 0,
+          duration: 0,
+          useNativeDriver: true,
+        }),
+        Animated.delay(900),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [progress]);
+
+  const translateX = progress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-CARD_WIDTH * 1.3, CARD_WIDTH * 1.3],
+  });
+
+  return (
+    <View style={styles.sweepClip} pointerEvents="none">
+      <Animated.View style={[styles.sweepBand, { transform: [{ translateX }, { rotate: '-18deg' }] }]}>
+        <LinearGradient
+          colors={['transparent', accent + '00', accent + '4D', accent + '00', 'transparent']}
+          locations={[0, 0.35, 0.5, 0.65, 1]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={StyleSheet.absoluteFill}
+        />
+      </Animated.View>
+    </View>
+  );
+}
+
 function CountdownCard({ countdown, colors, onPress }: { countdown: SharedCountdown; colors: ThemeColors; onPress: () => void }) {
   const days = daysUntil(countdown.targetDate);
   const isPast = days < 0;
@@ -68,6 +118,7 @@ function CountdownCard({ countdown, colors, onPress }: { countdown: SharedCountd
         },
       ]}
     >
+      <NeonSweep accent={accent} />
       <View style={[styles.cardEmojiWrap, { backgroundColor: accent + '22' }]}>
         <Text style={styles.cardEmojiBig}>{countdown.emoji ?? '💛'}</Text>
       </View>
@@ -363,6 +414,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 10,
     gap: 8,
+    overflow: 'hidden',
+  },
+  // Container, der den Neon-Streifen exakt auf die Kachel zuschneidet, damit
+  // die "Welle" nicht über den Rand hinausragt (Spiegel-Effekt, TE-128).
+  sweepClip: { ...StyleSheet.absoluteFillObject, borderRadius: 16, overflow: 'hidden' },
+  sweepBand: {
+    position: 'absolute',
+    top: -CARD_HEIGHT,
+    left: 0,
+    width: CARD_WIDTH * 0.7,
+    height: CARD_HEIGHT * 3,
   },
   cardEmojiWrap: {
     width: 40,
