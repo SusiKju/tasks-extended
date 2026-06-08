@@ -15,6 +15,7 @@ import {
   fetchWeatherForecast,
   weatherIconAndLabel,
   weatherDayLabel,
+  SCHOOL_WINDOW_LABEL,
   DailyWeather,
   WeatherForecast,
 } from '../services/weather';
@@ -90,7 +91,8 @@ export function WeatherWidget({ colors }: { colors: ThemeColors }) {
               </Pressable>
             </View>
             <Text style={[styles.modalSubtitle, { color: colors.textMuted }]}>
-              Heute und die nächsten drei Tage – Temperatur und Windgeschwindigkeit
+              Heute und die nächsten drei Tage – Temperatur und Windgeschwindigkeit{'\n'}
+              jeweils für {SCHOOL_WINDOW_LABEL}
             </Text>
             <View style={{ marginTop: 6 }}>
               {forecast.days.map((day, i) => (
