@@ -437,7 +437,7 @@ const padStyles = StyleSheet.create({
 
 export function DashboardScreen() {
   const router = useRouter();
-  const { tasks, notes, settings, scratchpad, scratchpadUpdatedAt, setScratchpad, birthdays: storeBirthdays } = useStore();
+  const { tasks, settings, scratchpad, scratchpadUpdatedAt, setScratchpad, birthdays: storeBirthdays } = useStore();
   const { colors, isDark, theme, mono, isMono } = useTheme();
   const { syncScratchpad, syncDriveNotes } = useGoogleDriveNotesSync();
   const { syncTasks } = useGoogleTasksSync();
@@ -590,13 +590,6 @@ export function DashboardScreen() {
       { key: 'later',    label: 'Später',      tasks: sort(byGroup.later) },
     ].filter((g) => g.tasks.length > 0);
   }, [tasks]);
-
-  const recentNotes = useMemo(() =>
-    [...notes]
-      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-      .slice(0, 4),
-    [notes]
-  );
 
   // Bunter Geburtstags-Stil (rotierender Regenbogen-Rand im AI-Komponenten-Stil):
   // im Neon-Theme und im Schwarz-Weiß-Theme – dort bleibt die Geburtstags-Card
@@ -1167,36 +1160,6 @@ export function DashboardScreen() {
         </View>
       )}
 
-      {/* ── Notizen ── */}
-      {notes.length > 0 && (
-        <View style={[styles.section, { marginBottom: 0 }]}>
-          <SectionLabel
-            title="Notizen"
-            onMore={() => router.push('/(tabs)/notes')}
-            colors={colors}
-          />
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.noteScroll}
-          >
-            {recentNotes.map((note) => (
-              <View key={note.id} style={[styles.noteCard, { backgroundColor: mono(note.color) }]}>
-                {note.title ? (
-                  <Text style={styles.noteCardTitle} numberOfLines={1}>
-                    {note.title}
-                  </Text>
-                ) : null}
-                <Text style={styles.noteCardContent} numberOfLines={5}>
-                  {note.content ||
-                    note.checklist?.map((item) => `${item.checked ? '☑' : '☐'} ${item.text}`).join('\n') ||
-                    ''}
-                </Text>
-              </View>
-            ))}
-          </ScrollView>
-        </View>
-      )}
     </ScrollView>
   );
 }
@@ -1435,16 +1398,5 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
       paddingTop: 12,
       paddingBottom: 4,
     },
-
-    // Notes
-    noteScroll: { paddingHorizontal: 16, gap: 10 },
-    noteCard: { width: 150, minHeight: 100, borderRadius: 12, padding: 12 },
-    noteCardTitle: {
-      fontSize: 12,
-      fontWeight: '700',
-      color: 'rgba(0,0,0,0.8)',
-      marginBottom: 4,
-    },
-    noteCardContent: { fontSize: 12, color: 'rgba(0,0,0,0.65)', lineHeight: 17 },
   });
 }
