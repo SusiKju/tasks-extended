@@ -9,29 +9,11 @@ import {
   Alert,
   ActivityIndicator,
   TextInput,
-  Modal,
-  TouchableOpacity,
 } from 'react-native';
-import uuid from 'react-native-uuid';
 import { Ionicons } from '@expo/vector-icons';
 import { useStore } from '../store';
-import { DateFormat, Theme, Group } from '../types';
-import { DATE_FORMAT_LABELS } from '../utils/dateFormat';
+import { Theme } from '../types';
 import { useTheme, ThemeColors, THEMES, neonGlow } from '../utils/theme';
-
-const PRESET_COLORS = [
-  '#4F86F7', '#34C759', '#FF9500', '#FF3B30',
-  '#AF52DE', '#FF2D55', '#5AC8FA', '#FFCC00',
-  '#5856D6', '#32ADE6',
-];
-
-interface GroupFormState {
-  name: string;
-  color: string;
-  keywords: string;
-}
-
-const EMPTY_GROUP_FORM: GroupFormState = { name: '', color: PRESET_COLORS[0], keywords: '' };
 import {
   signInWithGoogle,
   listCalendars,
@@ -39,9 +21,7 @@ import {
 import { useGoogleTasksSync } from '../hooks/useGoogleTasksSync';
 import { useGoogleDriveNotesSync } from '../hooks/useGoogleDriveNotesSync';
 import { useGoogleContactsBirthdaysSync } from '../hooks/useGoogleContactsBirthdaysSync';
-import { importKeepTakeout } from '../utils/importKeepTakeout';
 
-const DATE_FORMATS: DateFormat[] = ['de', 'us', 'iso', 'relative'];
 const THEME_OPTIONS: { value: Theme; label: string; subtitle: string }[] = [
   { value: 'light', label: 'Hell', subtitle: 'iOS-Standard, weißer Hintergrund' },
   { value: 'dark-neon', label: 'Dark Neon', subtitle: 'Dunkles Design mit Neon-Akzenten' },
@@ -50,28 +30,19 @@ const THEME_OPTIONS: { value: Theme; label: string; subtitle: string }[] = [
   { value: 'light-mono', label: 'Negativ', subtitle: 'Komplettes Negativ von Schwarz-Weiß – hell statt dunkel, jede Farbe invertiert' },
 ];
 
-const DEFAULT_NOTE_COLOR = '#F0C040';
-
-function generateId() {
-  return `note-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-}
-
 export function SettingsScreen() {
-  const { settings, notes, groups, tasks, updateSettings, addNote, updateNote, deleteNote, clearNotes, addGroup, updateGroup, deleteGroup } = useStore();
+  const { settings, updateSettings } = useStore();
   const { syncTasks } = useGoogleTasksSync();
   const { syncDriveNotes } = useGoogleDriveNotesSync();
   const { syncBirthdays } = useGoogleContactsBirthdaysSync();
-  const { colors, mono } = useTheme();
+  const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [loadingCalendar, setLoadingCalendar] = useState(false);
   const [availableCalendars, setAvailableCalendars] = useState<Array<{ id: string; summary: string; primary?: boolean }>>([]);
   const [loadingCalendars, setLoadingCalendars] = useState(false);
-  const [loadingKeepImport, setLoadingKeepImport] = useState(false);
   const [loadingTasksSync, setLoadingTasksSync] = useState(false);
-  const [loadingNotesSync, setLoadingNotesSync] = useState(false);
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
   const [tasksSyncResult, setTasksSyncResult] = useState<string | null>(null);
-  const [notesSyncResult, setNotesSyncResult] = useState<string | null>(null);
 
   // Kalender-Liste laden wenn verbunden
   React.useEffect(() => {
@@ -178,107 +149,7 @@ export function SettingsScreen() {
   }, [syncTasks]);
 
 
-  const handleNotesSync = useCallback(async () => {
-    setLoadingNotesSync(true);
-    setNotesSyncResult(null);
-    try {
-      const result = await syncDriveNotes();
-      if (result === null) {
-        setNotesSyncResult('Drive-Sync nicht aktiviert');
-        return;
-      }
-      if (result.scopeError) {
-        setNotesSyncResult('⚠️ Keine Drive-Berechtigung – bitte Google-Verbindung trennen und neu anmelden');
-        return;
-      }
-      const { pulled, pushed, deleted } = result;
-      const parts = [
-        pulled > 0 ? `${pulled} geladen` : null,
-        pushed > 0 ? `${pushed} hochgeladen` : null,
-        deleted > 0 ? `${deleted} gelöscht` : null,
-        pulled === 0 && pushed === 0 && deleted === 0 ? 'Keine Änderungen' : null,
-      ].filter(Boolean);
-      setNotesSyncResult(parts.join(', '));
-    } catch (e) {
-      console.error('[NotesSync]', e);
-      setNotesSyncResult('Fehler beim Sync');
-    } finally {
-      setLoadingNotesSync(false);
-    }
-  }, [syncDriveNotes]);
-
-  const handleKeepImport = useCallback(async () => {
-    setLoadingKeepImport(true);
-    try {
-      const existingIds = new Set(notes.map((n) => n.id));
-      const result = await importKeepTakeout(existingIds, groups, addNote);
-      if (!result) return;
-      Alert.alert(
-        'Import abgeschlossen',
-        [
-          result.imported > 0 ? `${result.imported} Notizen importiert` : null,
-          result.skipped > 0 ? `${result.skipped} übersprungen (Papierkorb)` : null,
-          result.errors > 0 ? `${result.errors} Fehler` : null,
-          result.imported === 0 && result.skipped === 0 ? 'Keine Notizen gefunden' : null,
-        ].filter(Boolean).join('\n')
-      );
-    } catch (e) {
-      Alert.alert('Fehler', e instanceof Error ? e.message : String(e));
-    } finally {
-      setLoadingKeepImport(false);
-    }
-  }, [notes, groups, addNote]);
-
-  const [confirmClearNotes, setConfirmClearNotes] = useState(false);
-
-  // Gruppen
-  const [groupModalVisible, setGroupModalVisible] = useState(false);
-  const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
-  const [groupForm, setGroupForm] = useState<GroupFormState>(EMPTY_GROUP_FORM);
-
-  const openCreateGroup = useCallback(() => {
-    setEditingGroupId(null);
-    setGroupForm(EMPTY_GROUP_FORM);
-    setGroupModalVisible(true);
-  }, []);
-
-  const openEditGroup = useCallback((group: Group) => {
-    setEditingGroupId(group.id);
-    setGroupForm({ name: group.name, color: group.color, keywords: group.keywords.join(', ') });
-    setGroupModalVisible(true);
-  }, []);
-
-  const handleGroupSave = useCallback(() => {
-    if (!groupForm.name.trim()) {
-      Alert.alert('Name fehlt', 'Bitte gib einen Gruppennamen ein.');
-      return;
-    }
-    const keywords = groupForm.keywords.split(',').map((k) => k.trim().toLowerCase()).filter(Boolean);
-    if (editingGroupId) {
-      updateGroup(editingGroupId, { name: groupForm.name.trim(), color: groupForm.color, keywords });
-    } else {
-      addGroup({ id: uuid.v4() as string, name: groupForm.name.trim(), color: groupForm.color, keywords, createdAt: new Date().toISOString() });
-    }
-    setGroupModalVisible(false);
-  }, [groupForm, editingGroupId, addGroup, updateGroup]);
-
-  const handleGroupDelete = useCallback((group: Group) => {
-    const count = tasks.filter((t) => t.groupId === group.id).length;
-    const msg = count > 0
-      ? `Diese Gruppe hat ${count} Task${count > 1 ? 's' : ''}. Diese werden auf "Keine Gruppe" gesetzt.`
-      : 'Gruppe wirklich löschen?';
-    Alert.alert(`Gruppe "${group.name}" löschen`, msg, [
-      { text: 'Abbrechen', style: 'cancel' },
-      { text: 'Löschen', style: 'destructive', onPress: () => deleteGroup(group.id) },
-    ]);
-  }, [tasks, deleteGroup]);
-
-  const handleDeleteKeepImports = useCallback(() => {
-    setConfirmClearNotes(true);
-  }, []);
-
   return (
-    <>
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
 
       {/* Theme */}
@@ -307,25 +178,6 @@ export function SettingsScreen() {
             </Pressable>
           );
         })}
-      </View>
-
-      {/* Date format */}
-      <View style={styles.section}>
-        <Text style={styles.sectionHeader}>Datumsformat</Text>
-        {DATE_FORMATS.map((fmt) => (
-          <Pressable
-            key={fmt}
-            style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}
-            onPress={() => updateSettings({ dateFormat: fmt })}
-          >
-            <View style={styles.rowContent}>
-              <Text style={styles.rowTitle}>{DATE_FORMAT_LABELS[fmt]}</Text>
-            </View>
-            {settings.dateFormat === fmt ? (
-              <Ionicons name="checkmark" size={20} color={colors.accent} />
-            ) : null}
-          </Pressable>
-        ))}
       </View>
 
       {/* Auto-grouping */}
@@ -547,163 +399,6 @@ export function SettingsScreen() {
       </View>
 
 
-      {/* Google Keep Import */}
-      <View style={styles.section}>
-        <Text style={styles.sectionHeader}>Google Keep Import</Text>
-        <View style={styles.calendarInfo}>
-          <Ionicons name="cloud-download-outline" size={32} color={colors.accent} />
-          <Text style={styles.calendarInfoText}>
-            Exportiere deine Keep-Notizen unter takeout.google.com, entpacke die ZIP und wähle alle Dateien im „Keep"-Ordner aus. Farben, Labels und Pinned werden übernommen.
-          </Text>
-        </View>
-        <Pressable
-          style={({ pressed }) => [
-            styles.connectBtn,
-            { backgroundColor: '#34A853' },
-            loadingKeepImport && styles.connectBtnDisabled,
-            pressed && !loadingKeepImport && { opacity: 0.8 },
-          ]}
-          onPress={handleKeepImport}
-          disabled={loadingKeepImport}
-        >
-          {loadingKeepImport ? (
-            <ActivityIndicator color="#fff" size="small" />
-          ) : (
-            <>
-              <Ionicons name="folder-open-outline" size={18} color="#fff" />
-              <Text style={styles.connectBtnText}>Takeout-Dateien auswählen</Text>
-            </>
-          )}
-        </Pressable>
-        {confirmClearNotes ? (
-          <View style={styles.confirmRow}>
-            <Text style={[styles.rowSubtitle, { flex: 1, color: colors.danger }]}>
-              {notes.length} Notizen wirklich löschen?
-            </Text>
-            <Pressable
-              style={({ pressed }) => [styles.confirmBtn, { backgroundColor: colors.danger }, pressed && { opacity: 0.7 }]}
-              onPress={() => { clearNotes(); setConfirmClearNotes(false); }}
-            >
-              <Text style={styles.confirmBtnText}>Löschen</Text>
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => [styles.confirmBtn, { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }, pressed && { opacity: 0.7 }]}
-              onPress={() => setConfirmClearNotes(false)}
-            >
-              <Text style={[styles.confirmBtnText, { color: colors.text }]}>Abbrechen</Text>
-            </Pressable>
-          </View>
-        ) : (
-          <Pressable
-            style={({ pressed }) => [styles.dangerBtn, pressed && { opacity: 0.7 }]}
-            onPress={handleDeleteKeepImports}
-          >
-            <Ionicons name="trash-outline" size={16} color={colors.danger} />
-            <Text style={[styles.dangerBtnText, { color: colors.danger }]}>Alle Notizen löschen</Text>
-          </Pressable>
-        )}
-      </View>
-
-      {/* Google Drive Notizen-Sync */}
-      {settings.googleCalendarEnabled ? (
-        <View style={styles.section}>
-          <Text style={styles.sectionHeader}>Google Drive Notizen-Sync</Text>
-          <View style={styles.row}>
-            <View style={styles.rowContent}>
-              <Text style={styles.rowTitle}>Automatisch synchronisieren</Text>
-              <Text style={styles.rowSubtitle}>Notizen werden beim Start und Aktivieren der App mit Drive abgeglichen</Text>
-            </View>
-            <Switch
-              value={settings.googleNotesEnabled}
-              onValueChange={(v) => updateSettings({ googleNotesEnabled: v })}
-              trackColor={{ false: colors.border, true: colors.accent }}
-              thumbColor="#fff"
-            />
-          </View>
-          {settings.googleNotesEnabled ? (
-            <>
-              <Pressable
-                style={({ pressed }) => [styles.syncBtn, pressed && { opacity: 0.8 }, loadingNotesSync && { opacity: 0.6 }]}
-                onPress={handleNotesSync}
-                disabled={loadingNotesSync}
-              >
-                {loadingNotesSync ? (
-                  <ActivityIndicator color="#fff" size="small" />
-                ) : (
-                  <>
-                    <Ionicons name="cloud-upload-outline" size={16} color="#fff" />
-                    <Text style={styles.syncBtnText}>Notizen jetzt synchronisieren</Text>
-                  </>
-                )}
-              </Pressable>
-              {notesSyncResult ? (
-                <View style={[styles.row, { backgroundColor: colors.surfaceHigh }]}>
-                  <Ionicons name="checkmark-circle-outline" size={16} color={colors.success} />
-                  <Text style={[styles.rowSubtitle, { flex: 1 }]}>{notesSyncResult}</Text>
-                  <Pressable onPress={() => setNotesSyncResult(null)} hitSlop={8}>
-                    <Ionicons name="close" size={16} color={colors.textSecondary} />
-                  </Pressable>
-                </View>
-              ) : null}
-            </>
-          ) : null}
-        </View>
-      ) : null}
-
-      {/* Gruppen */}
-      <View style={styles.section}>
-        <Text style={styles.sectionHeader}>Gruppen</Text>
-        {groups.length === 0 ? (
-          <View style={[styles.row, { justifyContent: 'center' }]}>
-            <Text style={[styles.rowSubtitle, { textAlign: 'center' }]}>Noch keine Gruppen angelegt.</Text>
-          </View>
-        ) : (
-          groups.map((group) => {
-            const count = tasks.filter((t) => t.groupId === group.id).length;
-            return (
-              <View key={group.id} style={styles.groupRow}>
-                <View style={[styles.groupColorStripe, { backgroundColor: mono(group.color) }]} />
-                <View style={styles.rowContent}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Text style={styles.rowTitle}>{group.name}</Text>
-                    <View style={styles.countBadge}>
-                      <Text style={styles.countText}>{count}</Text>
-                    </View>
-                  </View>
-                  {group.keywords.length > 0 ? (
-                    <View style={styles.kwRow}>
-                      {group.keywords.slice(0, 4).map((kw) => (
-                        <View key={kw} style={styles.kwBadge}>
-                          <Text style={styles.kwText}>{kw}</Text>
-                        </View>
-                      ))}
-                      {group.keywords.length > 4 ? <Text style={styles.kwMore}>+{group.keywords.length - 4}</Text> : null}
-                    </View>
-                  ) : (
-                    <Text style={[styles.rowSubtitle, { fontStyle: 'italic' }]}>Keine Schlüsselwörter</Text>
-                  )}
-                </View>
-                <View style={styles.groupActions}>
-                  <TouchableOpacity onPress={() => openEditGroup(group)} hitSlop={8}>
-                    <Ionicons name="pencil-outline" size={18} color={colors.accent} />
-                  </TouchableOpacity>
-                  <TouchableOpacity onPress={() => handleGroupDelete(group)} hitSlop={8}>
-                    <Ionicons name="trash-outline" size={18} color={colors.danger} />
-                  </TouchableOpacity>
-                </View>
-              </View>
-            );
-          })
-        )}
-        <Pressable
-          style={({ pressed }) => [styles.addGroupBtn, pressed && { opacity: 0.75 }]}
-          onPress={openCreateGroup}
-        >
-          <Ionicons name="add-circle-outline" size={18} color={colors.accent} />
-          <Text style={[styles.rowTitle, { color: colors.accent }]}>Neue Gruppe</Text>
-        </Pressable>
-      </View>
-
       {/* Kinder E-Mail-Adressen */}
       <View style={styles.section}>
         <Text style={styles.sectionHeader}>Kinder E-Mail-Adressen</Text>
@@ -739,66 +434,6 @@ export function SettingsScreen() {
         </View>
       </View>
     </ScrollView>
-
-    {/* Gruppen Modal */}
-    <Modal visible={groupModalVisible} animationType="slide" presentationStyle="pageSheet">
-      <View style={styles.modal}>
-        <View style={styles.modalHeader}>
-          <TouchableOpacity onPress={() => setGroupModalVisible(false)}>
-            <Text style={styles.modalCancel}>Abbrechen</Text>
-          </TouchableOpacity>
-          <Text style={styles.modalTitle}>{editingGroupId ? 'Gruppe bearbeiten' : 'Neue Gruppe'}</Text>
-          <TouchableOpacity onPress={handleGroupSave}>
-            <Text style={styles.modalSave}>Speichern</Text>
-          </TouchableOpacity>
-        </View>
-        <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.modalScrollContent}>
-          <View style={styles.modalField}>
-            <Text style={styles.modalFieldLabel}>Name</Text>
-            <TextInput
-              style={styles.modalFieldInput}
-              value={groupForm.name}
-              onChangeText={(v) => setGroupForm((f) => ({ ...f, name: v }))}
-              placeholder="Gruppenname"
-              placeholderTextColor={colors.placeholder}
-              autoFocus={!editingGroupId}
-            />
-          </View>
-          <View style={styles.modalField}>
-            <Text style={styles.modalFieldLabel}>Farbe</Text>
-            <View style={styles.colorGrid}>
-              {PRESET_COLORS.map((color) => (
-                <TouchableOpacity
-                  key={color}
-                  style={[styles.colorSwatch, { backgroundColor: color }, groupForm.color === color && styles.colorSwatchSelected]}
-                  onPress={() => setGroupForm((f) => ({ ...f, color }))}
-                >
-                  {groupForm.color === color ? <Ionicons name="checkmark" size={16} color="#fff" /> : null}
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-          <View style={[styles.groupPreviewCard, { borderLeftColor: groupForm.color }]}>
-            <View style={[styles.previewDot, { backgroundColor: groupForm.color }]} />
-            <Text style={[styles.modalTitle, { color: groupForm.color }]}>{groupForm.name || 'Vorschau'}</Text>
-          </View>
-          <View style={styles.modalField}>
-            <Text style={styles.modalFieldLabel}>Schlüsselwörter</Text>
-            <Text style={[styles.rowSubtitle, { marginBottom: 4 }]}>Kommagetrennt. Werden beim automatischen Gruppieren erkannt.</Text>
-            <TextInput
-              style={[styles.modalFieldInput, { minHeight: 70, textAlignVertical: 'top' }]}
-              value={groupForm.keywords}
-              onChangeText={(v) => setGroupForm((f) => ({ ...f, keywords: v }))}
-              placeholder="meeting, projekt, deadline, …"
-              placeholderTextColor={colors.placeholder}
-              multiline
-              numberOfLines={3}
-            />
-          </View>
-        </ScrollView>
-      </View>
-    </Modal>
-    </>
   );
 }
 
@@ -953,119 +588,5 @@ function makeStyles(c: ThemeColors) {
       paddingVertical: 6,
       width: '100%' as any,
     },
-    // Gruppen
-    groupRow: {
-      flexDirection: 'row',
-      backgroundColor: c.surface,
-      borderRadius: 12,
-      overflow: 'hidden',
-      alignItems: 'stretch',
-      borderWidth: 1,
-      borderColor: c.border,
-      marginBottom: 2,
-    },
-    groupColorStripe: { width: 4 },
-    groupActions: {
-      flexDirection: 'column',
-      justifyContent: 'space-around',
-      paddingHorizontal: 14,
-      gap: 12,
-    },
-    countBadge: {
-      backgroundColor: c.surfaceHigh,
-      borderRadius: 10,
-      paddingHorizontal: 7,
-      paddingVertical: 1,
-    },
-    countText: { fontSize: 12, color: c.textSecondary, fontWeight: '600' },
-    kwRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 2 },
-    kwBadge: {
-      backgroundColor: c.surfaceHigh,
-      borderRadius: 6,
-      paddingHorizontal: 6,
-      paddingVertical: 2,
-    },
-    kwText: { fontSize: 11, color: c.textSecondary },
-    kwMore: { fontSize: 11, color: c.textMuted },
-    addGroupBtn: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 8,
-      backgroundColor: c.surface,
-      borderRadius: 12,
-      paddingHorizontal: 16,
-      paddingVertical: 12,
-      marginTop: 2,
-      borderWidth: 1,
-      borderColor: c.border,
-    },
-    // Modal
-    modal: { flex: 1, backgroundColor: c.background },
-    modalHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingHorizontal: 16,
-      paddingVertical: 14,
-      backgroundColor: c.surface,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: c.border,
-    },
-    modalCancel: { fontSize: 16, color: c.textSecondary },
-    modalTitle: { fontSize: 17, fontWeight: '600', color: c.text },
-    modalSave: { fontSize: 16, fontWeight: '600', color: c.accent },
-    modalScrollContent: { padding: 16, gap: 16, paddingBottom: 60 },
-    modalField: {
-      backgroundColor: c.surface,
-      borderRadius: 12,
-      padding: 14,
-      gap: 8,
-      borderWidth: 1,
-      borderColor: c.border,
-    },
-    modalFieldLabel: {
-      fontSize: 12,
-      fontWeight: '600',
-      color: c.textSecondary,
-      textTransform: 'uppercase',
-      letterSpacing: 0.5,
-    },
-    modalFieldInput: {
-      fontSize: 15,
-      color: c.text,
-      backgroundColor: c.surfaceHigh,
-      borderRadius: 8,
-      paddingHorizontal: 10,
-      paddingVertical: 8,
-    },
-    colorGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-    colorSwatch: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    colorSwatchSelected: {
-      borderWidth: 3,
-      borderColor: '#fff',
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.2,
-      shadowRadius: 4,
-      elevation: 4,
-    },
-    groupPreviewCard: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      backgroundColor: c.surface,
-      borderRadius: 12,
-      padding: 14,
-      gap: 8,
-      borderLeftWidth: 4,
-      borderWidth: 1,
-      borderColor: c.border,
-    },
-    previewDot: { width: 10, height: 10, borderRadius: 5 },
   });
 }
