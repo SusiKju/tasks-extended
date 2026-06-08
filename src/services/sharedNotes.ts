@@ -29,7 +29,19 @@ export interface SharedNoteItem {
   /** Anzeigename der Person, die den Eintrag erstellt hat (frei wählbar). */
   addedBy: string;
   createdAt: string;
+  /** Zeitpunkt des Abhakens – Basis für die "diese Woche erledigt"-Statistik (TE-124). */
+  doneAt?: string | null;
+  /** Optionaler Sticker/Emoji vor dem Text, z. B. 🛒 für Einkauf, ❤️ für Persönliches (TE-124). */
+  emoji?: string | null;
+  /** Liebevolle Reaktion der/des anderen auf diesen Eintrag (TE-124). */
+  reaction?: { emoji: string; by: string } | null;
 }
+
+/** Vorausgewählte Sticker zur Auswahl beim Hinzufügen eines Eintrags (TE-124). */
+export const SHARED_NOTE_EMOJIS = ['🛒', '🎁', '❤️', '🏠', '📅', '✨'];
+
+/** Vorausgewählte Reaktionen, mit denen man liebevoll auf einen Eintrag antworten kann (TE-124). */
+export const SHARED_NOTE_REACTIONS = ['❤️', '😘', '🤗', '👍'];
 
 const itemsCollection = () => collection(db, 'shared', 'notepad', 'items');
 
@@ -63,24 +75,47 @@ export function subscribeToSharedNotes(
   );
 }
 
-export async function addSharedNote(text: string, addedBy: string): Promise<string> {
+export async function addSharedNote(text: string, addedBy: string, emoji?: string | null): Promise<string> {
   const ref = doc(itemsCollection());
   const item: Omit<SharedNoteItem, 'id'> = {
     text: text.trim(),
     done: false,
     addedBy: addedBy.trim() || 'Jemand',
     createdAt: new Date().toISOString(),
+    doneAt: null,
+    emoji: emoji ?? null,
+    reaction: null,
   };
   await setDoc(ref, item);
   return ref.id;
 }
 
 export async function toggleSharedNote(itemId: string, done: boolean): Promise<void> {
-  await updateDoc(doc(db, 'shared', 'notepad', 'items', itemId), { done });
+  await updateDoc(doc(db, 'shared', 'notepad', 'items', itemId), {
+    done,
+    doneAt: done ? new Date().toISOString() : null,
+  });
+}
+
+/**
+ * Setzt (oder entfernt) eine liebevolle Reaktion auf einen Eintrag – das moderne
+ * Pendant zum alten Facebook-"Anstupsen"/"Gefällt mir" (TE-124).
+ */
+export async function setSharedNoteReaction(
+  itemId: string,
+  reaction: { emoji: string; by: string } | null
+): Promise<void> {
+  await updateDoc(doc(db, 'shared', 'notepad', 'items', itemId), { reaction });
 }
 
 export async function deleteSharedNote(itemId: string): Promise<void> {
   await deleteDoc(doc(db, 'shared', 'notepad', 'items', itemId));
+}
+
+/** Zählt, wie viele Einträge in den letzten 7 Tagen gemeinsam erledigt wurden (TE-124). */
+export function countDoneThisWeek(items: SharedNoteItem[]): number {
+  const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  return items.filter((i) => i.done && i.doneAt && new Date(i.doneAt).getTime() >= weekAgo).length;
 }
 
 /** Entfernt alle bereits abgehakten Einträge in einem Rutsch ("Liste aufräumen"). */

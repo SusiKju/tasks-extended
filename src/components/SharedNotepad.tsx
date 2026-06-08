@@ -23,6 +23,10 @@ import {
   toggleSharedNote,
   deleteSharedNote,
   clearDoneSharedNotes,
+  setSharedNoteReaction,
+  countDoneThisWeek,
+  SHARED_NOTE_EMOJIS,
+  SHARED_NOTE_REACTIONS,
 } from '../services/sharedNotes';
 
 export function SharedNotepad({ colors, isDark }: { colors: ThemeColors; isDark: boolean }) {
@@ -32,6 +36,8 @@ export function SharedNotepad({ colors, isDark }: { colors: ThemeColors; isDark:
   const [draft, setDraft] = useState('');
   const [nameDraft, setNameDraft] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [draftEmoji, setDraftEmoji] = useState<string | null>(null);
+  const [reactionPickerFor, setReactionPickerFor] = useState<string | null>(null);
 
   useEffect(() => {
     const unsub = subscribeToSharedNotes(
@@ -44,6 +50,8 @@ export function SharedNotepad({ colors, isDark }: { colors: ThemeColors; isDark:
   const myName = settings.myName?.trim() || null;
   const openCount = useMemo(() => (items ?? []).filter((i) => !i.done).length, [items]);
   const doneCount = useMemo(() => (items ?? []).filter((i) => i.done).length, [items]);
+  // Liebevolle Wochenstatistik – "Wir als Team" statt nüchterner Zähler (TE-124).
+  const doneThisWeek = useMemo(() => countDoneThisWeek(items ?? []), [items]);
 
   const handleSaveName = useCallback(() => {
     const trimmed = nameDraft.trim();
@@ -55,10 +63,24 @@ export function SharedNotepad({ colors, isDark }: { colors: ThemeColors; isDark:
     const text = draft.trim();
     if (!text || !myName) return;
     setDraft('');
+    const emoji = draftEmoji;
+    setDraftEmoji(null);
     try {
-      await addSharedNote(text, myName);
+      await addSharedNote(text, myName, emoji);
     } catch {}
-  }, [draft, myName]);
+  }, [draft, myName, draftEmoji]);
+
+  const handleReact = useCallback(async (item: SharedNoteItem, emoji: string) => {
+    setReactionPickerFor(null);
+    if (!myName) return;
+    try {
+      // Erneutes Antippen derselben Reaktion entfernt sie wieder (Toggle).
+      const next = item.reaction?.emoji === emoji && item.reaction?.by === myName
+        ? null
+        : { emoji, by: myName };
+      await setSharedNoteReaction(item.id, next);
+    } catch {}
+  }, [myName]);
 
   const handleToggle = useCallback(async (item: SharedNoteItem) => {
     setBusyId(item.id);
@@ -129,6 +151,26 @@ export function SharedNotepad({ colors, isDark }: { colors: ThemeColors; isDark:
         </View>
       ) : (
         <>
+          {/* Sticker-Auswahl – macht neue Einträge auf den ersten Blick persönlicher (TE-124) */}
+          <View style={styles.emojiRow}>
+            {SHARED_NOTE_EMOJIS.map((e) => {
+              const selected = draftEmoji === e;
+              return (
+                <Pressable
+                  key={e}
+                  onPress={() => setDraftEmoji(selected ? null : e)}
+                  style={[
+                    styles.emojiChip,
+                    { borderColor: selected ? accent : colors.border, backgroundColor: selected ? accent + '22' : 'transparent' },
+                  ]}
+                  hitSlop={4}
+                >
+                  <Text style={styles.emojiChipText}>{e}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
           {/* Eingabezeile */}
           <View style={styles.addRow}>
             <TextInput
@@ -165,7 +207,10 @@ export function SharedNotepad({ colors, isDark }: { colors: ThemeColors; isDark:
             </View>
           ) : (
             <View style={{ gap: 2 }}>
-              {items.map((item, i) => (
+              {items.map((item, i) => {
+                const pickerOpen = reactionPickerFor === item.id;
+                const reactedByMe = !!item.reaction && item.reaction.by === myName;
+                return (
                 <View
                   key={item.id}
                   style={[styles.row, i < items.length - 1 && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}
@@ -182,15 +227,45 @@ export function SharedNotepad({ colors, isDark }: { colors: ThemeColors; isDark:
                       style={[styles.itemText, { color: colors.text }, item.done && { textDecorationLine: 'line-through', color: colors.textMuted }]}
                       numberOfLines={2}
                     >
-                      {item.text}
+                      {item.emoji ? `${item.emoji} ` : ''}{item.text}
                     </Text>
-                    <Text style={[styles.itemMeta, { color: colors.textMuted }]}>von {item.addedBy}</Text>
+                    <View style={styles.itemMetaRow}>
+                      <Text style={[styles.itemMeta, { color: colors.textMuted }]}>von {item.addedBy}</Text>
+                      {item.reaction && (
+                        <View style={[styles.reactionBadge, { borderColor: reactedByMe ? accent : colors.border }]}>
+                          <Text style={styles.reactionBadgeEmoji}>{item.reaction.emoji}</Text>
+                          <Text style={[styles.reactionBadgeText, { color: colors.textMuted }]}>von {item.reaction.by}</Text>
+                        </View>
+                      )}
+                    </View>
+                    {pickerOpen && (
+                      <View style={[styles.reactionPicker, { borderColor: colors.border, backgroundColor: colors.inputBackground }]}>
+                        {SHARED_NOTE_REACTIONS.map((r) => (
+                          <Pressable key={r} onPress={() => handleReact(item, r)} hitSlop={6} style={styles.reactionPickerBtn}>
+                            <Text style={styles.reactionPickerEmoji}>{r}</Text>
+                          </Pressable>
+                        ))}
+                      </View>
+                    )}
                   </View>
+                  {/* Liebevoll reagieren – das moderne "Anstupsen" für einzelne Einträge (TE-124) */}
+                  <Pressable
+                    onPress={() => myName && setReactionPickerFor(pickerOpen ? null : item.id)}
+                    hitSlop={8}
+                    disabled={!myName}
+                  >
+                    <Ionicons
+                      name={item.reaction ? 'heart' : 'heart-outline'}
+                      size={18}
+                      color={item.reaction ? '#E8607A' : colors.textMuted}
+                    />
+                  </Pressable>
                   <Pressable onPress={() => handleDelete(item)} hitSlop={8} disabled={busyId === item.id}>
                     <Ionicons name="close" size={16} color={colors.textMuted} />
                   </Pressable>
                 </View>
-              ))}
+                );
+              })}
             </View>
           )}
 
@@ -204,6 +279,16 @@ export function SharedNotepad({ colors, isDark }: { colors: ThemeColors; isDark:
                   <Text style={[styles.footerAction, { color: accent }]}>Erledigtes löschen</Text>
                 </Pressable>
               )}
+            </View>
+          )}
+
+          {/* Liebevolle "Wir als Team"-Statistik statt nüchterner Zahlen (TE-124) */}
+          {doneThisWeek > 0 && (
+            <View style={[styles.loveStat, { borderColor: accent + '55', backgroundColor: accent + '14' }]}>
+              <Text style={styles.loveStatEmoji}>💪❤️</Text>
+              <Text style={[styles.loveStatText, { color: colors.text }]}>
+                Ihr habt diese Woche {doneThisWeek} {doneThisWeek === 1 ? 'Ding' : 'Dinge'} gemeinsam erledigt
+              </Text>
             </View>
           )}
         </>
@@ -247,14 +332,33 @@ const styles = StyleSheet.create({
   addInput: { flex: 1, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9, fontSize: 14 },
   addBtn: { width: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
 
+  // Sticker-Auswahl beim Hinzufügen (TE-124)
+  emojiRow: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
+  emojiChip: { width: 34, height: 34, borderRadius: 17, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  emojiChipText: { fontSize: 16 },
+
   emptyRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 10 },
   emptyText: { fontSize: 13 },
 
   row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8 },
   itemText: { fontSize: 14, fontWeight: '600' },
-  itemMeta: { fontSize: 11, marginTop: 1 },
+  itemMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 1, flexWrap: 'wrap' },
+  itemMeta: { fontSize: 11 },
+
+  // Reaktionen – das liebevolle "Anstupsen" auf einzelne Einträge (TE-124)
+  reactionBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, borderWidth: 1, borderRadius: 8, paddingHorizontal: 6, paddingVertical: 1 },
+  reactionBadgeEmoji: { fontSize: 11 },
+  reactionBadgeText: { fontSize: 10 },
+  reactionPicker: { flexDirection: 'row', gap: 10, borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6, marginTop: 6, alignSelf: 'flex-start' },
+  reactionPickerBtn: { padding: 2 },
+  reactionPickerEmoji: { fontSize: 18 },
 
   footer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 4 },
   footerText: { fontSize: 11.5 },
   footerAction: { fontSize: 12, fontWeight: '700' },
+
+  // Liebevolle Wochenstatistik (TE-124)
+  loveStat: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8, marginTop: 2 },
+  loveStatEmoji: { fontSize: 16 },
+  loveStatText: { fontSize: 12, fontWeight: '600', flex: 1 },
 });
