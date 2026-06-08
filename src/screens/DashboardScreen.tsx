@@ -612,6 +612,22 @@ export function DashboardScreen() {
     );
   }, [storeBirthdays]);
 
+  // Termine "heute" / "morgen" – auf Komponentenebene berechnet (statt nur lokal
+  // im Render), damit der Glow-Effekt unten auf "heutige Termine vorhanden?"
+  // reagieren kann (TE-120: gleiche Hervorhebung wie Geburtstage).
+  const { todayEvents, tomorrowEvents } = useMemo(() => {
+    const todayStr    = new Date().toDateString();
+    const tomorrowStr = new Date(Date.now() + 86400000).toDateString();
+    return {
+      todayEvents:    calEvents.filter((e) => new Date(e.start).toDateString() === todayStr),
+      tomorrowEvents: calEvents.filter((e) => new Date(e.start).toDateString() === tomorrowStr),
+    };
+  }, [calEvents]);
+
+  // Hervorhebung (Glow/Regenbogen) ist aktiv, sobald es heute etwas zu feiern
+  // ODER einen Termin gibt – beide teilen sich denselben "Flammen"-Look (TE-120).
+  const hasHighlight = todayBirthdays.length > 0 || todayEvents.length > 0;
+
   useEffect(() => {
     if (!settings.googleAccessToken) return;
     setMailLoading(true);
@@ -641,20 +657,20 @@ export function DashboardScreen() {
 
   // Neon-Dark: Regenbogen-Gradient dreht sich endlos (läuft um den Rand).
   useEffect(() => {
-    if (todayBirthdays.length === 0 || !richBirthday) { rainbowRotate.setValue(0); return; }
+    if (!hasHighlight || !richBirthday) { rainbowRotate.setValue(0); return; }
     const loop = Animated.loop(
       Animated.timing(rainbowRotate, { toValue: 1, duration: 2500, useNativeDriver: true })
     );
     loop.start();
     return () => { loop.stop(); rainbowRotate.setValue(0); };
-  }, [todayBirthdays.length, richBirthday, rainbowRotate]);
+  }, [hasHighlight, richBirthday, rainbowRotate]);
 
   // Atmender Flammen-Glow (Gemini-Look) – Schatten pulsiert + wechselt die Farbe,
   // dazu skaliert die Card synchron („atmen"). Läuft in ALLEN Themes, damit der
   // Geburtstag immer sehr präsent ist. useNativeDriver: false, weil Schatten-
   // werte animiert werden (Scale wird auf demselben Node mitgeführt).
   useEffect(() => {
-    if (todayBirthdays.length === 0) { flameAnim.setValue(0); return; }
+    if (!hasHighlight) { flameAnim.setValue(0); return; }
     const loop = Animated.loop(
       Animated.sequence([
         Animated.timing(flameAnim, { toValue: 1, duration: 1600, useNativeDriver: false }),
@@ -663,7 +679,7 @@ export function DashboardScreen() {
     );
     loop.start();
     return () => { loop.stop(); flameAnim.setValue(0); };
-  }, [todayBirthdays.length, flameAnim]);
+  }, [hasHighlight, flameAnim]);
 
   // Synchron zum Glow „atmende" Skalierung – gemeinsam für beide Card-Varianten.
   const flameScale = flameAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, 1.05, 1] });
@@ -960,11 +976,6 @@ export function DashboardScreen() {
               <Text style={styles.emptyText}>Keine Termine</Text>
             </View>
           ) : (() => {
-            const todayStr    = new Date().toDateString();
-            const tomorrowStr = new Date(Date.now() + 86400000).toDateString();
-            const todayEvents    = calEvents.filter(e => new Date(e.start).toDateString() === todayStr);
-            const tomorrowEvents = calEvents.filter(e => new Date(e.start).toDateString() === tomorrowStr);
-
             const renderEvent = (event: CalendarEvent, i: number, arr: CalendarEvent[], prominent: boolean) => {
               const { time } = formatEventTime(event);
               const eventColor = mono(event.color ?? C.calendar);
@@ -1032,9 +1043,60 @@ export function DashboardScreen() {
                 {todayEvents.length > 0 && (
                   <View>
                     <Text style={[styles.dayLabel, { color: colors.danger, paddingHorizontal: 0 }]}>Heute</Text>
-                    <View style={[styles.card, { borderLeftWidth: 0 }]}>
-                      {todayEvents.map((e, i) => renderEvent(e, i, todayEvents, true))}
-                    </View>
+                    {/* Gleiche Hervorhebung wie die Geburtstags-Card: atmender
+                        Flammen-Glow überall, zusätzlich rotierender Regenbogen-
+                        Rand im Neon-/Mono-Dark-Theme (TE-120). */}
+                    {richBirthday ? (
+                      <Animated.View
+                        style={[
+                          styles.todayEventsNeonWrap,
+                          {
+                            shadowColor: flameAnim.interpolate({
+                              inputRange: [0, 0.25, 0.5, 0.75, 1],
+                              outputRange: ['#FF0080', '#FF8C00', '#00FF88', '#00EEFF', '#7A5CFF'],
+                            }),
+                            shadowOpacity: flameAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.7, 1, 0.7] }),
+                            shadowRadius: flameAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [16, 46, 16] }),
+                            transform: [{ scale: flameScale }],
+                          },
+                        ]}
+                      >
+                        <Animated.View
+                          style={[
+                            styles.birthdayRainbowLayer,
+                            { transform: [{ rotate: rainbowRotate.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] }) }] },
+                          ]}
+                        >
+                          <LinearGradient
+                            colors={['#FF0080', '#FF8C00', '#FFE600', '#00FF88', '#00EEFF', '#7A5CFF', '#FF0080']}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                            style={StyleSheet.absoluteFill}
+                          />
+                        </Animated.View>
+                        <View style={styles.todayEventsNeonInner}>
+                          {todayEvents.map((e, i) => renderEvent(e, i, todayEvents, true))}
+                        </View>
+                      </Animated.View>
+                    ) : (
+                      <Animated.View
+                        style={[
+                          styles.card,
+                          styles.todayEventsGlowCard,
+                          {
+                            shadowColor: flameAnim.interpolate({
+                              inputRange: [0, 0.25, 0.5, 0.75, 1],
+                              outputRange: ['#FF6B00', '#FF0080', '#FF3B30', '#FF8C00', '#FF0080'],
+                            }),
+                            shadowOpacity: flameAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.5, 0.95, 0.5] }),
+                            shadowRadius: flameAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [10, 34, 10] }),
+                            transform: [{ scale: flameScale }],
+                          },
+                        ]}
+                      >
+                        {todayEvents.map((e, i) => renderEvent(e, i, todayEvents, true))}
+                      </Animated.View>
+                    )}
                   </View>
                 )}
                 {tomorrowEvents.length > 0 && (
@@ -1263,6 +1325,26 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
       paddingHorizontal: 12,
     },
     birthdayTextNeon: { color: '#EAEAFF' },
+
+    // Termine "heute" – gleiche Hervorhebung wie die Geburtstags-Card (TE-120).
+    todayEventsGlowCard: {
+      borderLeftWidth: 0,
+      shadowOffset: { width: 0, height: 0 },
+      elevation: 14,
+    },
+    todayEventsNeonWrap: {
+      marginHorizontal: 16,
+      borderRadius: 12,
+      padding: 4,
+      overflow: 'hidden',
+      shadowOffset: { width: 0, height: 0 },
+      elevation: 16,
+    },
+    todayEventsNeonInner: {
+      backgroundColor: '#0E0E16',
+      borderRadius: 10,
+      overflow: 'hidden',
+    },
 
     // Mail
     mailRow: {
