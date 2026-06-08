@@ -27,6 +27,7 @@ import {
   ChildId, CHILDREN, CHILD_NAMES, ChildTask, subscribeToChildTasks,
 } from '../services/kinderTasks';
 import { SharedNotepad } from '../components/SharedNotepad';
+import { WeatherWidget } from '../components/WeatherWidget';
 import { Task } from '../types';
 
 // Kleine Avatar-Farben pro Kind (TE-110 Dashboard-Avatare)
@@ -750,8 +751,9 @@ export function DashboardScreen() {
         )
       )}
 
-      {/* ── Sync-Button oben rechts ── */}
+      {/* ── Wettervorhersage (TE-126, links) + Sync-Button (rechts) ── */}
       <View style={styles.syncRow}>
+        <WeatherWidget colors={colors} />
         <Pressable
           onPress={handleSync}
           disabled={syncing}
@@ -1177,7 +1179,8 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
 
     syncRow: {
       flexDirection: 'row',
-      justifyContent: 'flex-end',
+      alignItems: 'center',
+      justifyContent: 'space-between',
       paddingHorizontal: 16,
       marginBottom: -8,
     },
