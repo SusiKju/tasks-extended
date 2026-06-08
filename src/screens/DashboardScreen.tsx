@@ -841,118 +841,122 @@ export function DashboardScreen() {
             colors={colors}
           />
 
-          {/* Einzelne Kinder – einspaltig, mit Avatar + Fälligkeitsdatum (TE-119) */}
-          {childrenWithTasks.length > 0 && (
-            <View style={{ gap: 10 }}>
-              {childrenWithTasks.map((childId) => {
-                const list = individualByChild[childId];
-                const doneCount = list.filter((t) => t.done).length;
-                return (
-                  <View key={childId}>
-                    <View style={styles.kidLabelRow}>
-                      <View style={[styles.kidAvatar, { backgroundColor: CHILD_AVATAR_COLORS[childId] }]}>
-                        <Text style={styles.kidAvatarText}>{CHILD_NAMES[childId].charAt(0)}</Text>
+          {/* Eigene Karte (TE-123): kapselt den ganzen Abschnitt sichtbar ab */}
+          <View style={styles.kidsSectionCard}>
+
+            {/* Einzelne Kinder – einspaltig, mit Avatar + Fälligkeitsdatum (TE-119) */}
+            {childrenWithTasks.length > 0 && (
+              <View style={{ gap: 10 }}>
+                {childrenWithTasks.map((childId) => {
+                  const list = individualByChild[childId];
+                  const doneCount = list.filter((t) => t.done).length;
+                  return (
+                    <View key={childId}>
+                      <View style={styles.kidLabelRow}>
+                        <View style={[styles.kidAvatar, { backgroundColor: CHILD_AVATAR_COLORS[childId] }]}>
+                          <Text style={styles.kidAvatarText}>{CHILD_NAMES[childId].charAt(0)}</Text>
+                        </View>
+                        <Text style={[styles.dayLabel, styles.kidColLabel, { color: colors.textMuted }]}>
+                          {CHILD_NAMES[childId]} · {doneCount}/{list.length}
+                        </Text>
                       </View>
-                      <Text style={[styles.dayLabel, styles.kidColLabel, { color: colors.textMuted }]}>
-                        {CHILD_NAMES[childId]} · {doneCount}/{list.length}
-                      </Text>
+                      <Pressable
+                        style={[styles.card, styles.kidCard]}
+                        onPress={() => router.push('/(tabs)/kids' as any)}
+                      >
+                        {list.map((task, i) => {
+                          const due = dueInfo(task);
+                          return (
+                            <View
+                              key={task.id}
+                              style={[styles.kidRow, i < list.length - 1 && styles.rowDivider]}
+                            >
+                              <Ionicons
+                                name={task.done ? 'checkmark-circle' : task.rejected ? 'close-circle' : 'ellipse-outline'}
+                                size={18}
+                                color={task.done ? colors.success : task.rejected ? colors.danger : colors.textMuted}
+                              />
+                              <Text
+                                style={[
+                                  styles.kidTaskText,
+                                  { color: colors.text },
+                                  task.done && styles.kidTaskDone,
+                                  task.rejected && { color: colors.danger },
+                                ]}
+                                numberOfLines={1}
+                              >
+                                {task.title}
+                              </Text>
+                              {due && (
+                                <Text style={[styles.dueBadge, due.overdue && styles.dueBadgeOverdue]}>
+                                  {due.label}
+                                </Text>
+                              )}
+                            </View>
+                          );
+                        })}
+                      </Pressable>
                     </View>
-                    <Pressable
-                      style={[styles.card, styles.kidCard]}
-                      onPress={() => router.push('/(tabs)/kids' as any)}
-                    >
-                      {list.map((task, i) => {
-                        const due = dueInfo(task);
-                        return (
+                  );
+                })}
+              </View>
+            )}
+  
+            {/* Gruppenarbeiten – einspaltig mit eigenem Avatar + Fälligkeitsdatum (TE-115/TE-119) */}
+            {groupTasks.length > 0 && (
+              <View style={{ gap: 10, marginTop: childrenWithTasks.length > 0 ? 10 : 0 }}>
+                {groupTasks.map((g) => {
+                  const doneCount = g.entries.filter((e) => e.task.done).length;
+                  const due = dueInfo(g.entries[0]?.task);
+                  return (
+                    <View key={g.groupId}>
+                      <View style={styles.kidLabelRow}>
+                        <View style={[styles.kidAvatar, { backgroundColor: colors.accentNeon }]}>
+                          <Ionicons name="people" size={12} color="#000" />
+                        </View>
+                        <Text style={[styles.dayLabel, styles.kidColLabel, { color: colors.textMuted }]} numberOfLines={1}>
+                          {g.title} · {doneCount}/{g.entries.length}
+                        </Text>
+                        {due && (
+                          <Text style={[styles.dueBadge, due.overdue && styles.dueBadgeOverdue]}>
+                            {due.label}
+                          </Text>
+                        )}
+                      </View>
+                      <Pressable
+                        style={[styles.card, styles.kidCard]}
+                        onPress={() => router.push('/(tabs)/kids' as any)}
+                      >
+                        {g.entries.map((e, i) => (
                           <View
-                            key={task.id}
-                            style={[styles.kidRow, i < list.length - 1 && styles.rowDivider]}
+                            key={e.childId}
+                            style={[styles.kidRow, i < g.entries.length - 1 && styles.rowDivider]}
                           >
                             <Ionicons
-                              name={task.done ? 'checkmark-circle' : task.rejected ? 'close-circle' : 'ellipse-outline'}
+                              name={e.task.done ? 'checkmark-circle' : e.task.rejected ? 'close-circle' : 'ellipse-outline'}
                               size={18}
-                              color={task.done ? colors.success : task.rejected ? colors.danger : colors.textMuted}
+                              color={e.task.done ? colors.success : e.task.rejected ? colors.danger : colors.textMuted}
                             />
                             <Text
                               style={[
                                 styles.kidTaskText,
                                 { color: colors.text },
-                                task.done && styles.kidTaskDone,
-                                task.rejected && { color: colors.danger },
+                                e.task.done && styles.kidTaskDone,
+                                e.task.rejected && { color: colors.danger },
                               ]}
                               numberOfLines={1}
                             >
-                              {task.title}
+                              {CHILD_NAMES[e.childId]}
                             </Text>
-                            {due && (
-                              <Text style={[styles.dueBadge, due.overdue && styles.dueBadgeOverdue]}>
-                                {due.label}
-                              </Text>
-                            )}
                           </View>
-                        );
-                      })}
-                    </Pressable>
-                  </View>
-                );
-              })}
-            </View>
-          )}
-
-          {/* Gruppenarbeiten – einspaltig mit eigenem Avatar + Fälligkeitsdatum (TE-115/TE-119) */}
-          {groupTasks.length > 0 && (
-            <View style={{ gap: 10, marginTop: childrenWithTasks.length > 0 ? 10 : 0 }}>
-              {groupTasks.map((g) => {
-                const doneCount = g.entries.filter((e) => e.task.done).length;
-                const due = dueInfo(g.entries[0]?.task);
-                return (
-                  <View key={g.groupId}>
-                    <View style={styles.kidLabelRow}>
-                      <View style={[styles.kidAvatar, { backgroundColor: colors.accentNeon }]}>
-                        <Ionicons name="people" size={12} color="#000" />
-                      </View>
-                      <Text style={[styles.dayLabel, styles.kidColLabel, { color: colors.textMuted }]} numberOfLines={1}>
-                        {g.title} · {doneCount}/{g.entries.length}
-                      </Text>
-                      {due && (
-                        <Text style={[styles.dueBadge, due.overdue && styles.dueBadgeOverdue]}>
-                          {due.label}
-                        </Text>
-                      )}
+                        ))}
+                      </Pressable>
                     </View>
-                    <Pressable
-                      style={[styles.card, styles.kidCard]}
-                      onPress={() => router.push('/(tabs)/kids' as any)}
-                    >
-                      {g.entries.map((e, i) => (
-                        <View
-                          key={e.childId}
-                          style={[styles.kidRow, i < g.entries.length - 1 && styles.rowDivider]}
-                        >
-                          <Ionicons
-                            name={e.task.done ? 'checkmark-circle' : e.task.rejected ? 'close-circle' : 'ellipse-outline'}
-                            size={18}
-                            color={e.task.done ? colors.success : e.task.rejected ? colors.danger : colors.textMuted}
-                          />
-                          <Text
-                            style={[
-                              styles.kidTaskText,
-                              { color: colors.text },
-                              e.task.done && styles.kidTaskDone,
-                              e.task.rejected && { color: colors.danger },
-                            ]}
-                            numberOfLines={1}
-                          >
-                            {CHILD_NAMES[e.childId]}
-                          </Text>
-                        </View>
-                      ))}
-                    </Pressable>
-                  </View>
-                );
-              })}
-            </View>
-          )}
+                  );
+                })}
+              </View>
+            )}
+          </View>
         </View>
       )}
 
@@ -1380,7 +1384,18 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
     },
     kidCol: { width: '48%' },
     kidColLabel: { paddingHorizontal: 0 },
-    kidLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4, paddingHorizontal: 16 },
+    kidLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
+    // Eigene, abgekapselte Karte für die Kinder-Sektion (TE-123) – grenzt den
+    // Abschnitt sichtbar von Kalender/Geteilter Liste/etc. ab.
+    kidsSectionCard: {
+      marginHorizontal: 16,
+      borderRadius: 14,
+      borderWidth: 1,
+      backgroundColor: c.surface,
+      borderColor: c.border,
+      padding: 12,
+      gap: 12,
+    },
     kidAvatar: {
       width: 22,
       height: 22,
@@ -1389,7 +1404,7 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
       justifyContent: 'center',
     },
     kidAvatarText: { fontSize: 11, fontWeight: '800', color: '#fff' },
-    kidCard: { marginHorizontal: 16, borderLeftWidth: 0 },
+    kidCard: { marginHorizontal: 0, borderLeftWidth: 0 },
     // Gruppenarbeit-Karte (TE-115)
     groupTitle: {
       fontSize: 14,
