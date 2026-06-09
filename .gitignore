@@ -17,3 +17,4 @@ client_secret.json
 .agents
 .env
 .env.local
+serviceAccount.json
