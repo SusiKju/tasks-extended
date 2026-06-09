@@ -391,7 +391,8 @@ function Scratchpad({
             ? { backgroundColor: colors.surfaceHigh, borderWidth: 1, borderColor: colors.border }
             : { backgroundColor: entry.color },
         ]}>
-          <View style={[padStyles.bullet, { backgroundColor: isMono ? monoDotColor(idx) : fg + '99' }]} />
+          {/* Bullet zentriert zur ersten Textzeile */}
+          <View style={[padStyles.bullet, { backgroundColor: isMono ? monoDotColor(idx) : fg + '99', marginTop: 3 }, { alignSelf: 'flex-start' }]} />
           <TextInput
             ref={(r) => { inputRefs.current[idx] = r; }}
             style={[padStyles.bubbleInput, { color: fg }]}
@@ -403,11 +404,14 @@ function Scratchpad({
             placeholderTextColor={fg + '55'}
             returnKeyType="done"
             blurOnSubmit={false}
+            multiline
+            scrollEnabled={false}
           />
+          {/* X immer rechts, oben ausgerichtet damit er bei zweizeiligem Text sichtbar bleibt */}
           <Pressable
             onPress={() => removeEntry(idx)}
             hitSlop={8}
-            style={[padStyles.deleteBtn, { backgroundColor: colors.danger + '22' }]}
+            style={[padStyles.deleteBtn, { backgroundColor: colors.danger + '22', alignSelf: 'flex-start', marginTop: 2 }]}
           >
             <Ionicons name="close" size={16} color={colors.danger} />
           </Pressable>
@@ -424,10 +428,10 @@ const padStyles = StyleSheet.create({
   },
   bubble: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',   // Kinder oben ausrichten bei zweizeiligem Text
     borderRadius: 8,
     paddingHorizontal: 8,
-    paddingVertical: 5,
+    paddingVertical: 6,
     gap: 5,
   },
   bullet: {
@@ -442,6 +446,7 @@ const padStyles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     padding: 0,
+    // multiline: kein festes maxHeight – Text bricht auf 2 Zeilen um
   },
   deleteBtn: {
     width: 22,
@@ -450,6 +455,7 @@ const padStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
+    // flexShrink: 0 + alignSelf: flex-start → X immer sichtbar, egal wie schmal der Screen
   },
 });
 
