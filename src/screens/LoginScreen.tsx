@@ -42,7 +42,9 @@ export function LoginScreen() {
         });
       }
     } catch (e: any) {
-      Alert.alert('Anmeldung fehlgeschlagen', e?.message ?? 'Unbekannter Fehler.');
+      const msg = e?.code ? `${e.code}\n${e.message ?? ''}` : (e?.message ?? 'Unbekannter Fehler.');
+      console.error('[Login] Fehler:', e?.code, e?.message);
+      Alert.alert('Anmeldung fehlgeschlagen', msg);
     } finally {
       setLoading(false);
     }

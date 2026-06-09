@@ -22,7 +22,9 @@ export default function RootLayout() {
   // onAuthStateChanged feuert danach automatisch – hier nur Fehler abfangen.
   useEffect(() => {
     if (Platform.OS !== 'web') return;
-    handleRedirectResult().catch(() => {});
+    handleRedirectResult().catch((e) => {
+      console.error('[Firebase Redirect] Fehler:', e?.code, e?.message);
+    });
   }, []);
   const { syncTasks } = useGoogleTasksSync();
   const { syncDriveNotes } = useGoogleDriveNotesSync();
