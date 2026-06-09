@@ -984,14 +984,6 @@ export function DashboardScreen() {
                     )}
                   </View>
                 )}
-                {tomorrowEvents.length > 0 && (
-                  <View>
-                    <Text style={[styles.dayLabel, { color: colors.textMuted, paddingHorizontal: 0 }]}>Morgen</Text>
-                    <View style={[styles.card, { borderLeftWidth: 0, opacity: 0.75 }]}>
-                      {tomorrowEvents.map((e, i) => renderEvent(e, i, tomorrowEvents, false))}
-                    </View>
-                  </View>
-                )}
               </View>
             );
           })()}
