@@ -407,9 +407,9 @@ function Scratchpad({
           <Pressable
             onPress={() => removeEntry(idx)}
             hitSlop={8}
-            style={[padStyles.deleteBtn, { backgroundColor: fg + '22' }]}
+            style={[padStyles.deleteBtn, { backgroundColor: colors.danger + '22' }]}
           >
-            <Ionicons name="close" size={13} color={fg} style={{ opacity: 0.75 }} />
+            <Ionicons name="close" size={16} color={colors.danger} />
           </Pressable>
         </View>
         );
