@@ -65,18 +65,18 @@ export function SharedNotepad({ colors, isDark }: { colors: ThemeColors; isDark:
 
   const handleAdd = useCallback(async () => {
     const text = draft.trim();
-    if (!text || !myName) return;
+    if (!text || !myName || !familyId) return;
     setDraft('');
     const emoji = draftEmoji;
     setDraftEmoji(null);
     try {
       await addSharedNote(familyId, text, myName, emoji);
     } catch {}
-  }, [draft, myName, draftEmoji]);
+  }, [draft, myName, draftEmoji, familyId]);
 
   const handleReact = useCallback(async (item: SharedNoteItem, emoji: string) => {
     setReactionPickerFor(null);
-    if (!myName) return;
+    if (!myName || !familyId) return;
     try {
       // Erneutes Antippen derselben Reaktion entfernt sie wieder (Toggle).
       const next = item.reaction?.emoji === emoji && item.reaction?.by === myName
@@ -84,30 +84,32 @@ export function SharedNotepad({ colors, isDark }: { colors: ThemeColors; isDark:
         : { emoji, by: myName };
       await setSharedNoteReaction(familyId, item.id, next);
     } catch {}
-  }, [myName]);
+  }, [myName, familyId]);
 
   const handleToggle = useCallback(async (item: SharedNoteItem) => {
+    if (!familyId) return;
     setBusyId(item.id);
     try {
       await toggleSharedNote(familyId, item.id, !item.done);
     } finally {
       setBusyId(null);
     }
-  }, []);
+  }, [familyId]);
 
   const handleDelete = useCallback(async (item: SharedNoteItem) => {
+    if (!familyId) return;
     setBusyId(item.id);
     try {
       await deleteSharedNote(familyId, item.id);
     } finally {
       setBusyId(null);
     }
-  }, []);
+  }, [familyId]);
 
   const handleClearDone = useCallback(async () => {
-    if (!items) return;
+    if (!items || !familyId) return;
     await clearDoneSharedNotes(familyId, items);
-  }, [items]);
+  }, [items, familyId]);
 
   const accent = colors.accentNeon;
   const [tooltipVisible, setTooltipVisible] = useState(false);
