@@ -392,7 +392,7 @@ function Scratchpad({
             : { backgroundColor: entry.color },
         ]}>
           {/* Bullet zentriert zur ersten Textzeile */}
-          <View style={[padStyles.bullet, { backgroundColor: isMono ? monoDotColor(idx) : fg + '99', marginTop: 3 }, { alignSelf: 'flex-start' }]} />
+          <View style={[padStyles.bullet, { backgroundColor: isMono ? monoDotColor(idx) : fg + '99', marginTop: 4, alignSelf: 'flex-start' }]} />
           <TextInput
             ref={(r) => { inputRefs.current[idx] = r; }}
             style={[padStyles.bubbleInput, { color: fg }]}
@@ -411,7 +411,7 @@ function Scratchpad({
           <Pressable
             onPress={() => removeEntry(idx)}
             hitSlop={8}
-            style={[padStyles.deleteBtn, { backgroundColor: colors.danger + '22', alignSelf: 'flex-start', marginTop: 2 }]}
+            style={[padStyles.deleteBtn, { backgroundColor: colors.danger + '22', alignSelf: 'flex-start', marginTop: 3 }]}
           >
             <Ionicons name="close" size={16} color={colors.danger} />
           </Pressable>
@@ -428,15 +428,15 @@ const padStyles = StyleSheet.create({
   },
   bubble: {
     flexDirection: 'row',
-    alignItems: 'flex-start',   // Kinder oben ausrichten bei zweizeiligem Text
+    alignItems: 'flex-start',
     borderRadius: 8,
     paddingHorizontal: 8,
-    paddingVertical: 6,
+    paddingVertical: 3,
     gap: 5,
   },
   bullet: {
-    width: 12,
-    height: 12,
+    width: 10,
+    height: 10,
     borderRadius: 999,
     flexShrink: 0,
   },
@@ -446,16 +446,14 @@ const padStyles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     padding: 0,
-    // multiline: kein festes maxHeight – Text bricht auf 2 Zeilen um
   },
   deleteBtn: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
-    // flexShrink: 0 + alignSelf: flex-start → X immer sichtbar, egal wie schmal der Screen
   },
 });
 
