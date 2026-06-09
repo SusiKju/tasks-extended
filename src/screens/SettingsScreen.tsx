@@ -292,56 +292,6 @@ export function SettingsScreen() {
         })}
       </View>
 
-      {/* Auto-grouping */}
-      <View style={styles.section}>
-        <Text style={styles.sectionHeader}>Automatische Gruppierung</Text>
-        <View style={styles.row}>
-          <View style={styles.rowContent}>
-            <Text style={styles.rowTitle}>Gruppe automatisch vorschlagen</Text>
-            <Text style={styles.rowSubtitle}>
-              Beim Tippen eines Task-Titels wird die passende Gruppe erkannt
-            </Text>
-          </View>
-          <Switch
-            value={settings.autoGroupEnabled}
-            onValueChange={(v) => updateSettings({ autoGroupEnabled: v })}
-            trackColor={{ true: colors.success }}
-          />
-        </View>
-
-        {settings.autoGroupEnabled ? (
-          <View style={styles.row}>
-            <View style={styles.rowContent}>
-              <Text style={styles.rowTitle}>Erkennungs-Schwelle</Text>
-              <Text style={styles.rowSubtitle}>
-                Aktuell: {Math.round(settings.autoGroupConfidenceThreshold * 100)}% Übereinstimmung
-              </Text>
-            </View>
-            <View style={styles.thresholdButtons}>
-              {[0.2, 0.4, 0.6].map((val) => (
-                <Pressable
-                  key={val}
-                  style={({ pressed }) => [
-                    styles.thresholdBtn,
-                    settings.autoGroupConfidenceThreshold === val && styles.thresholdBtnActive,
-                    pressed && { opacity: 0.7 },
-                  ]}
-                  onPress={() => updateSettings({ autoGroupConfidenceThreshold: val })}
-                >
-                  <Text
-                    style={[
-                      styles.thresholdBtnText,
-                      settings.autoGroupConfidenceThreshold === val && styles.thresholdBtnTextActive,
-                    ]}
-                  >
-                    {val === 0.2 ? 'Niedrig' : val === 0.4 ? 'Mittel' : 'Hoch'}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          </View>
-        ) : null}
-      </View>
 
       {/* Google Calendar */}
       <View style={styles.section}>
@@ -558,23 +508,36 @@ export function SettingsScreen() {
               <Text style={[styles.rowSubtitle, { fontStyle: 'italic' }]}>Noch keine Kinder angelegt.</Text>
             )}
             {familyChildren.map((child) => (
-              <View key={child.id} style={styles.childManageRow}>
-                <View style={[styles.childColorDot, { backgroundColor: child.color }]}>
-                  <Text style={styles.childColorDotText}>{child.emoji ?? child.name.charAt(0)}</Text>
+              <View key={child.id} style={{ width: '100%' as any, gap: 4 }}>
+                <View style={styles.childManageRow}>
+                  <View style={[styles.childColorDot, { backgroundColor: child.color }]}>
+                    <Text style={styles.childColorDotText}>{child.emoji ?? child.name.charAt(0)}</Text>
+                  </View>
+                  <Text style={[styles.rowTitle, { flex: 1, fontSize: 14 }]}>{child.name}</Text>
+                  <Pressable
+                    style={({ pressed }) => [{ padding: 6 }, pressed && { opacity: 0.6 }]}
+                    onPress={() => openEditChild(child)}
+                  >
+                    <Ionicons name="pencil-outline" size={18} color={colors.accentNeon} />
+                  </Pressable>
+                  <Pressable
+                    style={({ pressed }) => [{ padding: 6 }, pressed && { opacity: 0.6 }]}
+                    onPress={() => handleDeleteChild(child)}
+                  >
+                    <Ionicons name="trash-outline" size={18} color={colors.danger} />
+                  </Pressable>
                 </View>
-                <Text style={[styles.rowTitle, { flex: 1, fontSize: 14 }]}>{child.name}</Text>
-                <Pressable
-                  style={({ pressed }) => [{ padding: 6 }, pressed && { opacity: 0.6 }]}
-                  onPress={() => openEditChild(child)}
-                >
-                  <Ionicons name="pencil-outline" size={18} color={colors.accentNeon} />
-                </Pressable>
-                <Pressable
-                  style={({ pressed }) => [{ padding: 6 }, pressed && { opacity: 0.6 }]}
-                  onPress={() => handleDeleteChild(child)}
-                >
-                  <Ionicons name="trash-outline" size={18} color={colors.danger} />
-                </Pressable>
+                <TextInput
+                  style={[styles.settingInput, { marginLeft: 44, fontSize: 12 }]}
+                  placeholder="E-Mail für Benachrichtigungen"
+                  placeholderTextColor={colors.placeholder}
+                  value={settings.childEmails?.[child.id] ?? ''}
+                  onChangeText={(v) =>
+                    updateSettings({ childEmails: { ...settings.childEmails, [child.id]: v } })
+                  }
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                />
               </View>
             ))}
           </View>
@@ -674,29 +637,6 @@ export function SettingsScreen() {
         </Pressable>
       </Modal>
 
-      {/* Kinder E-Mail-Adressen */}
-      <View style={styles.section}>
-        <Text style={styles.sectionHeader}>Kinder E-Mail-Adressen</Text>
-        <Text style={[styles.rowValue, { fontSize: 12, marginBottom: 4 }]}>
-          Gmail-Adressen für Benachrichtigungen beim Erstellen von Kinder-Aufgaben.
-        </Text>
-        {familyChildren.map((child) => (
-          <View key={child.id} style={styles.row}>
-            <Text style={[styles.rowTitle, { flex: 1 }]}>{child.name}</Text>
-            <TextInput
-              style={[styles.settingInput, { flex: 2 }]}
-              placeholder="gmail@gmail.com"
-              placeholderTextColor={colors.placeholder}
-              value={settings.childEmails?.[child.id] ?? ''}
-              onChangeText={(v) =>
-                updateSettings({ childEmails: { ...settings.childEmails, [child.id]: v } })
-              }
-              keyboardType="email-address"
-              autoCapitalize="none"
-            />
-          </View>
-        ))}
-      </View>
 
       {/* App info */}
       <View style={styles.section}>

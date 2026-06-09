@@ -20,6 +20,7 @@ export default function RootLayout() {
   const { syncTasks } = useGoogleTasksSync();
   const { syncDriveNotes } = useGoogleDriveNotesSync();
   const { syncBirthdays } = useGoogleContactsBirthdaysSync();
+  const { settings, updateSettings } = useStore();
 
   // ── Auth-Guard ──────────────────────────────────────────────────────────────
   const router = useRouter();
@@ -82,7 +83,16 @@ export default function RootLayout() {
       clearInterval(keepAlive);
       stopScheduledPush();
     };
-  }, [user, familyId]);
+  }, [user, familyId, settings.googleAccessToken]);
+
+  // myName aus Firebase-DisplayName vorbelegen, falls noch nicht gesetzt
+  useEffect(() => {
+    if (!user) return;
+    if (!settings.myName?.trim()) {
+      const firstName = user.displayName?.split(' ')[0] ?? null;
+      if (firstName) updateSettings({ myName: firstName });
+    }
+  }, [user]);
 
   // Auth-Guard: Weiterleitung per useEffect statt <Redirect> (vermeidet Endlosschleife)
   useEffect(() => {
@@ -93,7 +103,7 @@ export default function RootLayout() {
     } else if (!familyId) {
       if (segments[0] !== 'family-setup') router.replace('/family-setup');
     } else {
-      if (inAuth) router.replace('/(tabs)');
+      if (inAuth) router.replace('/(tabs)/dashboard');
     }
   }, [user, familyId, authLoading, familyLoading]);
 
