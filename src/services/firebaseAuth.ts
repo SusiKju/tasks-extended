@@ -25,11 +25,13 @@ import {
 } from 'firebase/auth';
 import { getFirebaseAuth } from './firebase';
 
-// GitHub Pages blockiert manchmal Popups → auf Redirect-Flow zurückfallen.
-// Lokal (localhost) verwenden wir weiterhin Popup (schneller, kein Reload).
-const USE_REDIRECT = typeof window !== 'undefined' && !window.location.hostname.includes('localhost');
-
-// ── Web: Firebase Popup- oder Redirect-Flow ──────────────────────────────────
+// ── Web: Popup zuerst, Redirect nur als Fallback ─────────────────────────────
+//
+// Redirect-Flow hat auf GitHub Pages ein Problem: Firebase-Auth-Handler prüft
+// die Redirect-URL per XHR – bekommt 404 für /tasks-extended/login (kein
+// statisches File) – und der Auth-State geht verloren.
+// Lösung: immer Popup versuchen; nur bei auth/popup-blocked auf Redirect fallen.
+// Der Redirect zeigt dann auf die Root-URL (kein 404).
 
 async function signInWebPopup(): Promise<User | null> {
   const auth = getFirebaseAuth();
@@ -37,15 +39,25 @@ async function signInWebPopup(): Promise<User | null> {
   provider.addScope('email');
   provider.addScope('profile');
 
-  if (USE_REDIRECT) {
-    // Redirect-Flow: leitet zur Google-Anmeldeseite um, danach zurück zur App.
-    // getRedirectResult() in _layout.tsx oder LoginScreen fängt das Ergebnis auf.
-    await signInWithRedirect(auth, provider);
-    return null; // Seite wird umgeleitet – kehrt hier nie zurück
+  try {
+    const result = await signInWithPopup(auth, provider);
+    return result.user;
+  } catch (e: any) {
+    if (e?.code === 'auth/popup-blocked' || e?.code === 'auth/popup-closed-by-user') {
+      // Popup blockiert → Redirect-Flow als Fallback.
+      // Redirect zur Root, damit GitHub Pages kein 404 liefert.
+      if (typeof window !== 'undefined') {
+        const origin = window.location.origin;
+        const base = window.location.pathname.split('/').slice(0, 2).join('/'); // z.B. /tasks-extended
+        // Firebase leitet nach dem Login zur aktuellen URL zurück.
+        // Wir wechseln kurz zur Root, damit kein 404 entsteht.
+        window.history.replaceState(null, '', `${base}/`);
+      }
+      await signInWithRedirect(auth, provider);
+      return null; // Seite wird umgeleitet
+    }
+    throw e; // andere Fehler weitergeben
   }
-
-  const result = await signInWithPopup(auth, provider);
-  return result.user;
 }
 
 /**
