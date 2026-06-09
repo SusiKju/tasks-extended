@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { AppState, AppStateStatus, Platform, View, ActivityIndicator } from 'react-native';
-import { Stack, Redirect } from 'expo-router';
+import { Stack, useRouter, useSegments } from 'expo-router';
 import Head from 'expo-router/head';
 import { StatusBar } from 'expo-status-bar';
 import { useTheme } from '../src/utils/theme';
@@ -22,6 +22,8 @@ export default function RootLayout() {
   const { syncBirthdays } = useGoogleContactsBirthdaysSync();
 
   // ── Auth-Guard ──────────────────────────────────────────────────────────────
+  const router = useRouter();
+  const segments = useSegments();
   const { user, loading: authLoading } = useFirebaseAuth();
   const { familyId, children: familyChildren, loading: familyLoading } = useFamily();
   const syncTasksRef = useRef(syncTasks);
@@ -86,6 +88,19 @@ export default function RootLayout() {
     };
   }, []);
 
+  // Auth-Guard: Weiterleitung per useEffect statt <Redirect> (vermeidet Endlosschleife)
+  useEffect(() => {
+    if (authLoading || familyLoading) return;
+    const inAuth = segments[0] === 'login' || segments[0] === 'family-setup';
+    if (!user) {
+      if (!inAuth) router.replace('/login');
+    } else if (!familyId) {
+      if (segments[0] !== 'family-setup') router.replace('/family-setup');
+    } else {
+      if (inAuth) router.replace('/(tabs)');
+    }
+  }, [user, familyId, authLoading, familyLoading]);
+
   // Scheduled Push im Eltern-Modus starten sobald familyId + Kinder bekannt sind
   useEffect(() => {
     if (!familyId || familyChildren.length === 0) return;
@@ -95,23 +110,13 @@ export default function RootLayout() {
     return () => stopScheduledPush();
   }, [familyId, familyChildren]);
 
-  // Warten bis Auth und Family-Status geklärt sind
+  // Während Auth/Family noch laden: Spinner zeigen
   if (authLoading || familyLoading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F0F0F5' }}>
         <ActivityIndicator size="large" color="#4F7EF5" />
       </View>
     );
-  }
-
-  // Nicht eingeloggt → Login-Screen
-  if (!user) {
-    return <Redirect href="/login" />;
-  }
-
-  // Eingeloggt, aber noch keine Familie → Familie erstellen/beitreten
-  if (!familyId) {
-    return <Redirect href="/family-setup" />;
   }
 
   return (
