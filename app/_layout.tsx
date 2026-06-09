@@ -36,7 +36,9 @@ export default function RootLayout() {
   const lastSyncAt = useRef(0);
 
   useEffect(() => {
-    // Warten bis der Store aus AsyncStorage geladen ist, dann erst syncen
+    // Nur syncen wenn User eingeloggt und Familie geladen – verhindert GIS-Popup auf Login-Seite
+    if (!user || !familyId) return;
+
     const runSync = () => {
       syncRef.current().catch(() => {});
       syncNotesRef.current().catch(() => {});
@@ -60,7 +62,6 @@ export default function RootLayout() {
         const now = Date.now();
         if (now - lastSyncAt.current > 60_000) {
           lastSyncAt.current = now;
-          // Beim Zurückkommen Token still auffrischen, dann syncen.
           getValidAccessToken().catch(() => null).then(() => {
             syncRef.current().catch(() => {});
             syncNotesRef.current().catch(() => {});
@@ -72,21 +73,16 @@ export default function RootLayout() {
 
     const sub = AppState.addEventListener('change', onStateChange);
 
-    // Token im Hintergrund am Leben halten: getValidAccessToken erneuert nur,
-    // wenn das Token in <5 min abläuft. 4-min-Intervall fängt das rechtzeitig ab,
-    // sodass der Web-Login nicht nach 1 h stirbt.
     const keepAlive = setInterval(() => {
       getValidAccessToken().catch(() => {});
     }, 4 * 60_000);
-
-    // Scheduled Push: wird jetzt familien-abhängig gestartet (siehe useEffect unten)
 
     return () => {
       sub.remove();
       clearInterval(keepAlive);
       stopScheduledPush();
     };
-  }, []);
+  }, [user, familyId]);
 
   // Auth-Guard: Weiterleitung per useEffect statt <Redirect> (vermeidet Endlosschleife)
   useEffect(() => {
