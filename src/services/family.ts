@@ -91,7 +91,8 @@ function childrenConfigCol(familyId: string) {
 }
 
 function metaDoc(familyId: string) {
-  return doc(db, 'families', familyId, 'meta');
+  // Meta-Daten liegen direkt im Familie-Dokument (families/{familyId}), nicht in einem Sub-Dok
+  return doc(db, 'families', familyId);
 }
 
 function familyCodeDoc(code: string) {
@@ -159,10 +160,8 @@ export async function joinFamilyWithCode(user: User, code: string): Promise<stri
   }
   const { familyId } = codeSnap.data() as { familyId: string };
 
-  // Bereits Mitglied?
-  const existing = await getDoc(memberDoc(familyId, user.uid));
-  if (existing.exists()) return familyId;
-
+  // Direkt setDoc – kein vorheriges getDoc nötig (vermeidet Berechtigungsfehler vor dem Beitreten)
+  // Firestore-Regel: create erlaubt wenn request.auth.uid == uid (bereits Mitglied → update via Regel)
   await setDoc(memberDoc(familyId, user.uid), {
     uid: user.uid,
     role: 'parent',
@@ -179,12 +178,29 @@ export async function joinFamilyWithCode(user: User, code: string): Promise<stri
  * Gibt die familyId zurück oder null.
  */
 export async function findFamilyForUser(uid: string): Promise<string | null> {
-  // Wir speichern die familyId auch im User-eigenen Dokument für schnellen Zugriff.
   const userFamilySnap = await getDoc(doc(db, 'userFamilies', uid));
   if (userFamilySnap.exists()) {
     return (userFamilySnap.data() as { familyId: string }).familyId;
   }
   return null;
+}
+
+/**
+ * Echtzeit-Listener auf userFamilies/{uid}.
+ * Feuert sofort mit dem aktuellen Wert und bei jeder Änderung.
+ * Gibt eine Unsubscribe-Funktion zurück.
+ */
+export function subscribeToUserFamily(
+  uid: string,
+  callback: (familyId: string | null) => void,
+): Unsubscribe {
+  return onSnapshot(doc(db, 'userFamilies', uid), (snap) => {
+    if (snap.exists()) {
+      callback((snap.data() as { familyId: string }).familyId ?? null);
+    } else {
+      callback(null);
+    }
+  }, () => callback(null));
 }
 
 /**

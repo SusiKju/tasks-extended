@@ -13,10 +13,17 @@ import { scheduleCheckIfNeeded, stopScheduledPush } from '../src/services/schedu
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFirebaseAuth } from '../src/hooks/useFirebaseAuth';
 import { useFamily } from '../src/hooks/useFamily';
+import { handleRedirectResult } from '../src/services/firebaseAuth';
 
 export default function RootLayout() {
-  const { colors, theme } = useTheme();
-  const isDark = theme === 'dark-neon';
+  const { colors, isDark } = useTheme();
+
+  // Auf GitHub Pages: Firebase Redirect-Ergebnis beim App-Start auswerten.
+  // onAuthStateChanged feuert danach automatisch – hier nur Fehler abfangen.
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    handleRedirectResult().catch(() => {});
+  }, []);
   const { syncTasks } = useGoogleTasksSync();
   const { syncDriveNotes } = useGoogleDriveNotesSync();
   const { syncBirthdays } = useGoogleContactsBirthdaysSync();

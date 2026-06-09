@@ -13,7 +13,7 @@
 import { useState, useEffect } from 'react';
 import { useFirebaseAuth } from './useFirebaseAuth';
 import {
-  findFamilyForUser,
+  subscribeToUserFamily,
   getFamilyMeta,
   FamilyMeta,
   ChildConfig,
@@ -34,7 +34,7 @@ export function useFamily(): FamilyState {
   const [children, setChildren] = useState<ChildConfig[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // familyId laden sobald User bekannt ist
+  // Echtzeit-Listener auf userFamilies/{uid} – reagiert sofort auf Beitreten/Verlassen
   useEffect(() => {
     if (authLoading) return;
     if (!user) {
@@ -46,16 +46,17 @@ export function useFamily(): FamilyState {
     }
 
     setLoading(true);
-    findFamilyForUser(user.uid)
-      .then(async (id) => {
-        setFamilyId(id);
-        if (id) {
-          const m = await getFamilyMeta(id);
-          setMeta(m);
-        }
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    const unsub = subscribeToUserFamily(user.uid, async (id) => {
+      setFamilyId(id);
+      if (id) {
+        const m = await getFamilyMeta(id);
+        setMeta(m);
+      } else {
+        setMeta(null);
+      }
+      setLoading(false);
+    });
+    return unsub;
   }, [user, authLoading]);
 
   // Kinder-Listener sobald familyId bekannt
@@ -70,10 +71,9 @@ export function useFamily(): FamilyState {
 
 /**
  * Vereinfachter Hook der nur die familyId zurückgibt.
- * Wirft einen Fehler wenn keine Familie vorhanden (sollte durch Auth-Guard nie passieren).
+ * Gibt null zurück solange noch geladen wird (kein Throw mehr).
  */
-export function useFamilyId(): string {
+export function useFamilyId(): string | null {
   const { familyId } = useFamily();
-  if (!familyId) throw new Error('useFamilyId: kein Familienkontext vorhanden');
   return familyId;
 }

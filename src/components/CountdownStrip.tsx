@@ -176,6 +176,7 @@ export function CountdownStrip({ colors }: { colors: ThemeColors }) {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
+    if (!familyId) return;
     const unsub = subscribeToSharedCountdowns(
       familyId,
       (next) => { setLoadError(false); setItems(next); },
@@ -245,6 +246,8 @@ export function CountdownStrip({ colors }: { colors: ThemeColors }) {
 
   const accent = colors.accentNeon;
   const canSave = titleDraft.trim().length > 0 && !!dateDraft && !busy;
+
+  if (!familyId) return null;
 
   return (
     <View style={styles.wrap}>

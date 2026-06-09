@@ -83,7 +83,7 @@ const DEFAULT_GROUPS: Group[] = [
 
 const DEFAULT_SETTINGS: AppSettings = {
   dateFormat: 'de',
-  theme: 'light',
+  theme: 'dark-mono',
   googleCalendarEnabled: false,
   googleClientId: null,
   googleAccessToken: null,
@@ -251,7 +251,7 @@ export const useStore = create<TaskState>()(
     }),
     {
       name: 'tasks-extended-store',
-      version: 14,
+      version: 15,
       migrate: (persistedState: any, version: number) => {
         if (version < 1 && persistedState?.tasks) {
           persistedState.tasks = persistedState.tasks.map((t: any) => ({
@@ -311,6 +311,13 @@ export const useStore = create<TaskState>()(
         if (version < 14) {
           // Countdown-Karten fürs Dashboard (TE-128) – neu, Default leer.
           persistedState.countdowns = persistedState.countdowns ?? [];
+        }
+        if (version < 15) {
+          // Nur noch dark-mono – alle anderen Themes entfernt.
+          persistedState.settings.theme = 'dark-mono';
+          // Persönliche Notizen wandern zu Firestore – alten Store leeren.
+          persistedState.notes = [];
+          persistedState.deletedDriveNoteFileIds = [];
         }
         return persistedState;
       },

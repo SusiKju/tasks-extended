@@ -1,8 +1,7 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
-  FlatList,
   Pressable,
   ScrollView,
   Modal,
@@ -12,14 +11,20 @@ import {
   Dimensions,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Image } from 'react-native';
 import { useStore } from '../store';
-import { Note } from '../types';
+import { Note, NoteChecklistItem } from '../types';
 import { useTheme, ThemeColors, neonGlow, readableTextOn } from '../utils/theme';
-import { loadImage } from '../utils/imageStore';
-import { useGoogleDriveNotesSync } from '../hooks/useGoogleDriveNotesSync';
+import { useFamily } from '../hooks/useFamily';
+import { useFirebaseAuth } from '../hooks/useFirebaseAuth';
+import {
+  subscribeToPersonalNotes,
+  addPersonalNote,
+  updatePersonalNote,
+  deletePersonalNote,
+} from '../services/personalNotesService';
 
 const NOTE_COLORS = [
   { value: '#F0C040', label: 'Amber' },
@@ -38,16 +43,19 @@ const NOTE_WIDTH = (SCREEN_WIDTH - GRID_PADDING * 2 - GRID_GAP * (COLUMNS - 1)) 
 
 type SortOrder = 'newest' | 'oldest';
 
-function generateId() {
-  return `note-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-}
-
-// ─── Note Modal ──────────────────────────────────────────────────────────────
+// ─── Note Modal ───────────────────────────────────────────────────────────────
 
 interface NoteModalProps {
   visible: boolean;
   note: Note | null;
-  onSave: (title: string, content: string, color: string, groupId: string | null, pinned: boolean, checklist?: NoteChecklistItem[]) => void;
+  onSave: (
+    title: string,
+    content: string,
+    color: string,
+    groupId: string | null,
+    pinned: boolean,
+    checklist?: NoteChecklistItem[],
+  ) => void;
   onClose: () => void;
   colors: ThemeColors;
   styles: ReturnType<typeof makeStyles>;
@@ -84,8 +92,8 @@ function NoteModal({ visible, note, onSave, onClose, colors, styles }: NoteModal
         Alert.alert('Inhalt fehlt', 'Bitte mindestens einen Eintrag hinzufügen.');
         return;
       }
-      const content = validItems.map((i) => `${i.checked ? '☑' : '☐'} ${i.text}`).join('\n');
-      onSave(title.trim(), content, selectedColor, selectedGroupId, pinned, validItems);
+      const c = validItems.map((i) => `${i.checked ? '☑' : '☐'} ${i.text}`).join('\n');
+      onSave(title.trim(), c, selectedColor, selectedGroupId, pinned, validItems);
     } else {
       const trimmed = content.trim();
       if (!trimmed) {
@@ -241,30 +249,22 @@ function NoteModal({ visible, note, onSave, onClose, colors, styles }: NoteModal
   );
 }
 
-// ─── Note Card ───────────────────────────────────────────────────────────────
+// ─── Note Card ────────────────────────────────────────────────────────────────
 
 interface NoteCardProps {
   note: Note;
   onPress: () => void;
-  onLongPress: () => void;
+  onDelete: () => void;
   onToggleItem: (index: number) => void;
   groupName?: string;
   groupColor?: string;
   styles: ReturnType<typeof makeStyles>;
 }
 
-function NoteCard({ note, onPress, onLongPress, onToggleItem, groupName, groupColor, styles }: NoteCardProps) {
-  const { mono } = useTheme();
+function NoteCard({ note, onPress, onDelete, onToggleItem, groupName, groupColor, styles }: NoteCardProps) {
+  const { mono, colors } = useTheme();
   const maxItems = note.title ? 3 : 4;
-  const [imageUri, setImageUri] = useState<string | null>(null);
 
-  React.useEffect(() => {
-    if (note.imageUris && note.imageUris.length > 0) {
-      loadImage(note.imageUris[0]).then(setImageUri).catch(() => {});
-    }
-  }, [note.imageUris]);
-
-  // Abgehakte Items ans Ende
   const sortedChecklist = note.checklist
     ? [...note.checklist.map((item, originalIndex) => ({ ...item, originalIndex }))]
         .sort((a, b) => Number(a.checked) - Number(b.checked))
@@ -274,32 +274,21 @@ function NoteCard({ note, onPress, onLongPress, onToggleItem, groupName, groupCo
     <Pressable
       style={({ pressed }) => [styles.noteCard, { backgroundColor: mono(note.color) }, pressed && { opacity: 0.85 }]}
       onPress={onPress}
-      onLongPress={onLongPress}
       android_ripple={{ color: 'rgba(0,0,0,0.1)' }}
     >
-      {/* Top badges row */}
-      <View style={styles.cardBadgeRow}>
-        {note.pinned ? (
-          <Ionicons name="pin" size={11} color="rgba(0,0,0,0.5)" />
-        ) : null}
-        {note.driveFileId ? (
-          <Ionicons name="cloud-done-outline" size={11} color="rgba(0,0,0,0.4)" />
-        ) : null}
-        {(note as any).imageCount ? (
-          <View style={styles.imageBadge}>
-            <Ionicons name="image-outline" size={10} color="rgba(0,0,0,0.5)" />
-            <Text style={styles.imageBadgeText}>{(note as any).imageCount}</Text>
-          </View>
-        ) : null}
-      </View>
+      {/* Löschen-Button */}
+      <Pressable
+        onPress={onDelete}
+        hitSlop={6}
+        style={styles.deleteBtn}
+      >
+        <Ionicons name="close" size={13} color="rgba(0,0,0,0.5)" />
+      </Pressable>
 
-      {imageUri ? (
-        <Image
-          source={{ uri: imageUri }}
-          style={styles.noteCardImage}
-          resizeMode="cover"
-        />
-      ) : null}
+      {/* Badges */}
+      <View style={styles.cardBadgeRow}>
+        {note.pinned ? <Ionicons name="pin" size={11} color="rgba(0,0,0,0.5)" /> : null}
+      </View>
 
       {note.title ? (
         <Text style={styles.noteCardTitle} numberOfLines={2}>{note.title}</Text>
@@ -328,9 +317,7 @@ function NoteCard({ note, onPress, onLongPress, onToggleItem, groupName, groupCo
             </Pressable>
           ))}
           {sortedChecklist.length > maxItems ? (
-            <Text style={styles.checklistMore}>
-              +{sortedChecklist.length - maxItems} weitere
-            </Text>
+            <Text style={styles.checklistMore}>+{sortedChecklist.length - maxItems} weitere</Text>
           ) : null}
         </View>
       ) : (
@@ -341,14 +328,16 @@ function NoteCard({ note, onPress, onLongPress, onToggleItem, groupName, groupCo
 
       {groupName ? (
         <View style={[styles.noteGroupBadge, { backgroundColor: mono(groupColor ?? '#888') }]}>
-          <Text style={[styles.noteGroupText, { color: readableTextOn(mono(groupColor ?? '#888')) }]} numberOfLines={1}>{groupName}</Text>
+          <Text style={[styles.noteGroupText, { color: readableTextOn(mono(groupColor ?? '#888')) }]} numberOfLines={1}>
+            {groupName}
+          </Text>
         </View>
       ) : null}
     </Pressable>
   );
 }
 
-// ─── Section Header ──────────────────────────────────────────────────────────
+// ─── Section Header ───────────────────────────────────────────────────────────
 
 function SectionHeader({ label, colors }: { label: string; colors: ThemeColors }) {
   return (
@@ -365,37 +354,43 @@ function SectionHeader({ label, colors }: { label: string; colors: ThemeColors }
 export function NotesScreen() {
   const { colors, isDark, mono } = useTheme();
   const styles = useMemo(() => makeStyles(colors, isDark), [colors, isDark]);
-  const { notes, groups, addNote, updateNote, deleteNote } = useStore();
+  const groups = useStore((s) => s.groups);
+  const { familyId } = useFamily();
+  const { user } = useFirebaseAuth();
+
+  const [notes, setNotes] = useState<Note[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Firestore-Echtzeit-Abo
+  useEffect(() => {
+    if (!familyId || !user?.uid) return;
+    setLoading(true);
+    const unsub = subscribeToPersonalNotes(familyId, user.uid, (n) => {
+      setNotes(n);
+      setLoading(false);
+    });
+    return unsub;
+  }, [familyId, user?.uid]);
 
   const [modalVisible, setModalVisible] = useState(false);
   const [editingNote, setEditingNote] = useState<Note | null>(null);
   const [filterColor, setFilterColor] = useState<string | null>(null);
   const [filterGroupId, setFilterGroupId] = useState<string | null>(null);
-  const [filterLabel, setFilterLabel] = useState<string | null>(null);
   const [sortOrder, setSortOrder] = useState<SortOrder>('newest');
-  const { syncDriveNotes } = useGoogleDriveNotesSync();
 
   const groupMap = useMemo(() => Object.fromEntries(groups.map((g) => [g.id, g])), [groups]);
-
-  // Alle verwendeten Labels sammeln
-  const usedLabels = useMemo(() => {
-    const set = new Set<string>();
-    notes.forEach((n) => n.labels?.forEach((l) => set.add(l)));
-    return Array.from(set).sort();
-  }, [notes]);
 
   const sortedNotes = useMemo(() => {
     let list = [...notes];
     if (filterColor) list = list.filter((n) => n.color === filterColor);
     if (filterGroupId) list = list.filter((n) => n.groupId === filterGroupId);
-    if (filterLabel) list = list.filter((n) => n.labels?.includes(filterLabel as string));
     list.sort((a, b) => {
       const ta = new Date(a.createdAt).getTime();
       const tb = new Date(b.createdAt).getTime();
       return sortOrder === 'newest' ? tb - ta : ta - tb;
     });
     return list;
-  }, [notes, filterColor, filterGroupId, filterLabel, sortOrder]);
+  }, [notes, filterColor, filterGroupId, sortOrder]);
 
   const pinnedNotes = useMemo(() => sortedNotes.filter((n) => n.pinned), [sortedNotes]);
   const unpinnedNotes = useMemo(() => sortedNotes.filter((n) => !n.pinned), [sortedNotes]);
@@ -420,61 +415,67 @@ export function NotesScreen() {
     setModalVisible(true);
   }, []);
 
-  const handleLongPress = useCallback(
+  const handleDelete = useCallback(
     (note: Note) => {
+      if (!familyId || !user?.uid) return;
       Alert.alert('Notiz löschen', 'Diese Notiz wirklich löschen?', [
         { text: 'Abbrechen', style: 'cancel' },
-        { text: 'Löschen', style: 'destructive', onPress: () => deleteNote(note.id) },
+        {
+          text: 'Löschen',
+          style: 'destructive',
+          onPress: () => deletePersonalNote(familyId, user.uid!, note.id).catch(() => {}),
+        },
       ]);
     },
-    [deleteNote],
+    [familyId, user?.uid],
   );
 
   const handleToggleItem = useCallback(
     (note: Note, itemIndex: number) => {
-      if (!note.checklist) return;
+      if (!note.checklist || !familyId || !user?.uid) return;
       const updated = note.checklist.map((item, i) =>
-        i === itemIndex ? { ...item, checked: !item.checked } : item
+        i === itemIndex ? { ...item, checked: !item.checked } : item,
       );
-      updateNote(note.id, { checklist: updated });
-      // Änderung sofort zu Drive hochladen
-      setTimeout(() => syncDriveNotes().catch(() => {}), 500);
+      updatePersonalNote(familyId, user.uid, note.id, { checklist: updated }).catch(() => {});
     },
-    [updateNote, syncDriveNotes],
+    [familyId, user?.uid],
   );
 
   const handleSave = useCallback(
-    (title: string, content: string, color: string, groupId: string | null, pinned: boolean, checklist?: NoteChecklistItem[]) => {
+    (
+      title: string,
+      content: string,
+      color: string,
+      groupId: string | null,
+      pinned: boolean,
+      checklist?: NoteChecklistItem[],
+    ) => {
+      if (!familyId || !user?.uid) return;
+      const now = new Date().toISOString();
       if (editingNote) {
-        updateNote(editingNote.id, {
+        updatePersonalNote(familyId, user.uid, editingNote.id, {
           title: title || undefined,
           content,
           color,
           groupId,
           pinned,
           checklist: checklist && checklist.length > 0 ? checklist : undefined,
-        });
+        }).catch(() => {});
       } else {
-        addNote({
-          id: generateId(),
+        addPersonalNote(familyId, user.uid, {
           title: title || undefined,
           content,
           color,
           groupId,
           pinned,
           checklist: checklist && checklist.length > 0 ? checklist : undefined,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        });
+          createdAt: now,
+          updatedAt: now,
+        }).catch(() => {});
       }
       setModalVisible(false);
     },
-    [editingNote, addNote, updateNote],
-  );
-
-  const toggleSort = useCallback(
-    () => setSortOrder((s) => (s === 'newest' ? 'oldest' : 'newest')),
-    [],
+    [editingNote, familyId, user?.uid],
   );
 
   const renderGrid = useCallback(
@@ -490,7 +491,7 @@ export function NotesScreen() {
                 key={note.id}
                 note={note}
                 onPress={() => handleEdit(note)}
-                onLongPress={() => handleLongPress(note)}
+                onDelete={() => handleDelete(note)}
                 onToggleItem={(idx) => handleToggleItem(note, idx)}
                 groupName={group?.name}
                 groupColor={group?.color}
@@ -501,7 +502,7 @@ export function NotesScreen() {
         </View>
       ));
     },
-    [groupMap, handleEdit, handleLongPress, styles],
+    [groupMap, handleEdit, handleDelete, handleToggleItem, styles],
   );
 
   return (
@@ -526,8 +527,10 @@ export function NotesScreen() {
               ))}
             </ScrollView>
           )}
-          {/* Sort toggle */}
-          <Pressable onPress={toggleSort} style={[styles.sortChip, { borderColor: colors.border, backgroundColor: colors.surface }]}>
+          <Pressable
+            onPress={() => setSortOrder((s) => (s === 'newest' ? 'oldest' : 'newest'))}
+            style={[styles.sortChip, { borderColor: colors.border, backgroundColor: colors.surface }]}
+          >
             <Ionicons
               name={sortOrder === 'newest' ? 'arrow-down' : 'arrow-up'}
               size={13}
@@ -558,32 +561,14 @@ export function NotesScreen() {
             ))}
           </ScrollView>
         )}
-
-        {usedLabels.length > 0 && (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
-            <Pressable
-              style={[styles.labelChip, filterLabel === null && styles.labelChipActive]}
-              onPress={() => setFilterLabel(null)}
-            >
-              <Ionicons name="pricetag-outline" size={11} color={filterLabel === null ? '#fff' : colors.textSecondary} />
-              <Text style={[styles.labelChipText, { color: filterLabel === null ? colors.accentFg : colors.textSecondary }]}>Alle Labels</Text>
-            </Pressable>
-            {usedLabels.map((label) => (
-              <Pressable
-                key={label}
-                style={[styles.labelChip, filterLabel === label && styles.labelChipActive]}
-                onPress={() => setFilterLabel(filterLabel === label ? null : label)}
-              >
-                <Ionicons name="pricetag-outline" size={11} color={filterLabel === label ? '#fff' : colors.textSecondary} />
-                <Text style={[styles.labelChipText, { color: filterLabel === label ? colors.accentFg : colors.textSecondary }]}>{label}</Text>
-              </Pressable>
-            ))}
-          </ScrollView>
-        )}
       </View>
 
       {/* Content */}
-      {sortedNotes.length === 0 ? (
+      {loading ? (
+        <View style={styles.empty}>
+          <ActivityIndicator color={colors.accent} />
+        </View>
+      ) : sortedNotes.length === 0 ? (
         <View style={styles.empty}>
           <Ionicons name="document-text-outline" size={48} color={colors.textMuted} />
           <Text style={[styles.emptyTitle, { color: colors.textSecondary }]}>Noch keine Notizen</Text>
@@ -608,7 +593,7 @@ export function NotesScreen() {
         </ScrollView>
       )}
 
-      <Pressable style={[styles.fab, { backgroundColor: isDark ? 'transparent' : colors.accent }]} onPress={handleAdd}>
+      <Pressable style={[styles.fab, { backgroundColor: 'transparent' }]} onPress={handleAdd}>
         <Ionicons name="add" size={28} color="#fff" />
       </Pressable>
 
@@ -656,14 +641,6 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
       borderWidth: 1, borderColor: c.border,
     },
     groupFilterText: { fontSize: 13, fontWeight: '500' },
-    labelChip: {
-      flexDirection: 'row', alignItems: 'center', gap: 4,
-      paddingHorizontal: 10, paddingVertical: 5,
-      borderRadius: 14, backgroundColor: c.surface,
-      borderWidth: 1, borderColor: c.border,
-    },
-    labelChipActive: { backgroundColor: c.accent, borderColor: c.accent },
-    labelChipText: { fontSize: 12, fontWeight: '500' },
     scrollContent: { paddingBottom: 100 },
     grid: { paddingHorizontal: GRID_PADDING, gap: GRID_GAP },
     gridRow: { flexDirection: 'row', gap: GRID_GAP, marginBottom: 0 },
@@ -675,8 +652,14 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
       justifyContent: 'space-between',
       marginBottom: GRID_GAP,
     },
-    pinBadge: {
-      position: 'absolute', top: 8, right: 8,
+    deleteBtn: {
+      position: 'absolute',
+      top: 6, right: 6,
+      width: 22, height: 22,
+      borderRadius: 11,
+      alignItems: 'center', justifyContent: 'center',
+      backgroundColor: 'rgba(0,0,0,0.12)',
+      zIndex: 1,
     },
     cardBadgeRow: {
       flexDirection: 'row',
@@ -684,21 +667,8 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
       gap: 5,
       marginBottom: 4,
       minHeight: 14,
-    },
-    imageBadge: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 2,
-    },
-    imageBadgeText: {
-      fontSize: 10,
-      color: 'rgba(0,0,0,0.5)',
-    },
-    noteCardImage: {
-      width: '100%' as any,
-      height: 90,
-      borderRadius: 6,
-      marginBottom: 6,
+      // Reserve space so pin icon doesn't push the delete button
+      paddingRight: 20,
     },
     noteCardTitle: {
       fontSize: 11, fontWeight: '700',
@@ -730,27 +700,18 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
       fontSize: 12, color: 'rgba(0,0,0,0.8)',
       lineHeight: 17, flex: 1,
     },
-    checklistPreview: {
-      gap: 3, flex: 1,
-    },
+    checklistPreview: { gap: 3, flex: 1 },
     checklistRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 5,
+      flexDirection: 'row', alignItems: 'center', gap: 5,
     },
     checklistText: {
-      fontSize: 11,
-      color: 'rgba(0,0,0,0.75)',
-      flex: 1,
+      fontSize: 11, color: 'rgba(0,0,0,0.75)', flex: 1,
     },
     checklistTextDone: {
-      textDecorationLine: 'line-through',
-      color: 'rgba(0,0,0,0.35)',
+      textDecorationLine: 'line-through', color: 'rgba(0,0,0,0.35)',
     },
     checklistMore: {
-      fontSize: 11,
-      color: 'rgba(0,0,0,0.4)',
-      marginTop: 2,
+      fontSize: 11, color: 'rgba(0,0,0,0.4)', marginTop: 2,
     },
     noteGroupBadge: {
       alignSelf: 'flex-start',
@@ -768,15 +729,9 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
       position: 'absolute', bottom: 28, right: 20,
       width: 56, height: 56, borderRadius: 28,
       alignItems: 'center', justifyContent: 'center',
-      borderWidth: isDark ? 1.5 : 0,
-      borderColor: isDark ? c.accentNeon : 'transparent',
-      ...(isDark ? neonGlow(c.accentNeon, 'hard') : {
-        shadowColor: c.accent,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.4,
-        shadowRadius: 8,
-        elevation: 6,
-      }),
+      borderWidth: 1.5,
+      borderColor: c.accentNeon,
+      ...neonGlow(c.accentNeon, 'hard'),
     },
     modalContainer: { flex: 1 },
     modalHeader: {

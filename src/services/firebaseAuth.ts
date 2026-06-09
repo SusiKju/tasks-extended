@@ -16,6 +16,8 @@ import { Platform } from 'react-native';
 import {
   GoogleAuthProvider,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signInWithCredential,
   signOut as firebaseSignOut,
   onAuthStateChanged,
@@ -23,15 +25,38 @@ import {
 } from 'firebase/auth';
 import { getFirebaseAuth } from './firebase';
 
-// ── Web: Firebase Popup-Flow ─────────────────────────────────────────────────
+// GitHub Pages blockiert manchmal Popups → auf Redirect-Flow zurückfallen.
+// Lokal (localhost) verwenden wir weiterhin Popup (schneller, kein Reload).
+const USE_REDIRECT = typeof window !== 'undefined' && !window.location.hostname.includes('localhost');
+
+// ── Web: Firebase Popup- oder Redirect-Flow ──────────────────────────────────
 
 async function signInWebPopup(): Promise<User | null> {
   const auth = getFirebaseAuth();
   const provider = new GoogleAuthProvider();
   provider.addScope('email');
   provider.addScope('profile');
+
+  if (USE_REDIRECT) {
+    // Redirect-Flow: leitet zur Google-Anmeldeseite um, danach zurück zur App.
+    // getRedirectResult() in _layout.tsx oder LoginScreen fängt das Ergebnis auf.
+    await signInWithRedirect(auth, provider);
+    return null; // Seite wird umgeleitet – kehrt hier nie zurück
+  }
+
   const result = await signInWithPopup(auth, provider);
   return result.user;
+}
+
+/**
+ * Muss beim App-Start auf Web aufgerufen werden, um ein laufendes Redirect-
+ * Ergebnis abzufangen (nach dem Zurückkehren von Google).
+ */
+export async function handleRedirectResult(): Promise<User | null> {
+  if (Platform.OS !== 'web') return null;
+  const auth = getFirebaseAuth();
+  const result = await getRedirectResult(auth);
+  return result?.user ?? null;
 }
 
 // ── Native: id_token aus PKCE-Flow → Firebase Credential ────────────────────

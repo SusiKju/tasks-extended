@@ -42,11 +42,12 @@ service cloud.firestore {
 
       // Mitglieder-Liste
       match /members/{uid} {
-        allow read: if isFamilyMember(familyId);
+        // Mitglieder lesen alle; User darf eigenes Dokument lesen (z.B. beim Beitreten prüfen)
+        allow read: if isFamilyMember(familyId) || (isSignedIn() && request.auth.uid == uid);
         // Mitglied darf sich selbst hinzufügen (joinFamily) und entfernen (leaveFamily)
         allow create: if isSignedIn() && request.auth.uid == uid;
         allow delete: if isSignedIn() && request.auth.uid == uid;
-        allow update: if isFamilyMember(familyId);
+        allow update: if isFamilyMember(familyId) || (isSignedIn() && request.auth.uid == uid);
       }
 
       // Kinder-Konfiguration (addChild, updateChild, deleteChild)
@@ -80,6 +81,16 @@ service cloud.firestore {
       // Geteilte Notizliste + Countdowns
       match /shared/{document=**} {
         allow read, write: if isFamilyMember(familyId);
+      }
+
+      // Persönlicher Scratchpad pro User
+      match /scratchpadByUser/{uid} {
+        allow read, write: if isFamilyMember(familyId) && request.auth.uid == uid;
+      }
+
+      // Persönliche Notizen pro User
+      match /personalNotesByUser/{uid}/notes/{noteId} {
+        allow read, write: if isFamilyMember(familyId) && request.auth.uid == uid;
       }
     }
 

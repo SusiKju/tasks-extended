@@ -35,7 +35,7 @@ export function FamilySetupScreen() {
     try {
       const familyId = await createFamily(user);
       await saveUserFamilyLink(user.uid, familyId);
-      router.replace('/(tabs)');
+      router.replace('/(tabs)/dashboard');
     } catch (e: any) {
       Alert.alert('Fehler', e?.message ?? 'Familie konnte nicht erstellt werden.');
     } finally {
@@ -50,7 +50,7 @@ export function FamilySetupScreen() {
     try {
       const familyId = await joinFamilyWithCode(user, code.trim());
       await saveUserFamilyLink(user.uid, familyId);
-      router.replace('/(tabs)');
+      router.replace('/(tabs)/dashboard');
     } catch (e: any) {
       Alert.alert('Unbekannter Code', e?.message ?? 'Bitte Schreibweise prüfen.');
     } finally {

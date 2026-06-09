@@ -16,8 +16,9 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useStore } from '../store';
 import { useTheme, ThemeColors, readableTextOn, neonGlow } from '../utils/theme';
-import { uploadScratchpad } from '../services/googleDriveNotes';
+import { subscribeToScratchpad, saveScratchpad } from '../services/scratchpadService';
 import { useGoogleDriveNotesSync } from '../hooks/useGoogleDriveNotesSync';
+import { useFirebaseAuth } from '../hooks/useFirebaseAuth';
 import { useGoogleTasksSync } from '../hooks/useGoogleTasksSync';
 import { useGoogleContactsBirthdaysSync } from '../hooks/useGoogleContactsBirthdaysSync';
 import { isOverdue } from '../utils/dateFormat';
@@ -462,18 +463,21 @@ export function DashboardScreen() {
   const childName = (id: string) => familyChildren.find((c) => c.id === id)?.name ?? id;
   const childColor = (id: string) => familyChildren.find((c) => c.id === id)?.color ?? CHILD_COLOR_FALLBACK;
   const childEmoji = (id: string) => familyChildren.find((c) => c.id === id)?.emoji ?? null;
-  const { tasks, settings, scratchpad, scratchpadUpdatedAt, setScratchpad, birthdays: storeBirthdays } = useStore();
+  const { tasks, settings, scratchpad, setScratchpad, birthdays: storeBirthdays } = useStore();
   const { colors, isDark, theme, mono, isMono } = useTheme();
-  const { syncScratchpad, syncDriveNotes } = useGoogleDriveNotesSync();
+  const { syncDriveNotes } = useGoogleDriveNotesSync();
+  const { user } = useFirebaseAuth();
   const { syncTasks } = useGoogleTasksSync();
   const { syncBirthdays } = useGoogleContactsBirthdaysSync();
 
-  // Pull beim Mount + alle 30 s automatisch pollen
+  // Firestore-Echtzeit-Abo für den persönlichen Scratchpad
   useEffect(() => {
-    syncScratchpad();
-    const interval = setInterval(() => syncScratchpad(), 30_000);
-    return () => clearInterval(interval);
-  }, []);
+    if (!fid || !user?.uid) return;
+    const unsub = subscribeToScratchpad(fid, user.uid, (raw) => {
+      setScratchpad(raw);
+    });
+    return unsub;
+  }, [fid, user?.uid]);
 
   // Sync-Button
   const [syncing, setSyncing] = useState(false);
@@ -518,16 +522,21 @@ export function DashboardScreen() {
     }
   }, [syncing, syncTasks, syncDriveNotes, syncBirthdays, settings]);
 
-  // Debounced Drive-Upload 1,5 s nach letzter Eingabe
+  // Debounced Firestore-Save 1,5 s nach letzter Eingabe
   const uploadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fidRef = useRef(fid);
+  fidRef.current = fid;
+  const uidRef = useRef(user?.uid);
+  uidRef.current = user?.uid;
   const handleScratchpadChange = useCallback((text: string) => {
     setScratchpad(text);
     if (uploadTimer.current) clearTimeout(uploadTimer.current);
     uploadTimer.current = setTimeout(() => {
-      // Immer frisch aus dem Store lesen — Token könnte zwischenzeitlich refresht worden sein
-      const { scratchpad: latest, scratchpadUpdatedAt: ts, settings: s } = useStore.getState();
-      if (!s.googleAccessToken) return;
-      uploadScratchpad(s.googleAccessToken, latest, ts).catch(() => {});
+      const currentFid = fidRef.current;
+      const uid = uidRef.current;
+      if (!currentFid || !uid) return;
+      const { scratchpad: latest } = useStore.getState();
+      saveScratchpad(currentFid, uid, latest).catch(() => {});
     }, 1500);
   }, [setScratchpad]);
   const styles = useMemo(() => makeStyles(colors, isDark), [colors, isDark]);

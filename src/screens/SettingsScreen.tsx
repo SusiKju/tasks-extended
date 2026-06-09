@@ -15,8 +15,7 @@ import {
 import { Clipboard } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useStore } from '../store';
-import { Theme } from '../types';
-import { useTheme, ThemeColors, THEMES, neonGlow } from '../utils/theme';
+import { useTheme, ThemeColors, neonGlow } from '../utils/theme';
 import {
   signInWithGoogle,
   listCalendars,
@@ -50,13 +49,6 @@ function crossAlert(title: string, message: string, onConfirm: () => void) {
   }
 }
 
-const THEME_OPTIONS: { value: Theme; label: string; subtitle: string }[] = [
-  { value: 'light', label: 'Hell', subtitle: 'iOS-Standard, weißer Hintergrund' },
-  { value: 'dark-neon', label: 'Dark Neon', subtitle: 'Dunkles Design mit Neon-Akzenten' },
-  { value: 'dark-soft', label: 'Dark Soft', subtitle: 'Augenschonendes dunkles Design' },
-  { value: 'dark-mono', label: 'Schwarz-Weiß', subtitle: 'Monochromes Neon-Design, Geburtstag bleibt bunt' },
-  { value: 'light-mono', label: 'Negativ', subtitle: 'Komplettes Negativ von Schwarz-Weiß – hell statt dunkel, jede Farbe invertiert' },
-];
 
 export function SettingsScreen() {
   const { settings, updateSettings } = useStore();
@@ -263,35 +255,6 @@ export function SettingsScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-
-      {/* Theme */}
-      <View style={styles.section}>
-        <Text style={styles.sectionHeader}>Design</Text>
-        {THEME_OPTIONS.map((opt) => {
-          const themeColors = THEMES[opt.value];
-          const isActive = (settings.theme ?? 'light') === opt.value;
-          return (
-            <Pressable
-              key={opt.value}
-              style={({ pressed }) => [styles.themeRow, isActive && styles.themeRowActive, pressed && { opacity: 0.75 }]}
-              onPress={() => updateSettings({ theme: opt.value })}
-            >
-              <View style={[styles.themePreview, { backgroundColor: themeColors.background, borderColor: themeColors.border }]}>
-                <View style={[styles.themePreviewBar, { backgroundColor: themeColors.surface }]} />
-                <View style={[styles.themePreviewDot, { backgroundColor: themeColors.accent }]} />
-              </View>
-              <View style={styles.rowContent}>
-                <Text style={[styles.rowTitle, isActive && { color: colors.accentNeon, fontWeight: '600' }]}>
-                  {opt.label}
-                </Text>
-                <Text style={styles.rowSubtitle}>{opt.subtitle}</Text>
-              </View>
-              {isActive ? <Ionicons name="checkmark-circle" size={20} color={colors.accentNeon} /> : null}
-            </Pressable>
-          );
-        })}
-      </View>
-
 
       {/* Google Calendar */}
       <View style={styles.section}>

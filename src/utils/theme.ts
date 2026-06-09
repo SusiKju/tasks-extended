@@ -1,4 +1,3 @@
-import { useMemo } from 'react';
 import { useStore } from '../store';
 import { Theme } from '../types';
 
@@ -28,87 +27,6 @@ export interface ThemeColors {
   warningFg: string;
   successFg: string;
 }
-
-const LIGHT: ThemeColors = {
-  background: '#F0F0F5',
-  surface: '#FFFFFF',
-  surfaceHigh: '#F0F0F5',
-  text: '#1C1C1E',
-  textSecondary: '#8E8E93',
-  textMuted: '#C7C7CC',
-  accent: '#4F7EF5',
-  accentNeon: '#4F7EF5',
-  success: '#30B955',
-  warning: '#F59500',
-  danger: '#FF3B30',
-  border: '#E0E0E8',
-  tabBar: '#FFFFFF',
-  tabBarBorder: '#E0E0E8',
-  header: '#F0F0F5',
-  inputBackground: '#FFFFFF',
-  placeholder: '#BBBBC4',
-  glowAccent: 'transparent',
-  glowDanger: 'transparent',
-  glowSuccess: 'transparent',
-  accentFg: '#FFFFFF',
-  dangerFg: '#FFFFFF',
-  warningFg: '#FFFFFF',
-  successFg: '#FFFFFF',
-};
-
-const DARK_NEON: ThemeColors = {
-  background:    '#02020A',   // tiefstes Schwarz-Blau
-  surface:       '#07071A',   // klarer Kontrast zum BG
-  surfaceHigh:   '#0E0E28',   // deutlich heller als surface
-  text:          '#DCDCEE',   // gedämpftes kühles Weiß (weniger Blendung auf Schwarz)
-  textSecondary: '#9090CC',   // lesbares Blau-Lila (war viel zu dunkel)
-  textMuted:     '#7B7BBB',   // WCAG: 4.85:1 auf surfaceHigh (war #383858 → 1.7:1)
-  accent:        '#2299FF',   // elektrisches Blau
-  accentNeon:    '#00EEFF',   // volles Cyan-Neon
-  success:       '#00FF88',   // Neon-Grün
-  warning:       '#FFE600',   // elektrisches Gelb
-  danger:        '#FF1177',   // Neon-Magenta-Pink
-  border:        '#16163A',   // klare Trennlinie
-  tabBar:        '#02020A',
-  tabBarBorder:  '#16163A',
-  header:        '#02020A',
-  inputBackground: '#0E0E28',
-  placeholder:   '#7272D8',   // WCAG: 4.60:1 auf inputBackground (war #2A2A50 → 1.4:1)
-  glowAccent:  'rgba(0, 238, 255, 0.65)',
-  glowDanger:  'rgba(255, 17, 119, 0.65)',
-  glowSuccess: 'rgba(0, 255, 136, 0.55)',
-  accentFg: '#FFFFFF',
-  dangerFg: '#FFFFFF',
-  warningFg: '#FFFFFF',
-  successFg: '#FFFFFF',
-};
-
-const DARK_SOFT: ThemeColors = {
-  background: '#141414',
-  surface: '#202020',
-  surfaceHigh: '#2C2C2C',
-  text: '#F5F5F5',
-  textSecondary: '#B0B0B0',  // war #888 – deutlich heller
-  textMuted: '#969696',      // WCAG: 4.72:1 auf surfaceHigh (war #787878 → 3.2:1)
-  accent: '#5BA8FF',
-  accentNeon: '#5BA8FF',
-  success: '#4CC98A',
-  warning: '#F5A623',
-  danger: '#FF5F57',
-  border: '#3A3A3A',         // war #2E2E – klarer sichtbar
-  tabBar: '#141414',
-  tabBarBorder: '#3A3A3A',
-  header: '#141414',
-  inputBackground: '#202020',
-  placeholder: '#888888',    // WCAG: 4.60:1 auf inputBackground (war #686868 → 2.9:1)
-  glowAccent: 'transparent',
-  glowDanger: 'transparent',
-  glowSuccess: 'transparent',
-  accentFg: '#FFFFFF',
-  dangerFg: '#FFFFFF',
-  warningFg: '#FFFFFF',
-  successFg: '#FFFFFF',
-};
 
 // Schwarz-Weiß: Kopie des Neon-Themes (gleiche Glow-/Outline-Mechanik via isDark),
 // aber alle Akzente monochrom. Statt farbiger Neons reines Weiß als „Neon" und
@@ -140,44 +58,8 @@ const DARK_MONO: ThemeColors = {
   successFg: '#000000',
 };
 
-// Komplettes Negativ von DARK_MONO – wirklich JEDE Farbe per Kanal invertiert
-// (255 - Wert), wie ein fotografisches Negativ. Schwarz wird Weiß, Weiß wird
-// Schwarz, jedes Grau kippt auf seinen Gegenwert; selbst Glow-Farben und die
-// "Fg"-Kontrastfarben drehen sich um. Dadurch ist es nicht nur "ein helles
-// Mono-Theme", sondern wortwörtlich das Negativ des Schwarz-Weiß-Neon-Looks.
-const LIGHT_MONO: ThemeColors = {
-  background:    '#FFFFFF',   // Negativ von #000000
-  surface:       '#F5F5F5',   // Negativ von #0A0A0A
-  surfaceHigh:   '#E7E7E7',   // Negativ von #181818
-  text:          '#000000',   // Negativ von #FFFFFF
-  textSecondary: '#4B4B4B',   // Negativ von #B4B4B4
-  textMuted:     '#7A7A7A',   // Negativ von #858585
-  accent:        '#000000',   // Negativ von #FFFFFF
-  accentNeon:    '#000000',   // schwarzer „Neon"-Akzent + Glow – Negativ von #FFFFFF
-  success:       '#252525',   // Negativ von #DADADA
-  warning:       '#575757',   // Negativ von #A8A8A8
-  danger:        '#000000',   // monochrom – Negativ von #FFFFFF
-  border:        '#D5D5D5',   // Negativ von #2A2A2A
-  tabBar:        '#FFFFFF',
-  tabBarBorder:  '#D5D5D5',
-  header:        '#FFFFFF',
-  inputBackground: '#E7E7E7',
-  placeholder:   '#7E7E7E',   // Negativ von #818181
-  glowAccent:  'rgba(0, 0, 0, 0.55)',
-  glowDanger:  'rgba(0, 0, 0, 0.45)',
-  glowSuccess: 'rgba(0, 0, 0, 0.45)',
-  accentFg: '#FFFFFF',
-  dangerFg: '#FFFFFF',
-  warningFg: '#FFFFFF',
-  successFg: '#FFFFFF',
-};
-
 export const THEMES: Record<Theme, ThemeColors> = {
-  light: LIGHT,
-  'dark-neon': DARK_NEON,
-  'dark-soft': DARK_SOFT,
   'dark-mono': DARK_MONO,
-  'light-mono': LIGHT_MONO,
 };
 
 /** Relative Luminanz (WCAG) einer Hex-Farbe (#RGB / #RRGGBB), 0..1. */
@@ -268,19 +150,16 @@ export function useTheme(): {
   theme: Theme;
   isDark: boolean;
   isMono: boolean;
-  /** Im Schwarz-Weiß-Theme jede Farbe zu Graustufe, sonst unverändert. */
+  /** Wandelt Farbe zu Graustufe – dark-mono ist immer aktiv. */
   mono: (hex: string) => string;
 } {
-  const theme = useStore((s) => s.settings.theme ?? 'light');
-  const colors = useMemo(() => THEMES[theme] ?? LIGHT, [theme]);
-  const isMono = theme === 'dark-mono' || theme === 'light-mono';
+  // Nur noch dark-mono – für Re-render-Kompatibilität beibehalten.
+  useStore((s) => s.settings.theme); // eslint-disable-line
   return {
-    colors,
-    theme,
-    isDark: theme === 'dark-neon' || theme === 'dark-soft' || theme === 'dark-mono',
-    isMono,
-    // Negativ-Theme braucht invertierte Graustufen (helle statt dunkle Grautöne),
-    // damit Inhaltsfarben auf dem weißen Hintergrund weiterhin gut lesbar bleiben.
-    mono: (hex: string) => (theme === 'light-mono' ? toGrayInverted(hex) : isMono ? toGray(hex) : hex),
+    colors: DARK_MONO,
+    theme: 'dark-mono',
+    isDark: true,
+    isMono: true,
+    mono: toGray,
   };
 }
