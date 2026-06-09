@@ -34,7 +34,8 @@ export interface SharedCountdown {
   createdAt: string;
 }
 
-const itemsCollection = () => collection(db, 'shared', 'countdowns', 'items');
+const itemsCollection = (familyId: string) =>
+  collection(db, 'families', familyId, 'shared', 'countdowns', 'items');
 
 /**
  * Echtzeit-Listener für die geteilten Countdowns – chronologisch nach Zieldatum.
@@ -44,11 +45,12 @@ const itemsCollection = () => collection(db, 'shared', 'countdowns', 'items');
  * (gleiche Lehre wie beim Endlos-Spinner-Fix der geteilten Liste, TE-121).
  */
 export function subscribeToSharedCountdowns(
+  familyId: string,
   onChange: (items: SharedCountdown[]) => void,
   onError?: (error: unknown) => void
 ): Unsubscribe {
   return onSnapshot(
-    itemsCollection(),
+    itemsCollection(familyId),
     (snap) => {
       const items = snap.docs
         .map((d) => ({ id: d.id, ...d.data() } as SharedCountdown))
@@ -63,12 +65,13 @@ export function subscribeToSharedCountdowns(
 }
 
 export async function addSharedCountdown(
+  familyId: string,
   title: string,
   targetDate: string,
   emoji: string | null,
   addedBy: string
 ): Promise<string> {
-  const ref = doc(itemsCollection());
+  const ref = doc(itemsCollection(familyId));
   const item: Omit<SharedCountdown, 'id'> = {
     title: title.trim(),
     targetDate,
@@ -81,12 +84,13 @@ export async function addSharedCountdown(
 }
 
 export async function updateSharedCountdown(
+  familyId: string,
   itemId: string,
   updates: { title?: string; targetDate?: string; emoji?: string | null }
 ): Promise<void> {
-  await updateDoc(doc(db, 'shared', 'countdowns', 'items', itemId), updates);
+  await updateDoc(doc(db, 'families', familyId, 'shared', 'countdowns', 'items', itemId), updates);
 }
 
-export async function deleteSharedCountdown(itemId: string): Promise<void> {
-  await deleteDoc(doc(db, 'shared', 'countdowns', 'items', itemId));
+export async function deleteSharedCountdown(familyId: string, itemId: string): Promise<void> {
+  await deleteDoc(doc(db, 'families', familyId, 'shared', 'countdowns', 'items', itemId));
 }

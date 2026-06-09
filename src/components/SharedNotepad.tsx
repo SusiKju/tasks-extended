@@ -16,6 +16,7 @@ import { View, Text, TextInput, Pressable, StyleSheet, ActivityIndicator } from 
 import { Ionicons } from '@expo/vector-icons';
 import { useStore } from '../store';
 import { ThemeColors } from '../utils/theme';
+import { useFamilyId } from '../hooks/useFamily';
 import {
   SharedNoteItem,
   subscribeToSharedNotes,
@@ -31,6 +32,7 @@ import {
 
 export function SharedNotepad({ colors, isDark }: { colors: ThemeColors; isDark: boolean }) {
   const { settings, updateSettings } = useStore();
+  const familyId = useFamilyId();
   const [items, setItems] = useState<SharedNoteItem[] | null>(null);
   const [loadError, setLoadError] = useState(false);
   const [draft, setDraft] = useState('');
@@ -41,11 +43,12 @@ export function SharedNotepad({ colors, isDark }: { colors: ThemeColors; isDark:
 
   useEffect(() => {
     const unsub = subscribeToSharedNotes(
+      familyId,
       (next) => { setLoadError(false); setItems(next); },
       () => { setLoadError(true); setItems([]); }
     );
     return unsub;
-  }, []);
+  }, [familyId]);
 
   const myName = settings.myName?.trim() || null;
   const openCount = useMemo(() => (items ?? []).filter((i) => !i.done).length, [items]);
@@ -66,7 +69,7 @@ export function SharedNotepad({ colors, isDark }: { colors: ThemeColors; isDark:
     const emoji = draftEmoji;
     setDraftEmoji(null);
     try {
-      await addSharedNote(text, myName, emoji);
+      await addSharedNote(familyId, text, myName, emoji);
     } catch {}
   }, [draft, myName, draftEmoji]);
 
@@ -78,14 +81,14 @@ export function SharedNotepad({ colors, isDark }: { colors: ThemeColors; isDark:
       const next = item.reaction?.emoji === emoji && item.reaction?.by === myName
         ? null
         : { emoji, by: myName };
-      await setSharedNoteReaction(item.id, next);
+      await setSharedNoteReaction(familyId, item.id, next);
     } catch {}
   }, [myName]);
 
   const handleToggle = useCallback(async (item: SharedNoteItem) => {
     setBusyId(item.id);
     try {
-      await toggleSharedNote(item.id, !item.done);
+      await toggleSharedNote(familyId, item.id, !item.done);
     } finally {
       setBusyId(null);
     }
@@ -94,7 +97,7 @@ export function SharedNotepad({ colors, isDark }: { colors: ThemeColors; isDark:
   const handleDelete = useCallback(async (item: SharedNoteItem) => {
     setBusyId(item.id);
     try {
-      await deleteSharedNote(item.id);
+      await deleteSharedNote(familyId, item.id);
     } finally {
       setBusyId(null);
     }
@@ -102,7 +105,7 @@ export function SharedNotepad({ colors, isDark }: { colors: ThemeColors; isDark:
 
   const handleClearDone = useCallback(async () => {
     if (!items) return;
-    await clearDoneSharedNotes(items);
+    await clearDoneSharedNotes(familyId, items);
   }, [items]);
 
   const accent = colors.accentNeon;

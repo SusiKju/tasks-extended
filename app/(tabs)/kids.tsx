@@ -28,13 +28,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../src/utils/theme';
 import { useStore } from '../../src/store';
 import {
-  ChildId, CHILDREN, CHILD_NAMES, CHILD_SHORT, ChildTask,
+  ChildTask,
   ActivityEntry, ActivityAction,
   ChildReward, RewardType, REWARD_TYPES,
   subscribeToChildTasks, addTask, updateTask, deleteTask, deleteCompletedTasks, rejectTask,
   subscribeToChildReward, setChildReward,
   getReminderTimes, setReminderTimes, getActivityLog,
 } from '../../src/services/kinderTasks';
+import { useFamily } from '../../src/hooks/useFamily';
 import { sendHtmlMail } from '../../src/services/googleMail';
 import { sendReminderToAllChildren, sendReminderToChild } from '../../src/services/pushNotifications';
 import { writePushTrigger, writePushTriggerAll } from '../../src/services/kinderTasks';
@@ -62,18 +63,23 @@ export default function KinderScreen() {
   const { colors } = useTheme();
   const s = styles(colors);
 
+  const { familyId, children: familyChildren } = useFamily();
+  const fid = familyId ?? '';
+  // Lookup-Helfer für dynamische Kinder-Daten
+  const childName = (id: string) => familyChildren.find((c) => c.id === id)?.name ?? id;
+  const childShort = (id: string) => {
+    const name = childName(id);
+    return name.slice(0, 2);
+  };
+
   const { settings } = useStore();
-  const [selectedChild, setSelectedChild] = useState<ChildId>('lenny');
-  const [tasksByChild, setTasksByChild] = useState<Record<ChildId, ChildTask[]>>({
-    lenny: [], emil: [], hannes: [], liddy: [],
-  });
+  const [selectedChild, setSelectedChild] = useState<string>('');
+  const [tasksByChild, setTasksByChild] = useState<Record<string, ChildTask[]>>({});
   const [newTaskTitle, setNewTaskTitle] = useState('');
   // Gruppenaufgabe (TE-111): dieselbe Aufgabe an mehrere ausgewählte Kinder.
   const [groupMode, setGroupMode] = useState(false);
-  const [groupSelection, setGroupSelection] = useState<Record<ChildId, boolean>>({
-    lenny: false, emil: false, hannes: false, liddy: false,
-  });
-  const [mailingChild, setMailingChild] = useState<ChildId | null>(null);
+  const [groupSelection, setGroupSelection] = useState<Record<string, boolean>>({});
+  const [mailingChild, setMailingChild] = useState<string | null>(null);
   const [sendingAllMail, setSendingAllMail] = useState(false);
   const [reminderTimes, setReminderTimesState] = useState<string[]>(['15:00', '17:00']);
   const [editingTimes, setEditingTimes] = useState(false);
@@ -82,57 +88,65 @@ export default function KinderScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [setupModalVisible, setSetupModalVisible] = useState(false);
   const [editingTask, setEditingTask] = useState<{ id: string; title: string } | null>(null);
-  const [historyChild, setHistoryChild] = useState<ChildId | null>(null);
+  const [historyChild, setHistoryChild] = useState<string | null>(null);
   const [history, setHistory] = useState<ActivityEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   // Belohnungen (TE-101)
-  const [rewardsByChild, setRewardsByChild] = useState<Record<ChildId, ChildReward | null>>({
-    lenny: null, emil: null, hannes: null, liddy: null,
-  });
+  const [rewardsByChild, setRewardsByChild] = useState<Record<string, ChildReward | null>>({});
   const [rewardModalVisible, setRewardModalVisible] = useState(false);
   const [draftRewardType, setDraftRewardType] = useState<RewardType>('tv_series');
   const [draftRewardTitle, setDraftRewardTitle] = useState('');
 
+  // Erstes Kind als Standard auswählen sobald Kinder geladen sind
+  useEffect(() => {
+    if (familyChildren.length > 0 && !selectedChild) {
+      setSelectedChild(familyChildren[0].id);
+    }
+  }, [familyChildren, selectedChild]);
+
   // Firestore-Listener für alle Kinder
   useEffect(() => {
-    const unsubs = CHILDREN.map((childId) =>
-      subscribeToChildTasks(childId, TODAY, (tasks) => {
-        setTasksByChild((prev) => ({ ...prev, [childId]: tasks }));
+    if (!fid || familyChildren.length === 0) return;
+    const unsubs = familyChildren.map((child) =>
+      subscribeToChildTasks(fid, child.id, TODAY, (tasks) => {
+        setTasksByChild((prev) => ({ ...prev, [child.id]: tasks }));
       })
     );
     return () => unsubs.forEach((u) => u());
-  }, []);
+  }, [fid, familyChildren]);
 
   // Belohnungs-Listener für alle Kinder (TE-101)
   useEffect(() => {
-    const unsubs = CHILDREN.map((childId) =>
-      subscribeToChildReward(childId, (reward) => {
-        setRewardsByChild((prev) => ({ ...prev, [childId]: reward }));
+    if (!fid || familyChildren.length === 0) return;
+    const unsubs = familyChildren.map((child) =>
+      subscribeToChildReward(fid, child.id, (reward) => {
+        setRewardsByChild((prev) => ({ ...prev, [child.id]: reward }));
       })
     );
     return () => unsubs.forEach((u) => u());
-  }, []);
+  }, [fid, familyChildren]);
 
   useEffect(() => {
-    getReminderTimes().then((times) => {
+    if (!fid) return;
+    getReminderTimes(fid).then((times) => {
       setReminderTimesState(times);
       setTimesInput(times.join(', '));
     });
-  }, []);
+  }, [fid]);
 
   const handleAddTask = useCallback(async () => {
-    if (!newTaskTitle.trim()) return;
+    if (!newTaskTitle.trim() || !fid || !selectedChild) return;
     const title = newTaskTitle.trim();
-    await addTask(selectedChild, {
+    await addTask(fid, selectedChild, {
       title,
       done: false,
       date: TODAY,
       createdAt: new Date().toISOString(),
     });
     setNewTaskTitle('');
-  }, [selectedChild, newTaskTitle]);
+  }, [fid, selectedChild, newTaskTitle]);
 
-  const toggleGroupChild = useCallback((childId: ChildId) => {
+  const toggleGroupChild = useCallback((childId: string) => {
     setGroupSelection((prev) => ({ ...prev, [childId]: !prev[childId] }));
   }, []);
 
@@ -140,8 +154,8 @@ export default function KinderScreen() {
   // aber je Kind eine eigenständige Kopie (eigener Status, eigene Belohnungslogik). (TE-111)
   const handleAddGroupTask = useCallback(async () => {
     const title = newTaskTitle.trim();
-    if (!title) return;
-    const targets = CHILDREN.filter((id) => groupSelection[id]);
+    if (!title || !fid) return;
+    const targets = familyChildren.filter((c) => groupSelection[c.id]).map((c) => c.id);
     if (targets.length === 0) {
       crossInfo('Keine Kinder gewählt', 'Bitte mindestens ein Kind für die Gruppenaufgabe auswählen.');
       return;
@@ -150,7 +164,7 @@ export default function KinderScreen() {
     try {
       await Promise.all(
         targets.map((id) =>
-          addTask(id, {
+          addTask(fid, id, {
             title,
             done: false,
             date: TODAY,
@@ -164,26 +178,26 @@ export default function KinderScreen() {
     } catch (e: any) {
       crossInfo('Fehler', e?.message ?? 'Gruppenaufgabe konnte nicht angelegt werden.');
     }
-  }, [newTaskTitle, groupSelection]);
+  }, [fid, familyChildren, newTaskTitle, groupSelection]);
 
   // Baut die HTML-Mail + verschickt Push & E-Mail für genau ein Kind.
   // Wird sowohl vom Einzel-Button als auch vom "Push & Mail an alle"-Button genutzt (TE-118).
   // Gibt zurück, ob tatsächlich gesendet wurde ('sent'), das Kind keine E-Mail/Token hat
   // ('skipped') oder ein Fehler auftrat ('error').
-  const sendTaskMailToChild = useCallback(async (childId: ChildId): Promise<'sent' | 'skipped' | 'error'> => {
+  const sendTaskMailToChild = useCallback(async (childId: string): Promise<'sent' | 'skipped' | 'error'> => {
     const email = (settings.childEmails ?? {})[childId];
-    if (!email || !settings.googleAccessToken) return 'skipped';
+    if (!email || !settings.googleAccessToken || !fid) return 'skipped';
 
     try {
       // Firestore-Push (App offen)
-      await writePushTrigger(childId);
+      const name = childName(childId);
+      await writePushTrigger(fid, childId, name);
       if (Platform.OS !== 'web') {
-        await sendReminderToChild(childId).catch(() => {});
+        await sendReminderToChild(fid, childId, name).catch(() => {});
       }
 
-      const openTasks = tasksByChild[childId].filter((t) => !t.done);
-      const doneTasks = tasksByChild[childId].filter((t) => t.done);
-      const name = CHILD_NAMES[childId];
+      const openTasks = (tasksByChild[childId] ?? []).filter((t) => !t.done);
+      const doneTasks = (tasksByChild[childId] ?? []).filter((t) => t.done);
       const appUrl = `https://susikju.github.io/tasks-extended/?child=${childId}`;
 
       const taskRows = (tasks: ChildTask[], done: boolean) =>
@@ -255,9 +269,9 @@ export default function KinderScreen() {
     } catch (e: any) {
       return 'error';
     }
-  }, [settings, tasksByChild]);
+  }, [fid, settings, tasksByChild, familyChildren]);
 
-  const handlePushMail = useCallback(async (childId: ChildId) => {
+  const handlePushMail = useCallback(async (childId: string) => {
     const email = (settings.childEmails ?? {})[childId];
     if (!email || !settings.googleAccessToken) {
       crossInfo('E-Mail nicht konfiguriert', 'Bitte E-Mail-Adresse in den Einstellungen eintragen und Google-Konto verbinden.');
@@ -267,7 +281,7 @@ export default function KinderScreen() {
     try {
       const result = await sendTaskMailToChild(childId);
       if (result === 'sent') {
-        crossInfo('✓ Gesendet', `Push + E-Mail an ${CHILD_NAMES[childId]} verschickt.`);
+        crossInfo('✓ Gesendet', `Push + E-Mail an ${childName(childId)} verschickt.`);
       } else {
         crossInfo('Fehler', 'Konnte nicht senden.');
       }
@@ -282,8 +296,8 @@ export default function KinderScreen() {
     setSendingAllMail(true);
     try {
       let sent = 0, skipped = 0, failed = 0;
-      for (const childId of CHILDREN) {
-        const result = await sendTaskMailToChild(childId);
+      for (const child of familyChildren) {
+        const result = await sendTaskMailToChild(child.id);
         if (result === 'sent') sent++;
         else if (result === 'skipped') skipped++;
         else failed++;
@@ -295,17 +309,17 @@ export default function KinderScreen() {
     } finally {
       setSendingAllMail(false);
     }
-  }, [sendTaskMailToChild]);
+  }, [familyChildren, sendTaskMailToChild]);
 
   const handleDeleteTask = useCallback((taskId: string, title: string) => {
     crossAlert('Aufgabe löschen?', '', async () => {
       try {
-        await deleteTask(selectedChild, taskId, { actor: 'parent', title });
+        await deleteTask(fid, selectedChild, taskId, { actor: 'parent', title });
       } catch (e: any) {
         crossInfo('Fehler beim Löschen', e?.message ?? String(e));
       }
     }, true);
-  }, [selectedChild]);
+  }, [fid, selectedChild]);
 
   const handleRejectTask = useCallback((taskId: string, title: string) => {
     crossAlert(
@@ -313,36 +327,37 @@ export default function KinderScreen() {
       'Sie wird wieder auf „offen" gesetzt und beim Kind rot angezeigt.',
       async () => {
         try {
-          await rejectTask(selectedChild, taskId, { title });
+          await rejectTask(fid, selectedChild, taskId, { title });
         } catch (e: any) {
           crossInfo('Fehler', e?.message ?? String(e));
         }
       }
     );
-  }, [selectedChild]);
+  }, [fid, selectedChild]);
 
   const handleDeleteCompleted = useCallback(() => {
-    const count = tasksByChild[selectedChild].filter((t) => t.done).length;
+    const childTaskList = tasksByChild[selectedChild] ?? [];
+    const count = childTaskList.filter((t) => t.done).length;
     crossAlert(
       `${count} erledigte Aufgabe${count !== 1 ? 'n' : ''} löschen?`,
       'Diese Aufgaben werden dauerhaft entfernt.',
       async () => {
         try {
-          await deleteCompletedTasks(selectedChild, tasksByChild[selectedChild]);
+          await deleteCompletedTasks(fid, selectedChild, childTaskList);
         } catch (e: any) {
           crossInfo('Fehler beim Löschen', e?.message ?? String(e));
         }
       },
       true
     );
-  }, [selectedChild, tasksByChild]);
+  }, [fid, selectedChild, tasksByChild]);
 
   const handleSaveEdit = useCallback(async () => {
     if (!editingTask || !editingTask.title.trim()) return;
     const title = editingTask.title.trim();
-    await updateTask(selectedChild, editingTask.id, { title }, { actor: 'parent', title });
+    await updateTask(fid, selectedChild, editingTask.id, { title }, { actor: 'parent', title });
     setEditingTask(null);
-  }, [selectedChild, editingTask]);
+  }, [fid, selectedChild, editingTask]);
 
   const handleOpenRewardModal = useCallback(() => {
     const current = rewardsByChild[selectedChild];
@@ -358,51 +373,51 @@ export default function KinderScreen() {
       ? { type: draftRewardType, title }
       : { type: draftRewardType };
     try {
-      await setChildReward(selectedChild, reward);
+      await setChildReward(fid, selectedChild, reward);
       setRewardModalVisible(false);
     } catch (e: any) {
       crossInfo('Fehler', e?.message ?? 'Belohnung konnte nicht gespeichert werden.');
     }
-  }, [selectedChild, draftRewardType, draftRewardTitle]);
+  }, [fid, selectedChild, draftRewardType, draftRewardTitle]);
 
   const handleClearReward = useCallback(async () => {
     try {
-      await setChildReward(selectedChild, null);
+      await setChildReward(fid, selectedChild, null);
       setRewardModalVisible(false);
     } catch (e: any) {
       crossInfo('Fehler', e?.message ?? 'Belohnung konnte nicht entfernt werden.');
     }
-  }, [selectedChild]);
+  }, [fid, selectedChild]);
 
-  const handleOpenHistory = useCallback(async (childId: ChildId) => {
+  const handleOpenHistory = useCallback(async (childId: string) => {
     setHistoryChild(childId);
     setHistoryLoading(true);
     setHistory([]);
     try {
-      const items = await getActivityLog(childId);
+      const items = await getActivityLog(fid, childId);
       setHistory(items);
     } catch (e: any) {
       crossInfo('Fehler', e?.message ?? 'Verlauf konnte nicht geladen werden.');
     } finally {
       setHistoryLoading(false);
     }
-  }, []);
+  }, [fid]);
 
   const handleSaveTimes = useCallback(async () => {
     const times = timesInput.split(',').map((t) => t.trim()).filter(Boolean);
-    await setReminderTimes(times);
+    await setReminderTimes(fid, times);
     setReminderTimesState(times);
     setEditingTimes(false);
-  }, [timesInput]);
+  }, [fid, timesInput]);
 
   const handleSendNow = useCallback(async () => {
     setSending(true);
     try {
       // Web: Firestore-Trigger (App muss offen sein)
       // Native: Expo Push Service (echter Hintergrund-Push)
-      await writePushTriggerAll();
+      await writePushTriggerAll(fid, familyChildren);
       if (Platform.OS !== 'web') {
-        await sendReminderToAllChildren().catch(() => {});
+        await sendReminderToAllChildren(fid, familyChildren).catch(() => {});
       }
       crossInfo('✓ Push gesendet', 'Alle Kinder wurden benachrichtigt.');
     } catch (e: any) {
@@ -410,11 +425,11 @@ export default function KinderScreen() {
     } finally {
       setSending(false);
     }
-  }, []);
+  }, [fid, familyChildren]);
 
-  const tasks = tasksByChild[selectedChild];
+  const tasks = tasksByChild[selectedChild] ?? [];
   const done = tasks.filter((t) => t.done).length;
-  const currentReward = rewardsByChild[selectedChild];
+  const currentReward = rewardsByChild[selectedChild] ?? null;
   const rewardUnlocked = tasks.length > 0 && done === tasks.length;
 
   // Teilnehmer-Kürzel einer Gruppenaufgabe (TE-113/TE-114): bevorzugt die auf der
@@ -428,10 +443,11 @@ export default function KinderScreen() {
   };
 
   const groupShorts = (task: ChildTask): string[] => {
+    const allIds = familyChildren.map((c) => c.id);
     const ids = task.groupChildren?.length
-      ? CHILDREN.filter((id) => task.groupChildren!.includes(id))
-      : CHILDREN.filter((id) => tasksByChild[id].some((t) => t.groupId === task.groupId));
-    return ids.map((id) => CHILD_SHORT[id]);
+      ? allIds.filter((id) => task.groupChildren!.includes(id))
+      : allIds.filter((id) => (tasksByChild[id] ?? []).some((t) => t.groupId === task.groupId));
+    return ids.map((id) => childShort(id));
   };
 
   return (
@@ -442,21 +458,21 @@ export default function KinderScreen() {
     >
       {/* Kind-Auswahl */}
       <View style={s.childRow}>
-        {CHILDREN.map((childId) => {
-          const childTasks = tasksByChild[childId];
-          const childDone = childTasks.filter((t) => t.done).length;
-          const isSelected = childId === selectedChild;
+        {familyChildren.map((child) => {
+          const childTaskList = tasksByChild[child.id] ?? [];
+          const childDone = childTaskList.filter((t) => t.done).length;
+          const isSelected = child.id === selectedChild;
           return (
             <TouchableOpacity
-              key={childId}
+              key={child.id}
               style={[s.childChip, isSelected && { backgroundColor: colors.accentNeon }]}
-              onPress={() => setSelectedChild(childId)}
+              onPress={() => setSelectedChild(child.id)}
             >
               <Text style={[s.childName, isSelected && { color: '#000' }]}>
-                {CHILD_NAMES[childId]}
+                {child.emoji ? `${child.emoji} ` : ''}{child.name}
               </Text>
               <Text style={[s.childProgress, isSelected && { color: '#000' }]}>
-                {childDone}/{childTasks.length}
+                {childDone}/{childTaskList.length}
               </Text>
             </TouchableOpacity>
           );
@@ -487,27 +503,27 @@ export default function KinderScreen() {
           <>
             <Text style={s.sectionTitle}>Gruppenaufgabe für ausgewählte Kinder</Text>
             <View style={s.groupChips}>
-              {CHILDREN.map((childId) => {
-                const sel = groupSelection[childId];
+              {familyChildren.map((child) => {
+                const sel = groupSelection[child.id] ?? false;
                 return (
                   <TouchableOpacity
-                    key={childId}
+                    key={child.id}
                     style={[s.groupChip, sel && { borderColor: colors.accentNeon, backgroundColor: colors.accentNeon }]}
-                    onPress={() => toggleGroupChild(childId)}
+                    onPress={() => toggleGroupChild(child.id)}
                   >
                     <Ionicons
                       name={sel ? 'checkmark-circle' : 'ellipse-outline'}
                       size={15}
                       color={sel ? '#000' : colors.textMuted}
                     />
-                    <Text style={[s.groupChipText, sel && { color: '#000' }]}>{CHILD_NAMES[childId]}</Text>
+                    <Text style={[s.groupChipText, sel && { color: '#000' }]}>{child.name}</Text>
                   </TouchableOpacity>
                 );
               })}
             </View>
           </>
         ) : (
-          <Text style={s.sectionTitle}>Aufgabe für {CHILD_NAMES[selectedChild]} hinzufügen</Text>
+          <Text style={s.sectionTitle}>Aufgabe für {childName(selectedChild)} hinzufügen</Text>
         )}
 
         <View style={s.inputRow}>
@@ -630,7 +646,7 @@ export default function KinderScreen() {
         ) : (
           <Text style={s.hint}>
             Noch keine Belohnung. Tippe auf ＋, um eine festzulegen — sie wird freigeschaltet,
-            wenn {CHILD_NAMES[selectedChild]} alle Tagesaufgaben erledigt hat.
+            wenn {childName(selectedChild)} alle Tagesaufgaben erledigt hat.
           </Text>
         )}
       </View>
@@ -686,7 +702,7 @@ export default function KinderScreen() {
       <Modal visible={rewardModalVisible} transparent animationType="fade">
         <Pressable style={s.modalOverlay} onPress={() => setRewardModalVisible(false)}>
           <Pressable style={s.modalBox} onPress={() => {}}>
-            <Text style={s.modalTitle}>Belohnung für {CHILD_NAMES[selectedChild]}</Text>
+            <Text style={s.modalTitle}>Belohnung für {childName(selectedChild)}</Text>
             <Text style={s.modalHint}>Wird freigeschaltet, wenn alle Tagesaufgaben erledigt sind.</Text>
             <View style={s.rewardTypeGrid}>
               {(Object.keys(REWARD_TYPES) as RewardType[]).map((type) => {
@@ -732,7 +748,7 @@ export default function KinderScreen() {
           <Pressable style={s.historyBox} onPress={() => {}}>
             <View style={s.row}>
               <Text style={s.modalTitle}>
-                Verlauf{historyChild ? ` — ${CHILD_NAMES[historyChild]}` : ''}
+                Verlauf{historyChild ? ` — ${childName(historyChild)}` : ''}
               </Text>
               <TouchableOpacity onPress={() => setHistoryChild(null)}>
                 <Ionicons name="close" size={22} color={colors.textMuted} />
@@ -793,20 +809,21 @@ export default function KinderScreen() {
           <Pressable style={s.modalBox} onPress={() => {}}>
             <Text style={s.modalTitle}>Für wen ist dieses Gerät?</Text>
             <Text style={s.modalHint}>Danach wechselt die App in den Kinder-Modus.</Text>
-            {CHILDREN.map((id) => (
+            {familyChildren.map((child) => (
               <TouchableOpacity
-                key={id}
+                key={child.id}
                 style={s.modalChildBtn}
                 onPress={async () => {
-                  await AsyncStorage.setItem('kinder_child_id', id);
+                  await AsyncStorage.setItem('kinder_child_id', child.id);
+                  await AsyncStorage.setItem('kinder_family_id', fid);
                   setSetupModalVisible(false);
                   crossInfo(
-                    `✓ Gerät für ${CHILD_NAMES[id]} eingerichtet`,
+                    `✓ Gerät für ${child.name} eingerichtet`,
                     'Die App wechselt beim nächsten Start in den Kinder-Modus. Jetzt die App neu starten.'
                   );
                 }}
               >
-                <Text style={s.modalChildBtnText}>{CHILD_NAMES[id]}</Text>
+                <Text style={s.modalChildBtnText}>{child.emoji ? `${child.emoji} ` : ''}{child.name}</Text>
               </TouchableOpacity>
             ))}
           </Pressable>

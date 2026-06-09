@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
-import { AppState, AppStateStatus, Platform } from 'react-native';
-import { Stack } from 'expo-router';
+import { AppState, AppStateStatus, Platform, View, ActivityIndicator } from 'react-native';
+import { Stack, Redirect } from 'expo-router';
 import Head from 'expo-router/head';
 import { StatusBar } from 'expo-status-bar';
 import { useTheme } from '../src/utils/theme';
@@ -11,6 +11,8 @@ import { useGoogleContactsBirthdaysSync } from '../src/hooks/useGoogleContactsBi
 import { getValidAccessToken } from '../src/services/googleCalendar';
 import { scheduleCheckIfNeeded, stopScheduledPush } from '../src/services/scheduledPush';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFirebaseAuth } from '../src/hooks/useFirebaseAuth';
+import { useFamily } from '../src/hooks/useFamily';
 
 export default function RootLayout() {
   const { colors, theme } = useTheme();
@@ -18,6 +20,10 @@ export default function RootLayout() {
   const { syncTasks } = useGoogleTasksSync();
   const { syncDriveNotes } = useGoogleDriveNotesSync();
   const { syncBirthdays } = useGoogleContactsBirthdaysSync();
+
+  // ── Auth-Guard ──────────────────────────────────────────────────────────────
+  const { user, loading: authLoading } = useFirebaseAuth();
+  const { familyId, children: familyChildren, loading: familyLoading } = useFamily();
   const syncTasksRef = useRef(syncTasks);
   syncTasksRef.current = syncTasks;
   const syncNotesRef = useRef(syncDriveNotes);
@@ -71,10 +77,7 @@ export default function RootLayout() {
       getValidAccessToken().catch(() => {});
     }, 4 * 60_000);
 
-    // Scheduled Push nur im Eltern-Modus starten
-    AsyncStorage.getItem('kinder_child_id').then((childId) => {
-      if (!childId) scheduleCheckIfNeeded();
-    });
+    // Scheduled Push: wird jetzt familien-abhängig gestartet (siehe useEffect unten)
 
     return () => {
       sub.remove();
@@ -82,6 +85,34 @@ export default function RootLayout() {
       stopScheduledPush();
     };
   }, []);
+
+  // Scheduled Push im Eltern-Modus starten sobald familyId + Kinder bekannt sind
+  useEffect(() => {
+    if (!familyId || familyChildren.length === 0) return;
+    AsyncStorage.getItem('kinder_child_id').then((childId) => {
+      if (!childId) scheduleCheckIfNeeded(familyId, familyChildren);
+    });
+    return () => stopScheduledPush();
+  }, [familyId, familyChildren]);
+
+  // Warten bis Auth und Family-Status geklärt sind
+  if (authLoading || familyLoading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F0F0F5' }}>
+        <ActivityIndicator size="large" color="#4F7EF5" />
+      </View>
+    );
+  }
+
+  // Nicht eingeloggt → Login-Screen
+  if (!user) {
+    return <Redirect href="/login" />;
+  }
+
+  // Eingeloggt, aber noch keine Familie → Familie erstellen/beitreten
+  if (!familyId) {
+    return <Redirect href="/family-setup" />;
+  }
 
   return (
     <>
@@ -100,6 +131,8 @@ export default function RootLayout() {
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <Stack>
         <Stack.Screen name="index" options={{ headerShown: false }} />
+        <Stack.Screen name="login" options={{ headerShown: false }} />
+        <Stack.Screen name="family-setup" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen
           name="task/new"

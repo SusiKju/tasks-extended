@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,7 +9,10 @@ import {
   Alert,
   ActivityIndicator,
   TextInput,
+  Modal,
+  Platform,
 } from 'react-native';
+import { Clipboard } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useStore } from '../store';
 import { Theme } from '../types';
@@ -21,6 +24,31 @@ import {
 import { useGoogleTasksSync } from '../hooks/useGoogleTasksSync';
 import { useGoogleDriveNotesSync } from '../hooks/useGoogleDriveNotesSync';
 import { useGoogleContactsBirthdaysSync } from '../hooks/useGoogleContactsBirthdaysSync';
+import { useFamily } from '../hooks/useFamily';
+import { useFirebaseAuth } from '../hooks/useFirebaseAuth';
+import { signOutFirebase } from '../services/firebaseAuth';
+import {
+  FamilyMember, ChildConfig,
+  subscribeToMembers, leaveFamily,
+  addChild, updateChild, deleteChild,
+} from '../services/family';
+
+// Vorauswahl für Kind-Farben
+const CHILD_COLORS = [
+  '#4f86f7', '#f76e4f', '#22c55e', '#d946ef',
+  '#f59e0b', '#06b6d4', '#8b5cf6', '#ec4899',
+];
+
+function crossAlert(title: string, message: string, onConfirm: () => void) {
+  if (Platform.OS === 'web') {
+    if (window.confirm(`${title}${message ? '\n' + message : ''}`)) onConfirm();
+  } else {
+    Alert.alert(title, message, [
+      { text: 'Abbrechen', style: 'cancel' },
+      { text: 'OK', style: 'destructive', onPress: onConfirm },
+    ]);
+  }
+}
 
 const THEME_OPTIONS: { value: Theme; label: string; subtitle: string }[] = [
   { value: 'light', label: 'Hell', subtitle: 'iOS-Standard, weißer Hintergrund' },
@@ -43,6 +71,90 @@ export function SettingsScreen() {
   const [loadingTasksSync, setLoadingTasksSync] = useState(false);
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
   const [tasksSyncResult, setTasksSyncResult] = useState<string | null>(null);
+
+  // ── Familie ──────────────────────────────────────────────────────────────
+  const { user } = useFirebaseAuth();
+  const { familyId, meta, children: familyChildren } = useFamily();
+  const [members, setMembers] = useState<FamilyMember[]>([]);
+  const [codeCopied, setCodeCopied] = useState(false);
+  const [confirmLeave, setConfirmLeave] = useState(false);
+  const [leavingFamily, setLeavingFamily] = useState(false);
+
+  // Kind-Modal
+  const [childModal, setChildModal] = useState<{
+    mode: 'add' | 'edit';
+    child?: ChildConfig;
+    name: string;
+    color: string;
+    emoji: string;
+  } | null>(null);
+  const [savingChild, setSavingChild] = useState(false);
+  const [confirmDeleteChildId, setConfirmDeleteChildId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!familyId) return;
+    return subscribeToMembers(familyId, setMembers);
+  }, [familyId]);
+
+  const handleCopyCode = useCallback(() => {
+    if (!meta?.code) return;
+    Clipboard.setString(meta.code);
+    setCodeCopied(true);
+    setTimeout(() => setCodeCopied(false), 2000);
+  }, [meta?.code]);
+
+  const handleLeaveFamily = useCallback(async () => {
+    if (!familyId || !user) return;
+    setLeavingFamily(true);
+    try {
+      await leaveFamily(user.uid, familyId);
+    } catch (e: any) {
+      Alert.alert('Fehler', e?.message ?? 'Familie verlassen fehlgeschlagen.');
+    } finally {
+      setLeavingFamily(false);
+      setConfirmLeave(false);
+    }
+  }, [familyId, user]);
+
+  const openAddChild = useCallback(() => {
+    setChildModal({ mode: 'add', name: '', color: CHILD_COLORS[0], emoji: '' });
+  }, []);
+
+  const openEditChild = useCallback((child: ChildConfig) => {
+    setChildModal({ mode: 'edit', child, name: child.name, color: child.color, emoji: child.emoji ?? '' });
+  }, []);
+
+  const handleSaveChild = useCallback(async () => {
+    if (!childModal || !familyId) return;
+    const name = childModal.name.trim();
+    if (!name) { Alert.alert('Name fehlt', 'Bitte einen Namen eingeben.'); return; }
+    setSavingChild(true);
+    try {
+      const emoji = childModal.emoji.trim() || null;
+      if (childModal.mode === 'add') {
+        await addChild(familyId, name, childModal.color, emoji);
+      } else if (childModal.child) {
+        await updateChild(familyId, childModal.child.id, { name, color: childModal.color, emoji });
+      }
+      setChildModal(null);
+    } catch (e: any) {
+      Alert.alert('Fehler', e?.message ?? 'Speichern fehlgeschlagen.');
+    } finally {
+      setSavingChild(false);
+    }
+  }, [childModal, familyId]);
+
+  const handleDeleteChild = useCallback((child: ChildConfig) => {
+    crossAlert(
+      `${child.name} löschen?`,
+      'Alle Aufgaben und Daten dieses Kindes bleiben erhalten.',
+      async () => {
+        if (!familyId) return;
+        try { await deleteChild(familyId, child.id); }
+        catch (e: any) { Alert.alert('Fehler', e?.message ?? 'Löschen fehlgeschlagen.'); }
+      }
+    );
+  }, [familyId]);
 
   // Kalender-Liste laden wenn verbunden
   React.useEffect(() => {
@@ -399,24 +511,185 @@ export function SettingsScreen() {
       </View>
 
 
+      {/* Familie */}
+      {familyId && (
+        <View style={styles.section}>
+          <Text style={styles.sectionHeader}>Familie</Text>
+
+          {/* Code */}
+          <Pressable style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]} onPress={() => handleCopyCode()}>
+            <Ionicons name="key-outline" size={20} color={colors.accentNeon} />
+            <View style={styles.rowContent}>
+              <Text style={styles.rowTitle}>Familiencode</Text>
+              <Text style={[styles.rowSubtitle, { fontFamily: 'monospace' }]}>{meta?.code ?? '…'}</Text>
+            </View>
+            <Ionicons name={codeCopied ? 'checkmark' : 'copy-outline'} size={18} color={colors.textSecondary} />
+          </Pressable>
+
+          {/* Mitglieder */}
+          {members.length > 0 && (
+            <View style={[styles.row, { flexDirection: 'column', alignItems: 'flex-start', gap: 6 }]}>
+              <Text style={styles.rowTitle}>Mitglieder</Text>
+              {members.map((m) => (
+                <View key={m.uid} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Ionicons name="person-circle-outline" size={18} color={colors.textSecondary} />
+                  <Text style={styles.rowSubtitle}>{m.displayName}</Text>
+                  {m.uid === user?.uid && (
+                    <Text style={[styles.rowSubtitle, { color: colors.accentNeon }]}>(du)</Text>
+                  )}
+                </View>
+              ))}
+            </View>
+          )}
+
+          {/* Kinder verwalten */}
+          <View style={[styles.row, { flexDirection: 'column', alignItems: 'flex-start', gap: 8 }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' as any }}>
+              <Text style={styles.rowTitle}>Kinder</Text>
+              <Pressable
+                style={({ pressed }) => [styles.smallBtn, pressed && { opacity: 0.7 }]}
+                onPress={openAddChild}
+              >
+                <Ionicons name="add" size={16} color={colors.accentFg} />
+                <Text style={styles.smallBtnText}>Hinzufügen</Text>
+              </Pressable>
+            </View>
+            {familyChildren.length === 0 && (
+              <Text style={[styles.rowSubtitle, { fontStyle: 'italic' }]}>Noch keine Kinder angelegt.</Text>
+            )}
+            {familyChildren.map((child) => (
+              <View key={child.id} style={styles.childManageRow}>
+                <View style={[styles.childColorDot, { backgroundColor: child.color }]}>
+                  <Text style={styles.childColorDotText}>{child.emoji ?? child.name.charAt(0)}</Text>
+                </View>
+                <Text style={[styles.rowTitle, { flex: 1, fontSize: 14 }]}>{child.name}</Text>
+                <Pressable
+                  style={({ pressed }) => [{ padding: 6 }, pressed && { opacity: 0.6 }]}
+                  onPress={() => openEditChild(child)}
+                >
+                  <Ionicons name="pencil-outline" size={18} color={colors.accentNeon} />
+                </Pressable>
+                <Pressable
+                  style={({ pressed }) => [{ padding: 6 }, pressed && { opacity: 0.6 }]}
+                  onPress={() => handleDeleteChild(child)}
+                >
+                  <Ionicons name="trash-outline" size={18} color={colors.danger} />
+                </Pressable>
+              </View>
+            ))}
+          </View>
+
+          {/* Familie verlassen */}
+          {confirmLeave ? (
+            <View style={styles.confirmRow}>
+              <Text style={[styles.rowSubtitle, { flex: 1, color: colors.danger }]}>
+                Familie wirklich verlassen?
+              </Text>
+              <Pressable
+                style={({ pressed }) => [styles.confirmBtn, { backgroundColor: colors.danger }, pressed && { opacity: 0.7 }]}
+                onPress={handleLeaveFamily}
+                disabled={leavingFamily}
+              >
+                {leavingFamily
+                  ? <ActivityIndicator size="small" color="#fff" />
+                  : <Text style={styles.confirmBtnText}>Verlassen</Text>
+                }
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [styles.confirmBtn, { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }, pressed && { opacity: 0.7 }]}
+                onPress={() => setConfirmLeave(false)}
+              >
+                <Text style={[styles.confirmBtnText, { color: colors.text }]}>Abbrechen</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <Pressable
+              style={({ pressed }) => [styles.dangerBtn, pressed && { opacity: 0.7 }]}
+              onPress={() => setConfirmLeave(true)}
+            >
+              <Ionicons name="exit-outline" size={16} color={colors.danger} />
+              <Text style={[styles.dangerBtnText, { color: colors.danger }]}>Familie verlassen</Text>
+            </Pressable>
+          )}
+        </View>
+      )}
+
+      {/* Kind-Modal (Hinzufügen / Bearbeiten) */}
+      <Modal visible={!!childModal} transparent animationType="fade">
+        <Pressable style={styles.modalOverlay} onPress={() => setChildModal(null)}>
+          <Pressable style={styles.modalBox} onPress={() => {}}>
+            <Text style={styles.modalTitle}>
+              {childModal?.mode === 'add' ? 'Kind hinzufügen' : 'Kind bearbeiten'}
+            </Text>
+
+            <Text style={[styles.rowSubtitle, { marginBottom: 4 }]}>Name</Text>
+            <TextInput
+              style={styles.settingInput}
+              value={childModal?.name ?? ''}
+              onChangeText={(v) => setChildModal((m) => m ? { ...m, name: v } : m)}
+              placeholder="z.B. Lenny"
+              placeholderTextColor={colors.placeholder}
+              autoFocus
+            />
+
+            <Text style={[styles.rowSubtitle, { marginTop: 12, marginBottom: 4 }]}>Emoji (optional)</Text>
+            <TextInput
+              style={styles.settingInput}
+              value={childModal?.emoji ?? ''}
+              onChangeText={(v) => setChildModal((m) => m ? { ...m, emoji: v } : m)}
+              placeholder="z.B. 🦁"
+              placeholderTextColor={colors.placeholder}
+            />
+
+            <Text style={[styles.rowSubtitle, { marginTop: 12, marginBottom: 6 }]}>Farbe</Text>
+            <View style={styles.colorGrid}>
+              {CHILD_COLORS.map((clr) => (
+                <Pressable
+                  key={clr}
+                  style={[
+                    styles.colorDot,
+                    { backgroundColor: clr },
+                    childModal?.color === clr && styles.colorDotSelected,
+                  ]}
+                  onPress={() => setChildModal((m) => m ? { ...m, color: clr } : m)}
+                >
+                  {childModal?.color === clr && (
+                    <Ionicons name="checkmark" size={14} color="#fff" />
+                  )}
+                </Pressable>
+              ))}
+            </View>
+
+            <Pressable
+              style={({ pressed }) => [styles.connectBtn, { marginTop: 16 }, pressed && { opacity: 0.8 }, savingChild && { opacity: 0.6 }]}
+              onPress={handleSaveChild}
+              disabled={savingChild}
+            >
+              {savingChild
+                ? <ActivityIndicator color="#fff" size="small" />
+                : <Text style={styles.connectBtnText}>Speichern</Text>
+              }
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       {/* Kinder E-Mail-Adressen */}
       <View style={styles.section}>
         <Text style={styles.sectionHeader}>Kinder E-Mail-Adressen</Text>
         <Text style={[styles.rowValue, { fontSize: 12, marginBottom: 4 }]}>
           Gmail-Adressen für Benachrichtigungen beim Erstellen von Kinder-Aufgaben.
         </Text>
-        {(['lenny', 'emil', 'hannes', 'liddy'] as const).map((childId) => (
-          <View key={childId} style={styles.row}>
-            <Text style={[styles.rowTitle, { flex: 1 }]}>
-              {childId.charAt(0).toUpperCase() + childId.slice(1)}
-            </Text>
+        {familyChildren.map((child) => (
+          <View key={child.id} style={styles.row}>
+            <Text style={[styles.rowTitle, { flex: 1 }]}>{child.name}</Text>
             <TextInput
               style={[styles.settingInput, { flex: 2 }]}
               placeholder="gmail@gmail.com"
               placeholderTextColor={colors.placeholder}
-              value={settings.childEmails?.[childId] ?? ''}
+              value={settings.childEmails?.[child.id] ?? ''}
               onChangeText={(v) =>
-                updateSettings({ childEmails: { ...settings.childEmails, [childId]: v } })
+                updateSettings({ childEmails: { ...settings.childEmails, [child.id]: v } })
               }
               keyboardType="email-address"
               autoCapitalize="none"
@@ -432,6 +705,15 @@ export function SettingsScreen() {
           <Text style={styles.rowTitle}>Version</Text>
           <Text style={styles.rowValue}>1.0.0</Text>
         </View>
+        {user && (
+          <Pressable
+            style={({ pressed }) => [styles.dangerBtn, pressed && { opacity: 0.7 }]}
+            onPress={() => crossAlert('Abmelden?', '', () => signOutFirebase().catch(() => {}))}
+          >
+            <Ionicons name="log-out-outline" size={16} color={colors.danger} />
+            <Text style={[styles.dangerBtnText, { color: colors.danger }]}>Abmelden</Text>
+          </Pressable>
+        )}
       </View>
     </ScrollView>
   );
@@ -587,6 +869,61 @@ function makeStyles(c: ThemeColors) {
       gap: 10,
       paddingVertical: 6,
       width: '100%' as any,
+    },
+    // Familie-Verwaltung
+    smallBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      backgroundColor: c.accent,
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: 8,
+    },
+    smallBtnText: { fontSize: 13, fontWeight: '600', color: c.accentFg },
+    childManageRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      width: '100%' as any,
+    },
+    childColorDot: {
+      width: 30,
+      height: 30,
+      borderRadius: 15,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    childColorDotText: { fontSize: 14 },
+    // Kind-Modal
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.5)',
+      justifyContent: 'center',
+      padding: 24,
+    },
+    modalBox: {
+      backgroundColor: c.surface,
+      borderRadius: 16,
+      padding: 20,
+      gap: 4,
+    },
+    modalTitle: { fontSize: 17, fontWeight: '700', color: c.text, marginBottom: 8 },
+    colorGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+    colorDot: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    colorDotSelected: {
+      borderWidth: 2.5,
+      borderColor: '#fff',
+      shadowColor: '#000',
+      shadowOpacity: 0.3,
+      shadowRadius: 4,
+      elevation: 4,
     },
   });
 }

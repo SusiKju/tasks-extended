@@ -10,6 +10,9 @@ WebBrowser.maybeCompleteAuthSession();
 const GOOGLE_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID ?? '934256455571-posu4ic37t03v4krthiph71pik127ljn.apps.googleusercontent.com';
 
 const SCOPES = [
+  'openid',
+  'email',
+  'profile',
   'https://www.googleapis.com/auth/calendar.events',
   'https://www.googleapis.com/auth/calendar.readonly',
   'https://www.googleapis.com/auth/tasks',
@@ -26,6 +29,9 @@ export interface CalendarAuthResult {
   refreshToken: string | null;
   /** Token lifetime in seconds, used to compute googleTokenExpiry. */
   expiresIn: number;
+  /** OpenID Connect ID-Token – nur beim nativen Login vorhanden.
+   *  Wird für Firebase Auth (signInWithCredential) benötigt. */
+  idToken?: string | null;
 }
 
 interface TokenRefreshResult {
@@ -188,6 +194,7 @@ async function exchangeCodeForTokens(
       accessToken: data.access_token,
       refreshToken: data.refresh_token ?? null,
       expiresIn: Number(data.expires_in) || 3600,
+      idToken: data.id_token ?? null,
     };
   } catch {
     return null;

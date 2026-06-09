@@ -1,0 +1,91 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Hilfsfunktionen ────────────────────────────────────────────────────────
+
+    // Ist der anfragende User in dieser Familie Mitglied?
+    function isFamilyMember(familyId) {
+      return request.auth != null
+          && exists(/databases/$(database)/documents/families/$(familyId)/members/$(request.auth.uid));
+    }
+
+    // Ist der anfragende User eingeloggt?
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // ── userFamilies: schnelle Familien-Nachschlag pro User ────────────────────
+    // Nur der User selbst darf seinen eigenen Eintrag lesen/schreiben.
+    match /userFamilies/{uid} {
+      allow read, write: if isSignedIn() && request.auth.uid == uid;
+    }
+
+    // ── familyCodes: Beitrittscode-Lookup ─────────────────────────────────────
+    // Jeder eingeloggte User darf einen Code lesen (zum Beitreten).
+    // Erstellt wird der Code nur beim createFamily – kein direktes Schreiben durch User.
+    match /familyCodes/{code} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update, delete: if false; // Codes sind unveränderlich
+    }
+
+    // ── Familie (Hauptstruktur) ────────────────────────────────────────────────
+    match /families/{familyId} {
+
+      // Meta-Dokument: alle Mitglieder lesen, kein direktes Schreiben
+      allow read: if isFamilyMember(familyId);
+      allow create: if isSignedIn(); // createFamily schreibt das erste Mal
+      allow update: if isFamilyMember(familyId);
+      allow delete: if false;
+
+      // Mitglieder-Liste
+      match /members/{uid} {
+        allow read: if isFamilyMember(familyId);
+        // Mitglied darf sich selbst hinzufügen (joinFamily) und entfernen (leaveFamily)
+        allow create: if isSignedIn() && request.auth.uid == uid;
+        allow delete: if isSignedIn() && request.auth.uid == uid;
+        allow update: if isFamilyMember(familyId);
+      }
+
+      // Kinder-Konfiguration (addChild, updateChild, deleteChild)
+      match /childrenConfig/{childId} {
+        allow read, write: if isFamilyMember(familyId);
+      }
+
+      // Kinder-Aufgaben, Aktivitätslog, pushToken, Belohnung
+      match /children/{childId} {
+        allow read, write: if isFamilyMember(familyId);
+
+        match /tasks/{taskId} {
+          allow read, write: if isFamilyMember(familyId);
+        }
+
+        match /activity/{entryId} {
+          allow read, write: if isFamilyMember(familyId);
+        }
+      }
+
+      // Push-Trigger (Eltern → Kind)
+      match /pushTriggers/{childId} {
+        allow read, write: if isFamilyMember(familyId);
+      }
+
+      // App-Konfiguration (Erinnerungszeiten)
+      match /config/{docId} {
+        allow read, write: if isFamilyMember(familyId);
+      }
+
+      // Geteilte Notizliste + Countdowns
+      match /shared/{document=**} {
+        allow read, write: if isFamilyMember(familyId);
+      }
+    }
+
+    // ── Alle anderen Dokumente: kein Zugriff ──────────────────────────────────
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

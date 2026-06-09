@@ -19,6 +19,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useStore } from '../store';
 import { ThemeColors } from '../utils/theme';
 import { DatePickerModal } from './DatePickerModal';
+import { useFamilyId } from '../hooks/useFamily';
 import {
   SharedCountdown,
   subscribeToSharedCountdowns,
@@ -162,6 +163,7 @@ function AddCard({ colors, onPress }: { colors: ThemeColors; onPress: () => void
 
 export function CountdownStrip({ colors }: { colors: ThemeColors }) {
   const { settings, updateSettings } = useStore();
+  const familyId = useFamilyId();
   const [items, setItems] = useState<SharedCountdown[] | null>(null);
   const [loadError, setLoadError] = useState(false);
   const [editing, setEditing] = useState<SharedCountdown | null>(null);
@@ -175,11 +177,12 @@ export function CountdownStrip({ colors }: { colors: ThemeColors }) {
 
   useEffect(() => {
     const unsub = subscribeToSharedCountdowns(
+      familyId,
       (next) => { setLoadError(false); setItems(next); },
       () => { setLoadError(true); setItems([]); }
     );
     return unsub;
-  }, []);
+  }, [familyId]);
 
   const myName = settings.myName?.trim() || null;
 
@@ -217,9 +220,9 @@ export function CountdownStrip({ colors }: { colors: ThemeColors }) {
     setBusy(true);
     try {
       if (editing) {
-        await updateSharedCountdown(editing.id, { title, emoji: emojiDraft, targetDate: isoDate });
+        await updateSharedCountdown(familyId, editing.id, { title, emoji: emojiDraft, targetDate: isoDate });
       } else {
-        await addSharedCountdown(title, isoDate, emojiDraft, myName);
+        await addSharedCountdown(familyId, title, isoDate, emojiDraft, myName);
       }
       setFormVisible(false);
     } catch {
@@ -232,7 +235,7 @@ export function CountdownStrip({ colors }: { colors: ThemeColors }) {
     if (!editing) return;
     setBusy(true);
     try {
-      await deleteSharedCountdown(editing.id);
+      await deleteSharedCountdown(familyId, editing.id);
       setFormVisible(false);
     } catch {
     } finally {

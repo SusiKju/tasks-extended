@@ -13,12 +13,14 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../utils/theme';
 import {
-  ChildId, CHILDREN, CHILD_NAMES, ChildTask,
-  ChildReward, REWARD_TYPES,
+  ChildTask, ChildReward, REWARD_TYPES,
   subscribeToChildTasks, toggleTask, subscribeToPushTrigger,
   subscribeToChildReward,
 } from '../services/kinderTasks';
+import { ChildConfig, subscribeToChildren } from '../services/family';
 import { registerPushToken } from '../services/pushNotifications';
+
+const FAMILY_ID_KEY = 'kinder_family_id';
 import { Platform } from 'react-native';
 
 async function requestWebNotificationPermission(): Promise<void> {
@@ -55,7 +57,9 @@ export default function KindScreen({ onExitChildMode }: Props) {
   const { colors } = useTheme();
   const s = styles(colors);
 
-  const [childId, setChildId] = useState<ChildId | null>(null);
+  const [childId, setChildId] = useState<string | null>(null);
+  const [familyId, setFamilyId] = useState<string | null>(null);
+  const [familyChildren, setFamilyChildren] = useState<ChildConfig[]>([]);
   const [tasks, setTasks] = useState<ChildTask[]>([]);
   const [reward, setReward] = useState<ChildReward | null>(null);
   const [loading, setLoading] = useState(true);
@@ -70,21 +74,31 @@ export default function KindScreen({ onExitChildMode }: Props) {
   const coinScale = useRef(new Animated.Value(1)).current;
   const prevDoneRef = useRef<number | null>(null);
 
-  // Gespeicherte Kind-ID laden
+  // Gespeicherte Kind-ID und Familie laden
   useEffect(() => {
-    AsyncStorage.getItem(STORAGE_KEY).then((stored) => {
-      if (stored) setChildId(stored as ChildId);
+    Promise.all([
+      AsyncStorage.getItem(STORAGE_KEY),
+      AsyncStorage.getItem(FAMILY_ID_KEY),
+    ]).then(([storedChild, storedFamily]) => {
+      if (storedChild) setChildId(storedChild);
+      if (storedFamily) setFamilyId(storedFamily);
       setLoading(false);
     });
   }, []);
 
-  // Firestore-Listener sobald Kind bekannt
+  // Kinder-Konfiguration laden sobald familyId bekannt
   useEffect(() => {
-    if (!childId) return;
-    const unsubTasks = subscribeToChildTasks(childId, TODAY, setTasks);
+    if (!familyId) return;
+    return subscribeToChildren(familyId, setFamilyChildren);
+  }, [familyId]);
+
+  // Firestore-Listener sobald Kind UND Familie bekannt
+  useEffect(() => {
+    if (!childId || !familyId) return;
+    const unsubTasks = subscribeToChildTasks(familyId, childId, TODAY, setTasks);
     // Push-Token immer registrieren (auch wenn Onboarding übersprungen wurde)
     if (Platform.OS !== 'web') {
-      registerPushToken(childId).catch(console.warn);
+      registerPushToken(familyId, childId).catch(console.warn);
     }
     // Web-Benachrichtigungen: Berechtigung anfragen + Status merken
     if (Platform.OS === 'web' && typeof window !== 'undefined' && 'Notification' in window) {
@@ -93,13 +107,13 @@ export default function KindScreen({ onExitChildMode }: Props) {
         setNotifPermission(Notification.permission as any);
       });
     }
-    const unsubPush = subscribeToPushTrigger(childId, () => {
+    const unsubPush = subscribeToPushTrigger(familyId, childId, () => {
       setToast(true);
       setTimeout(() => setToast(false), 5000);
     });
-    const unsubReward = subscribeToChildReward(childId, setReward);
+    const unsubReward = subscribeToChildReward(familyId, childId, setReward);
     return () => { unsubTasks(); unsubPush(); unsubReward(); };
-  }, [childId]);
+  }, [childId, familyId]);
 
   // Schatzkiste-Animation auslösen, sobald eine Aufgabe NEU abgehakt wurde (TE-100)
   useEffect(() => {
@@ -121,17 +135,17 @@ export default function KindScreen({ onExitChildMode }: Props) {
     prevDoneRef.current = doneNow;
   }, [tasks, chestScale, coinScale]);
 
-  const handleSelectChild = useCallback(async (id: ChildId) => {
+  const handleSelectChild = useCallback(async (id: string) => {
     await AsyncStorage.setItem(STORAGE_KEY, id);
     setChildId(id);
     // Push-Token registrieren
-    registerPushToken(id).catch(console.warn);
-  }, []);
+    if (familyId) registerPushToken(familyId, id).catch(console.warn);
+  }, [familyId]);
 
   const handleToggle = useCallback(async (task: ChildTask) => {
-    if (!childId) return;
-    await toggleTask(childId, task.id, !task.done, { actor: 'child', title: task.title });
-  }, [childId]);
+    if (!childId || !familyId) return;
+    await toggleTask(familyId, childId, task.id, !task.done, { actor: 'child', title: task.title });
+  }, [childId, familyId]);
 
   const handlePinSubmit = useCallback(async () => {
     if (pinInput === PARENT_PIN) {
@@ -163,13 +177,15 @@ export default function KindScreen({ onExitChildMode }: Props) {
         <Text style={s.onboardingEmoji}>👋</Text>
         <Text style={s.onboardingTitle}>Wer bist du?</Text>
         <View style={s.nameGrid}>
-          {CHILDREN.map((id) => (
+          {familyChildren.map((child) => (
             <TouchableOpacity
-              key={id}
-              style={s.nameBtn}
-              onPress={() => handleSelectChild(id)}
+              key={child.id}
+              style={[s.nameBtn, { backgroundColor: child.color }]}
+              onPress={() => handleSelectChild(child.id)}
             >
-              <Text style={s.nameBtnText}>{CHILD_NAMES[id]}</Text>
+              <Text style={s.nameBtnText}>
+                {child.emoji ? `${child.emoji} ` : ''}{child.name}
+              </Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -197,7 +213,7 @@ export default function KindScreen({ onExitChildMode }: Props) {
       {/* Header */}
       <View style={s.header}>
         <Text style={s.headerEmoji}>{headerEmoji}</Text>
-        <Text style={s.headerTitle}>Hey {CHILD_NAMES[childId]}! 🌟</Text>
+        <Text style={s.headerTitle}>Hey {familyChildren.find((c) => c.id === childId)?.name ?? childId}! 🌟</Text>
         <Text style={s.headerSub}>{headerSub}</Text>
         {total > 0 && (
           <View style={s.progressTrack}>
@@ -303,7 +319,7 @@ export default function KindScreen({ onExitChildMode }: Props) {
                 // Gruppenaufgabe (TE-114/TE-116): andere teilnehmende Kinder anzeigen.
                 const others = (task.groupChildren ?? [])
                   .filter((id) => id !== childId)
-                  .map((id) => CHILD_NAMES[id]);
+                  .map((id) => familyChildren.find((c) => c.id === id)?.name ?? id);
                 if (others.length) {
                   return <Text style={s.groupHint}>👥 Zusammen mit {others.join(', ')}</Text>;
                 }

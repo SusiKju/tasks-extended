@@ -43,7 +43,8 @@ export const SHARED_NOTE_EMOJIS = ['🛒', '🎁', '❤️', '🏠', '📅', '�
 /** Vorausgewählte Reaktionen, mit denen man liebevoll auf einen Eintrag antworten kann (TE-124). */
 export const SHARED_NOTE_REACTIONS = ['❤️', '😘', '🤗', '👍'];
 
-const itemsCollection = () => collection(db, 'shared', 'notepad', 'items');
+const itemsCollection = (familyId: string) =>
+  collection(db, 'families', familyId, 'shared', 'notepad', 'items');
 
 /**
  * Echtzeit-Listener für die geteilte Liste – älteste zuerst, erledigte ans Ende.
@@ -54,11 +55,12 @@ const itemsCollection = () => collection(db, 'shared', 'notepad', 'items');
  * einem Fehler keinen weiteren Snapshot mehr liefert (TE-121-Fix).
  */
 export function subscribeToSharedNotes(
+  familyId: string,
   onChange: (items: SharedNoteItem[]) => void,
   onError?: (error: unknown) => void
 ): Unsubscribe {
   return onSnapshot(
-    itemsCollection(),
+    itemsCollection(familyId),
     (snap) => {
       const items = snap.docs
         .map((d) => ({ id: d.id, ...d.data() } as SharedNoteItem))
@@ -75,8 +77,8 @@ export function subscribeToSharedNotes(
   );
 }
 
-export async function addSharedNote(text: string, addedBy: string, emoji?: string | null): Promise<string> {
-  const ref = doc(itemsCollection());
+export async function addSharedNote(familyId: string, text: string, addedBy: string, emoji?: string | null): Promise<string> {
+  const ref = doc(itemsCollection(familyId));
   const item: Omit<SharedNoteItem, 'id'> = {
     text: text.trim(),
     done: false,
@@ -90,8 +92,8 @@ export async function addSharedNote(text: string, addedBy: string, emoji?: strin
   return ref.id;
 }
 
-export async function toggleSharedNote(itemId: string, done: boolean): Promise<void> {
-  await updateDoc(doc(db, 'shared', 'notepad', 'items', itemId), {
+export async function toggleSharedNote(familyId: string, itemId: string, done: boolean): Promise<void> {
+  await updateDoc(doc(db, 'families', familyId, 'shared', 'notepad', 'items', itemId), {
     done,
     doneAt: done ? new Date().toISOString() : null,
   });
@@ -102,14 +104,15 @@ export async function toggleSharedNote(itemId: string, done: boolean): Promise<v
  * Pendant zum alten Facebook-"Anstupsen"/"Gefällt mir" (TE-124).
  */
 export async function setSharedNoteReaction(
+  familyId: string,
   itemId: string,
   reaction: { emoji: string; by: string } | null
 ): Promise<void> {
-  await updateDoc(doc(db, 'shared', 'notepad', 'items', itemId), { reaction });
+  await updateDoc(doc(db, 'families', familyId, 'shared', 'notepad', 'items', itemId), { reaction });
 }
 
-export async function deleteSharedNote(itemId: string): Promise<void> {
-  await deleteDoc(doc(db, 'shared', 'notepad', 'items', itemId));
+export async function deleteSharedNote(familyId: string, itemId: string): Promise<void> {
+  await deleteDoc(doc(db, 'families', familyId, 'shared', 'notepad', 'items', itemId));
 }
 
 /** Zählt, wie viele Einträge in den letzten 7 Tagen gemeinsam erledigt wurden (TE-124). */
@@ -119,7 +122,7 @@ export function countDoneThisWeek(items: SharedNoteItem[]): number {
 }
 
 /** Entfernt alle bereits abgehakten Einträge in einem Rutsch ("Liste aufräumen"). */
-export async function clearDoneSharedNotes(items: SharedNoteItem[]): Promise<void> {
+export async function clearDoneSharedNotes(familyId: string, items: SharedNoteItem[]): Promise<void> {
   const done = items.filter((i) => i.done);
-  await Promise.all(done.map((i) => deleteSharedNote(i.id)));
+  await Promise.all(done.map((i) => deleteSharedNote(familyId, i.id)));
 }

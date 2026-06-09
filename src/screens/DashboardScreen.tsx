@@ -24,20 +24,16 @@ import { isOverdue } from '../utils/dateFormat';
 import { fetchRecentMails, MailMessage } from '../services/googleMail';
 import { listUpcomingEvents, CalendarEvent } from '../services/googleCalendar';
 import {
-  ChildId, CHILDREN, CHILD_NAMES, ChildTask, subscribeToChildTasks,
+  ChildTask, subscribeToChildTasks,
 } from '../services/kinderTasks';
+import { useFamily } from '../hooks/useFamily';
 import { SharedNotepad } from '../components/SharedNotepad';
 import { WeatherWidget } from '../components/WeatherWidget';
 import { CountdownStrip } from '../components/CountdownStrip';
 import { Task } from '../types';
 
-// Kleine Avatar-Farben pro Kind (TE-110 Dashboard-Avatare)
-const CHILD_AVATAR_COLORS: Record<ChildId, string> = {
-  lenny: '#4f86f7',
-  emil: '#f76e4f',
-  hannes: '#22c55e',
-  liddy: '#d946ef',
-};
+// Fallback-Farbe falls Kind keine Farbe gesetzt hat
+const CHILD_COLOR_FALLBACK = '#4f86f7';
 import { format } from 'date-fns';
 
 const TODAY = format(new Date(), 'yyyy-MM-dd');
@@ -444,6 +440,12 @@ const padStyles = StyleSheet.create({
 
 export function DashboardScreen() {
   const router = useRouter();
+  const { familyId, children: familyChildren } = useFamily();
+  const fid = familyId ?? '';
+  // Lookup-Helfer für dynamische Kinder-Daten
+  const childName = (id: string) => familyChildren.find((c) => c.id === id)?.name ?? id;
+  const childColor = (id: string) => familyChildren.find((c) => c.id === id)?.color ?? CHILD_COLOR_FALLBACK;
+  const childEmoji = (id: string) => familyChildren.find((c) => c.id === id)?.emoji ?? null;
   const { tasks, settings, scratchpad, scratchpadUpdatedAt, setScratchpad, birthdays: storeBirthdays } = useStore();
   const { colors, isDark, theme, mono, isMono } = useTheme();
   const { syncScratchpad, syncDriveNotes } = useGoogleDriveNotesSync();
@@ -521,48 +523,50 @@ export function DashboardScreen() {
 
   // Heutige Aufgaben aller Kinder (TE-110) – ein Echtzeit-Listener pro Kind,
   // analog zum Kids-Tab. Abschnitt erscheint nur, wenn mindestens eine Aufgabe da ist.
-  const [childTasks, setChildTasks] = useState<Record<ChildId, ChildTask[]>>({
-    lenny: [], emil: [], hannes: [], liddy: [],
-  });
+  const [childTasks, setChildTasks] = useState<Record<string, ChildTask[]>>({});
   useEffect(() => {
-    const unsubs = CHILDREN.map((childId) =>
-      subscribeToChildTasks(childId, TODAY, (tasks) =>
-        setChildTasks((prev) => ({ ...prev, [childId]: tasks }))
+    if (!fid || familyChildren.length === 0) return;
+    const unsubs = familyChildren.map((child) =>
+      subscribeToChildTasks(fid, child.id, TODAY, (tasks) =>
+        setChildTasks((prev) => ({ ...prev, [child.id]: tasks }))
       )
     );
     return () => unsubs.forEach((u) => u());
-  }, []);
+  }, [fid, familyChildren]);
 
   // Gruppenaufgaben (TE-115): Kopien mit gemeinsamer groupId über die Kinder hinweg
   // zu je einer Gruppe bündeln – jede wird zu einer eigenen Extrakarte.
   const groupTasks = useMemo(() => {
-    const map = new Map<string, { groupId: string; title: string; entries: { childId: ChildId; task: ChildTask }[] }>();
-    for (const childId of CHILDREN) {
-      for (const task of childTasks[childId]) {
+    const map = new Map<string, { groupId: string; title: string; entries: { childId: string; task: ChildTask }[] }>();
+    for (const child of familyChildren) {
+      for (const task of (childTasks[child.id] ?? [])) {
         if (!task.groupId) continue;
         let g = map.get(task.groupId);
         if (!g) { g = { groupId: task.groupId, title: task.title, entries: [] }; map.set(task.groupId, g); }
-        g.entries.push({ childId, task });
+        g.entries.push({ childId: child.id, task });
       }
     }
-    // Teilnehmer in fester CHILDREN-Reihenfolge.
+    // Teilnehmer in Familienreihenfolge sortieren.
+    const childOrder = familyChildren.map((c) => c.id);
     for (const g of map.values()) {
-      g.entries.sort((a, b) => CHILDREN.indexOf(a.childId) - CHILDREN.indexOf(b.childId));
+      g.entries.sort((a, b) => childOrder.indexOf(a.childId) - childOrder.indexOf(b.childId));
     }
     return [...map.values()];
-  }, [childTasks]);
+  }, [childTasks, familyChildren]);
 
-  // Einzelaufgaben je Kind (ohne Gruppenaufgaben) für die zweispaltige Anzeige.
+  // Einzelaufgaben je Kind (ohne Gruppenaufgaben) für die Anzeige.
   const individualByChild = useMemo(() => {
-    const out = {} as Record<ChildId, ChildTask[]>;
-    for (const id of CHILDREN) out[id] = childTasks[id].filter((t) => !t.groupId);
+    const out: Record<string, ChildTask[]> = {};
+    for (const child of familyChildren) {
+      out[child.id] = (childTasks[child.id] ?? []).filter((t) => !t.groupId);
+    }
     return out;
-  }, [childTasks]);
+  }, [childTasks, familyChildren]);
 
   // Nur Kinder mit mindestens einer Einzelaufgabe.
   const childrenWithTasks = useMemo(
-    () => CHILDREN.filter((id) => individualByChild[id].length > 0),
-    [individualByChild]
+    () => familyChildren.filter((c) => (individualByChild[c.id]?.length ?? 0) > 0).map((c) => c.id),
+    [individualByChild, familyChildren]
   );
 
   // Tasks nach Fälligkeit gruppieren
@@ -1019,11 +1023,13 @@ export function DashboardScreen() {
                   return (
                     <View key={childId}>
                       <View style={styles.kidLabelRow}>
-                        <View style={[styles.kidAvatar, { backgroundColor: CHILD_AVATAR_COLORS[childId] }]}>
-                          <Text style={styles.kidAvatarText}>{CHILD_NAMES[childId].charAt(0)}</Text>
+                        <View style={[styles.kidAvatar, { backgroundColor: childColor(childId) }]}>
+                          <Text style={styles.kidAvatarText}>
+                            {childEmoji(childId) ?? childName(childId).charAt(0)}
+                          </Text>
                         </View>
                         <Text style={[styles.dayLabel, styles.kidColLabel, { color: colors.textMuted }]}>
-                          {CHILD_NAMES[childId]} · {doneCount}/{list.length}
+                          {childName(childId)} · {doneCount}/{list.length}
                         </Text>
                       </View>
                       <Pressable
@@ -1112,7 +1118,7 @@ export function DashboardScreen() {
                               ]}
                               numberOfLines={1}
                             >
-                              {CHILD_NAMES[e.childId]}
+                              {childName(e.childId)}
                             </Text>
                           </View>
                         ))}

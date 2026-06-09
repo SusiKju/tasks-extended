@@ -1,7 +1,7 @@
 /**
  * scheduledPush.ts
  * Prüft täglich zur konfigurierten Zeit ob eine Push-Nachricht gesendet werden soll.
- * Aufruf: scheduleCheckIfNeeded() einmalig beim App-Start (Eltern-Modus).
+ * Aufruf: scheduleCheckIfNeeded(familyId, children) einmalig beim App-Start (Eltern-Modus).
  *
  * Funktionsweise:
  * - Liest Erinnerungszeiten aus Firestore
@@ -21,15 +21,18 @@ function currentHHMM(): string {
   return `${h}:${m}`;
 }
 
-export function scheduleCheckIfNeeded(): void {
+export function scheduleCheckIfNeeded(
+  familyId: string,
+  children: Array<{ id: string; name: string }>
+): void {
   if (intervalId) return; // bereits läuft
 
   intervalId = setInterval(async () => {
     try {
-      const times = await getReminderTimes();
+      const times = await getReminderTimes(familyId);
       const now = currentHHMM();
       if (times.includes(now)) {
-        await sendReminderToAllChildren();
+        await sendReminderToAllChildren(familyId, children);
       }
     } catch (e) {
       console.warn('scheduledPush error:', e);

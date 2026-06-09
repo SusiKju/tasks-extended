@@ -2,11 +2,14 @@
  * kinderTasks.ts
  * Alle Firestore-Operationen für das Kinder-Aufgaben-System.
  *
- * Firestore-Struktur:
- *   children/{childId}/tasks/{taskId}     → ChildTask
- *   children/{childId}/activity/{autoId}  → ActivityEntry
- *   children/{childId}/pushToken          → string
- *   config/reminders                      → { times: string[] }
+ * Firestore-Struktur (multi-tenant):
+ *   families/{familyId}/children/{childId}/tasks/{taskId}     → ChildTask
+ *   families/{familyId}/children/{childId}/activity/{autoId}  → ActivityEntry
+ *   families/{familyId}/children/{childId}                    → { pushToken, reward }
+ *   families/{familyId}/config/reminders                      → { times: string[] }
+ *   families/{familyId}/pushTriggers/{childId}                → { triggeredAt }
+ *
+ * Alle öffentlichen Funktionen erwarten familyId als ersten Parameter.
  */
 
 import {
@@ -25,21 +28,40 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebase';
 
+/** @deprecated Wird durch dynamische Kinder aus Firestore ersetzt (Task 5).
+ *  Bleibt temporär für die Migration und Legacy-Code. */
 export type ChildId = 'lenny' | 'emil' | 'hannes' | 'liddy';
+/** @deprecated */
 export const CHILDREN: ChildId[] = ['lenny', 'emil', 'hannes', 'liddy'];
+/** @deprecated */
 export const CHILD_NAMES: Record<ChildId, string> = {
-  lenny: 'Lenny',
-  emil: 'Emil',
-  hannes: 'Hannes',
-  liddy: 'Liddy',
+  lenny: 'Lenny', emil: 'Emil', hannes: 'Hannes', liddy: 'Liddy',
 };
-/** Kurzkürzel für kompakte Anzeige, z. B. Teilnehmer einer Gruppenaufgabe. (TE-113) */
+/** @deprecated */
 export const CHILD_SHORT: Record<ChildId, string> = {
-  lenny: 'Len',
-  emil: 'Emi',
-  hannes: 'Han',
-  liddy: 'Lid',
+  lenny: 'Len', emil: 'Emi', hannes: 'Han', liddy: 'Lid',
 };
+
+// ── Firestore-Pfad-Helfer (familyId-Namespace) ────────────────────────────────
+
+function childDoc(familyId: string, childId: string) {
+  return doc(db, 'families', familyId, 'children', childId);
+}
+function tasksCol(familyId: string, childId: string) {
+  return collection(db, 'families', familyId, 'children', childId, 'tasks');
+}
+function taskDoc(familyId: string, childId: string, taskId: string) {
+  return doc(db, 'families', familyId, 'children', childId, 'tasks', taskId);
+}
+function activityCol(familyId: string, childId: string) {
+  return collection(db, 'families', familyId, 'children', childId, 'activity');
+}
+function configDoc(familyId: string) {
+  return doc(db, 'families', familyId, 'config', 'reminders');
+}
+function pushTriggerDoc(familyId: string, childId: string) {
+  return doc(db, 'families', familyId, 'pushTriggers', childId);
+}
 
 export interface ChildTask {
   id: string;
@@ -105,8 +127,8 @@ export interface ActivityEntry {
 
 // ─── Aufgaben lesen ──────────────────────────────────────────────────────────
 
-export async function getTasksForChild(childId: ChildId, date: string): Promise<ChildTask[]> {
-  const snap = await getDocs(collection(db, 'children', childId, 'tasks'));
+export async function getTasksForChild(familyId: string, childId: string, date: string): Promise<ChildTask[]> {
+  const snap = await getDocs(tasksCol(familyId, childId));
   return snap.docs
     .map((d) => ({ id: d.id, ...d.data() } as ChildTask))
     .filter((t) => t.date === date);
@@ -121,15 +143,15 @@ export async function getTasksForChild(childId: ChildId, date: string): Promise<
  * "verschwinden" Aufgaben nie einfach durch Tageswechsel (TE-117).
  */
 export function subscribeToChildTasks(
-  childId: ChildId,
+  familyId: string,
+  childId: string,
   date: string,
   onChange: (tasks: ChildTask[]) => void
 ): Unsubscribe {
-  return onSnapshot(collection(db, 'children', childId, 'tasks'), (snap) => {
+  return onSnapshot(tasksCol(familyId, childId), (snap) => {
     const tasks = snap.docs
       .map((d) => ({ id: d.id, ...d.data() } as ChildTask))
       .filter((t) => !t.done || t.date === date)
-      // Älteste fällige Aufgaben zuerst, damit Überfälliges oben auffällt.
       .sort((a, b) => a.date.localeCompare(b.date));
     onChange(tasks);
   });
@@ -138,32 +160,30 @@ export function subscribeToChildTasks(
 // ─── Aufgaben schreiben (Eltern) ─────────────────────────────────────────────
 
 export async function addTask(
-  childId: ChildId,
+  familyId: string,
+  childId: string,
   task: Omit<ChildTask, 'id'>,
   actor: Actor = 'parent'
 ): Promise<string> {
-  const ref = doc(collection(db, 'children', childId, 'tasks'));
+  const ref = doc(tasksCol(familyId, childId));
   await setDoc(ref, task);
-  await logActivity(childId, {
-    action: 'created',
-    taskId: ref.id,
-    taskTitle: task.title,
-    actor,
+  await logActivity(familyId, childId, {
+    action: 'created', taskId: ref.id, taskTitle: task.title, actor,
     at: new Date().toISOString(),
   });
   return ref.id;
 }
 
 export async function updateTask(
-  childId: ChildId,
+  familyId: string,
+  childId: string,
   taskId: string,
   updates: Partial<ChildTask>,
   opts?: { actor?: Actor; title?: string }
 ): Promise<void> {
-  await updateDoc(doc(db, 'children', childId, 'tasks', taskId), updates as Record<string, unknown>);
-  await logActivity(childId, {
-    action: 'edited',
-    taskId,
+  await updateDoc(taskDoc(familyId, childId, taskId), updates as Record<string, unknown>);
+  await logActivity(familyId, childId, {
+    action: 'edited', taskId,
     taskTitle: opts?.title ?? updates.title ?? '',
     actor: opts?.actor ?? 'parent',
     at: new Date().toISOString(),
@@ -171,14 +191,14 @@ export async function updateTask(
 }
 
 export async function deleteTask(
-  childId: ChildId,
+  familyId: string,
+  childId: string,
   taskId: string,
   opts?: { actor?: Actor; title?: string }
 ): Promise<void> {
-  await deleteDoc(doc(db, 'children', childId, 'tasks', taskId));
-  await logActivity(childId, {
-    action: 'deleted',
-    taskId,
+  await deleteDoc(taskDoc(familyId, childId, taskId));
+  await logActivity(familyId, childId, {
+    action: 'deleted', taskId,
     taskTitle: opts?.title ?? '',
     actor: opts?.actor ?? 'parent',
     at: new Date().toISOString(),
@@ -186,30 +206,31 @@ export async function deleteTask(
 }
 
 export async function deleteCompletedTasks(
-  childId: ChildId,
+  familyId: string,
+  childId: string,
   tasks: ChildTask[]
 ): Promise<void> {
   const completed = tasks.filter((t) => t.done);
   await Promise.all(
-    completed.map((t) => deleteTask(childId, t.id, { actor: 'parent', title: t.title }))
+    completed.map((t) => deleteTask(familyId, childId, t.id, { actor: 'parent', title: t.title }))
   );
 }
 
 // ─── Abhaken (Kind) ──────────────────────────────────────────────────────────
 
 export async function toggleTask(
-  childId: ChildId,
+  familyId: string,
+  childId: string,
   taskId: string,
   done: boolean,
   opts?: { actor?: Actor; title?: string }
 ): Promise<void> {
-  await updateDoc(doc(db, 'children', childId, 'tasks', taskId), {
+  await updateDoc(taskDoc(familyId, childId, taskId), {
     done,
     completedAt: done ? new Date().toISOString() : null,
-    // Eine Aktion des Kindes hebt eine Eltern-Ablehnung immer auf (TE-103).
     rejected: false,
   });
-  await logActivity(childId, {
+  await logActivity(familyId, childId, {
     action: done ? 'completed' : 'reopened',
     taskId,
     taskTitle: opts?.title ?? '',
@@ -225,18 +246,16 @@ export async function toggleTask(
  * als abgelehnt (`rejected`). Das Kind sieht sie dann rot ("nicht akzeptiert"). Sobald
  * das Kind sie erneut abhakt, löscht `toggleTask` das Flag wieder. (TE-103) */
 export async function rejectTask(
-  childId: ChildId,
+  familyId: string,
+  childId: string,
   taskId: string,
   opts?: { title?: string }
 ): Promise<void> {
-  await updateDoc(doc(db, 'children', childId, 'tasks', taskId), {
-    done: false,
-    completedAt: null,
-    rejected: true,
+  await updateDoc(taskDoc(familyId, childId, taskId), {
+    done: false, completedAt: null, rejected: true,
   });
-  await logActivity(childId, {
-    action: 'reopened',
-    taskId,
+  await logActivity(familyId, childId, {
+    action: 'reopened', taskId,
     taskTitle: opts?.title ?? '',
     actor: 'parent',
     at: new Date().toISOString(),
@@ -250,8 +269,8 @@ export async function rejectTask(
  * Sortiert nach Erledigungszeitpunkt absteigend (neuste zuerst).
  * Alt-Daten ohne `completedAt` fallen auf `date` zurück.
  */
-export async function getCompletedHistory(childId: ChildId): Promise<ChildTask[]> {
-  const snap = await getDocs(collection(db, 'children', childId, 'tasks'));
+export async function getCompletedHistory(familyId: string, childId: string): Promise<ChildTask[]> {
+  const snap = await getDocs(tasksCol(familyId, childId));
   return snap.docs
     .map((d) => ({ id: d.id, ...d.data() } as ChildTask))
     .filter((t) => t.done)
@@ -260,108 +279,93 @@ export async function getCompletedHistory(childId: ChildId): Promise<ChildTask[]
 
 // ─── Aktivitätslog lesen/schreiben (TE-97) ───────────────────────────────────
 
-/** Schreibt ein Event in den Aktivitätslog eines Kindes. Fehler werden geschluckt
- *  (ein fehlgeschlagenes Log darf die eigentliche Mutation nie blockieren). */
 export async function logActivity(
-  childId: ChildId,
+  familyId: string,
+  childId: string,
   entry: Omit<ActivityEntry, 'id'>
 ): Promise<void> {
   try {
-    const ref = doc(collection(db, 'children', childId, 'activity'));
+    const ref = doc(activityCol(familyId, childId));
     await setDoc(ref, entry);
   } catch (e) {
     console.warn('logActivity fehlgeschlagen', e);
   }
 }
 
-/**
- * Aktivitätslog eines Kindes, neuste zuerst.
- * Auf die letzten `max` Events begrenzt (Default 100).
- */
-export async function getActivityLog(childId: ChildId, max = 100): Promise<ActivityEntry[]> {
-  const q = query(
-    collection(db, 'children', childId, 'activity'),
-    orderBy('at', 'desc'),
-    limit(max)
-  );
+export async function getActivityLog(familyId: string, childId: string, max = 100): Promise<ActivityEntry[]> {
+  const q = query(activityCol(familyId, childId), orderBy('at', 'desc'), limit(max));
   const snap = await getDocs(q);
   return snap.docs.map((d) => ({ id: d.id, ...d.data() } as ActivityEntry));
 }
 
 // ─── Push-Token ──────────────────────────────────────────────────────────────
 
-export async function savePushToken(childId: ChildId, token: string): Promise<void> {
-  await setDoc(doc(db, 'children', childId), { pushToken: token }, { merge: true });
+export async function savePushToken(familyId: string, childId: string, token: string): Promise<void> {
+  await setDoc(childDoc(familyId, childId), { pushToken: token }, { merge: true });
 }
 
-export async function getPushTokens(): Promise<Record<ChildId, string | null>> {
+export async function getPushTokens(familyId: string, childIds: string[]): Promise<Record<string, string | null>> {
   const result: Record<string, string | null> = {};
-  for (const childId of CHILDREN) {
-    const snap = await getDoc(doc(db, 'children', childId));
+  for (const childId of childIds) {
+    const snap = await getDoc(childDoc(familyId, childId));
     result[childId] = snap.exists() ? (snap.data()?.pushToken ?? null) : null;
   }
-  return result as Record<ChildId, string | null>;
+  return result;
 }
 
 // ─── Belohnung lesen/schreiben (TE-101) ──────────────────────────────────────
-// Liegt auf dem Kind-Dokument `children/{childId}` (Feld `reward`), analog zu
-// `pushToken`. `null` = keine Belohnung gesetzt.
 
-export async function setChildReward(childId: ChildId, reward: ChildReward | null): Promise<void> {
-  await setDoc(doc(db, 'children', childId), { reward }, { merge: true });
+export async function setChildReward(familyId: string, childId: string, reward: ChildReward | null): Promise<void> {
+  await setDoc(childDoc(familyId, childId), { reward }, { merge: true });
 }
 
-export async function getChildReward(childId: ChildId): Promise<ChildReward | null> {
-  const snap = await getDoc(doc(db, 'children', childId));
+export async function getChildReward(familyId: string, childId: string): Promise<ChildReward | null> {
+  const snap = await getDoc(childDoc(familyId, childId));
   return snap.exists() ? ((snap.data()?.reward as ChildReward | undefined) ?? null) : null;
 }
 
-/** Echtzeit-Listener für die Belohnung eines Kindes. */
 export function subscribeToChildReward(
-  childId: ChildId,
+  familyId: string,
+  childId: string,
   onChange: (reward: ChildReward | null) => void
 ): Unsubscribe {
-  return onSnapshot(doc(db, 'children', childId), (snap) => {
+  return onSnapshot(childDoc(familyId, childId), (snap) => {
     onChange(snap.exists() ? ((snap.data()?.reward as ChildReward | undefined) ?? null) : null);
   });
 }
 
 // ─── Web-Push-Trigger ────────────────────────────────────────────────────────
 
-/** Schreibt einen Push-Trigger für ein Kind in Firestore. */
-export async function writePushTrigger(childId: ChildId): Promise<void> {
-  await setDoc(doc(db, 'pushTriggers', childId), {
+export async function writePushTrigger(familyId: string, childId: string, childName: string): Promise<void> {
+  await setDoc(pushTriggerDoc(familyId, childId), {
     triggeredAt: new Date().toISOString(),
-    childName: CHILD_NAMES[childId],
+    childName,
   });
 }
 
-/** Schreibt Push-Trigger für alle Kinder. */
-export async function writePushTriggerAll(): Promise<void> {
-  await Promise.all(CHILDREN.map((id) => writePushTrigger(id)));
+export async function writePushTriggerAll(familyId: string, children: Array<{ id: string; name: string }>): Promise<void> {
+  await Promise.all(children.map((c) => writePushTrigger(familyId, c.id, c.name)));
 }
 
-/** Hört auf Push-Trigger für ein Kind. Ruft onTrigger() auf wenn ein neuer Trigger ankommt. */
-export function subscribeToPushTrigger(childId: ChildId, onTrigger: () => void): Unsubscribe {
-  return onSnapshot(doc(db, 'pushTriggers', childId), (snap) => {
+export function subscribeToPushTrigger(familyId: string, childId: string, onTrigger: () => void): Unsubscribe {
+  return onSnapshot(pushTriggerDoc(familyId, childId), (snap) => {
     if (!snap.exists()) return;
     const data = snap.data();
     if (!data?.triggeredAt) return;
     const triggered = new Date(data.triggeredAt).getTime();
-    const age = Date.now() - triggered;
-    if (age > 60_000) return; // älter als 60s → ignorieren
+    if (Date.now() - triggered > 60_000) return;
     onTrigger();
   });
 }
 
 // ─── Erinnerungszeiten ───────────────────────────────────────────────────────
 
-export async function getReminderTimes(): Promise<string[]> {
-  const snap = await getDoc(doc(db, 'config', 'reminders'));
+export async function getReminderTimes(familyId: string): Promise<string[]> {
+  const snap = await getDoc(configDoc(familyId));
   if (snap.exists()) return snap.data().times as string[];
-  return ['15:00', '17:00']; // Default
+  return ['15:00', '17:00'];
 }
 
-export async function setReminderTimes(times: string[]): Promise<void> {
-  await setDoc(doc(db, 'config', 'reminders'), { times });
+export async function setReminderTimes(familyId: string, times: string[]): Promise<void> {
+  await setDoc(configDoc(familyId), { times });
 }
