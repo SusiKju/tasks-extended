@@ -29,6 +29,7 @@ import {
 import { useFamily } from '../hooks/useFamily';
 import { SharedNotepad } from '../components/SharedNotepad';
 import { WeatherWidget } from '../components/WeatherWidget';
+import { GoogleConnectBanner } from '../components/GoogleConnectBanner';
 import { CountdownStrip } from '../components/CountdownStrip';
 import { Task } from '../types';
 
@@ -402,6 +403,13 @@ function Scratchpad({
             returnKeyType="done"
             blurOnSubmit={false}
           />
+          <Pressable
+            onPress={() => removeEntry(idx)}
+            hitSlop={8}
+            style={[padStyles.deleteBtn, { backgroundColor: fg + '22' }]}
+          >
+            <Ionicons name="close" size={13} color={fg} style={{ opacity: 0.75 }} />
+          </Pressable>
         </View>
         );
       })}
@@ -430,9 +438,17 @@ const padStyles = StyleSheet.create({
   bubbleInput: {
     flex: 1,
     color: '#FFFFFF',
-    fontSize: 12,
+    fontSize: 13,
     lineHeight: 18,
     padding: 0,
+  },
+  deleteBtn: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
   },
 });
 
@@ -597,8 +613,6 @@ export function DashboardScreen() {
     return [
       { key: 'overdue',  label: 'Überfällig', tasks: sort(byGroup.overdue) },
       { key: 'today',    label: 'Heute',       tasks: sort(byGroup.today) },
-      { key: 'tomorrow', label: 'Morgen',      tasks: sort(byGroup.tomorrow) },
-      { key: 'later',    label: 'Später',      tasks: sort(byGroup.later) },
     ].filter((g) => g.tasks.length > 0);
   }, [tasks]);
 
@@ -761,6 +775,9 @@ export function DashboardScreen() {
         )
       )}
 
+      {/* ── Google-Connect-Banner (nur wenn noch nicht verbunden) ── */}
+      {!settings.googleCalendarEnabled && <GoogleConnectBanner colors={colors} />}
+
       {/* ── Wettervorhersage (TE-126, links) + Sync-Button (rechts) ── */}
       <View style={styles.syncRow}>
         <WeatherWidget colors={colors} />
@@ -786,7 +803,7 @@ export function DashboardScreen() {
         {/* Tasks */}
         <View style={styles.tasksCol}>
           <SectionLabel
-            title="Tasks"
+            title="Heutige Tasks"
             onMore={() => router.push('/(tabs)/tasks' as any)}
             colors={colors}
           />
@@ -810,9 +827,11 @@ export function DashboardScreen() {
                   isToday || isOverdue ? 'lg' : isTomorrow ? 'md' : 'sm';
                 return (
                   <View key={group.key}>
-                    <Text style={[styles.dayLabel, { color: labelColor }]}>
-                      {group.label}
-                    </Text>
+                    {!isToday && (
+                      <Text style={[styles.dayLabel, { color: labelColor }]}>
+                        {group.label}
+                      </Text>
+                    )}
                     <View style={styles.chipWrap}>
                       {group.tasks.map((task) => (
                         <TaskChip
@@ -850,7 +869,7 @@ export function DashboardScreen() {
       {/* ── Kalender ── */}
       {settings.googleCalendarEnabled && (
         <View style={styles.section}>
-          <SectionLabel title="Termine der nächsten 2 Tage" colors={colors} />
+          <SectionLabel title="Heutige Termine" colors={colors} />
           {calLoading ? (
             <View style={[styles.card, styles.loadingRow]}>
               <ActivityIndicator color={mono(C.calendar)} size="small" />
@@ -927,7 +946,6 @@ export function DashboardScreen() {
               <View style={{ gap: 6 }}>
                 {todayEvents.length > 0 && (
                   <View>
-                    <Text style={[styles.dayLabel, { color: colors.danger, paddingHorizontal: 0 }]}>Heute</Text>
                     {/* Gleiche Hervorhebung wie die Geburtstags-Card: atmender
                         Flammen-Glow überall, zusätzlich rotierender Regenbogen-
                         Rand im Neon-/Mono-Dark-Theme (TE-120). */}

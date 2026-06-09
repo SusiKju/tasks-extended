@@ -11,8 +11,8 @@
  * Card-Look, der den Abschnitt bewusst hervorhebt.
  */
 
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { View, Text, TextInput, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import { View, Text, TextInput, Pressable, StyleSheet, ActivityIndicator, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useStore } from '../store';
 import { ThemeColors } from '../utils/theme';
@@ -42,6 +42,7 @@ export function SharedNotepad({ colors, isDark }: { colors: ThemeColors; isDark:
   const [reactionPickerFor, setReactionPickerFor] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!familyId) return;
     const unsub = subscribeToSharedNotes(
       familyId,
       (next) => { setLoadError(false); setItems(next); },
@@ -109,6 +110,9 @@ export function SharedNotepad({ colors, isDark }: { colors: ThemeColors; isDark:
   }, [items]);
 
   const accent = colors.accentNeon;
+  const [tooltipVisible, setTooltipVisible] = useState(false);
+
+  if (!familyId) return null;
 
   return (
     <View style={[styles.wrap, { borderColor: accent, backgroundColor: colors.surface, shadowColor: accent }]}>
@@ -122,10 +126,19 @@ export function SharedNotepad({ colors, isDark }: { colors: ThemeColors; isDark:
           <Ionicons name="people-outline" size={12} color={accent} />
           <Text style={[styles.sharedTagText, { color: accent }]}>geteilt</Text>
         </View>
+        <Pressable
+          onPress={() => setTooltipVisible((v) => !v)}
+          style={styles.infoBtn}
+          hitSlop={8}
+        >
+          <Ionicons name="information-circle-outline" size={18} color={colors.textMuted} />
+        </Pressable>
       </View>
-      <Text style={[styles.subtitle, { color: colors.textMuted }]}>
-        Für Dinge, die ihr gemeinsam im Blick behalten wollt – z. B. den Einkauf.
-      </Text>
+      {tooltipVisible && (
+        <Text style={[styles.tooltip, { backgroundColor: colors.surfaceAlt ?? colors.surface, color: colors.textMuted, borderColor: colors.border ?? colors.textMuted }]}>
+          Für Dinge, die ihr gemeinsam im Blick behalten wollt – z. B. den Einkauf.
+        </Text>
+      )}
 
       {!myName ? (
         // Einmaliger Mini-Dialog: Name festlegen, damit Einträge zugeordnet werden können.
@@ -209,63 +222,78 @@ export function SharedNotepad({ colors, isDark }: { colors: ThemeColors; isDark:
               <Text style={[styles.emptyText, { color: colors.textMuted }]}>Noch leer – fügt etwas hinzu.</Text>
             </View>
           ) : (
-            <View style={{ gap: 2 }}>
+            <View>
               {items.map((item, i) => {
                 const pickerOpen = reactionPickerFor === item.id;
                 const reactedByMe = !!item.reaction && item.reaction.by === myName;
                 return (
-                <View
-                  key={item.id}
-                  style={[styles.row, i < items.length - 1 && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}
-                >
-                  <Pressable onPress={() => handleToggle(item)} hitSlop={8} disabled={busyId === item.id}>
-                    <Ionicons
-                      name={item.done ? 'checkbox' : 'square-outline'}
-                      size={20}
-                      color={item.done ? colors.success : colors.textMuted}
-                    />
-                  </Pressable>
-                  <View style={{ flex: 1 }}>
-                    <Text
-                      style={[styles.itemText, { color: colors.text }, item.done && { textDecorationLine: 'line-through', color: colors.textMuted }]}
-                      numberOfLines={2}
-                    >
-                      {item.emoji ? `${item.emoji} ` : ''}{item.text}
-                    </Text>
-                    <View style={styles.itemMetaRow}>
-                      <Text style={[styles.itemMeta, { color: colors.textMuted }]}>von {item.addedBy}</Text>
-                      {item.reaction && (
-                        <View style={[styles.reactionBadge, { borderColor: reactedByMe ? accent : colors.border }]}>
-                          <Text style={styles.reactionBadgeEmoji}>{item.reaction.emoji}</Text>
-                          <Text style={[styles.reactionBadgeText, { color: colors.textMuted }]}>von {item.reaction.by}</Text>
-                        </View>
-                      )}
-                    </View>
-                    {pickerOpen && (
-                      <View style={[styles.reactionPicker, { borderColor: colors.border, backgroundColor: colors.inputBackground }]}>
-                        {SHARED_NOTE_REACTIONS.map((r) => (
-                          <Pressable key={r} onPress={() => handleReact(item, r)} hitSlop={6} style={styles.reactionPickerBtn}>
-                            <Text style={styles.reactionPickerEmoji}>{r}</Text>
-                          </Pressable>
-                        ))}
-                      </View>
-                    )}
-                  </View>
-                  {/* Liebevoll reagieren – das moderne "Anstupsen" für einzelne Einträge (TE-124) */}
-                  <Pressable
-                    onPress={() => myName && setReactionPickerFor(pickerOpen ? null : item.id)}
-                    hitSlop={8}
-                    disabled={!myName}
+                <View key={item.id}>
+                  <View
+                    style={[styles.row, i < items.length - 1 && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}
                   >
-                    <Ionicons
-                      name={item.reaction ? 'heart' : 'heart-outline'}
-                      size={18}
-                      color={item.reaction ? '#E8607A' : colors.textMuted}
-                    />
-                  </Pressable>
-                  <Pressable onPress={() => handleDelete(item)} hitSlop={8} disabled={busyId === item.id}>
-                    <Ionicons name="close" size={16} color={colors.textMuted} />
-                  </Pressable>
+                    {/* Checkbox */}
+                    <Pressable onPress={() => handleToggle(item)} hitSlop={8} disabled={busyId === item.id}>
+                      <Ionicons
+                        name={item.done ? 'checkbox' : 'square-outline'}
+                        size={22}
+                        color={item.done ? colors.success : colors.textMuted}
+                      />
+                    </Pressable>
+
+                    {/* Text + Meta */}
+                    <View style={{ flex: 1 }}>
+                      <Text
+                        style={[styles.itemText, { color: colors.text }, item.done && { textDecorationLine: 'line-through', color: colors.textMuted }]}
+                        numberOfLines={2}
+                      >
+                        {item.emoji ? `${item.emoji} ` : ''}{item.text}
+                      </Text>
+                      <View style={styles.itemMetaRow}>
+                        <Text style={[styles.itemMeta, { color: colors.textMuted }]}>von {item.addedBy}</Text>
+                        {item.reaction && (
+                          <View style={[styles.reactionBadge, { borderColor: reactedByMe ? accent : colors.border }]}>
+                            <Text style={styles.reactionBadgeEmoji}>{item.reaction.emoji}</Text>
+                            <Text style={[styles.reactionBadgeText, { color: colors.textMuted }]}>von {item.reaction.by}</Text>
+                          </View>
+                        )}
+                      </View>
+                    </View>
+
+                    {/* Reaktion */}
+                    <Pressable
+                      onPress={() => myName && setReactionPickerFor(pickerOpen ? null : item.id)}
+                      hitSlop={8}
+                      disabled={!myName}
+                      style={styles.heartBtn}
+                    >
+                      <Ionicons
+                        name={item.reaction ? 'heart' : 'heart-outline'}
+                        size={18}
+                        color={item.reaction ? '#E8607A' : colors.textMuted}
+                      />
+                    </Pressable>
+
+                    {/* Löschen */}
+                    <Pressable
+                      onPress={() => handleDelete(item)}
+                      hitSlop={8}
+                      disabled={busyId === item.id}
+                      style={[styles.deleteBtn, { backgroundColor: colors.danger + '22' }]}
+                    >
+                      <Ionicons name="close" size={16} color={colors.danger} />
+                    </Pressable>
+                  </View>
+
+                  {/* Reaktions-Picker unterhalb der Zeile */}
+                  {pickerOpen && (
+                    <View style={[styles.reactionPicker, { borderColor: colors.border, backgroundColor: colors.inputBackground }]}>
+                      {SHARED_NOTE_REACTIONS.map((r) => (
+                        <Pressable key={r} onPress={() => handleReact(item, r)} hitSlop={6} style={styles.reactionPickerBtn}>
+                          <Text style={styles.reactionPickerEmoji}>{r}</Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  )}
                 </View>
                 );
               })}
@@ -323,7 +351,18 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3,
   },
   sharedTagText: { fontSize: 10, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.4 },
-  subtitle: { fontSize: 12, marginTop: -2 },
+  infoBtn: { marginLeft: 'auto', padding: 2 },
+  tooltip: {
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 6,
+    marginBottom: 2,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 8,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
 
   namePrompt: { gap: 8, paddingTop: 4 },
   namePromptText: { fontSize: 12.5, lineHeight: 18 },
@@ -343,7 +382,9 @@ const styles = StyleSheet.create({
   emptyRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 10 },
   emptyText: { fontSize: 13 },
 
-  row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9 },
+  deleteBtn: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  heartBtn: { padding: 2 },
   itemText: { fontSize: 14, fontWeight: '600' },
   itemMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 1, flexWrap: 'wrap' },
   itemMeta: { fontSize: 11 },

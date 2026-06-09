@@ -65,31 +65,38 @@ export function WeatherWidget({ colors }: { colors: ThemeColors }) {
 
   return (
     <>
-      <Pressable
-        onPress={() => setModalVisible(true)}
-        style={({ pressed }) => [
-          styles.chip,
-          { borderColor: colors.border, backgroundColor: colors.surface, opacity: pressed ? 0.7 : 1 },
-        ]}
-        hitSlop={6}
-      >
-        <Ionicons name={icon as any} size={16} color={colors.textSecondary} />
+      <View style={styles.row}>
+        {/* Wetter-Chip → öffnet Vorhersage-Modal */}
         <Pressable
-          onPress={(e) => {
-            e.stopPropagation();
-            setAdviceVisible(true);
-          }}
+          onPress={() => setModalVisible(true)}
+          style={({ pressed }) => [
+            styles.chip,
+            { borderColor: colors.border, backgroundColor: colors.surface, opacity: pressed ? 0.7 : 1 },
+          ]}
           hitSlop={6}
         >
+          <Ionicons name={icon as any} size={16} color={colors.textSecondary} />
           <Text style={[styles.chipTemp, { color: colors.text }]}>
             {today.tempMax}° <Text style={{ color: colors.textMuted }}>/ {today.tempMin}°</Text>
           </Text>
+          <View style={styles.chipWind}>
+            <Ionicons name="navigate-outline" size={11} color={colors.textMuted} />
+            <Text style={[styles.chipWindText, { color: colors.textMuted }]}>{today.windSpeedMax} km/h</Text>
+          </View>
         </Pressable>
-        <View style={styles.chipWind}>
-          <Ionicons name="navigate-outline" size={11} color={colors.textMuted} />
-          <Text style={[styles.chipWindText, { color: colors.textMuted }]}>{today.windSpeedMax} km/h</Text>
-        </View>
-      </Pressable>
+
+        {/* Klamotten-Button → öffnet Kleidungsempfehlung */}
+        <Pressable
+          onPress={() => setAdviceVisible(true)}
+          style={({ pressed }) => [
+            styles.clothingBtn,
+            { borderColor: colors.border, backgroundColor: colors.surface, opacity: pressed ? 0.7 : 1 },
+          ]}
+          hitSlop={6}
+        >
+          <Ionicons name="shirt-outline" size={17} color={colors.textSecondary} />
+        </Pressable>
+      </View>
 
       <Modal visible={modalVisible} animationType="fade" transparent onRequestClose={() => setModalVisible(false)}>
         <Pressable style={styles.backdrop} onPress={() => setModalVisible(false)}>
@@ -143,6 +150,11 @@ export function WeatherWidget({ colors }: { colors: ThemeColors }) {
 }
 
 const styles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -151,6 +163,14 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 10,
     paddingVertical: 6,
+  },
+  clothingBtn: {
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   chipTemp: { fontSize: 13, fontWeight: '700' },
   chipWind: { flexDirection: 'row', alignItems: 'center', gap: 2 },
