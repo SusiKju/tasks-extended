@@ -18,10 +18,12 @@ import {
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { getCurrentUser } from '../services/firebaseAuth';
 import { createFamily, joinFamilyWithCode, saveUserFamilyLink } from '../services/family';
 
 export function FamilySetupScreen() {
+  const router = useRouter();
   const [mode, setMode] = useState<'choose' | 'create' | 'join'>('choose');
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
@@ -33,7 +35,7 @@ export function FamilySetupScreen() {
     try {
       const familyId = await createFamily(user);
       await saveUserFamilyLink(user.uid, familyId);
-      // Navigation übernimmt der Auth-Guard in _layout.tsx (re-render nach saveUserFamilyLink)
+      router.replace('/(tabs)');
     } catch (e: any) {
       Alert.alert('Fehler', e?.message ?? 'Familie konnte nicht erstellt werden.');
     } finally {
@@ -48,6 +50,7 @@ export function FamilySetupScreen() {
     try {
       const familyId = await joinFamilyWithCode(user, code.trim());
       await saveUserFamilyLink(user.uid, familyId);
+      router.replace('/(tabs)');
     } catch (e: any) {
       Alert.alert('Unbekannter Code', e?.message ?? 'Bitte Schreibweise prüfen.');
     } finally {
