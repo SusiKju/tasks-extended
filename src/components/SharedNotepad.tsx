@@ -13,7 +13,7 @@
 
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet, ActivityIndicator, Platform } from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { useStore } from '../store';
 import { ThemeColors } from '../utils/theme';
 import { useFamilyId } from '../hooks/useFamily';
@@ -163,8 +163,7 @@ export function SharedNotepad({ colors, isDark }: { colors: ThemeColors; isDark:
       {/* Auffälliger Header mit Icon-Badge – hebt den Abschnitt bewusst hervor (TE-121) */}
       <View style={styles.header}>
         <View style={[styles.badge, { backgroundColor: accent }]}>
-          {/* TE-4: kompakteres, kinderbezogenes Icon statt Einkaufswagen */}
-          <MaterialCommunityIcons name="account-child-outline" size={15} color={isDark ? '#000' : '#fff'} />
+          <Ionicons name="cart-outline" size={15} color={isDark ? '#000' : '#fff'} />
         </View>
         <Text style={[styles.title, { color: colors.text }]}>Geteilte Liste</Text>
         <View style={[styles.sharedTag, { borderColor: accent }]}>
@@ -461,7 +460,7 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   header: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  badge: { width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  badge: { width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
   title: { fontSize: 15, fontWeight: '800', flex: 1 },
   sharedTag: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
