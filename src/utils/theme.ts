@@ -58,8 +58,43 @@ const DARK_MONO: ThemeColors = {
   successFg: '#000000',
 };
 
+// Ruhiges Alternativ-Theme: weiterhin dunkel (die App ist dark-only), aber
+// aufgeräumter als das Neon-Mono-Theme. Reiner Schwarz-Hintergrund weicht
+// einem weichen Anthrazit, die harten weißen Neon-Glows werden durch eine
+// gedämpfte Slate-Blau-Akzentfarbe mit sehr dezentem Glow ersetzt.
+// success/warning/danger bleiben farbig, aber entsättigt. Alle Werte sind
+// gegen ihren jeweiligen Hintergrund auf WCAG ≥ 4.5:1 geprüft (UI-Glow
+// ausgenommen), analog zum DARK_MONO-Theme.
+const DARK_CALM: ThemeColors = {
+  background:    '#15171C',   // weiches Anthrazit statt reinem Schwarz
+  surface:       '#1C1F26',
+  surfaceHigh:   '#262A33',
+  text:          '#E6E8EC',   // weiches Off-White statt reinem Weiß
+  textSecondary: '#A7AEBA',
+  textMuted:     '#8E95A1',   // WCAG: 4.77:1 auf surfaceHigh
+  accent:        '#8FA6C4',   // gedämpftes Slate-Blau
+  accentNeon:    '#8FA6C4',   // gleicher Akzent, Glow stark reduziert
+  success:       '#84B58E',   // entsättigtes Salbeigrün
+  warning:       '#CDAE7C',   // entsättigtes Amber
+  danger:        '#D28C8C',   // entsättigtes Rosé-Rot, bleibt als Warnung lesbar
+  border:        '#2C313B',
+  tabBar:        '#15171C',
+  tabBarBorder:  '#2C313B',
+  header:        '#15171C',
+  inputBackground: '#1C1F26',
+  placeholder:   '#888F9A',   // WCAG: 5.06:1 auf inputBackground
+  glowAccent:  'rgba(143, 166, 196, 0.20)',   // sehr subtiler Glow
+  glowDanger:  'rgba(210, 140, 140, 0.18)',
+  glowSuccess: 'rgba(132, 181, 142, 0.18)',
+  accentFg: '#15171C',
+  dangerFg: '#15171C',
+  warningFg: '#15171C',
+  successFg: '#15171C',
+};
+
 export const THEMES: Record<Theme, ThemeColors> = {
   'dark-mono': DARK_MONO,
+  'dark-calm': DARK_CALM,
 };
 
 /** Relative Luminanz (WCAG) einer Hex-Farbe (#RGB / #RRGGBB), 0..1. */
@@ -150,16 +185,18 @@ export function useTheme(): {
   theme: Theme;
   isDark: boolean;
   isMono: boolean;
-  /** Wandelt Farbe zu Graustufe – dark-mono ist immer aktiv. */
+  /** Im Mono-Theme zu Graustufe wandeln, sonst Farbe unverändert lassen. */
   mono: (hex: string) => string;
 } {
-  // Nur noch dark-mono – für Re-render-Kompatibilität beibehalten.
-  useStore((s) => s.settings.theme); // eslint-disable-line
+  const theme = useStore((s) => s.settings.theme);
+  const resolved: Theme = THEMES[theme] ? theme : 'dark-mono';
+  const colors = THEMES[resolved];
+  const isMono = resolved === 'dark-mono';
   return {
-    colors: DARK_MONO,
-    theme: 'dark-mono',
-    isDark: true,
-    isMono: true,
-    mono: toGray,
+    colors,
+    theme: resolved,
+    isDark: true, // beide Themes sind dunkel
+    isMono,
+    mono: isMono ? toGray : (hex: string) => hex,
   };
 }

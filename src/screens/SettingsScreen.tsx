@@ -15,7 +15,13 @@ import {
 import { Clipboard } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useStore } from '../store';
-import { useTheme, ThemeColors, neonGlow } from '../utils/theme';
+import { useTheme, ThemeColors, neonGlow, THEMES } from '../utils/theme';
+import { Theme } from '../types';
+
+const THEME_OPTIONS: { key: Theme; label: string; description: string }[] = [
+  { key: 'dark-mono', label: 'Neon Mono', description: 'Schwarz-Weiß mit kräftigem Glow' },
+  { key: 'dark-calm', label: 'Ruhig', description: 'Gedämpft & aufgeräumt' },
+];
 import {
   signInWithGoogle,
   listCalendars,
@@ -625,6 +631,32 @@ export function SettingsScreen() {
         </Pressable>
       </Modal>
 
+
+      {/* Darstellung */}
+      <View style={styles.section}>
+        <Text style={styles.sectionHeader}>Darstellung</Text>
+        {THEME_OPTIONS.map((opt) => {
+          const tc = THEMES[opt.key];
+          const active = settings.theme === opt.key;
+          return (
+            <Pressable
+              key={opt.key}
+              style={({ pressed }) => [styles.themeRow, active && styles.themeRowActive, pressed && { opacity: 0.85 }]}
+              onPress={() => updateSettings({ theme: opt.key })}
+            >
+              <View style={[styles.themePreview, { backgroundColor: tc.background, borderColor: tc.border }]}>
+                <View style={[styles.themePreviewBar, { backgroundColor: tc.accentNeon }]} />
+                <View style={[styles.themePreviewDot, { backgroundColor: tc.success }]} />
+              </View>
+              <View style={styles.rowContent}>
+                <Text style={styles.rowTitle}>{opt.label}</Text>
+                <Text style={styles.rowSubtitle}>{opt.description}</Text>
+              </View>
+              {active && <Ionicons name="checkmark-circle" size={22} color={colors.accentNeon} />}
+            </Pressable>
+          );
+        })}
+      </View>
 
       {/* App info */}
       <View style={styles.section}>

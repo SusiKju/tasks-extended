@@ -1,6 +1,6 @@
 export type DateFormat = 'iso' | 'de' | 'us' | 'relative';
 
-export type Theme = 'dark-mono';
+export type Theme = 'dark-mono' | 'dark-calm';
 
 export interface Attachment {
   id: string;
