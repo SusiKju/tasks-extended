@@ -111,6 +111,10 @@ export async function setSharedNoteReaction(
   await updateDoc(doc(db, 'families', familyId, 'shared', 'notepad', 'items', itemId), { reaction });
 }
 
+export async function updateSharedNote(familyId: string, itemId: string, text: string): Promise<void> {
+  await updateDoc(doc(db, 'families', familyId, 'shared', 'notepad', 'items', itemId), { text: text.trim() });
+}
+
 export async function deleteSharedNote(familyId: string, itemId: string): Promise<void> {
   await deleteDoc(doc(db, 'families', familyId, 'shared', 'notepad', 'items', itemId));
 }

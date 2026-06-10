@@ -22,6 +22,7 @@ import {
   subscribeToSharedNotes,
   addSharedNote,
   toggleSharedNote,
+  updateSharedNote,
   deleteSharedNote,
   clearDoneSharedNotes,
   setSharedNoteReaction,
@@ -40,6 +41,8 @@ export function SharedNotepad({ colors, isDark }: { colors: ThemeColors; isDark:
   const [busyId, setBusyId] = useState<string | null>(null);
   const [draftEmoji, setDraftEmoji] = useState<string | null>(null);
   const [reactionPickerFor, setReactionPickerFor] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState('');
 
   useEffect(() => {
     if (!familyId) return;
@@ -105,6 +108,21 @@ export function SharedNotepad({ colors, isDark }: { colors: ThemeColors; isDark:
       setBusyId(null);
     }
   }, [familyId]);
+
+  const handleStartEdit = useCallback((item: SharedNoteItem) => {
+    setReactionPickerFor(null);
+    setEditingId(item.id);
+    setEditDraft(item.text);
+  }, []);
+
+  const handleSaveEdit = useCallback(async (item: SharedNoteItem) => {
+    const trimmed = editDraft.trim();
+    setEditingId(null);
+    if (!trimmed || trimmed === item.text || !familyId) return;
+    try {
+      await updateSharedNote(familyId, item.id, trimmed);
+    } catch {}
+  }, [editDraft, familyId]);
 
   const handleClearDone = useCallback(async () => {
     if (!items || !familyId) return;
@@ -244,12 +262,24 @@ export function SharedNotepad({ colors, isDark }: { colors: ThemeColors; isDark:
 
                     {/* Text + Meta */}
                     <View style={{ flex: 1 }}>
-                      <Text
-                        style={[styles.itemText, { color: colors.text }, item.done && { textDecorationLine: 'line-through', color: colors.textMuted }]}
-                        numberOfLines={2}
-                      >
-                        {item.emoji ? `${item.emoji} ` : ''}{item.text}
-                      </Text>
+                      {editingId === item.id ? (
+                        <TextInput
+                          style={[styles.editInput, { color: colors.text, borderColor: accent, backgroundColor: colors.inputBackground }]}
+                          value={editDraft}
+                          onChangeText={setEditDraft}
+                          onSubmitEditing={() => handleSaveEdit(item)}
+                          onBlur={() => handleSaveEdit(item)}
+                          autoFocus
+                          returnKeyType="done"
+                        />
+                      ) : (
+                        <Text
+                          style={[styles.itemText, { color: colors.text }, item.done && { textDecorationLine: 'line-through', color: colors.textMuted }]}
+                          numberOfLines={2}
+                        >
+                          {item.emoji ? `${item.emoji} ` : ''}{item.text}
+                        </Text>
+                      )}
                       <View style={styles.itemMetaRow}>
                         <Text style={[styles.itemMeta, { color: colors.textMuted }]}>von {item.addedBy}</Text>
                         {item.reaction && (
@@ -261,29 +291,44 @@ export function SharedNotepad({ colors, isDark }: { colors: ThemeColors; isDark:
                       </View>
                     </View>
 
+                    {/* Bearbeiten */}
+                    {editingId !== item.id && (
+                      <Pressable
+                        onPress={() => handleStartEdit(item)}
+                        hitSlop={8}
+                        style={styles.editBtn}
+                      >
+                        <Ionicons name="pencil-outline" size={16} color={colors.textMuted} />
+                      </Pressable>
+                    )}
+
                     {/* Reaktion */}
-                    <Pressable
-                      onPress={() => myName && setReactionPickerFor(pickerOpen ? null : item.id)}
-                      hitSlop={8}
-                      disabled={!myName}
-                      style={styles.heartBtn}
-                    >
-                      <Ionicons
-                        name={item.reaction ? 'heart' : 'heart-outline'}
-                        size={18}
-                        color={item.reaction ? '#E8607A' : colors.textMuted}
-                      />
-                    </Pressable>
+                    {editingId !== item.id && (
+                      <Pressable
+                        onPress={() => myName && setReactionPickerFor(pickerOpen ? null : item.id)}
+                        hitSlop={8}
+                        disabled={!myName}
+                        style={styles.heartBtn}
+                      >
+                        <Ionicons
+                          name={item.reaction ? 'heart' : 'heart-outline'}
+                          size={18}
+                          color={item.reaction ? '#E8607A' : colors.textMuted}
+                        />
+                      </Pressable>
+                    )}
 
                     {/* Löschen */}
-                    <Pressable
-                      onPress={() => handleDelete(item)}
-                      hitSlop={8}
-                      disabled={busyId === item.id}
-                      style={[styles.deleteBtn, { backgroundColor: colors.danger + '22' }]}
-                    >
-                      <Ionicons name="close" size={16} color={colors.danger} />
-                    </Pressable>
+                    {editingId !== item.id && (
+                      <Pressable
+                        onPress={() => handleDelete(item)}
+                        hitSlop={8}
+                        disabled={busyId === item.id}
+                        style={[styles.deleteBtn, { backgroundColor: colors.danger + '22' }]}
+                      >
+                        <Ionicons name="close" size={16} color={colors.danger} />
+                      </Pressable>
+                    )}
                   </View>
 
                   {/* Reaktions-Picker unterhalb der Zeile */}
@@ -386,6 +431,8 @@ const styles = StyleSheet.create({
 
   row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9 },
   deleteBtn: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  editBtn: { padding: 2 },
+  editInput: { fontSize: 14, fontWeight: '600', borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
   heartBtn: { padding: 2 },
   itemText: { fontSize: 14, fontWeight: '600' },
   itemMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 1, flexWrap: 'wrap' },
