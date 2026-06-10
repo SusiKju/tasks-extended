@@ -29,6 +29,7 @@ import {
 } from '../services/kinderTasks';
 import { useFamily } from '../hooks/useFamily';
 import { SharedNotepad } from '../components/SharedNotepad';
+import { GeistesKacheln } from '../components/GeistesKacheln';
 import { WeatherWidget } from '../components/WeatherWidget';
 import { GoogleConnectBanner } from '../components/GoogleConnectBanner';
 import { CountdownStrip } from '../components/CountdownStrip';
@@ -874,6 +875,9 @@ export function DashboardScreen() {
         </View>
 
       </View>
+
+      {/* ── Geistesblitze: persönliche Gedanken-Kacheln ── */}
+      <GeistesKacheln colors={colors} isDark={isDark} />
 
       {/* ── Countdowns (TE-128): filigrane, motivierende Karten oberhalb der Termine ── */}
       <CountdownStrip colors={colors} />

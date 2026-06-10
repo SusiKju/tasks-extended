@@ -92,6 +92,11 @@ service cloud.firestore {
       match /personalNotesByUser/{uid}/notes/{noteId} {
         allow read, write: if isFamilyMember(familyId) && request.auth.uid == uid;
       }
+
+      // Persönliche Gedanken-Kacheln pro User
+      match /geistesKachelByUser/{uid}/tiles/{tileId} {
+        allow read, write: if isFamilyMember(familyId) && request.auth.uid == uid;
+      }
     }
 
     // ── Alle anderen Dokumente: kein Zugriff ──────────────────────────────────
