@@ -440,6 +440,7 @@ const padStyles = StyleSheet.create({
   },
   bubbleInput: {
     flex: 1,
+    minWidth: 0,        // verhindert, dass langer Text den X-Button rausschiebt
     color: '#FFFFFF',
     fontSize: 13,
     lineHeight: 18,
