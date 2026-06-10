@@ -392,7 +392,7 @@ function Scratchpad({
             : { backgroundColor: entry.color },
         ]}>
           {/* Bullet zentriert zur ersten Textzeile */}
-          <View style={[padStyles.bullet, { backgroundColor: isMono ? monoDotColor(idx) : fg + '99', marginTop: 4, alignSelf: 'flex-start' }]} />
+          <View style={[padStyles.bullet, { backgroundColor: isMono ? monoDotColor(idx) : fg + '99' }]} />
           <TextInput
             ref={(r) => { inputRefs.current[idx] = r; }}
             style={[padStyles.bubbleInput, { color: fg }]}
@@ -404,14 +404,12 @@ function Scratchpad({
             placeholderTextColor={fg + '55'}
             returnKeyType="done"
             blurOnSubmit={false}
-            multiline
-            scrollEnabled={false}
           />
           {/* X immer rechts, oben ausgerichtet damit er bei zweizeiligem Text sichtbar bleibt */}
           <Pressable
             onPress={() => removeEntry(idx)}
             hitSlop={8}
-            style={[padStyles.deleteBtn, { backgroundColor: colors.danger + '22', alignSelf: 'flex-start', marginTop: 3 }]}
+            style={[padStyles.deleteBtn, { backgroundColor: colors.danger + '22' }]}
           >
             <Ionicons name="close" size={16} color={colors.danger} />
           </Pressable>
@@ -428,7 +426,7 @@ const padStyles = StyleSheet.create({
   },
   bubble: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     borderRadius: 8,
     paddingHorizontal: 8,
     paddingVertical: 3,
