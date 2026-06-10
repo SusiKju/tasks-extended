@@ -24,6 +24,8 @@ import {
   toggleSharedNote,
   updateSharedNote,
   deleteSharedNote,
+  restoreSharedNote,
+  permanentlyDeleteSharedNote,
   clearDoneSharedNotes,
   setSharedNoteReaction,
   countDoneThisWeek,
@@ -35,6 +37,8 @@ export function SharedNotepad({ colors, isDark }: { colors: ThemeColors; isDark:
   const { settings, updateSettings } = useStore();
   const familyId = useFamilyId();
   const [items, setItems] = useState<SharedNoteItem[] | null>(null);
+  const [deletedItems, setDeletedItems] = useState<SharedNoteItem[]>([]);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const [draft, setDraft] = useState('');
   const [nameDraft, setNameDraft] = useState('');
@@ -48,8 +52,8 @@ export function SharedNotepad({ colors, isDark }: { colors: ThemeColors; isDark:
     if (!familyId) return;
     const unsub = subscribeToSharedNotes(
       familyId,
-      (next) => { setLoadError(false); setItems(next); },
-      () => { setLoadError(true); setItems([]); }
+      (active, deleted) => { setLoadError(false); setItems(active); setDeletedItems(deleted); },
+      () => { setLoadError(true); setItems([]); setDeletedItems([]); }
     );
     return unsub;
   }, [familyId]);
@@ -109,6 +113,26 @@ export function SharedNotepad({ colors, isDark }: { colors: ThemeColors; isDark:
     }
   }, [familyId]);
 
+  const handleRestore = useCallback(async (item: SharedNoteItem) => {
+    if (!familyId) return;
+    setBusyId(item.id);
+    try {
+      await restoreSharedNote(familyId, item.id);
+    } finally {
+      setBusyId(null);
+    }
+  }, [familyId]);
+
+  const handlePermanentDelete = useCallback(async (item: SharedNoteItem) => {
+    if (!familyId) return;
+    setBusyId(item.id);
+    try {
+      await permanentlyDeleteSharedNote(familyId, item.id);
+    } finally {
+      setBusyId(null);
+    }
+  }, [familyId]);
+
   const handleStartEdit = useCallback((item: SharedNoteItem) => {
     setReactionPickerFor(null);
     setEditingId(item.id);
@@ -146,6 +170,18 @@ export function SharedNotepad({ colors, isDark }: { colors: ThemeColors; isDark:
           <Ionicons name="people-outline" size={12} color={accent} />
           <Text style={[styles.sharedTagText, { color: accent }]}>geteilt</Text>
         </View>
+        {deletedItems.length > 0 && (
+          <Pressable
+            onPress={() => setHistoryOpen((v) => !v)}
+            style={styles.historyBtn}
+            hitSlop={8}
+          >
+            <Ionicons name="time-outline" size={18} color={historyOpen ? accent : colors.textMuted} />
+            <View style={[styles.historyBadge, { backgroundColor: accent }]}>
+              <Text style={styles.historyBadgeText}>{deletedItems.length}</Text>
+            </View>
+          </Pressable>
+        )}
         <Pressable
           onPress={() => setTooltipVisible((v) => !v)}
           style={styles.infoBtn}
@@ -369,6 +405,39 @@ export function SharedNotepad({ colors, isDark }: { colors: ThemeColors; isDark:
               </Text>
             </View>
           )}
+
+          {/* Papierkorb / History (TE-3) */}
+          {historyOpen && deletedItems.length > 0 && (
+            <View style={[styles.trashSection, { borderColor: colors.border ?? colors.textMuted }]}>
+              <View style={styles.trashHeader}>
+                <Ionicons name="trash-outline" size={14} color={colors.textMuted} />
+                <Text style={[styles.trashTitle, { color: colors.textMuted }]}>Zuletzt gelöscht</Text>
+              </View>
+              {deletedItems.map((item) => (
+                <View key={item.id} style={[styles.trashRow, { borderBottomColor: colors.border ?? colors.textMuted }]}>
+                  <Text style={[styles.trashItemText, { color: colors.textMuted }]} numberOfLines={1}>
+                    {item.emoji ? `${item.emoji} ` : ''}{item.text}
+                  </Text>
+                  <Pressable
+                    onPress={() => handleRestore(item)}
+                    hitSlop={8}
+                    disabled={busyId === item.id}
+                    style={[styles.restoreBtn, { borderColor: accent }]}
+                  >
+                    <Ionicons name="arrow-undo-outline" size={14} color={accent} />
+                  </Pressable>
+                  <Pressable
+                    onPress={() => handlePermanentDelete(item)}
+                    hitSlop={8}
+                    disabled={busyId === item.id}
+                    style={[styles.deleteBtn, { backgroundColor: colors.danger + '22' }]}
+                  >
+                    <Ionicons name="close" size={14} color={colors.danger} />
+                  </Pressable>
+                </View>
+              ))}
+            </View>
+          )}
         </>
       )}
     </View>
@@ -398,7 +467,10 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3,
   },
   sharedTagText: { fontSize: 10, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.4 },
-  infoBtn: { marginLeft: 'auto', padding: 2 },
+  infoBtn: { padding: 2 },
+  historyBtn: { padding: 2, position: 'relative' },
+  historyBadge: { position: 'absolute', top: -2, right: -2, minWidth: 14, height: 14, borderRadius: 7, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 2 },
+  historyBadgeText: { fontSize: 9, fontWeight: '800', color: '#000' },
   tooltip: {
     fontSize: 12,
     lineHeight: 17,
@@ -454,4 +526,11 @@ const styles = StyleSheet.create({
   loveStat: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8, marginTop: 2 },
   loveStatEmoji: { fontSize: 16 },
   loveStatText: { fontSize: 12, fontWeight: '600', flex: 1 },
+
+  trashSection: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 8, marginTop: 4, gap: 2 },
+  trashHeader: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 4 },
+  trashTitle: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.4 },
+  trashRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6, borderBottomWidth: StyleSheet.hairlineWidth },
+  trashItemText: { flex: 1, fontSize: 13, textDecorationLine: 'line-through' },
+  restoreBtn: { width: 28, height: 28, borderRadius: 14, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
 });

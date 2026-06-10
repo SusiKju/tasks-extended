@@ -35,6 +35,8 @@ export interface SharedNoteItem {
   emoji?: string | null;
   /** Liebevolle Reaktion der/des anderen auf diesen Eintrag (TE-124). */
   reaction?: { emoji: string; by: string } | null;
+  /** Soft-Delete: gesetzt wenn der Eintrag gelöscht wurde, damit er wiederherstellbar bleibt (TE-3). */
+  deletedAt?: string | null;
 }
 
 /** Vorausgewählte Sticker zur Auswahl beim Hinzufügen eines Eintrags (TE-124). */
@@ -56,19 +58,23 @@ const itemsCollection = (familyId: string) =>
  */
 export function subscribeToSharedNotes(
   familyId: string,
-  onChange: (items: SharedNoteItem[]) => void,
+  onChange: (active: SharedNoteItem[], deleted: SharedNoteItem[]) => void,
   onError?: (error: unknown) => void
 ): Unsubscribe {
   return onSnapshot(
     itemsCollection(familyId),
     (snap) => {
-      const items = snap.docs
-        .map((d) => ({ id: d.id, ...d.data() } as SharedNoteItem))
+      const all = snap.docs.map((d) => ({ id: d.id, ...d.data() } as SharedNoteItem));
+      const active = all
+        .filter((i) => !i.deletedAt)
         .sort((a, b) => {
           if (a.done !== b.done) return a.done ? 1 : -1;
           return a.createdAt.localeCompare(b.createdAt);
         });
-      onChange(items);
+      const deleted = all
+        .filter((i) => !!i.deletedAt)
+        .sort((a, b) => (b.deletedAt ?? '').localeCompare(a.deletedAt ?? ''));
+      onChange(active, deleted);
     },
     (error) => {
       console.warn('subscribeToSharedNotes fehlgeschlagen', error);
@@ -115,7 +121,22 @@ export async function updateSharedNote(familyId: string, itemId: string, text: s
   await updateDoc(doc(db, 'families', familyId, 'shared', 'notepad', 'items', itemId), { text: text.trim() });
 }
 
+/** Soft-Delete: setzt deletedAt, damit der Eintrag wiederherstellbar bleibt (TE-3). */
 export async function deleteSharedNote(familyId: string, itemId: string): Promise<void> {
+  await updateDoc(doc(db, 'families', familyId, 'shared', 'notepad', 'items', itemId), {
+    deletedAt: new Date().toISOString(),
+  });
+}
+
+/** Stellt einen soft-gelöschten Eintrag wieder her (TE-3). */
+export async function restoreSharedNote(familyId: string, itemId: string): Promise<void> {
+  await updateDoc(doc(db, 'families', familyId, 'shared', 'notepad', 'items', itemId), {
+    deletedAt: null,
+  });
+}
+
+/** Löscht einen Eintrag endgültig aus Firestore (kein Restore möglich). */
+export async function permanentlyDeleteSharedNote(familyId: string, itemId: string): Promise<void> {
   await deleteDoc(doc(db, 'families', familyId, 'shared', 'notepad', 'items', itemId));
 }
 
@@ -125,8 +146,8 @@ export function countDoneThisWeek(items: SharedNoteItem[]): number {
   return items.filter((i) => i.done && i.doneAt && new Date(i.doneAt).getTime() >= weekAgo).length;
 }
 
-/** Entfernt alle bereits abgehakten Einträge in einem Rutsch ("Liste aufräumen"). */
+/** Soft-löscht alle bereits abgehakten Einträge in einem Rutsch ("Liste aufräumen"). */
 export async function clearDoneSharedNotes(familyId: string, items: SharedNoteItem[]): Promise<void> {
-  const done = items.filter((i) => i.done);
+  const done = items.filter((i) => i.done && !i.deletedAt);
   await Promise.all(done.map((i) => deleteSharedNote(familyId, i.id)));
 }
