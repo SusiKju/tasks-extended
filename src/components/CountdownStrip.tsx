@@ -17,7 +17,7 @@ import { View, Text, StyleSheet, Pressable, ScrollView, TextInput, Modal, Activi
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useStore } from '../store';
-import { ThemeColors } from '../utils/theme';
+import { ThemeColors, useTheme } from '../utils/theme';
 import { DatePickerModal } from './DatePickerModal';
 import { useFamilyId } from '../hooks/useFamily';
 import {
@@ -58,9 +58,12 @@ function motivationLine(days: number, isToday: boolean, isPast: boolean): string
  * die Kacheln auf den ersten Blick lebendig und ein bisschen magisch wirken.
  */
 function NeonSweep({ accent }: { accent: string }) {
+  const { reduceMotion } = useTheme();
   const progress = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    // Calm-Theme: kein wandernder Lichtstreifen – die Kacheln bleiben ruhig.
+    if (reduceMotion) return;
     const loop = Animated.loop(
       Animated.sequence([
         Animated.timing(progress, {
@@ -79,7 +82,9 @@ function NeonSweep({ accent }: { accent: string }) {
     );
     loop.start();
     return () => loop.stop();
-  }, [progress]);
+  }, [progress, reduceMotion]);
+
+  if (reduceMotion) return null;
 
   const translateX = progress.interpolate({
     inputRange: [0, 1],

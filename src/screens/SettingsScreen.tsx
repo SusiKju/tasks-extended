@@ -19,8 +19,8 @@ import { useTheme, ThemeColors, neonGlow, THEMES } from '../utils/theme';
 import { Theme } from '../types';
 
 const THEME_OPTIONS: { key: Theme; label: string; description: string }[] = [
-  { key: 'dark-mono', label: 'Neon Mono', description: 'Schwarz-Weiß mit kräftigem Glow' },
-  { key: 'dark-calm', label: 'Ruhig', description: 'Gedämpft & aufgeräumt' },
+  { key: 'dark-mono', label: 'Neon Mono', description: 'Schwarz-Weiß mit Glow & Animationen' },
+  { key: 'dark-calm', label: 'Ruhig', description: 'Schwarz-Weiß, ohne Glow & Animationen' },
 ];
 import {
   signInWithGoogle,
@@ -645,7 +645,14 @@ export function SettingsScreen() {
               onPress={() => updateSettings({ theme: opt.key })}
             >
               <View style={[styles.themePreview, { backgroundColor: tc.background, borderColor: tc.border }]}>
-                <View style={[styles.themePreviewBar, { backgroundColor: tc.accentNeon }]} />
+                <View
+                  style={[
+                    styles.themePreviewBar,
+                    { backgroundColor: tc.accentNeon },
+                    // Nur das Neon-Theme zeigt im Mini-Preview einen Glow.
+                    opt.key === 'dark-mono' && { shadowColor: '#FFFFFF', shadowOpacity: 0.9, shadowRadius: 6, shadowOffset: { width: 0, height: 0 }, elevation: 6 },
+                  ]}
+                />
                 <View style={[styles.themePreviewDot, { backgroundColor: tc.success }]} />
               </View>
               <View style={styles.rowContent}>

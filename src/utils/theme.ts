@@ -58,44 +58,36 @@ const DARK_MONO: ThemeColors = {
   successFg: '#000000',
 };
 
-// Ruhiges Alternativ-Theme: weiterhin dunkel (die App ist dark-only), aber
-// aufgeräumter als das Neon-Mono-Theme. Reiner Schwarz-Hintergrund weicht
-// einem weichen Anthrazit, die harten weißen Neon-Glows werden durch eine
-// gedämpfte Slate-Blau-Akzentfarbe mit sehr dezentem Glow ersetzt.
-// success/warning/danger bleiben farbig, aber entsättigt. Alle Werte sind
-// gegen ihren jeweiligen Hintergrund auf WCAG ≥ 4.5:1 geprüft (UI-Glow
-// ausgenommen), analog zum DARK_MONO-Theme.
+// Ruhiges Alternativ-Theme: dieselbe Schwarz-Weiß-Palette wie DARK_MONO – also
+// identische Kontraste, keine neuen Farben – aber bewusst „still": kein Neon-
+// Glow (siehe neonGlow/neonBorder, die im dark-calm-Theme leer zurückgeben) und
+// keine ambienten Animationen (siehe reduceMotion). Die Differenz zum Mono-Theme
+// ist rein das Fehlen von Leuchten und Bewegung, damit es noch ruhiger wirkt.
+// Glow-Werte stehen auf transparent, weil im Calm-Theme gar nicht geglüht wird.
 const DARK_CALM: ThemeColors = {
-  background:    '#15171C',   // weiches Anthrazit statt reinem Schwarz
-  surface:       '#1C1F26',
-  surfaceHigh:   '#262A33',
-  text:          '#E6E8EC',   // weiches Off-White statt reinem Weiß
-  textSecondary: '#A7AEBA',
-  textMuted:     '#8E95A1',   // WCAG: 4.77:1 auf surfaceHigh
-  accent:        '#8FA6C4',   // gedämpftes Slate-Blau
-  accentNeon:    '#8FA6C4',   // gleicher Akzent, Glow stark reduziert
-  success:       '#84B58E',   // entsättigtes Salbeigrün
-  warning:       '#CDAE7C',   // entsättigtes Amber
-  danger:        '#D28C8C',   // entsättigtes Rosé-Rot, bleibt als Warnung lesbar
-  border:        '#2C313B',
-  tabBar:        '#15171C',
-  tabBarBorder:  '#2C313B',
-  header:        '#15171C',
-  inputBackground: '#1C1F26',
-  placeholder:   '#888F9A',   // WCAG: 5.06:1 auf inputBackground
-  glowAccent:  'rgba(143, 166, 196, 0.20)',   // sehr subtiler Glow
-  glowDanger:  'rgba(210, 140, 140, 0.18)',
-  glowSuccess: 'rgba(132, 181, 142, 0.18)',
-  accentFg: '#15171C',
-  dangerFg: '#15171C',
-  warningFg: '#15171C',
-  successFg: '#15171C',
+  ...DARK_MONO,
+  glowAccent:  'transparent',
+  glowDanger:  'transparent',
+  glowSuccess: 'transparent',
 };
 
 export const THEMES: Record<Theme, ThemeColors> = {
   'dark-mono': DARK_MONO,
   'dark-calm': DARK_CALM,
 };
+
+/**
+ * Aktuell aufgelöstes Theme – als Modul-Globale gespiegelt, damit Nicht-Hook-
+ * Helfer wie `neonGlow`/`neonBorder` (die in `makeStyles(c)` ohne Hook-Kontext
+ * laufen) wissen, ob geglüht werden darf. Die App rendert global genau ein
+ * Theme; `useTheme()` hält den Wert bei jedem Render synchron.
+ */
+let _activeTheme: Theme = 'dark-mono';
+
+/** Im Calm-Theme wird bewusst nicht geglüht. */
+function glowSuppressed(): boolean {
+  return _activeTheme === 'dark-calm';
+}
 
 /** Relative Luminanz (WCAG) einer Hex-Farbe (#RGB / #RRGGBB), 0..1. */
 function luminance(hex: string): number {
@@ -157,6 +149,7 @@ export function toGrayInverted(hex: string): string {
 }
 
 export function neonGlow(color: string, intensity: 'soft' | 'medium' | 'hard' = 'medium') {
+  if (glowSuppressed()) return {};
   const cfg = {
     soft:   { opacity: 0.55, radius: 12 },
     medium: { opacity: 0.80, radius: 20 },
@@ -173,6 +166,10 @@ export function neonGlow(color: string, intensity: 'soft' | 'medium' | 'hard' = 
 
 /** Subtiler Neon-Rahmen für Cards im Neon-Theme */
 export function neonBorder(color: string) {
+  if (glowSuppressed()) {
+    // Calm-Theme: schlichter Rahmen ohne Glow.
+    return { borderColor: color + '55', borderWidth: 1 };
+  }
   return {
     borderColor: color + '55',
     borderWidth: 1,
@@ -185,18 +182,21 @@ export function useTheme(): {
   theme: Theme;
   isDark: boolean;
   isMono: boolean;
-  /** Im Mono-Theme zu Graustufe wandeln, sonst Farbe unverändert lassen. */
+  /** True im Calm-Theme: ambiente Animationen (Blink, Flammen-Glow, Sweep) aus. */
+  reduceMotion: boolean;
+  /** Schwarz-Weiß-Themes wandeln Inhaltsfarben zu Graustufe. */
   mono: (hex: string) => string;
 } {
   const theme = useStore((s) => s.settings.theme);
   const resolved: Theme = THEMES[theme] ? theme : 'dark-mono';
+  _activeTheme = resolved;
   const colors = THEMES[resolved];
-  const isMono = resolved === 'dark-mono';
   return {
     colors,
     theme: resolved,
-    isDark: true, // beide Themes sind dunkel
-    isMono,
-    mono: isMono ? toGray : (hex: string) => hex,
+    isDark: true,   // beide Themes sind dunkel
+    isMono: true,   // beide Themes sind Schwarz-Weiß
+    reduceMotion: resolved === 'dark-calm',
+    mono: toGray,
   };
 }

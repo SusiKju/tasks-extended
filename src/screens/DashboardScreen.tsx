@@ -166,14 +166,16 @@ function TaskChip({
   scale?: 'lg' | 'md' | 'sm';
   blink?: boolean;
 }) {
-  const { isDark, isMono } = useTheme();
+  const { isDark, isMono, reduceMotion } = useTheme();
   const label = chipDueLabel(task);
   const isImportant = task.important;
+  // Calm-Theme: kein Blinken und keine rote Ausnahme – alles ruhig in Weiß.
+  const blinkActive = blink && !reduceMotion;
 
   // Blink-Animation: nur wenn die Task heute fällig UND wichtig ist (siehe Aufruf).
   const blinkAnim = useRef(new Animated.Value(1)).current;
   useEffect(() => {
-    if (!blink) { blinkAnim.setValue(1); return; }
+    if (!blinkActive) { blinkAnim.setValue(1); return; }
     const loop = Animated.loop(
       Animated.sequence([
         Animated.timing(blinkAnim, { toValue: 0.3, duration: 600, useNativeDriver: true }),
@@ -182,19 +184,20 @@ function TaskChip({
     );
     loop.start();
     return () => { loop.stop(); blinkAnim.setValue(1); };
-  }, [blink, blinkAnim]);
+  }, [blinkActive, blinkAnim]);
 
   // Farbe rein nach Priorität: wichtige Tasks rot, normale blau.
   // Dark-Themes: Tasks-Tab-Stil – keine Füllung, nur Rahmen + Schrift in der
   // Chip-Farbe (+ Glow). Light: solide Füllung mit lesbarem Text wie bisher.
   // Schwarz-Weiß-Theme: alles monochrom (weiß) – einzige Ausnahme bleibt Rot
-  // für wichtige Tasks, die heute fällig sind (= blink).
+  // für wichtige Tasks, die heute fällig sind (= blink). Im Calm-Theme entfällt
+  // auch diese Ausnahme: alles bleibt weiß.
   const chipColor   = isMono
-    ? (blink ? C.important : '#FFFFFF')
+    ? (blinkActive ? C.important : '#FFFFFF')
     : (isImportant ? C.important : C.tasks);
   const borderColor = chipColor;
   const bgColor     = isDark ? chipColor + '18' : chipColor;
-  const textColor   = isMono && (blink || isImportant)
+  const textColor   = isMono && (blinkActive || isImportant)
     ? '#FFFFFF'
     : (isDark ? chipColor : readableTextOn(chipColor));
 
@@ -468,7 +471,7 @@ export function DashboardScreen() {
   const childColor = (id: string) => familyChildren.find((c) => c.id === id)?.color ?? CHILD_COLOR_FALLBACK;
   const childEmoji = (id: string) => familyChildren.find((c) => c.id === id)?.emoji ?? null;
   const { tasks, settings, scratchpad, setScratchpad, birthdays: storeBirthdays } = useStore();
-  const { colors, isDark, theme, mono, isMono } = useTheme();
+  const { colors, isDark, theme, mono, isMono, reduceMotion } = useTheme();
   const { syncDriveNotes } = useGoogleDriveNotesSync();
   const { user } = useFirebaseAuth();
   const { syncTasks } = useGoogleTasksSync();
@@ -632,7 +635,8 @@ export function DashboardScreen() {
   // Bunter Geburtstags-Stil (rotierender Regenbogen-Rand im AI-Komponenten-Stil):
   // im Neon-Theme und im Schwarz-Weiß-Theme – dort bleibt die Geburtstags-Card
   // bewusst bunt als Ausnahme zum sonst monochromen Look (TE-81).
-  const richBirthday = theme === 'dark-neon' || theme === 'dark-mono' || theme === 'light-mono';
+  // Bunte Geburtstags-Card nur im Neon-Mono-Theme; das Calm-Theme bleibt schlicht.
+  const richBirthday = theme === 'dark-mono';
   const rainbowRotate = useRef(new Animated.Value(0)).current;
   // Atmender, farbwechselnder Flammen-Glow (Gemini-Look).
   const flameAnim = useRef(new Animated.Value(0)).current;
@@ -702,7 +706,8 @@ export function DashboardScreen() {
   // Geburtstag immer sehr präsent ist. useNativeDriver: false, weil Schatten-
   // werte animiert werden (Scale wird auf demselben Node mitgeführt).
   useEffect(() => {
-    if (!hasHighlight) { flameAnim.setValue(0); return; }
+    // Calm-Theme: kein atmender Flammen-Glow – Geburtstags-Card bleibt still.
+    if (!hasHighlight || reduceMotion) { flameAnim.setValue(0); return; }
     const loop = Animated.loop(
       Animated.sequence([
         Animated.timing(flameAnim, { toValue: 1, duration: 1600, useNativeDriver: false }),
@@ -711,7 +716,7 @@ export function DashboardScreen() {
     );
     loop.start();
     return () => { loop.stop(); flameAnim.setValue(0); };
-  }, [hasHighlight, flameAnim]);
+  }, [hasHighlight, reduceMotion, flameAnim]);
 
   // Synchron zum Glow „atmende" Skalierung – gemeinsam für beide Card-Varianten.
   const flameScale = flameAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, 1.05, 1] });
@@ -767,15 +772,18 @@ export function DashboardScreen() {
           <Animated.View
             style={[
               styles.birthdayCard,
-              {
-                shadowColor: flameAnim.interpolate({
-                  inputRange: [0, 0.25, 0.5, 0.75, 1],
-                  outputRange: ['#FF6B00', '#FF0080', '#FF3B30', '#FF8C00', '#FF0080'],
-                }),
-                shadowOpacity: flameAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.5, 0.95, 0.5] }),
-                shadowRadius: flameAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [10, 34, 10] }),
-                transform: [{ scale: flameScale }],
-              },
+              reduceMotion
+                // Calm-Theme: keine farbige Flammen-Aura, kein Atmen – schlichte Card.
+                ? { borderWidth: 1, borderColor: colors.border }
+                : {
+                    shadowColor: flameAnim.interpolate({
+                      inputRange: [0, 0.25, 0.5, 0.75, 1],
+                      outputRange: ['#FF6B00', '#FF0080', '#FF3B30', '#FF8C00', '#FF0080'],
+                    }),
+                    shadowOpacity: flameAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.5, 0.95, 0.5] }),
+                    shadowRadius: flameAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [10, 34, 10] }),
+                    transform: [{ scale: flameScale }],
+                  },
             ]}
           >
             <Text style={styles.birthdayIcon}>🎂</Text>
