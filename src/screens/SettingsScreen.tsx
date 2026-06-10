@@ -62,6 +62,7 @@ export function SettingsScreen() {
   const [loadingCalendars, setLoadingCalendars] = useState(false);
   const [loadingTasksSync, setLoadingTasksSync] = useState(false);
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
+  const [showUncheckedCalendars, setShowUncheckedCalendars] = useState(false);
   const [tasksSyncResult, setTasksSyncResult] = useState<string | null>(null);
 
   // ── Familie ──────────────────────────────────────────────────────────────
@@ -331,34 +332,58 @@ export function SettingsScreen() {
                 <Text style={styles.rowSubtitle}>Wähle welche Kalender auf dem Dashboard erscheinen</Text>
                 {loadingCalendars ? (
                   <ActivityIndicator size="small" color={colors.accent} />
-                ) : (
-                  availableCalendars.map((cal) => {
-                    const selected = (settings.selectedCalendarIds ?? []).includes(cal.id);
-                    return (
-                      <Pressable
-                        key={cal.id}
-                        style={({ pressed }) => [styles.calendarPickerRow, pressed && { opacity: 0.7 }]}
-                        onPress={() => {
-                          const current = settings.selectedCalendarIds ?? [];
-                          const next = selected
-                            ? current.filter((id) => id !== cal.id)
-                            : [...current, cal.id];
-                          updateSettings({ selectedCalendarIds: next });
-                        }}
-                      >
-                        <Ionicons
-                          name={selected ? 'checkbox' : 'square-outline'}
-                          size={20}
-                          color={selected ? colors.accent : colors.textSecondary}
-                        />
-                        <View style={{ flex: 1 }}>
-                          <Text style={[styles.rowTitle, { fontSize: 14 }]} numberOfLines={1}>{cal.summary}</Text>
-                          {cal.primary && <Text style={styles.rowSubtitle}>Primär</Text>}
-                        </View>
-                      </Pressable>
-                    );
-                  })
-                )}
+                ) : (() => {
+                  const selectedIds = settings.selectedCalendarIds ?? [];
+                  const checked = availableCalendars.filter((c) => selectedIds.includes(c.id));
+                  const unchecked = availableCalendars.filter((c) => !selectedIds.includes(c.id));
+                  const visible = showUncheckedCalendars ? availableCalendars : checked;
+                  return (
+                    <>
+                      {visible.map((cal) => {
+                        const selected = selectedIds.includes(cal.id);
+                        return (
+                          <Pressable
+                            key={cal.id}
+                            style={({ pressed }) => [styles.calendarPickerRow, pressed && { opacity: 0.7 }]}
+                            onPress={() => {
+                              const next = selected
+                                ? selectedIds.filter((id) => id !== cal.id)
+                                : [...selectedIds, cal.id];
+                              updateSettings({ selectedCalendarIds: next });
+                            }}
+                          >
+                            <Ionicons
+                              name={selected ? 'checkbox' : 'square-outline'}
+                              size={20}
+                              color={selected ? colors.accent : colors.textSecondary}
+                            />
+                            <View style={{ flex: 1 }}>
+                              <Text style={[styles.rowTitle, { fontSize: 14 }]} numberOfLines={1}>{cal.summary}</Text>
+                              {cal.primary && <Text style={styles.rowSubtitle}>Primär</Text>}
+                            </View>
+                          </Pressable>
+                        );
+                      })}
+                      {unchecked.length > 0 && (
+                        <Pressable
+                          style={({ pressed }) => [styles.calendarPickerRow, pressed && { opacity: 0.7 }]}
+                          onPress={() => setShowUncheckedCalendars((v) => !v)}
+                        >
+                          <Ionicons
+                            name={showUncheckedCalendars ? 'chevron-up' : 'chevron-down'}
+                            size={16}
+                            color={colors.textSecondary}
+                          />
+                          <Text style={[styles.rowSubtitle, { flex: 1 }]}>
+                            {showUncheckedCalendars
+                              ? 'Weniger anzeigen'
+                              : `${unchecked.length} weitere Kalender anzeigen`}
+                          </Text>
+                        </Pressable>
+                      )}
+                    </>
+                  );
+                })()}
                 {(settings.selectedCalendarIds ?? []).length === 0 && (
                   <Text style={[styles.rowSubtitle, { fontStyle: 'italic' }]}>Alle Kalender werden angezeigt</Text>
                 )}
