@@ -28,7 +28,6 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFirebaseAuth } from '../hooks/useFirebaseAuth';
-import { useFamily } from '../hooks/useFamily';
 import { useStore } from '../store';
 import { FunTileTheme } from '../types';
 import {
@@ -142,10 +141,8 @@ function ThemeBackground({ theme, chalk }: { theme: FunTileTheme; chalk: string 
 
 export function FussballKachel() {
   const { user } = useFirebaseAuth();
-  const { familyId } = useFamily();
   const enabled = useStore((st) => st.settings.funTileEnabled);
   const theme = useStore((st) => st.settings.funTileTheme);
-  const fid = familyId ?? '';
   const uid = user?.uid ?? '';
 
   const [sections, setSections] = useState<FussballAbschnitt[]>(() => defaultSections(theme));
@@ -153,13 +150,13 @@ export function FussballKachel() {
   const [draft, setDraft] = useState<FussballAbschnitt[]>(() => defaultSections(theme));
 
   useEffect(() => {
-    if (!enabled || !fid || !uid) {
+    if (!enabled || !uid) {
       // Ohne Subscription beim Themenwechsel zumindest die Default-Titel zeigen.
       setSections(defaultSections(theme));
       return;
     }
-    return subscribeToFussballKachel(fid, uid, theme, (data) => setSections(data.sections));
-  }, [enabled, fid, uid, theme]);
+    return subscribeToFussballKachel(uid, theme, (data) => setSections(data.sections));
+  }, [enabled, uid, theme]);
 
   const openDialog = useCallback(() => {
     setDraft(sections);
@@ -173,11 +170,11 @@ export function FussballKachel() {
   // Dialog sofort schließen; im Hintergrund speichern (Fehler nur loggen).
   const handleSave = useCallback(() => {
     setOpen(false);
-    if (!fid || !uid) return;
-    saveFussballKachel(fid, uid, theme, draft).catch((e) =>
+    if (!uid) return;
+    saveFussballKachel(uid, theme, draft).catch((e) =>
       console.warn('saveFussballKachel failed', e),
     );
-  }, [fid, uid, theme, draft]);
+  }, [uid, theme, draft]);
 
   // Standardmäßig versteckt – nur sichtbar, wenn in den Settings aktiviert.
   if (!enabled) return null;

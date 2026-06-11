@@ -2,12 +2,13 @@
  * fussballKachel.ts
  *
  * Persistente, nicht löschbare Fokus-Kachel pro User in Firestore.
- * Pfad: families/{familyId}/fussballKachelByUser/{uid}/themes/{theme}
+ * Pfad: focusTilesByUser/{uid}/themes/{theme}
  *
- * Es gibt genau EINE Kachel je User und Thema (kein Hinzufügen/Löschen).
- * Jedes Thema (fussball/yoga/garten) hat ein eigenes Dokument mit vier
- * unabhängigen Notizabschnitten (2×2-Raster) und eigenen Default-Titeln.
- * Privat (nur für den jeweiligen User).
+ * Strikt privat pro User – bewusst NICHT unter families/, damit die Daten
+ * weder mit der Familie geteilt werden noch eine Familienmitgliedschaft
+ * voraussetzen. Es gibt genau EINE Kachel je User und Thema (kein Hinzufügen/
+ * Löschen). Jedes Thema (fussball/yoga/garten) hat ein eigenes Dokument mit
+ * vier unabhängigen Notizabschnitten (2×2-Raster) und eigenen Default-Titeln.
  */
 
 import { db } from './firebase';
@@ -51,8 +52,8 @@ export function defaultSections(theme: FunTileTheme): FussballAbschnitt[] {
   return (DEFAULT_SECTIONS_BY_THEME[theme] ?? DEFAULT_SECTIONS_BY_THEME.fussball).map((d) => ({ ...d }));
 }
 
-const kachelDoc = (familyId: string, uid: string, theme: FunTileTheme) =>
-  doc(db, 'families', familyId, 'fussballKachelByUser', uid, 'themes', theme);
+const kachelDoc = (uid: string, theme: FunTileTheme) =>
+  doc(db, 'focusTilesByUser', uid, 'themes', theme);
 
 /** Genau vier Abschnitte garantieren – fehlende mit Themen-Defaults auffüllen. */
 function normalize(theme: FunTileTheme, sections?: FussballAbschnitt[]): FussballAbschnitt[] {
@@ -67,14 +68,13 @@ function normalize(theme: FunTileTheme, sections?: FussballAbschnitt[]): Fussbal
  * Abschnitte – auch wenn das Dokument noch nicht existiert.
  */
 export function subscribeToFussballKachel(
-  familyId: string,
   uid: string,
   theme: FunTileTheme,
   onChange: (data: FussballKachelData) => void,
   onError?: (e: unknown) => void,
 ): Unsubscribe {
   return onSnapshot(
-    kachelDoc(familyId, uid, theme),
+    kachelDoc(uid, theme),
     (snap) => {
       const raw = snap.exists() ? (snap.data() as FussballKachelData) : undefined;
       onChange({ sections: normalize(theme, raw?.sections) });
@@ -88,13 +88,12 @@ export function subscribeToFussballKachel(
 
 /** Abschnitte speichern (Dokument wird bei Bedarf angelegt). */
 export async function saveFussballKachel(
-  familyId: string,
   uid: string,
   theme: FunTileTheme,
   sections: FussballAbschnitt[],
 ): Promise<void> {
   await setDoc(
-    kachelDoc(familyId, uid, theme),
+    kachelDoc(uid, theme),
     { sections: normalize(theme, sections), updatedAt: new Date().toISOString() },
     { merge: true },
   );

@@ -97,11 +97,13 @@ service cloud.firestore {
       match /geistesKachelByUser/{uid}/tiles/{tileId} {
         allow read, write: if isFamilyMember(familyId) && request.auth.uid == uid;
       }
+    }
 
-      // Persönliche Fokus-Kachel pro User & Thema (TE-7/TE-10)
-      match /fussballKachelByUser/{uid}/themes/{theme} {
-        allow read, write: if isFamilyMember(familyId) && request.auth.uid == uid;
-      }
+    // ── Fokus-Kachel: strikt privat pro User, nicht geteilt (TE-7/TE-10/TE-12) ──
+    // Bewusst außerhalb von families/: keine Familienmitgliedschaft nötig,
+    // ausschließlich der Eigentümer (uid) darf lesen/schreiben.
+    match /focusTilesByUser/{uid}/themes/{theme} {
+      allow read, write: if isSignedIn() && request.auth.uid == uid;
     }
 
     // ── Alle anderen Dokumente: kein Zugriff ──────────────────────────────────
