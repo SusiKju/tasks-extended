@@ -25,7 +25,6 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
-  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFirebaseAuth } from '../hooks/useFirebaseAuth';
@@ -34,7 +33,7 @@ import { useStore } from '../store';
 import { FunTileTheme } from '../types';
 import {
   FussballAbschnitt,
-  DEFAULT_SECTIONS,
+  defaultSections,
   subscribeToFussballKachel,
   saveFussballKachel,
 } from '../services/fussballKachel';
@@ -54,6 +53,7 @@ interface FunThemeCfg {
   chalk: string;       // dekorative Hintergrund-Markierungen
   fg: string;          // Schrift
   fgMuted: string;     // Platzhalter
+  placeholder: string; // Platzhalter-Text der Notizfelder (themenspezifisch)
 }
 
 export const FUN_THEMES: Record<FunTileTheme, FunThemeCfg> = {
@@ -68,6 +68,7 @@ export const FUN_THEMES: Record<FunTileTheme, FunThemeCfg> = {
     chalk: 'rgba(232,247,232,0.30)',
     fg: '#F1FAF1',
     fgMuted: '#A7C8AB',
+    placeholder: 'Freitext oder Liste\n- Spieler 1\n- Spieler 2',
   },
   yoga: {
     label: 'Yoga',
@@ -80,6 +81,7 @@ export const FUN_THEMES: Record<FunTileTheme, FunThemeCfg> = {
     chalk: 'rgba(240,235,250,0.26)',
     fg: '#F4F1FB',
     fgMuted: '#BCAFD6',
+    placeholder: 'Freitext oder Liste\n- Asana 1\n- Atemübung',
   },
   garten: {
     label: 'Garten',
@@ -92,6 +94,7 @@ export const FUN_THEMES: Record<FunTileTheme, FunThemeCfg> = {
     chalk: 'rgba(238,247,228,0.28)',
     fg: '#F1F7EA',
     fgMuted: '#B6CBA0',
+    placeholder: 'Freitext oder Liste\n- Tomaten säen\n- Beet gießen',
   },
 };
 
@@ -145,15 +148,18 @@ export function FussballKachel() {
   const fid = familyId ?? '';
   const uid = user?.uid ?? '';
 
-  const [sections, setSections] = useState<FussballAbschnitt[]>(DEFAULT_SECTIONS);
+  const [sections, setSections] = useState<FussballAbschnitt[]>(() => defaultSections(theme));
   const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState<FussballAbschnitt[]>(DEFAULT_SECTIONS);
-  const [saving, setSaving] = useState(false);
+  const [draft, setDraft] = useState<FussballAbschnitt[]>(() => defaultSections(theme));
 
   useEffect(() => {
-    if (!enabled || !fid || !uid) return;
-    return subscribeToFussballKachel(fid, uid, (data) => setSections(data.sections));
-  }, [enabled, fid, uid]);
+    if (!enabled || !fid || !uid) {
+      // Ohne Subscription beim Themenwechsel zumindest die Default-Titel zeigen.
+      setSections(defaultSections(theme));
+      return;
+    }
+    return subscribeToFussballKachel(fid, uid, theme, (data) => setSections(data.sections));
+  }, [enabled, fid, uid, theme]);
 
   const openDialog = useCallback(() => {
     setDraft(sections);
@@ -164,16 +170,14 @@ export function FussballKachel() {
     setDraft((prev) => prev.map((sec, idx) => (idx === i ? { ...sec, ...patch } : sec)));
   }, []);
 
-  const handleSave = useCallback(async () => {
-    if (!fid || !uid) { setOpen(false); return; }
-    setSaving(true);
-    try {
-      await saveFussballKachel(fid, uid, draft);
-      setOpen(false);
-    } finally {
-      setSaving(false);
-    }
-  }, [fid, uid, draft]);
+  // Dialog sofort schließen; im Hintergrund speichern (Fehler nur loggen).
+  const handleSave = useCallback(() => {
+    setOpen(false);
+    if (!fid || !uid) return;
+    saveFussballKachel(fid, uid, theme, draft).catch((e) =>
+      console.warn('saveFussballKachel failed', e),
+    );
+  }, [fid, uid, theme, draft]);
 
   // Standardmäßig versteckt – nur sichtbar, wenn in den Settings aktiviert.
   if (!enabled) return null;
@@ -230,7 +234,7 @@ export function FussballKachel() {
                             style={[s.cellBody, { color: cfg.fg }]}
                             value={sec.body}
                             onChangeText={(t) => patchDraft(i, { body: t })}
-                            placeholder={'Freitext oder Liste\n- Eintrag 1\n- Eintrag 2'}
+                            placeholder={cfg.placeholder}
                             placeholderTextColor={cfg.fgMuted}
                             multiline
                             textAlignVertical="top"
@@ -243,15 +247,12 @@ export function FussballKachel() {
               </View>
             </View>
 
-            {/* Speichern */}
+            {/* Speichern – schließt den Dialog sofort */}
             <Pressable
               style={({ pressed }) => [s.saveBtn, { backgroundColor: cfg.tile }, pressed && { opacity: 0.85 }]}
               onPress={handleSave}
-              disabled={saving}
             >
-              {saving
-                ? <ActivityIndicator size="small" color="#fff" />
-                : <Text style={s.saveBtnText}>Speichern</Text>}
+              <Text style={s.saveBtnText}>Speichern</Text>
             </Pressable>
           </View>
         </KeyboardAvoidingView>
