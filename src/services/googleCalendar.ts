@@ -83,18 +83,35 @@ async function getWebTokenClient(): Promise<any> {
   return webTokenClient;
 }
 
+// GIS-Script + Token-Client früh vorladen, damit der erste „Verbinden"-Klick
+// requestAccessToken synchron im User-Gesture aufrufen kann. Ohne diesen
+// Preload würde loadGisScript() mitten im Klick-Handler über das Netz laden,
+// die User-Aktivierung verfallen und der Browser das Popup blocken
+// ("Failed to open popup window").
+if (Platform.OS === 'web' && typeof document !== 'undefined') {
+  getWebTokenClient().catch(() => {});
+}
+
 /**
  * Fordert via GIS ein Access-Token an.
  * - prompt: 'consent' → expliziter Login (Popup, alle Scopes neu bestätigen).
  * - prompt: ''        → stiller Refresh ohne UI, sofern Session & Consent leben.
  */
 async function requestWebToken(prompt: '' | 'consent'): Promise<TokenRefreshResult | null> {
-  let client: any;
-  try {
-    client = await getWebTokenClient();
-  } catch (e) {
-    console.warn('[GoogleLogin] GIS nicht verfügbar:', e);
-    return null;
+  // requestAccessToken öffnet ein Popup und DARF nur direkt aus einem
+  // User-Gesture laufen. Ist der Token-Client bereits vorgeladen (siehe
+  // Preload unten), nutzen wir ihn synchron ohne zwischenliegendes await —
+  // sonst verliert der Browser die User-Aktivierung und blockt das Popup
+  // ("Failed to open popup window"). Nur als Fallback wird hier noch lazy
+  // geladen (dann kann der erste Klick fehlschlagen).
+  let client: any = webTokenClient;
+  if (!client) {
+    try {
+      client = await getWebTokenClient();
+    } catch (e) {
+      console.warn('[GoogleLogin] GIS nicht verfügbar:', e);
+      return null;
+    }
   }
 
   return new Promise<TokenRefreshResult | null>((resolve) => {

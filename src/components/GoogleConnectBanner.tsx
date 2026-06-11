@@ -2,8 +2,9 @@
  * GoogleConnectBanner.tsx
  *
  * Erscheint auf dem Dashboard wenn der Nutzer noch keinen Google-Kalender
- * verbunden hat. Der Button ist ein direkter User-Gesture → GIS-Popup öffnet
- * zuverlässig (kein Popup-Chaining-Problem wie im Login-Flow).
+ * verbunden hat. Der Button ist ein direkter User-Gesture und der GIS-Token-
+ * Client wird beim Modul-Load vorgeladen (googleCalendar.ts) → requestAccessToken
+ * läuft synchron im Gesture und das Popup öffnet zuverlässig.
  */
 
 import React, { useState, useCallback } from 'react';
