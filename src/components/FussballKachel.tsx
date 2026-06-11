@@ -69,7 +69,7 @@ function numberLines(text: string): string {
 
 // ─── Namensliste (TE-16) ───────────────────────────────────────────────────────
 
-const emptyEntry = (): RosterEntry => ({ vorname: '', nachname: '', geburtstag: '', icon: '' });
+const emptyEntry = (): RosterEntry => ({ name: '', geburtstag: '', icon: '' });
 
 /** ISO 'YYYY-MM-DD' → 'DD.MM.YYYY' (string-basiert, ohne Zeitzonen-Fallen). */
 function formatGeb(iso: string): string {
@@ -109,105 +109,111 @@ interface RosterCellProps {
   onMove: (idx: number, dir: -1 | 1) => void;
 }
 
+/** ISO 'YYYY-MM-DD' → kompaktes "'JJ" Jahres-Badge (z. B. "'19"). */
+function yearBadge(iso: string): string {
+  const y = iso.split('-')[0];
+  return y.length === 4 ? `'${y.slice(2)}` : '';
+}
+
 /**
- * Editor für die strukturierte Namensliste eines Roster-Feldes: durchnummerierte
- * Einträge mit Vorname (Pflicht), Nachname, Geburtstag (Datums-Picker) und Icon
- * (Emoji-Vorauswahl). Hinzufügen, Löschen und ▲▼-Sortieren.
+ * Editor für die strukturierte Namensliste eines Roster-Feldes – kompakt:
+ * eine Zeile pro Eintrag (Nummer · optionales Icon · Name · optionales
+ * Jahres-Badge · Löschen). Tippen auf die Zeile klappt ein Detail-Panel auf
+ * (Icon-Auswahl, voller Geburtstag per Picker, ▲▼-Sortieren). So passen auch
+ * 15–16 Namen sichtbar untereinander.
  */
 function RosterCell({ entries, cfg, colors, onAdd, onPatch, onRemove, onMove }: RosterCellProps) {
-  const [iconPickerIdx, setIconPickerIdx] = useState<number | null>(null);
+  const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
   const [datePickerIdx, setDatePickerIdx] = useState<number | null>(null);
+  const toggle = (idx: number) => setExpandedIdx((cur) => (cur === idx ? null : idx));
 
   return (
     <>
       <ScrollView style={s.rosterScroll} keyboardShouldPersistTaps="handled">
-        {entries.map((e, idx) => (
-          <View key={idx} style={[s.entryCard, { borderColor: cfg.line }]}>
-            <View style={s.entryRow}>
-              <Text style={[s.entryNum, { color: cfg.fgMuted }]}>{idx + 1}.</Text>
-              <Pressable
-                onPress={() => setIconPickerIdx((cur) => (cur === idx ? null : idx))}
-                style={[s.iconChip, { borderColor: cfg.line }]}
-                accessibilityLabel="Icon wählen"
-              >
-                <Text style={s.iconChipText}>{e.icon || '＋'}</Text>
-              </Pressable>
-              <TextInput
-                style={[s.entryInput, { color: cfg.fg, borderBottomColor: cfg.line }]}
-                value={e.vorname}
-                onChangeText={(t) => onPatch(idx, { vorname: t })}
-                placeholder="Vorname"
-                placeholderTextColor={cfg.fgMuted}
-              />
-            </View>
-
-            {iconPickerIdx === idx && (
-              <View style={s.iconPicker}>
-                {ROSTER_ICONS.map((ic) => (
-                  <Pressable
-                    key={ic}
-                    onPress={() => {
-                      onPatch(idx, { icon: e.icon === ic ? '' : ic });
-                      setIconPickerIdx(null);
-                    }}
-                    style={s.iconOption}
-                  >
-                    <Text style={s.iconOptionText}>{ic}</Text>
-                  </Pressable>
-                ))}
+        {entries.map((e, idx) => {
+          const open = expandedIdx === idx;
+          return (
+            <View key={idx}>
+              {/* Kompakte Zeile: ein Name = eine Zeile */}
+              <View style={[s.entryLine, { borderBottomColor: cfg.line }]}>
+                <Pressable onPress={() => toggle(idx)} hitSlop={4} style={s.lineLeft} accessibilityLabel="Details">
+                  <Text style={[s.entryNum, { color: cfg.fgMuted }]}>{idx + 1}.</Text>
+                  {e.icon ? <Text style={s.lineEmoji}>{e.icon}</Text> : null}
+                </Pressable>
+                <TextInput
+                  style={[s.lineInput, { color: cfg.fg }]}
+                  value={e.name}
+                  onChangeText={(t) => onPatch(idx, { name: t })}
+                  placeholder="Name"
+                  placeholderTextColor={cfg.fgMuted}
+                />
+                {e.geburtstag ? (
+                  <Text style={[s.lineYear, { color: cfg.fgMuted }]}>{yearBadge(e.geburtstag)}</Text>
+                ) : null}
+                <Pressable onPress={() => toggle(idx)} hitSlop={4} style={s.lineBtn} accessibilityLabel="Details">
+                  <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={14} color={cfg.fgMuted} />
+                </Pressable>
+                <Pressable onPress={() => onRemove(idx)} hitSlop={4} style={s.lineBtn} accessibilityLabel="Eintrag löschen">
+                  <Ionicons name="close" size={14} color={cfg.fgMuted} />
+                </Pressable>
               </View>
-            )}
 
-            <TextInput
-              style={[s.entryInput, { color: cfg.fg, borderBottomColor: cfg.line }]}
-              value={e.nachname}
-              onChangeText={(t) => onPatch(idx, { nachname: t })}
-              placeholder="Nachname"
-              placeholderTextColor={cfg.fgMuted}
-            />
+              {/* Detail-Panel (nur für die aufgeklappte Zeile) */}
+              {open && (
+                <View style={s.expand}>
+                  <View style={s.iconPicker}>
+                    {ROSTER_ICONS.map((ic) => (
+                      <Pressable
+                        key={ic}
+                        onPress={() => onPatch(idx, { icon: e.icon === ic ? '' : ic })}
+                        style={[s.iconOption, e.icon === ic && { backgroundColor: cfg.line, borderRadius: 6 }]}
+                      >
+                        <Text style={s.iconOptionText}>{ic}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                  <View style={s.expandRow}>
+                    <Pressable
+                      onPress={() => setDatePickerIdx(idx)}
+                      style={[s.dateChip, { borderColor: cfg.line }]}
+                      accessibilityLabel="Geburtstag wählen"
+                    >
+                      <Ionicons name="calendar-outline" size={13} color={cfg.fgMuted} />
+                      <Text style={[s.dateChipText, { color: e.geburtstag ? cfg.fg : cfg.fgMuted }]}>
+                        {e.geburtstag ? formatGeb(e.geburtstag) : 'Geburtstag'}
+                      </Text>
+                    </Pressable>
+                    <View style={s.entrySpacer} />
+                    <Pressable onPress={() => onMove(idx, -1)} disabled={idx === 0} hitSlop={6} style={s.ctrlBtn}>
+                      <Ionicons name="chevron-up" size={16} color={idx === 0 ? cfg.line : cfg.fg} />
+                    </Pressable>
+                    <Pressable
+                      onPress={() => onMove(idx, 1)}
+                      disabled={idx === entries.length - 1}
+                      hitSlop={6}
+                      style={s.ctrlBtn}
+                    >
+                      <Ionicons name="chevron-down" size={16} color={idx === entries.length - 1 ? cfg.line : cfg.fg} />
+                    </Pressable>
+                  </View>
+                </View>
+              )}
 
-            <View style={s.entryRow}>
-              <Pressable
-                onPress={() => setDatePickerIdx(idx)}
-                style={[s.dateChip, { borderColor: cfg.line }]}
-                accessibilityLabel="Geburtstag wählen"
-              >
-                <Ionicons name="calendar-outline" size={13} color={cfg.fgMuted} />
-                <Text style={[s.dateChipText, { color: e.geburtstag ? cfg.fg : cfg.fgMuted }]}>
-                  {e.geburtstag ? formatGeb(e.geburtstag) : 'Geb.'}
-                </Text>
-              </Pressable>
-              <View style={s.entrySpacer} />
-              <Pressable onPress={() => onMove(idx, -1)} disabled={idx === 0} hitSlop={6} style={s.ctrlBtn}>
-                <Ionicons name="chevron-up" size={16} color={idx === 0 ? cfg.line : cfg.fg} />
-              </Pressable>
-              <Pressable
-                onPress={() => onMove(idx, 1)}
-                disabled={idx === entries.length - 1}
-                hitSlop={6}
-                style={s.ctrlBtn}
-              >
-                <Ionicons name="chevron-down" size={16} color={idx === entries.length - 1 ? cfg.line : cfg.fg} />
-              </Pressable>
-              <Pressable onPress={() => onRemove(idx)} hitSlop={6} style={s.ctrlBtn} accessibilityLabel="Eintrag löschen">
-                <Ionicons name="trash-outline" size={15} color={cfg.fgMuted} />
-              </Pressable>
+              {datePickerIdx === idx && (
+                <DatePickerModal
+                  visible
+                  value={parseGeb(e.geburtstag)}
+                  onConfirm={(d) => {
+                    onPatch(idx, { geburtstag: toISODate(d) });
+                    setDatePickerIdx(null);
+                  }}
+                  onCancel={() => setDatePickerIdx(null)}
+                  colors={colors}
+                />
+              )}
             </View>
-
-            {datePickerIdx === idx && (
-              <DatePickerModal
-                visible
-                value={parseGeb(e.geburtstag)}
-                onConfirm={(d) => {
-                  onPatch(idx, { geburtstag: toISODate(d) });
-                  setDatePickerIdx(null);
-                }}
-                onCancel={() => setDatePickerIdx(null)}
-                colors={colors}
-              />
-            )}
-          </View>
-        ))}
+          );
+        })}
       </ScrollView>
 
       <Pressable onPress={onAdd} style={[s.addBtn, { borderColor: cfg.line }]}>
@@ -540,22 +546,26 @@ const s = StyleSheet.create({
   cellTitle: { fontSize: 14, fontWeight: '700', borderBottomWidth: 1, paddingBottom: 6 },
   cellBody: { flex: 1, fontSize: 13, lineHeight: 19, minHeight: 100 },
 
-  // ── Namensliste (TE-16) ──
+  // ── Namensliste (TE-16) – kompakt: eine Zeile pro Name ──
   rosterScroll: { flex: 1 },
-  entryCard: { borderWidth: 1, borderRadius: 8, padding: 6, marginBottom: 6, gap: 4 },
-  entryRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  entryNum: { fontSize: 11, fontWeight: '700', minWidth: 16 },
-  entryInput: { flex: 1, fontSize: 12, borderBottomWidth: 1, paddingVertical: 2, paddingHorizontal: 0 },
-  iconChip: { width: 24, height: 24, borderRadius: 6, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-  iconChipText: { fontSize: 14 },
-  iconPicker: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, paddingVertical: 2 },
-  iconOption: { padding: 2 },
+  entryLine: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingVertical: 1, borderBottomWidth: StyleSheet.hairlineWidth },
+  lineLeft: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  entryNum: { fontSize: 11, fontWeight: '700', minWidth: 18 },
+  lineEmoji: { fontSize: 13 },
+  lineInput: { flex: 1, fontSize: 13, paddingVertical: 2, paddingHorizontal: 0 },
+  lineYear: { fontSize: 10, fontWeight: '600' },
+  lineBtn: { paddingHorizontal: 2, paddingVertical: 2 },
+  // Detail-Panel
+  expand: { paddingLeft: 18, paddingBottom: 6, gap: 6 },
+  expandRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  iconPicker: { flexDirection: 'row', flexWrap: 'wrap', gap: 2 },
+  iconOption: { padding: 3 },
   iconOptionText: { fontSize: 18 },
   dateChip: { flexDirection: 'row', alignItems: 'center', gap: 3, borderWidth: 1, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 3 },
   dateChipText: { fontSize: 11 },
   entrySpacer: { flex: 1 },
   ctrlBtn: { padding: 3 },
-  addBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, borderWidth: 1, borderStyle: 'dashed', borderRadius: 8, paddingVertical: 6, marginTop: 2 },
+  addBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, borderWidth: 1, borderStyle: 'dashed', borderRadius: 8, paddingVertical: 6, marginTop: 4 },
   addBtnText: { fontSize: 12, fontWeight: '600' },
 
   saveBtn: { borderRadius: 14, paddingVertical: 14, alignItems: 'center', justifyContent: 'center' },

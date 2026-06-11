@@ -21,10 +21,11 @@ import { FunTileTheme } from '../types';
  * Optionalität wird über den leeren String ('') ausgedrückt.
  */
 export interface RosterEntry {
-  /** Vorname – Pflichtfeld (komplett leere Einträge werden beim Speichern verworfen). */
-  vorname: string;
-  /** Nachname – optional. */
-  nachname: string;
+  /**
+   * Vollständiger Name (Vor- und Nachname in einem Feld) – Pflichtfeld;
+   * komplett leere Einträge werden beim Speichern verworfen.
+   */
+  name: string;
   /** Geburtstag als ISO 'YYYY-MM-DD' – optional ('' = nicht gesetzt). */
   geburtstag: string;
   /** Emoji aus fixer Vorauswahl – optional ('' = kein Icon). */
@@ -89,24 +90,29 @@ export function defaultSections(theme: FunTileTheme): FussballAbschnitt[] {
 const kachelDoc = (uid: string, theme: FunTileTheme) =>
   doc(db, 'focusTilesByUser', uid, 'themes', theme);
 
-/** Coerce a possibly-partial roster entry to all-string shape (Firestore-safe). */
-function sanitizeEntry(e: Partial<RosterEntry> | undefined): RosterEntry {
+/**
+ * Coerce a possibly-partial / legacy roster entry to the all-string shape
+ * (Firestore-safe). Ein früher getrennt gespeicherter `nachname` (vor der
+ * Vereinfachung auf ein einziges Namensfeld) wird in `name` zusammengeführt.
+ */
+function sanitizeEntry(e: Record<string, any> | undefined): RosterEntry {
+  const name = String(e?.name ?? e?.vorname ?? '');
+  const legacyNachname = String(e?.nachname ?? '').trim();
   return {
-    vorname: e?.vorname ?? '',
-    nachname: e?.nachname ?? '',
-    geburtstag: e?.geburtstag ?? '',
-    icon: e?.icon ?? '',
+    name: legacyNachname ? `${name} ${legacyNachname}`.trim() : name,
+    geburtstag: String(e?.geburtstag ?? ''),
+    icon: String(e?.icon ?? ''),
   };
 }
 
 /** True, wenn alle Felder leer sind – solche Einträge werden nicht persistiert. */
 function isEmptyEntry(e: RosterEntry): boolean {
-  return !e.vorname.trim() && !e.nachname.trim() && !e.geburtstag && !e.icon;
+  return !e.name.trim() && !e.geburtstag && !e.icon;
 }
 
 /**
  * Migriert alten, durchnummerierten Freitext (TE-15) in strukturierte
- * Einträge: jede Zeile wird zu einem Eintrag mit nur gesetztem Vornamen.
+ * Einträge: jede Zeile wird zu einem Eintrag mit nur gesetztem Namen.
  * Das Nummern-Präfix ("1. ") wird entfernt.
  */
 function entriesFromBody(body: string): RosterEntry[] {
@@ -114,7 +120,7 @@ function entriesFromBody(body: string): RosterEntry[] {
     .split('\n')
     .map((line) => line.replace(/^\s*\d+\.\s?/, '').trim())
     .filter((name) => name !== '')
-    .map((vorname) => sanitizeEntry({ vorname }));
+    .map((name) => sanitizeEntry({ name }));
 }
 
 /** Roster-Einträge eines Feldes ableiten: vorhandene entries, sonst Body-Migration. */
