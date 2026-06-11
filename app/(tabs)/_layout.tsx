@@ -2,9 +2,13 @@ import React from 'react';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, neonGlow } from '../../src/utils/theme';
+import { useStore } from '../../src/store';
 
 export default function TabsLayout() {
   const { colors, isDark } = useTheme();
+  // Bambini-Tab nur, wenn das Thema "fussball" in den Settings aktiv ist (TE-19).
+  const funThemes = useStore((s) => s.settings.funTileThemes) ?? [];
+  const showBambini = funThemes.includes('fussball');
 
   return (
     <Tabs
@@ -88,6 +92,9 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="bambini"
         options={{
+          // href:null blendet den Tab aus (wie bei "groups"), solange Fußball
+          // nicht ausgewählt ist.
+          href: showBambini ? undefined : null,
           title: 'Bambini',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="football-outline" size={size} color={color} />
