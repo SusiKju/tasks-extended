@@ -40,6 +40,22 @@ import {
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 
+/** Indizes der Notizfelder, die als nummerierte Aufzählung geführt werden (TE-15). */
+const NUMBERED_FIELDS = [0, 1];
+
+/**
+ * Macht aus jedem Zeilenumbruch eine fortlaufende Nummer: "1. …", "2. …".
+ * Bestehende Nummern-Präfixe werden zuerst entfernt, damit Einfügen/Löschen
+ * von Zeilen sauber neu durchnummeriert. Leerer Text bleibt leer (löschbar).
+ */
+function numberLines(text: string): string {
+  if (text === '') return '';
+  return text
+    .split('\n')
+    .map((line, idx) => `${idx + 1}. ${line.replace(/^\s*\d+\.\s?/, '')}`)
+    .join('\n');
+}
+
 // ─── Themen-Konfiguration (themeunabhängige Farbtupfer) ────────────────────────
 
 interface FunThemeCfg {
@@ -245,7 +261,9 @@ export function FussballKachel() {
                             <TextInput
                               style={[s.cellBody, { color: cfg.fg }]}
                               value={sec?.body ?? ''}
-                              onChangeText={(t) => patchDraft(i, { body: t })}
+                              onChangeText={(t) =>
+                                patchDraft(i, { body: NUMBERED_FIELDS.includes(i) ? numberLines(t) : t })
+                              }
                               placeholder={cfg.placeholder}
                               placeholderTextColor={cfg.fgMuted}
                               multiline
