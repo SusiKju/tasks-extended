@@ -138,7 +138,16 @@ function JahrgangView({ sel, kids, cfg, onChange }: JahrgangViewProps) {
           matches.map((c, idx) => (
             <View key={c.id} style={[s.jgRow, { borderBottomColor: cfg.line }]}>
               <Text style={[s.entryNum, { color: cfg.fgMuted }]}>{idx + 1}.</Text>
-              <Text style={[s.jgName, { color: cfg.fg }]} numberOfLines={1}>{c.name}</Text>
+              <Text
+                style={[
+                  s.jgName,
+                  { color: c.stopped ? cfg.fgMuted : cfg.fg },
+                  c.stopped && s.jgNameStopped,
+                ]}
+                numberOfLines={1}
+              >
+                {c.name}
+              </Text>
               {c.birthYear ? (
                 <Text style={[s.lineYear, { color: cfg.fgMuted }]}>{`'${String(c.birthYear).slice(2)}`}</Text>
               ) : null}
@@ -500,6 +509,7 @@ const s = StyleSheet.create({
   jgEmpty: { fontSize: 12, fontStyle: 'italic', paddingVertical: 6 },
   jgRow: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 2, borderBottomWidth: StyleSheet.hairlineWidth },
   jgName: { flex: 1, fontSize: 13 },
+  jgNameStopped: { textDecorationLine: 'line-through' },
   jgOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center', padding: 32 },
   jgMenu: { width: '100%', maxWidth: 280, maxHeight: '70%', borderRadius: 14, borderWidth: 1, paddingVertical: 6 },
   jgMenuItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 11 },
