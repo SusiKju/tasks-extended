@@ -29,6 +29,7 @@ import {
 import { useFamily } from '../hooks/useFamily';
 import { SharedNotepad } from '../components/SharedNotepad';
 import { GeistesKacheln } from '../components/GeistesKacheln';
+import { FussballKachel } from '../components/FussballKachel';
 import { WeatherWidget } from '../components/WeatherWidget';
 import { GoogleConnectBanner } from '../components/GoogleConnectBanner';
 import { CountdownStrip } from '../components/CountdownStrip';
@@ -719,6 +720,7 @@ export function DashboardScreen() {
   const flameScale = flameAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, 1.05, 1] });
 
   return (
+    <View style={{ flex: 1 }}>
     <ScrollView
       style={styles.container}
       contentContainerStyle={styles.content}
@@ -1213,6 +1215,10 @@ export function DashboardScreen() {
       )}
 
     </ScrollView>
+
+      {/* ── TE-7: persistente Fußball-Kachel, am rechten Rand fixiert ── */}
+      <FussballKachel />
+    </View>
   );
 }
 
