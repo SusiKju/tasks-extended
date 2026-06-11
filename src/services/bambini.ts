@@ -28,6 +28,10 @@ export interface Child {
   name: string;
   /** Geburtsjahr, z. B. 2019. 0 = unbekannt. */
   birthYear: number;
+  /** Angemeldet seit – ISO 'YYYY-MM-DD', optional ('' = nicht gesetzt) (TE-22). */
+  registeredSince: string;
+  /** Hat aufgehört (TE-22). */
+  stopped: boolean;
 }
 
 const makeId = (): string => String(uuid.v4());
@@ -43,6 +47,8 @@ function sanitizeChild(c: any): Child | null {
     id: String(c?.id ?? '') || makeId(),
     name,
     birthYear: Number.isFinite(birthYear) && birthYear > 0 ? Math.trunc(birthYear) : 0,
+    registeredSince: String(c?.registeredSince ?? ''),
+    stopped: !!c?.stopped,
   };
 }
 
@@ -117,7 +123,7 @@ export async function migrateRosterToBambini(uid: string): Promise<void> {
       const key = `${name.toLowerCase()}|${birthYear}`;
       if (seen.has(key)) return;
       seen.add(key);
-      added.push({ id: makeId(), name, birthYear });
+      added.push({ id: makeId(), name, birthYear, registeredSince: '', stopped: false });
     });
   });
 

@@ -24,12 +24,32 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, ThemeColors } from '../utils/theme';
 import { useFirebaseAuth } from '../hooks/useFirebaseAuth';
+import { DatePickerModal } from '../components/DatePickerModal';
 import {
   Child,
   loadBambini,
   saveBambini,
   migrateRosterToBambini,
 } from '../services/bambini';
+
+/** ISO 'YYYY-MM-DD' → 'DD.MM.YYYY' (string-basiert, ohne Zeitzonen-Fallen). */
+function formatDE(iso: string): string {
+  const [y, m, d] = iso.split('-');
+  return y && m && d ? `${d}.${m}.${y}` : '';
+}
+
+/** ISO 'YYYY-MM-DD' → lokales Date (für den Picker-Startwert). */
+function parseISO(iso: string): Date | null {
+  const [y, m, d] = iso.split('-').map(Number);
+  return y && m && d ? new Date(y, m - 1, d) : null;
+}
+
+/** Lokales Date → ISO 'YYYY-MM-DD' (kein UTC-Shift). */
+function toISO(d: Date): string {
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${mm}-${dd}`;
+}
 
 /** Alert funktioniert auf Web nicht — window.confirm als Fallback. */
 function confirmDelete(name: string, onConfirm: () => void) {
@@ -56,6 +76,9 @@ export function BambiniScreen() {
   const [editing, setEditing] = useState<Child | null>(null);
   const [nameInput, setNameInput] = useState('');
   const [yearInput, setYearInput] = useState('');
+  const [sinceInput, setSinceInput] = useState(''); // ISO 'YYYY-MM-DD' oder ''
+  const [stoppedInput, setStoppedInput] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
   const reload = useCallback(async () => {
     if (!uid) {
@@ -87,15 +110,19 @@ export function BambiniScreen() {
   );
 
   const openNew = () => {
-    setEditing({ id: '', name: '', birthYear: 0 });
+    setEditing({ id: '', name: '', birthYear: 0, registeredSince: '', stopped: false });
     setNameInput('');
     setYearInput('');
+    setSinceInput('');
+    setStoppedInput(false);
   };
 
   const openEdit = (c: Child) => {
     setEditing(c);
     setNameInput(c.name);
     setYearInput(c.birthYear ? String(c.birthYear) : '');
+    setSinceInput(c.registeredSince);
+    setStoppedInput(c.stopped);
   };
 
   const closeModal = () => setEditing(null);
@@ -108,11 +135,12 @@ export function BambiniScreen() {
     }
     const year = Number(yearInput);
     const birthYear = Number.isFinite(year) && year > 1900 ? Math.trunc(year) : 0;
+    const patch = { name, birthYear, registeredSince: sinceInput, stopped: stoppedInput };
 
     if (editing && editing.id) {
-      persist(children.map((c) => (c.id === editing.id ? { ...c, name, birthYear } : c)));
+      persist(children.map((c) => (c.id === editing.id ? { ...c, ...patch } : c)));
     } else {
-      persist([...children, { id: '', name, birthYear }]);
+      persist([...children, { id: '', ...patch }]);
     }
     closeModal();
   };
@@ -143,7 +171,13 @@ export function BambiniScreen() {
                 <Text style={s.groupTitle}>{g.year ? `Jahrgang ${g.year}` : 'Ohne Jahrgang'}</Text>
                 {g.items.map((c) => (
                   <Pressable key={c.id} style={s.row} onPress={() => openEdit(c)}>
-                    <Text style={s.rowName}>{c.name}</Text>
+                    <View style={s.rowMain}>
+                      <Text style={[s.rowName, c.stopped && s.rowNameStopped]} numberOfLines={1}>{c.name}</Text>
+                      {c.registeredSince ? (
+                        <Text style={s.rowSub}>seit {formatDE(c.registeredSince)}</Text>
+                      ) : null}
+                    </View>
+                    {c.stopped ? <Text style={s.badgeStopped}>aufgehört</Text> : null}
                     <Text style={s.rowYear}>{c.birthYear || '—'}</Text>
                     <Pressable onPress={() => removeEntry(c)} hitSlop={8} style={s.rowDel} accessibilityLabel="Löschen">
                       <Ionicons name="trash-outline" size={18} color={colors.textSecondary} />
@@ -181,6 +215,28 @@ export function BambiniScreen() {
               keyboardType="number-pad"
               maxLength={4}
             />
+
+            <Pressable style={s.dateField} onPress={() => setShowDatePicker(true)}>
+              <Ionicons name="calendar-outline" size={18} color={colors.textSecondary} />
+              <Text style={[s.dateFieldText, { color: sinceInput ? colors.text : colors.placeholder }]}>
+                {sinceInput ? `Angemeldet seit ${formatDE(sinceInput)}` : 'Angemeldet seit …'}
+              </Text>
+              {sinceInput ? (
+                <Pressable onPress={() => setSinceInput('')} hitSlop={8} accessibilityLabel="Datum entfernen">
+                  <Ionicons name="close-circle" size={18} color={colors.textSecondary} />
+                </Pressable>
+              ) : null}
+            </Pressable>
+
+            <Pressable style={s.checkRow} onPress={() => setStoppedInput((v) => !v)}>
+              <Ionicons
+                name={stoppedInput ? 'checkbox' : 'square-outline'}
+                size={22}
+                color={stoppedInput ? colors.accent : colors.textSecondary}
+              />
+              <Text style={[s.checkLabel, { color: colors.text }]}>Hat aufgehört</Text>
+            </Pressable>
+
             <View style={s.cardActions}>
               <Pressable onPress={closeModal} style={[s.btn, s.btnGhost]}>
                 <Text style={[s.btnText, { color: colors.textSecondary }]}>Abbrechen</Text>
@@ -192,6 +248,14 @@ export function BambiniScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      <DatePickerModal
+        visible={showDatePicker}
+        value={parseISO(sinceInput)}
+        onConfirm={(d) => { setSinceInput(toISO(d)); setShowDatePicker(false); }}
+        onCancel={() => setShowDatePicker(false)}
+        colors={colors}
+      />
     </View>
   );
 }
@@ -216,7 +280,20 @@ function makeStyles(c: ThemeColors) {
       paddingHorizontal: 12,
       marginBottom: 6,
     },
-    rowName: { flex: 1, color: c.text, fontSize: 15, fontWeight: '600' },
+    rowMain: { flex: 1 },
+    rowName: { color: c.text, fontSize: 15, fontWeight: '600' },
+    rowNameStopped: { textDecorationLine: 'line-through', color: c.textSecondary },
+    rowSub: { color: c.textSecondary, fontSize: 11, marginTop: 1 },
+    badgeStopped: {
+      color: c.warningFg,
+      backgroundColor: c.warning,
+      fontSize: 10,
+      fontWeight: '700',
+      overflow: 'hidden',
+      borderRadius: 6,
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+    },
     rowYear: { color: c.textSecondary, fontSize: 13, fontWeight: '600' },
     rowDel: { padding: 2 },
 
@@ -250,6 +327,20 @@ function makeStyles(c: ThemeColors) {
       color: c.text,
       fontSize: 15,
     },
+    dateField: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      backgroundColor: c.inputBackground,
+      borderWidth: 1,
+      borderColor: c.border,
+      borderRadius: 10,
+      paddingHorizontal: 12,
+      paddingVertical: 11,
+    },
+    dateFieldText: { flex: 1, fontSize: 15 },
+    checkRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 4 },
+    checkLabel: { fontSize: 15, fontWeight: '500' },
     cardActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8, marginTop: 4 },
     btn: { paddingHorizontal: 18, paddingVertical: 10, borderRadius: 10 },
     btnGhost: { borderWidth: 1, borderColor: c.border },
