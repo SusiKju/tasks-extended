@@ -46,9 +46,12 @@ function sanitizeChild(c: any): Child | null {
   };
 }
 
-/** Sortierung: jüngster Jahrgang … – innerhalb eines Jahrgangs alphabetisch. */
+/**
+ * Sortierung: jüngste Jahrgänge oben (absteigend nach Geburtsjahr), Jahrgang
+ * 2018 also ganz unten; innerhalb eines Jahrgangs alphabetisch (TE-21).
+ */
 function sortChildren(list: Child[]): Child[] {
-  return [...list].sort((a, b) => a.birthYear - b.birthYear || a.name.localeCompare(b.name, 'de'));
+  return [...list].sort((a, b) => b.birthYear - a.birthYear || a.name.localeCompare(b.name, 'de'));
 }
 
 export async function loadBambini(uid: string): Promise<Child[]> {
