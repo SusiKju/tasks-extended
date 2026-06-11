@@ -1,21 +1,22 @@
 /**
  * FussballKachel.tsx
  *
- * Persistente, nicht löschbare Fokus-Kachel am rechten Bildschirmrand.
- * Standardmäßig ausgeblendet – erst über die Settings (funTileEnabled)
- * sichtbar. Klick öffnet einen fast-fullscreen Notizdialog mit einem
- * füllenden 2×2-Raster aus vier editierbaren Notizabschnitten.
+ * Fokus-Kachel(n) als kleine Icons – inline rechts in der Geistesblitze-Zeile
+ * (nicht fixiert/sticky). In den Settings werden ein oder mehrere Themen
+ * aktiviert (funTileThemes); pro Thema erscheint ein Icon. Klick öffnet einen
+ * fast-fullscreen Notizdialog des jeweiligen Themas mit füllendem 2×2-Raster
+ * aus vier editierbaren Notizabschnitten.
  *
- * Das in den Settings gewählte Thema (funTileTheme) bestimmt Kachelfarbe,
- * Icon und das komplette Dialog-Styling inkl. dekorativem Hintergrund:
+ * Das Thema bestimmt Icon-/Kachelfarbe und das komplette Dialog-Styling inkl.
+ * dekorativem Hintergrund:
  *   - fussball → Spielfeld
  *   - yoga     → konzentrische Zen-Ringe
  *   - garten   → Gartenbeete + Sonne
  *
- * Bewusster Farbtupfer im sonst strikt schwarz-weißen App-Theme (TE-7/TE-10).
+ * Bewusster Farbtupfer im sonst strikt schwarz-weißen App-Theme (TE-7/TE-10/TE-14).
  */
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -33,7 +34,7 @@ import { FunTileTheme } from '../types';
 import {
   FussballAbschnitt,
   defaultSections,
-  subscribeToFussballKachel,
+  loadFussballKachel,
   saveFussballKachel,
 } from '../services/fussballKachel';
 
@@ -139,123 +140,135 @@ function ThemeBackground({ theme, chalk }: { theme: FunTileTheme; chalk: string 
 
 // ─── Hauptkomponente ───────────────────────────────────────────────────────────
 
+/** Reihenfolge der Icons folgt der festen Themen-Reihenfolge, nicht der Auswahl. */
+const THEME_ORDER: FunTileTheme[] = ['fussball', 'yoga', 'garten'];
+
 export function FussballKachel() {
   const { user } = useFirebaseAuth();
-  // Defensive Defaults: alt persistierte Stände können die Felder noch nicht
-  // kennen (Migration v17), sonst wäre theme undefined und der Firestore-Pfad
-  // doc(...,'themes',undefined) crasht.
-  const enabled = useStore((st) => st.settings.funTileEnabled) ?? false;
-  const theme = useStore((st) => st.settings.funTileTheme) ?? 'fussball';
+  // Defensive Defaults: alt persistierte Stände kennen das Array evtl. noch
+  // nicht (Migration v18).
+  const themes = useStore((st) => st.settings.funTileThemes) ?? [];
   const uid = user?.uid ?? '';
 
-  const [sections, setSections] = useState<FussballAbschnitt[]>(() => defaultSections(theme));
-  const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState<FussballAbschnitt[]>(() => defaultSections(theme));
+  const [openTheme, setOpenTheme] = useState<FunTileTheme | null>(null);
+  const [draft, setDraft] = useState<FussballAbschnitt[]>([]);
+  // Verhindert, dass ein verspätet geladenes Dokument bereits getippte
+  // Eingaben überschreibt.
+  const editedRef = useRef(false);
 
-  useEffect(() => {
-    if (!enabled || !uid) {
-      // Ohne Subscription beim Themenwechsel zumindest die Default-Titel zeigen.
-      setSections(defaultSections(theme));
-      return;
-    }
-    return subscribeToFussballKachel(uid, theme, (data) => setSections(data.sections));
-  }, [enabled, uid, theme]);
-
-  const openDialog = useCallback(() => {
-    setDraft(sections);
-    setOpen(true);
-  }, [sections]);
+  const openDialog = useCallback((theme: FunTileTheme) => {
+    editedRef.current = false;
+    setDraft(defaultSections(theme));
+    setOpenTheme(theme);
+    if (!uid) return;
+    loadFussballKachel(uid, theme)
+      .then((data) => { if (!editedRef.current) setDraft(data.sections); })
+      .catch((e) => console.warn('loadFussballKachel failed', e));
+  }, [uid]);
 
   const patchDraft = useCallback((i: number, patch: Partial<FussballAbschnitt>) => {
+    editedRef.current = true;
     setDraft((prev) => prev.map((sec, idx) => (idx === i ? { ...sec, ...patch } : sec)));
   }, []);
 
   // Dialog sofort schließen; im Hintergrund speichern (Fehler nur loggen).
   const handleSave = useCallback(() => {
-    setOpen(false);
-    if (!uid) return;
+    const theme = openTheme;
+    setOpenTheme(null);
+    if (!uid || !theme) return;
     saveFussballKachel(uid, theme, draft).catch((e) =>
       console.warn('saveFussballKachel failed', e),
     );
-  }, [uid, theme, draft]);
+  }, [uid, openTheme, draft]);
 
-  // Standardmäßig versteckt – nur sichtbar, wenn in den Settings aktiviert.
-  if (!enabled) return null;
+  // Nur die in den Settings ausgewählten Themen, in fester Reihenfolge.
+  const activeThemes = THEME_ORDER.filter((t) => themes.includes(t));
+  if (activeThemes.length === 0) return null;
 
-  const cfg = FUN_THEMES[theme] ?? FUN_THEMES.fussball;
+  const cfg = openTheme ? (FUN_THEMES[openTheme] ?? FUN_THEMES.fussball) : null;
 
   return (
     <>
-      {/* Fixierte Kachel am rechten Rand */}
-      <Pressable
-        style={({ pressed }) => [s.tile, { backgroundColor: cfg.tile }, pressed && { opacity: 0.85 }]}
-        onPress={openDialog}
-        accessibilityRole="button"
-        accessibilityLabel={`${cfg.label}-Notizen öffnen`}
-      >
-        <Ionicons name={cfg.icon} size={30} color="#FFFFFF" />
-      </Pressable>
+      {/* Inline-Icons – eine kleine Kachel pro aktivem Thema (nicht sticky) */}
+      <View style={s.iconRow}>
+        {activeThemes.map((t) => {
+          const c = FUN_THEMES[t];
+          return (
+            <Pressable
+              key={t}
+              style={({ pressed }) => [s.iconTile, { backgroundColor: c.tile }, pressed && { opacity: 0.85 }]}
+              onPress={() => openDialog(t)}
+              accessibilityRole="button"
+              accessibilityLabel={`${c.label}-Notizen öffnen`}
+            >
+              <Ionicons name={c.icon} size={18} color="#FFFFFF" />
+            </Pressable>
+          );
+        })}
+      </View>
 
-      {/* Fast-fullscreen Notizdialog */}
-      <Modal visible={open} animationType="slide" transparent onRequestClose={() => setOpen(false)}>
-        <KeyboardAvoidingView
-          style={s.backdrop}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        >
-          <View style={[s.dialog, { backgroundColor: cfg.dialogBg, borderColor: cfg.line }]}>
-            {/* Kopfzeile */}
-            <View style={s.header}>
-              <Ionicons name={cfg.icon} size={22} color={cfg.fg} />
-              <Text style={[s.headerTitle, { color: cfg.fg }]}>{cfg.title}</Text>
-              <Pressable onPress={() => setOpen(false)} hitSlop={12} style={s.closeBtn} accessibilityLabel="Schließen">
-                <Ionicons name="close" size={22} color={cfg.fg} />
+      {/* Fast-fullscreen Notizdialog des gewählten Themas */}
+      <Modal visible={!!openTheme} animationType="slide" transparent onRequestClose={() => setOpenTheme(null)}>
+        {cfg && openTheme && (
+          <KeyboardAvoidingView
+            style={s.backdrop}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          >
+            <View style={[s.dialog, { backgroundColor: cfg.dialogBg, borderColor: cfg.line }]}>
+              {/* Kopfzeile */}
+              <View style={s.header}>
+                <Ionicons name={cfg.icon} size={22} color={cfg.fg} />
+                <Text style={[s.headerTitle, { color: cfg.fg }]}>{cfg.title}</Text>
+                <Pressable onPress={() => setOpenTheme(null)} hitSlop={12} style={s.closeBtn} accessibilityLabel="Schließen">
+                  <Ionicons name="close" size={22} color={cfg.fg} />
+                </Pressable>
+              </View>
+
+              {/* Dekorativer Hintergrund + füllendes 2×2-Raster */}
+              <View style={s.body}>
+                <ThemeBackground theme={openTheme} chalk={cfg.chalk} />
+
+                <View style={s.grid}>
+                  {[[0, 1], [2, 3]].map((rowIdx) => (
+                    <View key={rowIdx[0]} style={s.row}>
+                      {rowIdx.map((i) => {
+                        const sec = draft[i];
+                        return (
+                          <View key={i} style={[s.cell, { backgroundColor: cfg.cellBg, borderColor: cfg.line }]}>
+                            <TextInput
+                              style={[s.cellTitle, { color: cfg.fg, borderBottomColor: cfg.line }]}
+                              value={sec?.title ?? ''}
+                              onChangeText={(t) => patchDraft(i, { title: t })}
+                              placeholder="Titel"
+                              placeholderTextColor={cfg.fgMuted}
+                            />
+                            <TextInput
+                              style={[s.cellBody, { color: cfg.fg }]}
+                              value={sec?.body ?? ''}
+                              onChangeText={(t) => patchDraft(i, { body: t })}
+                              placeholder={cfg.placeholder}
+                              placeholderTextColor={cfg.fgMuted}
+                              multiline
+                              textAlignVertical="top"
+                            />
+                          </View>
+                        );
+                      })}
+                    </View>
+                  ))}
+                </View>
+              </View>
+
+              {/* Speichern – schließt den Dialog sofort */}
+              <Pressable
+                style={({ pressed }) => [s.saveBtn, { backgroundColor: cfg.tile }, pressed && { opacity: 0.85 }]}
+                onPress={handleSave}
+              >
+                <Text style={s.saveBtnText}>Speichern</Text>
               </Pressable>
             </View>
-
-            {/* Dekorativer Hintergrund + füllendes 2×2-Raster */}
-            <View style={s.body}>
-              <ThemeBackground theme={theme} chalk={cfg.chalk} />
-
-              <View style={s.grid}>
-                {[[0, 1], [2, 3]].map((rowIdx) => (
-                  <View key={rowIdx[0]} style={s.row}>
-                    {rowIdx.map((i) => {
-                      const sec = draft[i];
-                      return (
-                        <View key={i} style={[s.cell, { backgroundColor: cfg.cellBg, borderColor: cfg.line }]}>
-                          <TextInput
-                            style={[s.cellTitle, { color: cfg.fg, borderBottomColor: cfg.line }]}
-                            value={sec.title}
-                            onChangeText={(t) => patchDraft(i, { title: t })}
-                            placeholder="Titel"
-                            placeholderTextColor={cfg.fgMuted}
-                          />
-                          <TextInput
-                            style={[s.cellBody, { color: cfg.fg }]}
-                            value={sec.body}
-                            onChangeText={(t) => patchDraft(i, { body: t })}
-                            placeholder={cfg.placeholder}
-                            placeholderTextColor={cfg.fgMuted}
-                            multiline
-                            textAlignVertical="top"
-                          />
-                        </View>
-                      );
-                    })}
-                  </View>
-                ))}
-              </View>
-            </View>
-
-            {/* Speichern – schließt den Dialog sofort */}
-            <Pressable
-              style={({ pressed }) => [s.saveBtn, { backgroundColor: cfg.tile }, pressed && { opacity: 0.85 }]}
-              onPress={handleSave}
-            >
-              <Text style={s.saveBtnText}>Speichern</Text>
-            </Pressable>
-          </View>
-        </KeyboardAvoidingView>
+          </KeyboardAvoidingView>
+        )}
       </Modal>
     </>
   );
@@ -264,22 +277,14 @@ export function FussballKachel() {
 // ─── Styles (Geometrie; Farben kommen themenabhängig inline) ───────────────────
 
 const s = StyleSheet.create({
-  // Kachel – fest am rechten Bildschirmrand, vertikal mittig
-  tile: {
-    position: 'absolute',
-    right: 0,
-    top: '42%',
-    width: 56,
-    height: 56,
-    borderTopLeftRadius: 16,
-    borderBottomLeftRadius: 16,
+  // Inline-Icons rechts in der Geistesblitze-Kopfzeile (nicht sticky)
+  iconRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  iconTile: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: -2, height: 2 },
-    shadowOpacity: 0.35,
-    shadowRadius: 6,
-    elevation: 8,
   },
 
   // Dialog

@@ -95,8 +95,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   selectedCalendarIds: [],
   childEmails: {},
   myName: null,
-  funTileEnabled: false,
-  funTileTheme: 'fussball',
+  funTileThemes: [],
 };
 
 export const useStore = create<TaskState>()(
@@ -234,7 +233,7 @@ export const useStore = create<TaskState>()(
     }),
     {
       name: 'tasks-extended-store',
-      version: 17,
+      version: 18,
       migrate: (persistedState: any, version: number) => {
         if (version < 1 && persistedState?.tasks) {
           persistedState.tasks = persistedState.tasks.map((t: any) => ({
@@ -320,6 +319,16 @@ export const useStore = create<TaskState>()(
             persistedState.settings.funTileEnabled ?? false;
           persistedState.settings.funTileTheme =
             persistedState.settings.funTileTheme ?? 'fussball';
+        }
+        if (version < 18 && persistedState?.settings) {
+          // TE-14: Single-Select (funTileEnabled + funTileTheme) → Mehrfachauswahl
+          // (funTileThemes als Array). Bestehende Auswahl übernehmen.
+          const s = persistedState.settings;
+          if (!Array.isArray(s.funTileThemes)) {
+            s.funTileThemes = s.funTileEnabled && s.funTileTheme ? [s.funTileTheme] : [];
+          }
+          delete s.funTileEnabled;
+          delete s.funTileTheme;
         }
         return persistedState;
       },

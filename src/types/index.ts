@@ -79,10 +79,11 @@ export interface AppSettings {
   childEmails: Partial<Record<string, string>>;
   /** Anzeigename für die geteilte Notizliste (TE-121), z. B. "Matthias" oder "Sabine". */
   myName: string | null;
-  /** TE-10: Fokus-Kachel (Notiz-Kachel am rechten Rand) ein-/ausblenden. Default aus. */
-  funTileEnabled: boolean;
-  /** TE-10: Thema der Fokus-Kachel – bestimmt Farben, Icon und Dialog-Hintergrund. */
-  funTileTheme: FunTileTheme;
+  /**
+   * TE-10/TE-14: aktive Themen der Fokus-Kachel (Mehrfachauswahl). Pro Thema
+   * erscheint ein Icon in der Geistesblitze-Zeile. Leeres Array = keine Kachel.
+   */
+  funTileThemes: FunTileTheme[];
 }
 
 /** Themen der Fokus-Kachel (TE-10). */

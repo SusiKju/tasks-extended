@@ -12,7 +12,7 @@
  */
 
 import { db } from './firebase';
-import { doc, onSnapshot, setDoc, Unsubscribe } from 'firebase/firestore';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { FunTileTheme } from '../types';
 
 export interface FussballAbschnitt {
@@ -64,26 +64,16 @@ function normalize(theme: FunTileTheme, sections?: FussballAbschnitt[]): Fussbal
 }
 
 /**
- * Echtzeit-Listener auf die Kachel des Users für ein Thema. Liefert immer vier
+ * Einmaliges Laden der Kachel des Users für ein Thema. Liefert immer vier
  * Abschnitte – auch wenn das Dokument noch nicht existiert.
  */
-export function subscribeToFussballKachel(
+export async function loadFussballKachel(
   uid: string,
   theme: FunTileTheme,
-  onChange: (data: FussballKachelData) => void,
-  onError?: (e: unknown) => void,
-): Unsubscribe {
-  return onSnapshot(
-    kachelDoc(uid, theme),
-    (snap) => {
-      const raw = snap.exists() ? (snap.data() as FussballKachelData) : undefined;
-      onChange({ sections: normalize(theme, raw?.sections) });
-    },
-    (e) => {
-      console.warn('subscribeToFussballKachel failed', e);
-      onError?.(e);
-    },
-  );
+): Promise<FussballKachelData> {
+  const snap = await getDoc(kachelDoc(uid, theme));
+  const raw = snap.exists() ? (snap.data() as FussballKachelData) : undefined;
+  return { sections: normalize(theme, raw?.sections) };
 }
 
 /** Abschnitte speichern (Dokument wird bei Bedarf angelegt). */

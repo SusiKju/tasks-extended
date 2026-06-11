@@ -32,6 +32,7 @@ import {
   updateGeistesKachel,
   deleteGeistesKachel,
 } from '../services/geistesKacheln';
+import { FussballKachel } from './FussballKachel';
 
 // ─── Typen ────────────────────────────────────────────────────────────────────
 
@@ -287,6 +288,8 @@ export function GeistesKacheln({ colors, isDark }: { colors: ThemeColors; isDark
     <View style={s.section}>
       <View style={s.header}>
         <Text style={[s.headerTitle, { color: colors.textSecondary }]}>GEISTESBLITZE</Text>
+        {/* TE-14: Fokus-Kachel-Icons rechtsbündig in derselben Zeile (nicht sticky) */}
+        <FussballKachel />
       </View>
 
       {tiles.length === 0 ? (

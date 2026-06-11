@@ -637,28 +637,24 @@ export function SettingsScreen() {
       </Modal>
 
 
-      {/* Fokus-Kachel (TE-10) */}
+      {/* Fokus-Kachel (TE-10/TE-14) – Mehrfachauswahl */}
       <View style={styles.section}>
         <Text style={styles.sectionHeader}>Fokus-Kachel</Text>
-        <View style={styles.row}>
-          <View style={styles.rowContent}>
-            <Text style={styles.rowTitle}>Kachel anzeigen</Text>
-            <Text style={styles.rowSubtitle}>Notiz-Kachel am rechten Bildschirmrand</Text>
-          </View>
-          <Switch
-            value={settings.funTileEnabled}
-            onValueChange={(v) => updateSettings({ funTileEnabled: v })}
-            trackColor={{ false: colors.border, true: colors.accentNeon }}
-            thumbColor="#FFFFFF"
-          />
-        </View>
-        {settings.funTileEnabled && FUN_TILE_OPTIONS.map((opt) => {
-          const active = settings.funTileTheme === opt.key;
+        <Text style={[styles.rowSubtitle, { paddingHorizontal: 4, marginBottom: 6 }]}>
+          Ein oder mehrere Themen wählen – pro Thema erscheint ein Icon neben den Geistesblitzen.
+        </Text>
+        {FUN_TILE_OPTIONS.map((opt) => {
+          const selected = settings.funTileThemes ?? [];
+          const active = selected.includes(opt.key);
           return (
             <Pressable
               key={opt.key}
               style={({ pressed }) => [styles.themeRow, active && styles.themeRowActive, pressed && { opacity: 0.85 }]}
-              onPress={() => updateSettings({ funTileTheme: opt.key })}
+              onPress={() => updateSettings({
+                funTileThemes: active
+                  ? selected.filter((t) => t !== opt.key)
+                  : [...selected, opt.key],
+              })}
             >
               <View style={[styles.themePreview, { backgroundColor: opt.color, borderColor: opt.color, alignItems: 'center', paddingLeft: 0 }]}>
                 <Ionicons name={opt.icon} size={18} color="#FFFFFF" />
@@ -666,7 +662,9 @@ export function SettingsScreen() {
               <View style={styles.rowContent}>
                 <Text style={styles.rowTitle}>{opt.label}</Text>
               </View>
-              {active && <Ionicons name="checkmark-circle" size={22} color={colors.accentNeon} />}
+              {active
+                ? <Ionicons name="checkmark-circle" size={22} color={colors.accentNeon} />
+                : <Ionicons name="ellipse-outline" size={22} color={colors.textMuted} />}
             </Pressable>
           );
         })}
