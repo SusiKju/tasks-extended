@@ -141,8 +141,11 @@ function ThemeBackground({ theme, chalk }: { theme: FunTileTheme; chalk: string 
 
 export function FussballKachel() {
   const { user } = useFirebaseAuth();
-  const enabled = useStore((st) => st.settings.funTileEnabled);
-  const theme = useStore((st) => st.settings.funTileTheme);
+  // Defensive Defaults: alt persistierte Stände können die Felder noch nicht
+  // kennen (Migration v17), sonst wäre theme undefined und der Firestore-Pfad
+  // doc(...,'themes',undefined) crasht.
+  const enabled = useStore((st) => st.settings.funTileEnabled) ?? false;
+  const theme = useStore((st) => st.settings.funTileTheme) ?? 'fussball';
   const uid = user?.uid ?? '';
 
   const [sections, setSections] = useState<FussballAbschnitt[]>(() => defaultSections(theme));

@@ -234,7 +234,7 @@ export const useStore = create<TaskState>()(
     }),
     {
       name: 'tasks-extended-store',
-      version: 16,
+      version: 17,
       migrate: (persistedState: any, version: number) => {
         if (version < 1 && persistedState?.tasks) {
           persistedState.tasks = persistedState.tasks.map((t: any) => ({
@@ -311,6 +311,15 @@ export const useStore = create<TaskState>()(
               return rest;
             });
           }
+        }
+        if (version < 17 && persistedState?.settings) {
+          // TE-10/TE-13: Fokus-Kachel-Felder fehlten in alten Ständen → Defaults
+          // nachziehen, sonst ist funTileTheme undefined und der Firestore-Pfad
+          // doc(...,'themes',undefined) crasht.
+          persistedState.settings.funTileEnabled =
+            persistedState.settings.funTileEnabled ?? false;
+          persistedState.settings.funTileTheme =
+            persistedState.settings.funTileTheme ?? 'fussball';
         }
         return persistedState;
       },
