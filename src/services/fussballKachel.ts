@@ -15,19 +15,50 @@ import { db } from './firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { FunTileTheme } from '../types';
 
+/**
+ * Strukturierter Listeneintrag der Namensliste (TE-16). Alle Felder sind
+ * Strings (nie `undefined`), damit Firestore sie unverändert speichert;
+ * Optionalität wird über den leeren String ('') ausgedrückt.
+ */
+export interface RosterEntry {
+  /** Vorname – Pflichtfeld (komplett leere Einträge werden beim Speichern verworfen). */
+  vorname: string;
+  /** Nachname – optional. */
+  nachname: string;
+  /** Geburtstag als ISO 'YYYY-MM-DD' – optional ('' = nicht gesetzt). */
+  geburtstag: string;
+  /** Emoji aus fixer Vorauswahl – optional ('' = kein Icon). */
+  icon: string;
+}
+
 export interface FussballAbschnitt {
   /** Frei benennbarer Titel des Notizabschnitts. */
   title: string;
   /** Freitext – unterstützt Zeilenumbrüche und Aufzählungen (z. B. "- Max"). */
   body: string;
+  /**
+   * Strukturierte Namensliste (TE-16). Nur in den Roster-Feldern des
+   * fussball-Themas befüllt; sonst leeres Array.
+   */
+  entries: RosterEntry[];
 }
 
 export interface FussballKachelData {
   sections: FussballAbschnitt[];
 }
 
+/** Thema, dessen erste zwei Felder als Namensliste geführt werden (TE-16). */
+export const ROSTER_THEME: FunTileTheme = 'fussball';
+/** Feld-Indizes (im 2×2-Raster), die als Namensliste geführt werden. */
+export const ROSTER_FIELDS = [0, 1];
+
+/** True, wenn Feld `i` des Themas als strukturierte Namensliste geführt wird. */
+export function isRosterField(theme: FunTileTheme, i: number): boolean {
+  return theme === ROSTER_THEME && ROSTER_FIELDS.includes(i);
+}
+
 /** Vier Default-Abschnitte je Thema – Titel sind frei überschreibbar. */
-export const DEFAULT_SECTIONS_BY_THEME: Record<FunTileTheme, FussballAbschnitt[]> = {
+const DEFAULT_TITLES_BY_THEME: Record<FunTileTheme, Omit<FussballAbschnitt, 'entries'>[]> = {
   fussball: [
     { title: 'akt. Abgänge Jahrg. 2019', body: '' },
     { title: 'ab 2020', body: '' },
@@ -49,18 +80,66 @@ export const DEFAULT_SECTIONS_BY_THEME: Record<FunTileTheme, FussballAbschnitt[]
 };
 
 export function defaultSections(theme: FunTileTheme): FussballAbschnitt[] {
-  return (DEFAULT_SECTIONS_BY_THEME[theme] ?? DEFAULT_SECTIONS_BY_THEME.fussball).map((d) => ({ ...d }));
+  return (DEFAULT_TITLES_BY_THEME[theme] ?? DEFAULT_TITLES_BY_THEME.fussball).map((d) => ({
+    ...d,
+    entries: [],
+  }));
 }
 
 const kachelDoc = (uid: string, theme: FunTileTheme) =>
   doc(db, 'focusTilesByUser', uid, 'themes', theme);
 
-/** Genau vier Abschnitte garantieren – fehlende mit Themen-Defaults auffüllen. */
+/** Coerce a possibly-partial roster entry to all-string shape (Firestore-safe). */
+function sanitizeEntry(e: Partial<RosterEntry> | undefined): RosterEntry {
+  return {
+    vorname: e?.vorname ?? '',
+    nachname: e?.nachname ?? '',
+    geburtstag: e?.geburtstag ?? '',
+    icon: e?.icon ?? '',
+  };
+}
+
+/** True, wenn alle Felder leer sind – solche Einträge werden nicht persistiert. */
+function isEmptyEntry(e: RosterEntry): boolean {
+  return !e.vorname.trim() && !e.nachname.trim() && !e.geburtstag && !e.icon;
+}
+
+/**
+ * Migriert alten, durchnummerierten Freitext (TE-15) in strukturierte
+ * Einträge: jede Zeile wird zu einem Eintrag mit nur gesetztem Vornamen.
+ * Das Nummern-Präfix ("1. ") wird entfernt.
+ */
+function entriesFromBody(body: string): RosterEntry[] {
+  return body
+    .split('\n')
+    .map((line) => line.replace(/^\s*\d+\.\s?/, '').trim())
+    .filter((name) => name !== '')
+    .map((vorname) => sanitizeEntry({ vorname }));
+}
+
+/** Roster-Einträge eines Feldes ableiten: vorhandene entries, sonst Body-Migration. */
+function rosterEntries(raw?: FussballAbschnitt): RosterEntry[] {
+  if (raw?.entries && raw.entries.length > 0) {
+    return raw.entries.map(sanitizeEntry).filter((e) => !isEmptyEntry(e));
+  }
+  if (raw?.body) return entriesFromBody(raw.body);
+  return [];
+}
+
+/**
+ * Genau vier Abschnitte garantieren – fehlende mit Themen-Defaults auffüllen.
+ * Roster-Felder (TE-16) tragen strukturierte `entries` und leeren `body`,
+ * alle übrigen Felder Freitext-`body` und ein leeres `entries`-Array.
+ */
 function normalize(theme: FunTileTheme, sections?: FussballAbschnitt[]): FussballAbschnitt[] {
-  return defaultSections(theme).map((def, i) => ({
-    title: sections?.[i]?.title ?? def.title,
-    body: sections?.[i]?.body ?? def.body,
-  }));
+  return defaultSections(theme).map((def, i) => {
+    const raw = sections?.[i];
+    const title = raw?.title ?? def.title;
+    if (isRosterField(theme, i)) {
+      return { title, body: '', entries: rosterEntries(raw) };
+    }
+    return { title, body: raw?.body ?? def.body, entries: [] };
+  });
 }
 
 /**

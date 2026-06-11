@@ -24,6 +24,7 @@ import {
   Pressable,
   Modal,
   TextInput,
+  ScrollView,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
@@ -31,9 +32,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFirebaseAuth } from '../hooks/useFirebaseAuth';
 import { useStore } from '../store';
 import { FunTileTheme } from '../types';
+import { useTheme, ThemeColors } from '../utils/theme';
+import { DatePickerModal } from './DatePickerModal';
 import {
   FussballAbschnitt,
+  RosterEntry,
   defaultSections,
+  isRosterField,
   loadFussballKachel,
   saveFussballKachel,
 } from '../services/fussballKachel';
@@ -43,10 +48,16 @@ type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 /** Indizes der Notizfelder, die als nummerierte Aufzählung geführt werden (TE-15). */
 const NUMBERED_FIELDS = [0, 1];
 
+/** Fixe Emoji-Vorauswahl für Namenslisten-Einträge (TE-16). */
+const ROSTER_ICONS = ['⚽', '🧤', '🏃', '⭐', '🟢', '🔴', '🟡'];
+
 /**
  * Macht aus jedem Zeilenumbruch eine fortlaufende Nummer: "1. …", "2. …".
  * Bestehende Nummern-Präfixe werden zuerst entfernt, damit Einfügen/Löschen
  * von Zeilen sauber neu durchnummeriert. Leerer Text bleibt leer (löschbar).
+ *
+ * Greift nur noch in Nicht-Roster-Feldern (yoga/garten); im fussball-Thema
+ * sind die ersten zwei Felder seit TE-16 strukturierte Namenslisten.
  */
 function numberLines(text: string): string {
   if (text === '') return '';
@@ -54,6 +65,157 @@ function numberLines(text: string): string {
     .split('\n')
     .map((line, idx) => `${idx + 1}. ${line.replace(/^\s*\d+\.\s?/, '')}`)
     .join('\n');
+}
+
+// ─── Namensliste (TE-16) ───────────────────────────────────────────────────────
+
+const emptyEntry = (): RosterEntry => ({ vorname: '', nachname: '', geburtstag: '', icon: '' });
+
+/** ISO 'YYYY-MM-DD' → 'DD.MM.YYYY' (string-basiert, ohne Zeitzonen-Fallen). */
+function formatGeb(iso: string): string {
+  const [y, m, d] = iso.split('-');
+  return y && m && d ? `${d}.${m}.${y}` : iso;
+}
+
+/** ISO 'YYYY-MM-DD' → lokales Date (für den Picker-Startwert). */
+function parseGeb(iso: string): Date | null {
+  const [y, m, d] = iso.split('-').map(Number);
+  return y && m && d ? new Date(y, m - 1, d) : null;
+}
+
+/** Lokales Date → ISO 'YYYY-MM-DD' (kein UTC-Shift). */
+function toISODate(d: Date): string {
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${mm}-${dd}`;
+}
+
+/** Zwei Einträge tauschen; out-of-range no-op. */
+function moveItem(list: RosterEntry[], idx: number, dir: -1 | 1): RosterEntry[] {
+  const j = idx + dir;
+  if (j < 0 || j >= list.length) return list;
+  const copy = [...list];
+  [copy[idx], copy[j]] = [copy[j], copy[idx]];
+  return copy;
+}
+
+interface RosterCellProps {
+  entries: RosterEntry[];
+  cfg: FunThemeCfg;
+  colors: ThemeColors;
+  onAdd: () => void;
+  onPatch: (idx: number, patch: Partial<RosterEntry>) => void;
+  onRemove: (idx: number) => void;
+  onMove: (idx: number, dir: -1 | 1) => void;
+}
+
+/**
+ * Editor für die strukturierte Namensliste eines Roster-Feldes: durchnummerierte
+ * Einträge mit Vorname (Pflicht), Nachname, Geburtstag (Datums-Picker) und Icon
+ * (Emoji-Vorauswahl). Hinzufügen, Löschen und ▲▼-Sortieren.
+ */
+function RosterCell({ entries, cfg, colors, onAdd, onPatch, onRemove, onMove }: RosterCellProps) {
+  const [iconPickerIdx, setIconPickerIdx] = useState<number | null>(null);
+  const [datePickerIdx, setDatePickerIdx] = useState<number | null>(null);
+
+  return (
+    <>
+      <ScrollView style={s.rosterScroll} keyboardShouldPersistTaps="handled">
+        {entries.map((e, idx) => (
+          <View key={idx} style={[s.entryCard, { borderColor: cfg.line }]}>
+            <View style={s.entryRow}>
+              <Text style={[s.entryNum, { color: cfg.fgMuted }]}>{idx + 1}.</Text>
+              <Pressable
+                onPress={() => setIconPickerIdx((cur) => (cur === idx ? null : idx))}
+                style={[s.iconChip, { borderColor: cfg.line }]}
+                accessibilityLabel="Icon wählen"
+              >
+                <Text style={s.iconChipText}>{e.icon || '＋'}</Text>
+              </Pressable>
+              <TextInput
+                style={[s.entryInput, { color: cfg.fg, borderBottomColor: cfg.line }]}
+                value={e.vorname}
+                onChangeText={(t) => onPatch(idx, { vorname: t })}
+                placeholder="Vorname"
+                placeholderTextColor={cfg.fgMuted}
+              />
+            </View>
+
+            {iconPickerIdx === idx && (
+              <View style={s.iconPicker}>
+                {ROSTER_ICONS.map((ic) => (
+                  <Pressable
+                    key={ic}
+                    onPress={() => {
+                      onPatch(idx, { icon: e.icon === ic ? '' : ic });
+                      setIconPickerIdx(null);
+                    }}
+                    style={s.iconOption}
+                  >
+                    <Text style={s.iconOptionText}>{ic}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            )}
+
+            <TextInput
+              style={[s.entryInput, { color: cfg.fg, borderBottomColor: cfg.line }]}
+              value={e.nachname}
+              onChangeText={(t) => onPatch(idx, { nachname: t })}
+              placeholder="Nachname"
+              placeholderTextColor={cfg.fgMuted}
+            />
+
+            <View style={s.entryRow}>
+              <Pressable
+                onPress={() => setDatePickerIdx(idx)}
+                style={[s.dateChip, { borderColor: cfg.line }]}
+                accessibilityLabel="Geburtstag wählen"
+              >
+                <Ionicons name="calendar-outline" size={13} color={cfg.fgMuted} />
+                <Text style={[s.dateChipText, { color: e.geburtstag ? cfg.fg : cfg.fgMuted }]}>
+                  {e.geburtstag ? formatGeb(e.geburtstag) : 'Geb.'}
+                </Text>
+              </Pressable>
+              <View style={s.entrySpacer} />
+              <Pressable onPress={() => onMove(idx, -1)} disabled={idx === 0} hitSlop={6} style={s.ctrlBtn}>
+                <Ionicons name="chevron-up" size={16} color={idx === 0 ? cfg.line : cfg.fg} />
+              </Pressable>
+              <Pressable
+                onPress={() => onMove(idx, 1)}
+                disabled={idx === entries.length - 1}
+                hitSlop={6}
+                style={s.ctrlBtn}
+              >
+                <Ionicons name="chevron-down" size={16} color={idx === entries.length - 1 ? cfg.line : cfg.fg} />
+              </Pressable>
+              <Pressable onPress={() => onRemove(idx)} hitSlop={6} style={s.ctrlBtn} accessibilityLabel="Eintrag löschen">
+                <Ionicons name="trash-outline" size={15} color={cfg.fgMuted} />
+              </Pressable>
+            </View>
+
+            {datePickerIdx === idx && (
+              <DatePickerModal
+                visible
+                value={parseGeb(e.geburtstag)}
+                onConfirm={(d) => {
+                  onPatch(idx, { geburtstag: toISODate(d) });
+                  setDatePickerIdx(null);
+                }}
+                onCancel={() => setDatePickerIdx(null)}
+                colors={colors}
+              />
+            )}
+          </View>
+        ))}
+      </ScrollView>
+
+      <Pressable onPress={onAdd} style={[s.addBtn, { borderColor: cfg.line }]}>
+        <Ionicons name="add" size={16} color={cfg.fg} />
+        <Text style={[s.addBtnText, { color: cfg.fg }]}>Eintrag</Text>
+      </Pressable>
+    </>
+  );
 }
 
 // ─── Themen-Konfiguration (themeunabhängige Farbtupfer) ────────────────────────
@@ -165,6 +327,8 @@ export function FussballKachel() {
   // nicht (Migration v18).
   const themes = useStore((st) => st.settings.funTileThemes) ?? [];
   const uid = user?.uid ?? '';
+  // App-Theme nur für den Datums-Picker der Namensliste (TE-16).
+  const { colors } = useTheme();
 
   const [openTheme, setOpenTheme] = useState<FunTileTheme | null>(null);
   const [draft, setDraft] = useState<FussballAbschnitt[]>([]);
@@ -186,6 +350,17 @@ export function FussballKachel() {
     editedRef.current = true;
     setDraft((prev) => prev.map((sec, idx) => (idx === i ? { ...sec, ...patch } : sec)));
   }, []);
+
+  // Namensliste-Einträge eines Roster-Feldes mutieren (TE-16).
+  const mutateEntries = useCallback(
+    (i: number, fn: (entries: RosterEntry[]) => RosterEntry[]) => {
+      editedRef.current = true;
+      setDraft((prev) =>
+        prev.map((sec, idx) => (idx === i ? { ...sec, entries: fn(sec.entries ?? []) } : sec)),
+      );
+    },
+    [],
+  );
 
   // Dialog sofort schließen; im Hintergrund speichern (Fehler nur loggen).
   const handleSave = useCallback(() => {
@@ -258,17 +433,31 @@ export function FussballKachel() {
                               placeholder="Titel"
                               placeholderTextColor={cfg.fgMuted}
                             />
-                            <TextInput
-                              style={[s.cellBody, { color: cfg.fg }]}
-                              value={sec?.body ?? ''}
-                              onChangeText={(t) =>
-                                patchDraft(i, { body: NUMBERED_FIELDS.includes(i) ? numberLines(t) : t })
-                              }
-                              placeholder={cfg.placeholder}
-                              placeholderTextColor={cfg.fgMuted}
-                              multiline
-                              textAlignVertical="top"
-                            />
+                            {isRosterField(openTheme, i) ? (
+                              <RosterCell
+                                entries={sec?.entries ?? []}
+                                cfg={cfg}
+                                colors={colors}
+                                onAdd={() => mutateEntries(i, (es) => [...es, emptyEntry()])}
+                                onPatch={(k, patch) =>
+                                  mutateEntries(i, (es) => es.map((e, n) => (n === k ? { ...e, ...patch } : e)))
+                                }
+                                onRemove={(k) => mutateEntries(i, (es) => es.filter((_, n) => n !== k))}
+                                onMove={(k, dir) => mutateEntries(i, (es) => moveItem(es, k, dir))}
+                              />
+                            ) : (
+                              <TextInput
+                                style={[s.cellBody, { color: cfg.fg }]}
+                                value={sec?.body ?? ''}
+                                onChangeText={(t) =>
+                                  patchDraft(i, { body: NUMBERED_FIELDS.includes(i) ? numberLines(t) : t })
+                                }
+                                placeholder={cfg.placeholder}
+                                placeholderTextColor={cfg.fgMuted}
+                                multiline
+                                textAlignVertical="top"
+                              />
+                            )}
                           </View>
                         );
                       })}
@@ -350,6 +539,24 @@ const s = StyleSheet.create({
   cell: { flex: 1, borderRadius: 14, borderWidth: 1, padding: 10, gap: 8 },
   cellTitle: { fontSize: 14, fontWeight: '700', borderBottomWidth: 1, paddingBottom: 6 },
   cellBody: { flex: 1, fontSize: 13, lineHeight: 19, minHeight: 100 },
+
+  // ── Namensliste (TE-16) ──
+  rosterScroll: { flex: 1 },
+  entryCard: { borderWidth: 1, borderRadius: 8, padding: 6, marginBottom: 6, gap: 4 },
+  entryRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  entryNum: { fontSize: 11, fontWeight: '700', minWidth: 16 },
+  entryInput: { flex: 1, fontSize: 12, borderBottomWidth: 1, paddingVertical: 2, paddingHorizontal: 0 },
+  iconChip: { width: 24, height: 24, borderRadius: 6, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  iconChipText: { fontSize: 14 },
+  iconPicker: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, paddingVertical: 2 },
+  iconOption: { padding: 2 },
+  iconOptionText: { fontSize: 18 },
+  dateChip: { flexDirection: 'row', alignItems: 'center', gap: 3, borderWidth: 1, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 3 },
+  dateChipText: { fontSize: 11 },
+  entrySpacer: { flex: 1 },
+  ctrlBtn: { padding: 3 },
+  addBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, borderWidth: 1, borderStyle: 'dashed', borderRadius: 8, paddingVertical: 6, marginTop: 2 },
+  addBtnText: { fontSize: 12, fontWeight: '600' },
 
   saveBtn: { borderRadius: 14, paddingVertical: 14, alignItems: 'center', justifyContent: 'center' },
   saveBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
