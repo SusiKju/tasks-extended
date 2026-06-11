@@ -32,24 +32,26 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFirebaseAuth } from '../hooks/useFirebaseAuth';
 import { useStore } from '../store';
 import { FunTileTheme } from '../types';
-import { useTheme, ThemeColors } from '../utils/theme';
-import { DatePickerModal } from './DatePickerModal';
 import {
   FussballAbschnitt,
-  RosterEntry,
+  JahrgangSel,
   defaultSections,
+  defaultJahrgang,
   isRosterField,
   loadFussballKachel,
   saveFussballKachel,
 } from '../services/fussballKachel';
+import {
+  Child,
+  loadBambini,
+  childrenForJahrgang,
+  migrateRosterToBambini,
+} from '../services/bambini';
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 
 /** Indizes der Notizfelder, die als nummerierte Aufzählung geführt werden (TE-15). */
 const NUMBERED_FIELDS = [0, 1];
-
-/** Fixe Emoji-Vorauswahl für Namenslisten-Einträge (TE-16). */
-const ROSTER_ICONS = ['⚽', '🧤', '🏃', '⭐', '🟢', '🔴', '🟡'];
 
 /**
  * Macht aus jedem Zeilenumbruch eine fortlaufende Nummer: "1. …", "2. …".
@@ -67,160 +69,96 @@ function numberLines(text: string): string {
     .join('\n');
 }
 
-// ─── Namensliste (TE-16) ───────────────────────────────────────────────────────
+// ─── Jahrgang-Ansicht (TE-18) ──────────────────────────────────────────────────
 
-const emptyEntry = (): RosterEntry => ({ name: '', geburtstag: '', icon: '' });
-
-/** ISO 'YYYY-MM-DD' → 'DD.MM.YYYY' (string-basiert, ohne Zeitzonen-Fallen). */
-function formatGeb(iso: string): string {
-  const [y, m, d] = iso.split('-');
-  return y && m && d ? `${d}.${m}.${y}` : iso;
+/** Label einer Jahrgang-Auswahl, z. B. "Jahrgang 2019" oder "ab 2020". */
+function jahrgangLabel(sel: JahrgangSel): string {
+  return sel.mode === 'from' ? `ab ${sel.year}` : `Jahrgang ${sel.year}`;
 }
 
-/** ISO 'YYYY-MM-DD' → lokales Date (für den Picker-Startwert). */
-function parseGeb(iso: string): Date | null {
-  const [y, m, d] = iso.split('-').map(Number);
-  return y && m && d ? new Date(y, m - 1, d) : null;
+function sameSel(a: JahrgangSel, b: JahrgangSel): boolean {
+  return a.year === b.year && a.mode === b.mode;
 }
 
-/** Lokales Date → ISO 'YYYY-MM-DD' (kein UTC-Shift). */
-function toISODate(d: Date): string {
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
-  return `${d.getFullYear()}-${mm}-${dd}`;
+/** Auswahloptionen aus den vorhandenen Geburtsjahrgängen ableiten (+ aktuelle). */
+function jahrgangOptions(children: Child[], current: JahrgangSel): JahrgangSel[] {
+  const years = new Set(children.map((c) => c.birthYear).filter((y) => y > 0));
+  years.add(current.year);
+  const sorted = Array.from(years).sort((a, b) => a - b);
+  const opts: JahrgangSel[] = [];
+  sorted.forEach((y) => {
+    opts.push({ year: y, mode: 'exact' });
+    opts.push({ year: y, mode: 'from' });
+  });
+  return opts;
 }
 
-/** Zwei Einträge tauschen; out-of-range no-op. */
-function moveItem(list: RosterEntry[], idx: number, dir: -1 | 1): RosterEntry[] {
-  const j = idx + dir;
-  if (j < 0 || j >= list.length) return list;
-  const copy = [...list];
-  [copy[idx], copy[j]] = [copy[j], copy[idx]];
-  return copy;
-}
-
-interface RosterCellProps {
-  entries: RosterEntry[];
+interface JahrgangViewProps {
+  sel: JahrgangSel;
+  kids: Child[];
   cfg: FunThemeCfg;
-  colors: ThemeColors;
-  onAdd: () => void;
-  onPatch: (idx: number, patch: Partial<RosterEntry>) => void;
-  onRemove: (idx: number) => void;
-  onMove: (idx: number, dir: -1 | 1) => void;
-}
-
-/** ISO 'YYYY-MM-DD' → kompaktes "'JJ" Jahres-Badge (z. B. "'19"). */
-function yearBadge(iso: string): string {
-  const y = iso.split('-')[0];
-  return y.length === 4 ? `'${y.slice(2)}` : '';
+  onChange: (sel: JahrgangSel) => void;
 }
 
 /**
- * Editor für die strukturierte Namensliste eines Roster-Feldes – kompakt:
- * eine Zeile pro Eintrag (Nummer · optionales Icon · Name · optionales
- * Jahres-Badge · Löschen). Tippen auf die Zeile klappt ein Detail-Panel auf
- * (Icon-Auswahl, voller Geburtstag per Picker, ▲▼-Sortieren). So passen auch
- * 15–16 Namen sichtbar untereinander.
+ * Read-only Ansicht eines Roster-Feldes (TE-18): oben ein Jahrgang-Wähler,
+ * darunter die passenden Kinder aus der Bambini-Registry – eine Zeile pro Name.
+ * Gepflegt werden die Kinder im Bambini-Tab, nicht hier.
  */
-function RosterCell({ entries, cfg, colors, onAdd, onPatch, onRemove, onMove }: RosterCellProps) {
-  const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
-  const [datePickerIdx, setDatePickerIdx] = useState<number | null>(null);
-  const toggle = (idx: number) => setExpandedIdx((cur) => (cur === idx ? null : idx));
+function JahrgangView({ sel, kids, cfg, onChange }: JahrgangViewProps) {
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const matches = childrenForJahrgang(kids, sel);
+  const options = jahrgangOptions(kids, sel);
 
   return (
-    <>
+    <View style={s.jgWrap}>
+      <Pressable
+        onPress={() => setPickerOpen(true)}
+        style={[s.jgSelect, { borderColor: cfg.line }]}
+        accessibilityLabel="Jahrgang wählen"
+      >
+        <Text style={[s.jgSelectText, { color: cfg.fg }]} numberOfLines={1}>{jahrgangLabel(sel)}</Text>
+        <Ionicons name="chevron-down" size={14} color={cfg.fgMuted} />
+      </Pressable>
+
       <ScrollView style={s.rosterScroll} keyboardShouldPersistTaps="handled">
-        {entries.map((e, idx) => {
-          const open = expandedIdx === idx;
-          return (
-            <View key={idx}>
-              {/* Kompakte Zeile: ein Name = eine Zeile */}
-              <View style={[s.entryLine, { borderBottomColor: cfg.line }]}>
-                <Pressable onPress={() => toggle(idx)} hitSlop={4} style={s.lineLeft} accessibilityLabel="Details">
-                  <Text style={[s.entryNum, { color: cfg.fgMuted }]}>{idx + 1}.</Text>
-                  {e.icon ? <Text style={s.lineEmoji}>{e.icon}</Text> : null}
-                </Pressable>
-                <TextInput
-                  style={[s.lineInput, { color: cfg.fg }]}
-                  value={e.name}
-                  onChangeText={(t) => onPatch(idx, { name: t })}
-                  placeholder="Name"
-                  placeholderTextColor={cfg.fgMuted}
-                />
-                {e.geburtstag ? (
-                  <Text style={[s.lineYear, { color: cfg.fgMuted }]}>{yearBadge(e.geburtstag)}</Text>
-                ) : null}
-                <Pressable onPress={() => toggle(idx)} hitSlop={4} style={s.lineBtn} accessibilityLabel="Details">
-                  <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={14} color={cfg.fgMuted} />
-                </Pressable>
-                <Pressable onPress={() => onRemove(idx)} hitSlop={4} style={s.lineBtn} accessibilityLabel="Eintrag löschen">
-                  <Ionicons name="close" size={14} color={cfg.fgMuted} />
-                </Pressable>
-              </View>
-
-              {/* Detail-Panel (nur für die aufgeklappte Zeile) */}
-              {open && (
-                <View style={s.expand}>
-                  <View style={s.iconPicker}>
-                    {ROSTER_ICONS.map((ic) => (
-                      <Pressable
-                        key={ic}
-                        onPress={() => onPatch(idx, { icon: e.icon === ic ? '' : ic })}
-                        style={[s.iconOption, e.icon === ic && { backgroundColor: cfg.line, borderRadius: 6 }]}
-                      >
-                        <Text style={s.iconOptionText}>{ic}</Text>
-                      </Pressable>
-                    ))}
-                  </View>
-                  <View style={s.expandRow}>
-                    <Pressable
-                      onPress={() => setDatePickerIdx(idx)}
-                      style={[s.dateChip, { borderColor: cfg.line }]}
-                      accessibilityLabel="Geburtstag wählen"
-                    >
-                      <Ionicons name="calendar-outline" size={13} color={cfg.fgMuted} />
-                      <Text style={[s.dateChipText, { color: e.geburtstag ? cfg.fg : cfg.fgMuted }]}>
-                        {e.geburtstag ? formatGeb(e.geburtstag) : 'Geburtstag'}
-                      </Text>
-                    </Pressable>
-                    <View style={s.entrySpacer} />
-                    <Pressable onPress={() => onMove(idx, -1)} disabled={idx === 0} hitSlop={6} style={s.ctrlBtn}>
-                      <Ionicons name="chevron-up" size={16} color={idx === 0 ? cfg.line : cfg.fg} />
-                    </Pressable>
-                    <Pressable
-                      onPress={() => onMove(idx, 1)}
-                      disabled={idx === entries.length - 1}
-                      hitSlop={6}
-                      style={s.ctrlBtn}
-                    >
-                      <Ionicons name="chevron-down" size={16} color={idx === entries.length - 1 ? cfg.line : cfg.fg} />
-                    </Pressable>
-                  </View>
-                </View>
-              )}
-
-              {datePickerIdx === idx && (
-                <DatePickerModal
-                  visible
-                  value={parseGeb(e.geburtstag)}
-                  onConfirm={(d) => {
-                    onPatch(idx, { geburtstag: toISODate(d) });
-                    setDatePickerIdx(null);
-                  }}
-                  onCancel={() => setDatePickerIdx(null)}
-                  colors={colors}
-                />
-              )}
+        {matches.length === 0 ? (
+          <Text style={[s.jgEmpty, { color: cfg.fgMuted }]}>Keine Kinder in diesem Jahrgang.</Text>
+        ) : (
+          matches.map((c, idx) => (
+            <View key={c.id} style={[s.jgRow, { borderBottomColor: cfg.line }]}>
+              <Text style={[s.entryNum, { color: cfg.fgMuted }]}>{idx + 1}.</Text>
+              <Text style={[s.jgName, { color: cfg.fg }]} numberOfLines={1}>{c.name}</Text>
+              {c.birthYear ? (
+                <Text style={[s.lineYear, { color: cfg.fgMuted }]}>{`'${String(c.birthYear).slice(2)}`}</Text>
+              ) : null}
             </View>
-          );
-        })}
+          ))
+        )}
       </ScrollView>
 
-      <Pressable onPress={onAdd} style={[s.addBtn, { borderColor: cfg.line }]}>
-        <Ionicons name="add" size={16} color={cfg.fg} />
-        <Text style={[s.addBtnText, { color: cfg.fg }]}>Eintrag</Text>
-      </Pressable>
-    </>
+      <Modal visible={pickerOpen} transparent animationType="fade" onRequestClose={() => setPickerOpen(false)}>
+        <Pressable style={s.jgOverlay} onPress={() => setPickerOpen(false)}>
+          <View style={[s.jgMenu, { backgroundColor: cfg.dialogBg, borderColor: cfg.line }]}>
+            <ScrollView>
+              {options.map((opt) => {
+                const active = sameSel(opt, sel);
+                return (
+                  <Pressable
+                    key={`${opt.year}-${opt.mode}`}
+                    onPress={() => { onChange(opt); setPickerOpen(false); }}
+                    style={[s.jgMenuItem, active && { backgroundColor: cfg.cellBg }]}
+                  >
+                    <Text style={[s.jgMenuText, { color: cfg.fg }]}>{jahrgangLabel(opt)}</Text>
+                    {active ? <Ionicons name="checkmark" size={16} color={cfg.fg} /> : null}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </Pressable>
+      </Modal>
+    </View>
   );
 }
 
@@ -333,11 +271,11 @@ export function FussballKachel() {
   // nicht (Migration v18).
   const themes = useStore((st) => st.settings.funTileThemes) ?? [];
   const uid = user?.uid ?? '';
-  // App-Theme nur für den Datums-Picker der Namensliste (TE-16).
-  const { colors } = useTheme();
 
   const [openTheme, setOpenTheme] = useState<FunTileTheme | null>(null);
   const [draft, setDraft] = useState<FussballAbschnitt[]>([]);
+  // Kinder-Registry (TE-18) – speist die Jahrgang-Ansichten der Roster-Felder.
+  const [children, setChildren] = useState<Child[]>([]);
   // Verhindert, dass ein verspätet geladenes Dokument bereits getippte
   // Eingaben überschreibt.
   const editedRef = useRef(false);
@@ -345,28 +283,29 @@ export function FussballKachel() {
   const openDialog = useCallback((theme: FunTileTheme) => {
     editedRef.current = false;
     setDraft(defaultSections(theme));
+    setChildren([]);
     setOpenTheme(theme);
     if (!uid) return;
-    loadFussballKachel(uid, theme)
-      .then((data) => { if (!editedRef.current) setDraft(data.sections); })
-      .catch((e) => console.warn('loadFussballKachel failed', e));
+    // Erst alte Roster-Einträge migrieren, dann Kachel + Kinder laden (TE-18).
+    (async () => {
+      try {
+        await migrateRosterToBambini(uid);
+        const [data, kids] = await Promise.all([
+          loadFussballKachel(uid, theme),
+          loadBambini(uid),
+        ]);
+        if (!editedRef.current) setDraft(data.sections);
+        setChildren(kids);
+      } catch (e) {
+        console.warn('FussballKachel laden fehlgeschlagen', e);
+      }
+    })();
   }, [uid]);
 
   const patchDraft = useCallback((i: number, patch: Partial<FussballAbschnitt>) => {
     editedRef.current = true;
     setDraft((prev) => prev.map((sec, idx) => (idx === i ? { ...sec, ...patch } : sec)));
   }, []);
-
-  // Namensliste-Einträge eines Roster-Feldes mutieren (TE-16).
-  const mutateEntries = useCallback(
-    (i: number, fn: (entries: RosterEntry[]) => RosterEntry[]) => {
-      editedRef.current = true;
-      setDraft((prev) =>
-        prev.map((sec, idx) => (idx === i ? { ...sec, entries: fn(sec.entries ?? []) } : sec)),
-      );
-    },
-    [],
-  );
 
   // Dialog sofort schließen; im Hintergrund speichern (Fehler nur loggen).
   const handleSave = useCallback(() => {
@@ -440,16 +379,11 @@ export function FussballKachel() {
                               placeholderTextColor={cfg.fgMuted}
                             />
                             {isRosterField(openTheme, i) ? (
-                              <RosterCell
-                                entries={sec?.entries ?? []}
+                              <JahrgangView
+                                sel={sec?.jahrgang ?? defaultJahrgang(i)}
+                                kids={children}
                                 cfg={cfg}
-                                colors={colors}
-                                onAdd={() => mutateEntries(i, (es) => [...es, emptyEntry()])}
-                                onPatch={(k, patch) =>
-                                  mutateEntries(i, (es) => es.map((e, n) => (n === k ? { ...e, ...patch } : e)))
-                                }
-                                onRemove={(k) => mutateEntries(i, (es) => es.filter((_, n) => n !== k))}
-                                onMove={(k, dir) => mutateEntries(i, (es) => moveItem(es, k, dir))}
+                                onChange={(jg) => patchDraft(i, { jahrgang: jg })}
                               />
                             ) : (
                               <TextInput
@@ -546,27 +480,20 @@ const s = StyleSheet.create({
   cellTitle: { fontSize: 14, fontWeight: '700', borderBottomWidth: 1, paddingBottom: 6 },
   cellBody: { flex: 1, fontSize: 13, lineHeight: 19, minHeight: 100 },
 
-  // ── Namensliste (TE-16) – kompakt: eine Zeile pro Name ──
+  // ── Jahrgang-Ansicht (TE-18) – Wähler + kompakte Namensliste, eine Zeile/Name ──
   rosterScroll: { flex: 1 },
-  entryLine: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingVertical: 1, borderBottomWidth: StyleSheet.hairlineWidth },
-  lineLeft: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   entryNum: { fontSize: 11, fontWeight: '700', minWidth: 18 },
-  lineEmoji: { fontSize: 13 },
-  lineInput: { flex: 1, fontSize: 13, paddingVertical: 2, paddingHorizontal: 0 },
   lineYear: { fontSize: 10, fontWeight: '600' },
-  lineBtn: { paddingHorizontal: 2, paddingVertical: 2 },
-  // Detail-Panel
-  expand: { paddingLeft: 18, paddingBottom: 6, gap: 6 },
-  expandRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  iconPicker: { flexDirection: 'row', flexWrap: 'wrap', gap: 2 },
-  iconOption: { padding: 3 },
-  iconOptionText: { fontSize: 18 },
-  dateChip: { flexDirection: 'row', alignItems: 'center', gap: 3, borderWidth: 1, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 3 },
-  dateChipText: { fontSize: 11 },
-  entrySpacer: { flex: 1 },
-  ctrlBtn: { padding: 3 },
-  addBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, borderWidth: 1, borderStyle: 'dashed', borderRadius: 8, paddingVertical: 6, marginTop: 4 },
-  addBtnText: { fontSize: 12, fontWeight: '600' },
+  jgWrap: { flex: 1, gap: 6 },
+  jgSelect: { flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 5 },
+  jgSelectText: { flex: 1, fontSize: 12, fontWeight: '700' },
+  jgEmpty: { fontSize: 12, fontStyle: 'italic', paddingVertical: 6 },
+  jgRow: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 2, borderBottomWidth: StyleSheet.hairlineWidth },
+  jgName: { flex: 1, fontSize: 13 },
+  jgOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center', padding: 32 },
+  jgMenu: { width: '100%', maxWidth: 280, maxHeight: '70%', borderRadius: 14, borderWidth: 1, paddingVertical: 6 },
+  jgMenuItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 11 },
+  jgMenuText: { fontSize: 14, fontWeight: '600' },
 
   saveBtn: { borderRadius: 14, paddingVertical: 14, alignItems: 'center', justifyContent: 'center' },
   saveBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },

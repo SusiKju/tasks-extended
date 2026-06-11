@@ -32,20 +32,39 @@ export interface RosterEntry {
   icon: string;
 }
 
+/**
+ * Jahrgang-Auswahl eines Roster-Feldes (TE-18). `exact` zeigt genau den
+ * Geburtsjahrgang `year`, `from` zeigt diesen Jahrgang und alle jüngeren
+ * (>= year) – z. B. links `{2019,'exact'}`, rechts `{2020,'from'}`.
+ */
+export interface JahrgangSel {
+  year: number;
+  mode: 'exact' | 'from';
+}
+
 export interface FussballAbschnitt {
   /** Frei benennbarer Titel des Notizabschnitts. */
   title: string;
   /** Freitext – unterstützt Zeilenumbrüche und Aufzählungen (z. B. "- Max"). */
   body: string;
   /**
-   * Strukturierte Namensliste (TE-16). Nur in den Roster-Feldern des
-   * fussball-Themas befüllt; sonst leeres Array.
+   * Strukturierte Namensliste (TE-16). Seit TE-18 nur noch Migrationsquelle –
+   * die Anzeige speist sich aus der Bambini-Registry, gefiltert über `jahrgang`.
    */
   entries: RosterEntry[];
+  /** Gewählter Jahrgang dieses Roster-Feldes (TE-18); nur in Roster-Feldern. */
+  jahrgang?: JahrgangSel;
 }
 
 export interface FussballKachelData {
   sections: FussballAbschnitt[];
+  /** True, sobald die TE-16-Roster-Einträge in die Bambini-Registry migriert wurden (TE-18). */
+  rosterMigrated?: boolean;
+}
+
+/** Default-Jahrgang je Roster-Feld – bildet den bisherigen Zustand ab (TE-18). */
+export function defaultJahrgang(i: number): JahrgangSel {
+  return i === 0 ? { year: 2019, mode: 'exact' } : { year: 2020, mode: 'from' };
 }
 
 /** Thema, dessen erste zwei Felder als Namensliste geführt werden (TE-16). */
@@ -137,12 +156,23 @@ function rosterEntries(raw?: FussballAbschnitt): RosterEntry[] {
  * Roster-Felder (TE-16) tragen strukturierte `entries` und leeren `body`,
  * alle übrigen Felder Freitext-`body` und ein leeres `entries`-Array.
  */
+function sanitizeJahrgang(j: any, i: number): JahrgangSel {
+  const year = Number(j?.year);
+  const mode = j?.mode === 'from' ? 'from' : 'exact';
+  return Number.isFinite(year) && year > 0 ? { year, mode } : defaultJahrgang(i);
+}
+
 function normalize(theme: FunTileTheme, sections?: FussballAbschnitt[]): FussballAbschnitt[] {
   return defaultSections(theme).map((def, i) => {
     const raw = sections?.[i];
     const title = raw?.title ?? def.title;
     if (isRosterField(theme, i)) {
-      return { title, body: '', entries: rosterEntries(raw) };
+      return {
+        title,
+        body: '',
+        entries: rosterEntries(raw),
+        jahrgang: sanitizeJahrgang(raw?.jahrgang, i),
+      };
     }
     return { title, body: raw?.body ?? def.body, entries: [] };
   });
@@ -158,18 +188,23 @@ export async function loadFussballKachel(
 ): Promise<FussballKachelData> {
   const snap = await getDoc(kachelDoc(uid, theme));
   const raw = snap.exists() ? (snap.data() as FussballKachelData) : undefined;
-  return { sections: normalize(theme, raw?.sections) };
+  return { sections: normalize(theme, raw?.sections), rosterMigrated: !!raw?.rosterMigrated };
 }
 
-/** Abschnitte speichern (Dokument wird bei Bedarf angelegt). */
+/**
+ * Abschnitte speichern (Dokument wird bei Bedarf angelegt). `rosterMigrated`
+ * bleibt erhalten, wenn nicht explizit überschrieben (TE-18).
+ */
 export async function saveFussballKachel(
   uid: string,
   theme: FunTileTheme,
   sections: FussballAbschnitt[],
+  opts?: { rosterMigrated?: boolean },
 ): Promise<void> {
-  await setDoc(
-    kachelDoc(uid, theme),
-    { sections: normalize(theme, sections), updatedAt: new Date().toISOString() },
-    { merge: true },
-  );
+  const payload: Record<string, any> = {
+    sections: normalize(theme, sections),
+    updatedAt: new Date().toISOString(),
+  };
+  if (opts?.rosterMigrated !== undefined) payload.rosterMigrated = opts.rosterMigrated;
+  await setDoc(kachelDoc(uid, theme), payload, { merge: true });
 }
