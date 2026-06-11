@@ -106,6 +106,12 @@ service cloud.firestore {
       allow read, write: if isSignedIn() && request.auth.uid == uid;
     }
 
+    // ── Bambini-Kinder-Registry: strikt privat pro User (TE-18) ───────────────
+    // Genau wie focusTilesByUser bewusst außerhalb von families/.
+    match /bambiniByUser/{uid} {
+      allow read, write: if isSignedIn() && request.auth.uid == uid;
+    }
+
     // ── Alle anderen Dokumente: kein Zugriff ──────────────────────────────────
     match /{document=**} {
       allow read, write: if false;

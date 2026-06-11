@@ -118,14 +118,18 @@ export async function migrateRosterToBambini(uid: string): Promise<void> {
     });
   });
 
+  // Erst die Kinder schreiben. Schlägt das fehl (z. B. Permission), bricht der
+  // Aufrufer-catch ab, BEVOR wir die Kachel als migriert markieren – die alten
+  // Roster-Einträge bleiben dann als Quelle erhalten und die Migration läuft
+  // beim nächsten Mal erneut.
   if (added.length > 0) await saveBambini(uid, [...existing, ...added]);
 
-  // Roster-Einträge leeren, Jahrgang-Auswahl auf den bisherigen Stand setzen,
-  // Migration markieren.
+  // Jahrgang-Auswahl auf den bisherigen Stand setzen und Migration markieren.
+  // Die Roster-Einträge werden bewusst NICHT gelöscht – sie dienen als
+  // Cold-Backup, falls die Registry später mal geleert wird. Angezeigt werden
+  // sie nicht mehr (JahrgangView speist sich aus der Bambini-Registry).
   const sections = kachel.sections.map((sec, i) =>
-    ROSTER_FIELDS.includes(i)
-      ? { ...sec, entries: [], jahrgang: sec.jahrgang ?? defaultJahrgang(i) }
-      : sec,
+    ROSTER_FIELDS.includes(i) ? { ...sec, jahrgang: sec.jahrgang ?? defaultJahrgang(i) } : sec,
   );
   await saveFussballKachel(uid, ROSTER_THEME, sections, { rosterMigrated: true });
 }
