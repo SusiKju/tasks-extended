@@ -80,16 +80,26 @@ function sameSel(a: JahrgangSel, b: JahrgangSel): boolean {
   return a.year === b.year && a.mode === b.mode;
 }
 
-/** Auswahloptionen aus den vorhandenen Geburtsjahrgängen ableiten (+ aktuelle). */
-function jahrgangOptions(children: Child[], current: JahrgangSel): JahrgangSel[] {
-  const years = new Set(children.map((c) => c.birthYear).filter((y) => y > 0));
-  years.add(current.year);
-  const sorted = Array.from(years).sort((a, b) => a - b);
+/** Ältester relevanter Jahrgang (Abgänger). Für ihn gibt es kein "ab …" (TE-20). */
+const OLDEST_JAHRGANG = 2018;
+
+/**
+ * Auswahloptionen als zusammenhängende Jahrgangs-Spanne von OLDEST_JAHRGANG bis
+ * zum jüngsten relevanten Jahr (vorhandene Kinder bzw. aktuelle Auswahl).
+ * Pro Jahr ein "Jahrgang JJJJ"; ein "ab JJJJ" nur für Jahre nach dem ältesten –
+ * "ab 2018" entfällt bewusst.
+ */
+function jahrgangOptions(kids: Child[], current: JahrgangSel): JahrgangSel[] {
+  const maxYear = Math.max(
+    OLDEST_JAHRGANG,
+    current.year,
+    ...kids.map((c) => c.birthYear).filter((y) => y > 0),
+  );
   const opts: JahrgangSel[] = [];
-  sorted.forEach((y) => {
+  for (let y = OLDEST_JAHRGANG; y <= maxYear; y++) {
     opts.push({ year: y, mode: 'exact' });
-    opts.push({ year: y, mode: 'from' });
-  });
+    if (y > OLDEST_JAHRGANG) opts.push({ year: y, mode: 'from' });
+  }
   return opts;
 }
 
