@@ -14,7 +14,6 @@ interface TaskState {
   scratchpad: string;
   scratchpadUpdatedAt: string;
   deletedGoogleEventIds: string[];
-  deletedDriveNoteFileIds: string[];
 
   // Task actions
   addTask: (task: Task) => void;
@@ -39,8 +38,6 @@ interface TaskState {
   updateNote: (id: string, updates: Partial<Note>) => void;
   deleteNote: (id: string) => void;
   clearNotes: () => void;
-  clearDeletedDriveNoteFileIds: () => void;
-  removeDeletedDriveNoteFileIds: (fileIds: string[]) => void;
 
   // Birthday actions
   setBirthdays: (birthdays: Birthday[]) => void;
@@ -112,7 +109,6 @@ export const useStore = create<TaskState>()(
       scratchpad: '',
       scratchpadUpdatedAt: new Date(0).toISOString(),
       deletedGoogleEventIds: [],
-      deletedDriveNoteFileIds: [],
 
       addTask: (task) =>
         set((state) => ({ tasks: [task, ...state.tasks] })),
@@ -212,24 +208,9 @@ export const useStore = create<TaskState>()(
         })),
 
       deleteNote: (id) =>
-        set((state) => {
-          const note = state.notes.find((n) => n.id === id);
-          return {
-            notes: state.notes.filter((n) => n.id !== id),
-            deletedDriveNoteFileIds: note?.driveFileId
-              ? [...state.deletedDriveNoteFileIds, note.driveFileId]
-              : state.deletedDriveNoteFileIds,
-          };
-        }),
+        set((state) => ({ notes: state.notes.filter((n) => n.id !== id) })),
 
       clearNotes: () => set({ notes: [] }),
-
-      clearDeletedDriveNoteFileIds: () => set({ deletedDriveNoteFileIds: [] }),
-
-      removeDeletedDriveNoteFileIds: (fileIds) =>
-        set((state) => ({
-          deletedDriveNoteFileIds: state.deletedDriveNoteFileIds.filter((id) => !fileIds.includes(id)),
-        })),
 
       setBirthdays: (birthdays) => set({ birthdays }),
 
@@ -251,7 +232,7 @@ export const useStore = create<TaskState>()(
     }),
     {
       name: 'tasks-extended-store',
-      version: 15,
+      version: 16,
       migrate: (persistedState: any, version: number) => {
         if (version < 1 && persistedState?.tasks) {
           persistedState.tasks = persistedState.tasks.map((t: any) => ({
@@ -318,6 +299,16 @@ export const useStore = create<TaskState>()(
           // Persönliche Notizen wandern zu Firestore – alten Store leeren.
           persistedState.notes = [];
           persistedState.deletedDriveNoteFileIds = [];
+        }
+        if (version < 16) {
+          // TE-5: Google-Drive-Anbindung entfernt – Restfelder bereinigen.
+          delete persistedState.deletedDriveNoteFileIds;
+          if (Array.isArray(persistedState.notes)) {
+            persistedState.notes = persistedState.notes.map((n: any) => {
+              const { driveFileId: _drop, ...rest } = n;
+              return rest;
+            });
+          }
         }
         return persistedState;
       },

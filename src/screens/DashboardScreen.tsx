@@ -17,7 +17,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useStore } from '../store';
 import { useTheme, ThemeColors, readableTextOn, neonGlow } from '../utils/theme';
 import { subscribeToScratchpad, saveScratchpad } from '../services/scratchpadService';
-import { useGoogleDriveNotesSync } from '../hooks/useGoogleDriveNotesSync';
 import { useFirebaseAuth } from '../hooks/useFirebaseAuth';
 import { useGoogleTasksSync } from '../hooks/useGoogleTasksSync';
 import { useGoogleContactsBirthdaysSync } from '../hooks/useGoogleContactsBirthdaysSync';
@@ -472,7 +471,6 @@ export function DashboardScreen() {
   const childEmoji = (id: string) => familyChildren.find((c) => c.id === id)?.emoji ?? null;
   const { tasks, settings, scratchpad, setScratchpad, birthdays: storeBirthdays } = useStore();
   const { colors, isDark, theme, mono, isMono, reduceMotion } = useTheme();
-  const { syncDriveNotes } = useGoogleDriveNotesSync();
   const { user } = useFirebaseAuth();
   const { syncTasks } = useGoogleTasksSync();
   const { syncBirthdays } = useGoogleContactsBirthdaysSync();
@@ -502,7 +500,6 @@ export function DashboardScreen() {
     try {
       await Promise.all([
         syncTasks().catch(() => {}),
-        syncDriveNotes().catch(() => {}),
         syncBirthdays().catch(() => {}),
       ]);
       // Mails + Kalender neu laden
@@ -527,7 +524,7 @@ export function DashboardScreen() {
       spinAnim.setValue(0);
       setSyncing(false);
     }
-  }, [syncing, syncTasks, syncDriveNotes, syncBirthdays, settings]);
+  }, [syncing, syncTasks, syncBirthdays, settings]);
 
   // Debounced Firestore-Save 1,5 s nach letzter Eingabe
   const uploadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);

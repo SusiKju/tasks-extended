@@ -6,7 +6,6 @@ import { StatusBar } from 'expo-status-bar';
 import { useTheme } from '../src/utils/theme';
 import { useStore } from '../src/store';
 import { useGoogleTasksSync } from '../src/hooks/useGoogleTasksSync';
-import { useGoogleDriveNotesSync } from '../src/hooks/useGoogleDriveNotesSync';
 import { useGoogleContactsBirthdaysSync } from '../src/hooks/useGoogleContactsBirthdaysSync';
 import { getValidAccessToken } from '../src/services/googleCalendar';
 import { scheduleCheckIfNeeded, stopScheduledPush } from '../src/services/scheduledPush';
@@ -27,7 +26,6 @@ export default function RootLayout() {
     });
   }, []);
   const { syncTasks } = useGoogleTasksSync();
-  const { syncDriveNotes } = useGoogleDriveNotesSync();
   const { syncBirthdays } = useGoogleContactsBirthdaysSync();
   const { settings, updateSettings } = useStore();
 
@@ -38,8 +36,6 @@ export default function RootLayout() {
   const { familyId, children: familyChildren, loading: familyLoading } = useFamily();
   const syncTasksRef = useRef(syncTasks);
   syncTasksRef.current = syncTasks;
-  const syncNotesRef = useRef(syncDriveNotes);
-  syncNotesRef.current = syncDriveNotes;
   const syncBirthdaysRef = useRef(syncBirthdays);
   syncBirthdaysRef.current = syncBirthdays;
   const syncRef = syncTasksRef;
@@ -51,7 +47,6 @@ export default function RootLayout() {
 
     const runSync = () => {
       syncRef.current().catch(() => {});
-      syncNotesRef.current().catch(() => {});
       syncBirthdaysRef.current().catch(() => {});
     };
 
@@ -74,7 +69,6 @@ export default function RootLayout() {
           lastSyncAt.current = now;
           getValidAccessToken().catch(() => null).then(() => {
             syncRef.current().catch(() => {});
-            syncNotesRef.current().catch(() => {});
             syncBirthdaysRef.current().catch(() => {});
           });
         }

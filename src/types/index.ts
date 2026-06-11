@@ -96,7 +96,6 @@ export interface Note {
   pinned?: boolean;
   labels?: string[];
   imageUris?: string[];
-  driveFileId?: string | null;
   createdAt: string;
   updatedAt: string;
 }

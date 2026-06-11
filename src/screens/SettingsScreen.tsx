@@ -27,7 +27,6 @@ import {
   listCalendars,
 } from '../services/googleCalendar';
 import { useGoogleTasksSync } from '../hooks/useGoogleTasksSync';
-import { useGoogleDriveNotesSync } from '../hooks/useGoogleDriveNotesSync';
 import { useGoogleContactsBirthdaysSync } from '../hooks/useGoogleContactsBirthdaysSync';
 import { useFamily } from '../hooks/useFamily';
 import { useFirebaseAuth } from '../hooks/useFirebaseAuth';
@@ -59,7 +58,6 @@ function crossAlert(title: string, message: string, onConfirm: () => void) {
 export function SettingsScreen() {
   const { settings, updateSettings } = useStore();
   const { syncTasks } = useGoogleTasksSync();
-  const { syncDriveNotes } = useGoogleDriveNotesSync();
   const { syncBirthdays } = useGoogleContactsBirthdaysSync();
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
@@ -197,9 +195,6 @@ export function SettingsScreen() {
         googleBirthdaysEnabled: true,
       });
 
-      // Initial push: sync notes to Drive with the fresh token right away,
-      // bypassing any stale hook closure by passing the token explicitly.
-      syncDriveNotes(auth.accessToken).catch(() => {});
       // Prime the birthday data basis from Google Contacts with the fresh token.
       syncBirthdays(auth.accessToken).catch(() => {});
 
@@ -221,7 +216,7 @@ export function SettingsScreen() {
     } finally {
       setLoadingCalendar(false);
     }
-  }, [updateSettings, syncDriveNotes, syncBirthdays]);
+  }, [updateSettings, syncBirthdays]);
 
   const handleGoogleDisconnect = useCallback(() => {
     updateSettings({
