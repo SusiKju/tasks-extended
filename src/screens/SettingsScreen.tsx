@@ -16,12 +16,22 @@ import { Clipboard } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useStore } from '../store';
 import { useTheme, ThemeColors, neonGlow, THEMES } from '../utils/theme';
-import { Theme } from '../types';
+import { Theme, FunTileTheme } from '../types';
+import { FUN_THEMES } from '../components/FussballKachel';
 
 const THEME_OPTIONS: { key: Theme; label: string; description: string }[] = [
   { key: 'dark-mono', label: 'Neon Mono', description: 'Schwarz-Weiß mit Glow & Animationen' },
   { key: 'dark-calm', label: 'Ruhig', description: 'Schwarz-Weiß, ohne Glow & Animationen' },
 ];
+
+// Fokus-Kachel-Themen (TE-10) – Reihenfolge wie in FUN_THEMES definiert.
+const FUN_TILE_OPTIONS = (Object.keys(FUN_THEMES) as FunTileTheme[]).map((key) => ({
+  key,
+  label: FUN_THEMES[key].label,
+  color: FUN_THEMES[key].tile,
+  icon: FUN_THEMES[key].icon,
+}));
+
 import {
   signInWithGoogle,
   listCalendars,
@@ -626,6 +636,41 @@ export function SettingsScreen() {
         </Pressable>
       </Modal>
 
+
+      {/* Fokus-Kachel (TE-10) */}
+      <View style={styles.section}>
+        <Text style={styles.sectionHeader}>Fokus-Kachel</Text>
+        <View style={styles.row}>
+          <View style={styles.rowContent}>
+            <Text style={styles.rowTitle}>Kachel anzeigen</Text>
+            <Text style={styles.rowSubtitle}>Notiz-Kachel am rechten Bildschirmrand</Text>
+          </View>
+          <Switch
+            value={settings.funTileEnabled}
+            onValueChange={(v) => updateSettings({ funTileEnabled: v })}
+            trackColor={{ false: colors.border, true: colors.accentNeon }}
+            thumbColor="#FFFFFF"
+          />
+        </View>
+        {settings.funTileEnabled && FUN_TILE_OPTIONS.map((opt) => {
+          const active = settings.funTileTheme === opt.key;
+          return (
+            <Pressable
+              key={opt.key}
+              style={({ pressed }) => [styles.themeRow, active && styles.themeRowActive, pressed && { opacity: 0.85 }]}
+              onPress={() => updateSettings({ funTileTheme: opt.key })}
+            >
+              <View style={[styles.themePreview, { backgroundColor: opt.color, borderColor: opt.color, alignItems: 'center', paddingLeft: 0 }]}>
+                <Ionicons name={opt.icon} size={18} color="#FFFFFF" />
+              </View>
+              <View style={styles.rowContent}>
+                <Text style={styles.rowTitle}>{opt.label}</Text>
+              </View>
+              {active && <Ionicons name="checkmark-circle" size={22} color={colors.accentNeon} />}
+            </Pressable>
+          );
+        })}
+      </View>
 
       {/* Darstellung */}
       <View style={styles.section}>

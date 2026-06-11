@@ -95,6 +95,8 @@ const DEFAULT_SETTINGS: AppSettings = {
   selectedCalendarIds: [],
   childEmails: {},
   myName: null,
+  funTileEnabled: false,
+  funTileTheme: 'fussball',
 };
 
 export const useStore = create<TaskState>()(

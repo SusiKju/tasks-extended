@@ -1,13 +1,18 @@
 /**
  * FussballKachel.tsx
  *
- * Persistente, nicht löschbare Fußball-Kachel am rechten Bildschirmrand.
- * Rasengrüner Hintergrund, statisches Fußball-Icon, kein Lösch-Button.
- * Klick öffnet einen fast-fullscreen Notizdialog im Fußball-Look (dunkelgrün)
- * mit einem 2×2-Raster aus vier unabhängigen, editierbaren Notizabschnitten.
+ * Persistente, nicht löschbare Fokus-Kachel am rechten Bildschirmrand.
+ * Standardmäßig ausgeblendet – erst über die Settings (funTileEnabled)
+ * sichtbar. Klick öffnet einen fast-fullscreen Notizdialog mit einem
+ * füllenden 2×2-Raster aus vier editierbaren Notizabschnitten.
  *
- * Die Kachel bewusst in Fußball-Grün – ein gewollter Farbtupfer im sonst
- * strikt schwarz-weißen App-Theme (TE-7).
+ * Das in den Settings gewählte Thema (funTileTheme) bestimmt Kachelfarbe,
+ * Icon und das komplette Dialog-Styling inkl. dekorativem Hintergrund:
+ *   - fussball → Spielfeld
+ *   - yoga     → konzentrische Zen-Ringe
+ *   - garten   → Gartenbeete + Sonne
+ *
+ * Bewusster Farbtupfer im sonst strikt schwarz-weißen App-Theme (TE-7/TE-10).
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
@@ -25,6 +30,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useFirebaseAuth } from '../hooks/useFirebaseAuth';
 import { useFamily } from '../hooks/useFamily';
+import { useStore } from '../store';
+import { FunTileTheme } from '../types';
 import {
   FussballAbschnitt,
   DEFAULT_SECTIONS,
@@ -32,21 +39,109 @@ import {
   saveFussballKachel,
 } from '../services/fussballKachel';
 
-// ─── Fußball-Farben (themeunabhängig, gewollter Farbtupfer) ────────────────────
+type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 
-const GRASS       = '#2E7D32'; // Rasengrün (Kachel)
-const GRASS_DARK  = '#0E3A16'; // dunkelgrüner Dialog-Hintergrund
-const GRASS_LINE  = '#3C8C44'; // Rahmen
-const CELL_BG     = 'rgba(20,67,31,0.78)'; // halbtransparentes Notizfeld – Spielfeld scheint durch
-const CHALK       = 'rgba(232,247,232,0.30)'; // Spielfeld-Markierungen (Kalk)
-const FG          = '#F1FAF1'; // helle Schrift auf Grün
-const FG_MUTED    = '#A7C8AB';
+// ─── Themen-Konfiguration (themeunabhängige Farbtupfer) ────────────────────────
+
+interface FunThemeCfg {
+  label: string;
+  title: string;       // Dialog-Titel
+  icon: IoniconName;   // Kachel-/Header-Icon
+  tile: string;        // Kachel- & Speichern-Farbe
+  dialogBg: string;    // Dialog-Hintergrund
+  cellBg: string;      // halbtransparentes Notizfeld (Hintergrund scheint durch)
+  line: string;        // Rahmen/Trennlinien
+  chalk: string;       // dekorative Hintergrund-Markierungen
+  fg: string;          // Schrift
+  fgMuted: string;     // Platzhalter
+}
+
+export const FUN_THEMES: Record<FunTileTheme, FunThemeCfg> = {
+  fussball: {
+    label: 'Fußball',
+    title: 'Fußball-Notizen',
+    icon: 'football',
+    tile: '#2E7D32',
+    dialogBg: '#0E3A16',
+    cellBg: 'rgba(20,67,31,0.78)',
+    line: '#3C8C44',
+    chalk: 'rgba(232,247,232,0.30)',
+    fg: '#F1FAF1',
+    fgMuted: '#A7C8AB',
+  },
+  yoga: {
+    label: 'Yoga',
+    title: 'Yoga-Notizen',
+    icon: 'flower',
+    tile: '#7E6BD6',
+    dialogBg: '#241A33',
+    cellBg: 'rgba(58,44,84,0.78)',
+    line: '#5B4A86',
+    chalk: 'rgba(240,235,250,0.26)',
+    fg: '#F4F1FB',
+    fgMuted: '#BCAFD6',
+  },
+  garten: {
+    label: 'Garten',
+    title: 'Garten-Notizen',
+    icon: 'leaf',
+    tile: '#7CB342',
+    dialogBg: '#1C2912',
+    cellBg: 'rgba(44,58,28,0.78)',
+    line: '#4E6B30',
+    chalk: 'rgba(238,247,228,0.28)',
+    fg: '#F1F7EA',
+    fgMuted: '#B6CBA0',
+  },
+};
+
+// ─── Dekorativer Hintergrund je Thema ──────────────────────────────────────────
+
+function ThemeBackground({ theme, chalk }: { theme: FunTileTheme; chalk: string }) {
+  if (theme === 'fussball') {
+    return (
+      <View style={s.bgLayer} pointerEvents="none">
+        <View style={[s.halfLine, { borderColor: chalk }]} />
+        <View style={[s.centerCircle, { borderColor: chalk }]} />
+        <View style={[s.centerSpot, { backgroundColor: chalk }]} />
+        <View style={[s.penaltyBox, s.penaltyTop, { borderColor: chalk }]} />
+        <View style={[s.goalBox, s.goalTop, { borderColor: chalk }]} />
+        <View style={[s.penaltyBox, s.penaltyBottom, { borderColor: chalk }]} />
+        <View style={[s.goalBox, s.goalBottom, { borderColor: chalk }]} />
+      </View>
+    );
+  }
+  if (theme === 'yoga') {
+    return (
+      <View style={s.bgLayer} pointerEvents="none">
+        {[220, 150, 80].map((d) => (
+          <View
+            key={d}
+            style={[s.ring, { width: d, height: d, borderRadius: d / 2, marginLeft: -d / 2, marginTop: -d / 2, borderColor: chalk }]}
+          />
+        ))}
+        <View style={[s.centerSpot, { backgroundColor: chalk }]} />
+      </View>
+    );
+  }
+  // garten: Beete (horizontale Reihen) + Sonne
+  return (
+    <View style={s.bgLayer} pointerEvents="none">
+      {['16%', '34%', '52%', '70%', '88%'].map((top) => (
+        <View key={top} style={[s.gardenRow, { top: top as any, borderColor: chalk }]} />
+      ))}
+      <View style={[s.sun, { borderColor: chalk }]} />
+    </View>
+  );
+}
 
 // ─── Hauptkomponente ───────────────────────────────────────────────────────────
 
 export function FussballKachel() {
   const { user } = useFirebaseAuth();
   const { familyId } = useFamily();
+  const enabled = useStore((st) => st.settings.funTileEnabled);
+  const theme = useStore((st) => st.settings.funTileTheme);
   const fid = familyId ?? '';
   const uid = user?.uid ?? '';
 
@@ -56,9 +151,9 @@ export function FussballKachel() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (!fid || !uid) return;
+    if (!enabled || !fid || !uid) return;
     return subscribeToFussballKachel(fid, uid, (data) => setSections(data.sections));
-  }, [fid, uid]);
+  }, [enabled, fid, uid]);
 
   const openDialog = useCallback(() => {
     setDraft(sections);
@@ -66,7 +161,7 @@ export function FussballKachel() {
   }, [sections]);
 
   const patchDraft = useCallback((i: number, patch: Partial<FussballAbschnitt>) => {
-    setDraft((prev) => prev.map((s, idx) => (idx === i ? { ...s, ...patch } : s)));
+    setDraft((prev) => prev.map((sec, idx) => (idx === i ? { ...sec, ...patch } : sec)));
   }, []);
 
   const handleSave = useCallback(async () => {
@@ -80,16 +175,21 @@ export function FussballKachel() {
     }
   }, [fid, uid, draft]);
 
+  // Standardmäßig versteckt – nur sichtbar, wenn in den Settings aktiviert.
+  if (!enabled) return null;
+
+  const cfg = FUN_THEMES[theme] ?? FUN_THEMES.fussball;
+
   return (
     <>
       {/* Fixierte Kachel am rechten Rand */}
       <Pressable
-        style={({ pressed }) => [s.tile, pressed && { opacity: 0.85 }]}
+        style={({ pressed }) => [s.tile, { backgroundColor: cfg.tile }, pressed && { opacity: 0.85 }]}
         onPress={openDialog}
         accessibilityRole="button"
-        accessibilityLabel="Fußball-Notizen öffnen"
+        accessibilityLabel={`${cfg.label}-Notizen öffnen`}
       >
-        <Ionicons name="football" size={30} color="#FFFFFF" />
+        <Ionicons name={cfg.icon} size={30} color="#FFFFFF" />
       </Pressable>
 
       {/* Fast-fullscreen Notizdialog */}
@@ -98,55 +198,40 @@ export function FussballKachel() {
           style={s.backdrop}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
-          <View style={s.dialog}>
+          <View style={[s.dialog, { backgroundColor: cfg.dialogBg, borderColor: cfg.line }]}>
             {/* Kopfzeile */}
             <View style={s.header}>
-              <Ionicons name="football" size={22} color={FG} />
-              <Text style={s.headerTitle}>Fußball-Notizen</Text>
-              <Pressable
-                onPress={() => setOpen(false)}
-                hitSlop={12}
-                style={s.closeBtn}
-                accessibilityLabel="Schließen"
-              >
-                <Ionicons name="close" size={22} color={FG} />
+              <Ionicons name={cfg.icon} size={22} color={cfg.fg} />
+              <Text style={[s.headerTitle, { color: cfg.fg }]}>{cfg.title}</Text>
+              <Pressable onPress={() => setOpen(false)} hitSlop={12} style={s.closeBtn} accessibilityLabel="Schließen">
+                <Ionicons name="close" size={22} color={cfg.fg} />
               </Pressable>
             </View>
 
-            {/* Spielfeld-Hintergrund + füllendes 2×2-Raster */}
+            {/* Dekorativer Hintergrund + füllendes 2×2-Raster */}
             <View style={s.body}>
-              {/* Eingezeichnetes Fußball-Spielfeld (rein dekorativ) */}
-              <View style={s.pitch} pointerEvents="none">
-                <View style={s.halfLine} />
-                <View style={s.centerCircle} />
-                <View style={s.centerSpot} />
-                <View style={[s.penaltyBox, s.penaltyTop]} />
-                <View style={[s.goalBox, s.goalTop]} />
-                <View style={[s.penaltyBox, s.penaltyBottom]} />
-                <View style={[s.goalBox, s.goalBottom]} />
-              </View>
+              <ThemeBackground theme={theme} chalk={cfg.chalk} />
 
-              {/* 2×2-Raster – füllt den Dialog vollständig */}
               <View style={s.grid}>
                 {[[0, 1], [2, 3]].map((rowIdx) => (
                   <View key={rowIdx[0]} style={s.row}>
                     {rowIdx.map((i) => {
                       const sec = draft[i];
                       return (
-                        <View key={i} style={s.cell}>
+                        <View key={i} style={[s.cell, { backgroundColor: cfg.cellBg, borderColor: cfg.line }]}>
                           <TextInput
-                            style={s.cellTitle}
+                            style={[s.cellTitle, { color: cfg.fg, borderBottomColor: cfg.line }]}
                             value={sec.title}
                             onChangeText={(t) => patchDraft(i, { title: t })}
                             placeholder="Titel"
-                            placeholderTextColor={FG_MUTED}
+                            placeholderTextColor={cfg.fgMuted}
                           />
                           <TextInput
-                            style={s.cellBody}
+                            style={[s.cellBody, { color: cfg.fg }]}
                             value={sec.body}
                             onChangeText={(t) => patchDraft(i, { body: t })}
-                            placeholder={'Freitext oder Liste\n- Spieler 1\n- Spieler 2'}
-                            placeholderTextColor={FG_MUTED}
+                            placeholder={'Freitext oder Liste\n- Eintrag 1\n- Eintrag 2'}
+                            placeholderTextColor={cfg.fgMuted}
                             multiline
                             textAlignVertical="top"
                           />
@@ -160,7 +245,7 @@ export function FussballKachel() {
 
             {/* Speichern */}
             <Pressable
-              style={({ pressed }) => [s.saveBtn, pressed && { opacity: 0.85 }]}
+              style={({ pressed }) => [s.saveBtn, { backgroundColor: cfg.tile }, pressed && { opacity: 0.85 }]}
               onPress={handleSave}
               disabled={saving}
             >
@@ -175,7 +260,7 @@ export function FussballKachel() {
   );
 }
 
-// ─── Styles ────────────────────────────────────────────────────────────────────
+// ─── Styles (Geometrie; Farben kommen themenabhängig inline) ───────────────────
 
 const s = StyleSheet.create({
   // Kachel – fest am rechten Bildschirmrand, vertikal mittig
@@ -185,7 +270,6 @@ const s = StyleSheet.create({
     top: '42%',
     width: 56,
     height: 56,
-    backgroundColor: GRASS,
     borderTopLeftRadius: 16,
     borderBottomLeftRadius: 16,
     alignItems: 'center',
@@ -204,84 +288,45 @@ const s = StyleSheet.create({
     margin: 12,
     marginTop: Platform.OS === 'ios' ? 48 : 24,
     marginBottom: Platform.OS === 'ios' ? 32 : 16,
-    backgroundColor: GRASS_DARK,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: GRASS_LINE,
     padding: 14,
     gap: 12,
   },
 
   header: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  headerTitle: { flex: 1, color: FG, fontSize: 18, fontWeight: '700', letterSpacing: 0.3 },
+  headerTitle: { flex: 1, fontSize: 18, fontWeight: '700', letterSpacing: 0.3 },
   closeBtn: { padding: 4 },
 
-  // Füllende Spielfläche: Spielfeld-Layer + Raster übereinander
+  // Füllende Spielfläche: Hintergrund-Layer + Raster übereinander
   body: { flex: 1, position: 'relative' },
+  bgLayer: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
 
-  // ── Spielfeld-Markierungen (rein dekorativ, hinter dem Raster) ──
-  pitch: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
-  halfLine: {
-    position: 'absolute', left: 0, right: 0, top: '50%',
-    borderTopWidth: 2, borderColor: CHALK,
-  },
-  centerCircle: {
-    position: 'absolute', left: '50%', top: '50%',
-    width: 120, height: 120, marginLeft: -60, marginTop: -60,
-    borderRadius: 60, borderWidth: 2, borderColor: CHALK,
-  },
-  centerSpot: {
-    position: 'absolute', left: '50%', top: '50%',
-    width: 6, height: 6, marginLeft: -3, marginTop: -3,
-    borderRadius: 3, backgroundColor: CHALK,
-  },
-  penaltyBox: {
-    position: 'absolute', left: '18%', right: '18%', height: '14%',
-    borderWidth: 2, borderColor: CHALK,
-  },
+  // ── Fußball-Spielfeld ──
+  halfLine: { position: 'absolute', left: 0, right: 0, top: '50%', borderTopWidth: 2 },
+  centerCircle: { position: 'absolute', left: '50%', top: '50%', width: 120, height: 120, marginLeft: -60, marginTop: -60, borderRadius: 60, borderWidth: 2 },
+  centerSpot: { position: 'absolute', left: '50%', top: '50%', width: 6, height: 6, marginLeft: -3, marginTop: -3, borderRadius: 3 },
+  penaltyBox: { position: 'absolute', left: '18%', right: '18%', height: '14%', borderWidth: 2 },
   penaltyTop: { top: 0, borderTopWidth: 0 },
   penaltyBottom: { bottom: 0, borderBottomWidth: 0 },
-  goalBox: {
-    position: 'absolute', left: '36%', right: '36%', height: '6%',
-    borderWidth: 2, borderColor: CHALK,
-  },
+  goalBox: { position: 'absolute', left: '36%', right: '36%', height: '6%', borderWidth: 2 },
   goalTop: { top: 0, borderTopWidth: 0 },
   goalBottom: { bottom: 0, borderBottomWidth: 0 },
+
+  // ── Yoga: konzentrische Ringe (zentriert via left/top 50% + neg. margin) ──
+  ring: { position: 'absolute', left: '50%', top: '50%', borderWidth: 2 },
+
+  // ── Garten: Beet-Reihen + Sonne ──
+  gardenRow: { position: 'absolute', left: 0, right: 0, borderTopWidth: 1.5, borderStyle: 'dashed' },
+  sun: { position: 'absolute', top: 14, right: 14, width: 46, height: 46, borderRadius: 23, borderWidth: 2 },
 
   // ── 2×2-Raster, füllt den ganzen body ──
   grid: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, gap: 10 },
   row: { flex: 1, flexDirection: 'row', gap: 10 },
-  cell: {
-    flex: 1,
-    backgroundColor: CELL_BG,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: GRASS_LINE,
-    padding: 10,
-    gap: 8,
-  },
-  cellTitle: {
-    color: FG,
-    fontSize: 14,
-    fontWeight: '700',
-    borderBottomWidth: 1,
-    borderBottomColor: GRASS_LINE,
-    paddingBottom: 6,
-  },
-  cellBody: {
-    flex: 1,
-    color: FG,
-    fontSize: 13,
-    lineHeight: 19,
-    minHeight: 100,
-  },
+  cell: { flex: 1, borderRadius: 14, borderWidth: 1, padding: 10, gap: 8 },
+  cellTitle: { fontSize: 14, fontWeight: '700', borderBottomWidth: 1, paddingBottom: 6 },
+  cellBody: { flex: 1, fontSize: 13, lineHeight: 19, minHeight: 100 },
 
-  saveBtn: {
-    backgroundColor: GRASS,
-    borderRadius: 14,
-    paddingVertical: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  saveBtn: { borderRadius: 14, paddingVertical: 14, alignItems: 'center', justifyContent: 'center' },
   saveBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
 });
