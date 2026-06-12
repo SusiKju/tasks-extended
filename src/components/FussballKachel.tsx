@@ -390,13 +390,17 @@ export function FussballKachel() {
                         const sec = draft[i];
                         return (
                           <View key={i} style={[s.cell, { backgroundColor: cfg.cellBg, borderColor: cfg.line }]}>
-                            <TextInput
-                              style={[s.cellTitle, { color: cfg.fg, borderBottomColor: cfg.line }]}
-                              value={sec?.title ?? ''}
-                              onChangeText={(t) => patchDraft(i, { title: t })}
-                              placeholder="Titel"
-                              placeholderTextColor={cfg.fgMuted}
-                            />
+                            {/* Roster-Felder: kein Titel – das Jahrgang-Dropdown
+                                gibt den Inhalt vor (TE-24). */}
+                            {!isRosterField(openTheme, i) && (
+                              <TextInput
+                                style={[s.cellTitle, { color: cfg.fg, borderBottomColor: cfg.line }]}
+                                value={sec?.title ?? ''}
+                                onChangeText={(t) => patchDraft(i, { title: t })}
+                                placeholder="Titel"
+                                placeholderTextColor={cfg.fgMuted}
+                              />
+                            )}
                             {isRosterField(openTheme, i) ? (
                               <JahrgangView
                                 sel={sec?.jahrgang ?? defaultJahrgang(i)}
