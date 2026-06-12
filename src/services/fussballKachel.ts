@@ -52,8 +52,16 @@ export interface FussballAbschnitt {
    * die Anzeige speist sich aus der Bambini-Registry, gefiltert über `jahrgang`.
    */
   entries: RosterEntry[];
-  /** Gewählter Jahrgang dieses Roster-Feldes (TE-18); nur in Roster-Feldern. */
+  /**
+   * Gewählter Jahrgang dieses Feldes – in den Roster-Feldern (TE-18) und im
+   * Nominierungs-Feld (TE-28, dort als Filter für die hinzufügbaren Spieler).
+   */
   jahrgang?: JahrgangSel;
+  /**
+   * Turnier-Nominierung (TE-28): IDs der nominierten Kinder (Bambini-Registry),
+   * in Nominierungsreihenfolge. Nur im Nominierungs-Feld befüllt.
+   */
+  nominated?: string[];
 }
 
 export interface FussballKachelData {
@@ -75,6 +83,14 @@ export const ROSTER_FIELDS = [0, 1];
 /** True, wenn Feld `i` des Themas als strukturierte Namensliste geführt wird. */
 export function isRosterField(theme: FunTileTheme, i: number): boolean {
   return theme === ROSTER_THEME && ROSTER_FIELDS.includes(i);
+}
+
+/** Feld-Index des Turnier-Nominierungs-Tools (4. Feld, TE-28). */
+export const NOMINATION_FIELD = 3;
+
+/** True, wenn Feld `i` des Themas das Nominierungs-Feld ist. */
+export function isNominationField(theme: FunTileTheme, i: number): boolean {
+  return theme === ROSTER_THEME && i === NOMINATION_FIELD;
 }
 
 /** Vier Default-Abschnitte je Thema – Titel sind frei überschreibbar. */
@@ -162,6 +178,11 @@ function sanitizeJahrgang(j: any, i: number): JahrgangSel {
   return Number.isFinite(year) && year > 0 ? { year, mode } : defaultJahrgang(i);
 }
 
+/** Firestore-sichere Liste nicht-leerer String-IDs. */
+function sanitizeIdList(v: any): string[] {
+  return Array.isArray(v) ? v.map((x) => String(x)).filter((x) => x !== '') : [];
+}
+
 function normalize(theme: FunTileTheme, sections?: FussballAbschnitt[]): FussballAbschnitt[] {
   return defaultSections(theme).map((def, i) => {
     const raw = sections?.[i];
@@ -172,6 +193,15 @@ function normalize(theme: FunTileTheme, sections?: FussballAbschnitt[]): Fussbal
         body: '',
         entries: rosterEntries(raw),
         jahrgang: sanitizeJahrgang(raw?.jahrgang, i),
+      };
+    }
+    if (isNominationField(theme, i)) {
+      return {
+        title,
+        body: '',
+        entries: [],
+        jahrgang: sanitizeJahrgang(raw?.jahrgang, i),
+        nominated: sanitizeIdList(raw?.nominated),
       };
     }
     return { title, body: raw?.body ?? def.body, entries: [] };

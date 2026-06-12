@@ -38,6 +38,7 @@ import {
   defaultSections,
   defaultJahrgang,
   isRosterField,
+  isNominationField,
   loadFussballKachel,
   saveFussballKachel,
 } from '../services/fussballKachel';
@@ -103,6 +104,52 @@ function jahrgangOptions(kids: Child[], current: JahrgangSel): JahrgangSel[] {
   return opts;
 }
 
+interface JahrgangSelectProps {
+  sel: JahrgangSel;
+  kids: Child[];
+  cfg: FunThemeCfg;
+  onChange: (sel: JahrgangSel) => void;
+}
+
+/** Jahrgang-Wähler (Pressable + Auswahl-Menü) – geteilt von Ansicht & Nominierung. */
+function JahrgangSelect({ sel, kids, cfg, onChange }: JahrgangSelectProps) {
+  const [open, setOpen] = useState(false);
+  const options = jahrgangOptions(kids, sel);
+  return (
+    <>
+      <Pressable
+        onPress={() => setOpen(true)}
+        style={[s.jgSelect, { borderColor: cfg.line }]}
+        accessibilityLabel="Jahrgang wählen"
+      >
+        <Text style={[s.jgSelectText, { color: cfg.fg }]} numberOfLines={1}>{jahrgangLabel(sel)}</Text>
+        <Ionicons name="chevron-down" size={14} color={cfg.fgMuted} />
+      </Pressable>
+      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
+        <Pressable style={s.jgOverlay} onPress={() => setOpen(false)}>
+          <View style={[s.jgMenu, { backgroundColor: cfg.dialogBg, borderColor: cfg.line }]}>
+            <ScrollView>
+              {options.map((opt) => {
+                const active = sameSel(opt, sel);
+                return (
+                  <Pressable
+                    key={`${opt.year}-${opt.mode}`}
+                    onPress={() => { onChange(opt); setOpen(false); }}
+                    style={[s.jgMenuItem, active && { backgroundColor: cfg.cellBg }]}
+                  >
+                    <Text style={[s.jgMenuText, { color: cfg.fg }]}>{jahrgangLabel(opt)}</Text>
+                    {active ? <Ionicons name="checkmark" size={16} color={cfg.fg} /> : null}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </Pressable>
+      </Modal>
+    </>
+  );
+}
+
 interface JahrgangViewProps {
   sel: JahrgangSel;
   kids: Child[];
@@ -116,24 +163,15 @@ interface JahrgangViewProps {
  * Gepflegt werden die Kinder im Bambini-Tab, nicht hier.
  */
 function JahrgangView({ sel, kids, cfg, onChange }: JahrgangViewProps) {
-  const [pickerOpen, setPickerOpen] = useState(false);
   // In der Fußball-Ansicht rein alphabetisch sortieren (TE-27) – unabhängig vom
   // jahrgangsweisen Sortieren des Bambini-Tabs.
   const matches = childrenForJahrgang(kids, sel)
     .slice()
     .sort((a, b) => a.name.localeCompare(b.name, 'de'));
-  const options = jahrgangOptions(kids, sel);
 
   return (
     <View style={s.jgWrap}>
-      <Pressable
-        onPress={() => setPickerOpen(true)}
-        style={[s.jgSelect, { borderColor: cfg.line }]}
-        accessibilityLabel="Jahrgang wählen"
-      >
-        <Text style={[s.jgSelectText, { color: cfg.fg }]} numberOfLines={1}>{jahrgangLabel(sel)}</Text>
-        <Ionicons name="chevron-down" size={14} color={cfg.fgMuted} />
-      </Pressable>
+      <JahrgangSelect sel={sel} kids={kids} cfg={cfg} onChange={onChange} />
 
       <ScrollView style={s.rosterScroll} keyboardShouldPersistTaps="handled">
         {matches.length === 0 ? (
@@ -159,24 +197,95 @@ function JahrgangView({ sel, kids, cfg, onChange }: JahrgangViewProps) {
           ))
         )}
       </ScrollView>
+    </View>
+  );
+}
 
-      <Modal visible={pickerOpen} transparent animationType="fade" onRequestClose={() => setPickerOpen(false)}>
-        <Pressable style={s.jgOverlay} onPress={() => setPickerOpen(false)}>
+interface NominationCellProps {
+  sel: JahrgangSel;
+  nominated: string[];
+  kids: Child[];
+  cfg: FunThemeCfg;
+  onChangeSel: (sel: JahrgangSel) => void;
+  onAdd: (id: string) => void;
+  onRemove: (id: string) => void;
+}
+
+/**
+ * Turnier-Nominierung (TE-28): Jahrgang wählen, dann Spieler aus diesem Jahrgang
+ * hinzufügen. Die Nominierten (auch über mehrere Jahrgänge hinweg) erscheinen als
+ * Liste in der Kachel. Quelle ist die Bambini-Registry.
+ */
+function NominationCell({ sel, nominated, kids, cfg, onChangeSel, onAdd, onRemove }: NominationCellProps) {
+  const [addOpen, setAddOpen] = useState(false);
+
+  // Nominierte in Reihenfolge auflösen; unbekannte/gelöschte IDs überspringen.
+  const byId = new Map(kids.map((k) => [k.id, k]));
+  const nominatedKids = nominated.map((id) => byId.get(id)).filter((k): k is Child => !!k);
+
+  // Hinzufügbar: im gewählten Jahrgang, noch nicht nominiert, alphabetisch.
+  const addable = childrenForJahrgang(kids, sel)
+    .filter((k) => !nominated.includes(k.id))
+    .sort((a, b) => a.name.localeCompare(b.name, 'de'));
+
+  return (
+    <View style={s.jgWrap}>
+      <View style={s.nomTop}>
+        <View style={s.nomSelectWrap}>
+          <JahrgangSelect sel={sel} kids={kids} cfg={cfg} onChange={onChangeSel} />
+        </View>
+        <Pressable
+          onPress={() => setAddOpen(true)}
+          style={[s.nomAddBtn, { borderColor: cfg.line }]}
+          accessibilityLabel="Spieler nominieren"
+        >
+          <Ionicons name="person-add" size={15} color={cfg.fg} />
+        </Pressable>
+      </View>
+
+      <ScrollView style={s.rosterScroll} keyboardShouldPersistTaps="handled">
+        {nominatedKids.length === 0 ? (
+          <Text style={[s.jgEmpty, { color: cfg.fgMuted }]}>Noch niemand nominiert.</Text>
+        ) : (
+          nominatedKids.map((c, idx) => (
+            <View key={c.id} style={[s.jgRow, { borderBottomColor: cfg.line }]}>
+              <Text style={[s.entryNum, { color: cfg.fgMuted }]}>{idx + 1}.</Text>
+              <Text
+                style={[s.jgName, { color: cfg.fg }, c.stopped && s.jgNameStopped]}
+                numberOfLines={1}
+              >
+                {c.name}
+              </Text>
+              <Pressable onPress={() => onRemove(c.id)} hitSlop={6} style={s.nomDel} accessibilityLabel="Entfernen">
+                <Ionicons name="close" size={14} color={cfg.fgMuted} />
+              </Pressable>
+            </View>
+          ))
+        )}
+      </ScrollView>
+
+      {/* Spieler aus dem gewählten Jahrgang hinzufügen */}
+      <Modal visible={addOpen} transparent animationType="fade" onRequestClose={() => setAddOpen(false)}>
+        <Pressable style={s.jgOverlay} onPress={() => setAddOpen(false)}>
           <View style={[s.jgMenu, { backgroundColor: cfg.dialogBg, borderColor: cfg.line }]}>
+            <Text style={[s.nomMenuTitle, { color: cfg.fgMuted }]}>{jahrgangLabel(sel)} – hinzufügen</Text>
             <ScrollView>
-              {options.map((opt) => {
-                const active = sameSel(opt, sel);
-                return (
+              {addable.length === 0 ? (
+                <Text style={[s.jgEmpty, { color: cfg.fgMuted, padding: 12 }]}>
+                  Alle aus diesem Jahrgang sind schon dabei.
+                </Text>
+              ) : (
+                addable.map((c) => (
                   <Pressable
-                    key={`${opt.year}-${opt.mode}`}
-                    onPress={() => { onChange(opt); setPickerOpen(false); }}
-                    style={[s.jgMenuItem, active && { backgroundColor: cfg.cellBg }]}
+                    key={c.id}
+                    onPress={() => { onAdd(c.id); setAddOpen(false); }}
+                    style={s.jgMenuItem}
                   >
-                    <Text style={[s.jgMenuText, { color: cfg.fg }]}>{jahrgangLabel(opt)}</Text>
-                    {active ? <Ionicons name="checkmark" size={16} color={cfg.fg} /> : null}
+                    <Text style={[s.jgMenuText, { color: cfg.fg }]} numberOfLines={1}>{c.name}</Text>
+                    <Ionicons name="add" size={16} color={cfg.fg} />
                   </Pressable>
-                );
-              })}
+                ))
+              )}
             </ScrollView>
           </View>
         </Pressable>
@@ -330,6 +439,15 @@ export function FussballKachel() {
     setDraft((prev) => prev.map((sec, idx) => (idx === i ? { ...sec, ...patch } : sec)));
   }, []);
 
+  // Nominierungs-Liste eines Feldes mutieren (TE-28) – funktional, um Race-
+  // Conditions bei mehreren schnellen Adds zu vermeiden.
+  const mutateNominated = useCallback((i: number, fn: (ids: string[]) => string[]) => {
+    editedRef.current = true;
+    setDraft((prev) =>
+      prev.map((sec, idx) => (idx === i ? { ...sec, nominated: fn(sec.nominated ?? []) } : sec)),
+    );
+  }, []);
+
   // Dialog sofort schließen; im Hintergrund speichern (Fehler nur loggen).
   const handleSave = useCallback(() => {
     const theme = openTheme;
@@ -411,6 +529,18 @@ export function FussballKachel() {
                                 kids={children}
                                 cfg={cfg}
                                 onChange={(jg) => patchDraft(i, { jahrgang: jg })}
+                              />
+                            ) : isNominationField(openTheme, i) ? (
+                              <NominationCell
+                                sel={sec?.jahrgang ?? defaultJahrgang(i)}
+                                nominated={sec?.nominated ?? []}
+                                kids={children}
+                                cfg={cfg}
+                                onChangeSel={(jg) => patchDraft(i, { jahrgang: jg })}
+                                onAdd={(id) =>
+                                  mutateNominated(i, (ids) => (ids.includes(id) ? ids : [...ids, id]))
+                                }
+                                onRemove={(id) => mutateNominated(i, (ids) => ids.filter((x) => x !== id))}
                               />
                             ) : (
                               <TextInput
@@ -521,7 +651,14 @@ const s = StyleSheet.create({
   jgOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center', padding: 32 },
   jgMenu: { width: '100%', maxWidth: 280, maxHeight: '70%', borderRadius: 14, borderWidth: 1, paddingVertical: 6 },
   jgMenuItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 11 },
-  jgMenuText: { fontSize: 14, fontWeight: '600' },
+  jgMenuText: { flex: 1, fontSize: 14, fontWeight: '600' },
+
+  // ── Turnier-Nominierung (TE-28) ──
+  nomTop: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  nomSelectWrap: { flex: 1 },
+  nomAddBtn: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 9, paddingVertical: 6, alignItems: 'center', justifyContent: 'center' },
+  nomDel: { paddingHorizontal: 2, paddingVertical: 2 },
+  nomMenuTitle: { fontSize: 11, fontWeight: '700', paddingHorizontal: 14, paddingTop: 10, paddingBottom: 2 },
 
   saveBtn: { borderRadius: 14, paddingVertical: 14, alignItems: 'center', justifyContent: 'center' },
   saveBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
