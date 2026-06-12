@@ -117,7 +117,11 @@ interface JahrgangViewProps {
  */
 function JahrgangView({ sel, kids, cfg, onChange }: JahrgangViewProps) {
   const [pickerOpen, setPickerOpen] = useState(false);
-  const matches = childrenForJahrgang(kids, sel);
+  // In der Fußball-Ansicht rein alphabetisch sortieren (TE-27) – unabhängig vom
+  // jahrgangsweisen Sortieren des Bambini-Tabs.
+  const matches = childrenForJahrgang(kids, sel)
+    .slice()
+    .sort((a, b) => a.name.localeCompare(b.name, 'de'));
   const options = jahrgangOptions(kids, sel);
 
   return (
