@@ -62,6 +62,14 @@ export interface FussballAbschnitt {
    * in Nominierungsreihenfolge. Nur im Nominierungs-Feld befüllt.
    */
   nominated?: string[];
+  /** Trainingsideen-Badges (TE-31). Nur im Ideen-Feld befüllt. */
+  badges?: TrainingBadge[];
+}
+
+/** Ein Trainingsideen-Badge (TE-31): Text + aktiv/inaktiv. */
+export interface TrainingBadge {
+  label: string;
+  active: boolean;
 }
 
 export interface FussballKachelData {
@@ -91,6 +99,14 @@ export const NOMINATION_FIELD = 3;
 /** True, wenn Feld `i` des Themas das Nominierungs-Feld ist. */
 export function isNominationField(theme: FunTileTheme, i: number): boolean {
   return theme === ROSTER_THEME && i === NOMINATION_FIELD;
+}
+
+/** Feld-Index der Trainingsideen-Badges (3. Feld, TE-31). */
+export const IDEAS_FIELD = 2;
+
+/** True, wenn Feld `i` des Themas das Trainingsideen-Badge-Feld ist. */
+export function isIdeasField(theme: FunTileTheme, i: number): boolean {
+  return theme === ROSTER_THEME && i === IDEAS_FIELD;
 }
 
 /** Vier Default-Abschnitte je Thema – Titel sind frei überschreibbar. */
@@ -183,6 +199,14 @@ function sanitizeIdList(v: any): string[] {
   return Array.isArray(v) ? v.map((x) => String(x)).filter((x) => x !== '') : [];
 }
 
+/** Firestore-sichere Badge-Liste (TE-31): nicht-leere Labels, aktiv als boolean. */
+function sanitizeBadges(v: any): TrainingBadge[] {
+  if (!Array.isArray(v)) return [];
+  return v
+    .map((b) => ({ label: String(b?.label ?? '').trim(), active: !!b?.active }))
+    .filter((b) => b.label !== '');
+}
+
 function normalize(theme: FunTileTheme, sections?: FussballAbschnitt[]): FussballAbschnitt[] {
   return defaultSections(theme).map((def, i) => {
     const raw = sections?.[i];
@@ -203,6 +227,9 @@ function normalize(theme: FunTileTheme, sections?: FussballAbschnitt[]): Fussbal
         jahrgang: sanitizeJahrgang(raw?.jahrgang, i),
         nominated: sanitizeIdList(raw?.nominated),
       };
+    }
+    if (isIdeasField(theme, i)) {
+      return { title, body: '', entries: [], badges: sanitizeBadges(raw?.badges) };
     }
     return { title, body: raw?.body ?? def.body, entries: [] };
   });

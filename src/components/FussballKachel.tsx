@@ -35,10 +35,12 @@ import { FunTileTheme } from '../types';
 import {
   FussballAbschnitt,
   JahrgangSel,
+  TrainingBadge,
   defaultSections,
   defaultJahrgang,
   isRosterField,
   isNominationField,
+  isIdeasField,
   loadFussballKachel,
   saveFussballKachel,
 } from '../services/fussballKachel';
@@ -299,6 +301,72 @@ function NominationCell({ sel, nominated, kids, cfg, onChangeSel, onAdd, onRemov
   );
 }
 
+interface IdeasCellProps {
+  badges: TrainingBadge[];
+  cfg: FunThemeCfg;
+  onAdd: (label: string) => void;
+  onToggle: (idx: number) => void;
+  onRemove: (idx: number) => void;
+}
+
+/**
+ * Trainingsideen-Feld (TE-31): oben ein Eingabefeld – Enter macht aus dem Text
+ * ein Badge. Badges per Tap aktiv/inaktiv schalten (aktiv = gefüllt) und per ×
+ * löschen.
+ */
+function IdeasCell({ badges, cfg, onAdd, onToggle, onRemove }: IdeasCellProps) {
+  const [text, setText] = useState('');
+
+  const submit = () => {
+    const label = text.trim();
+    if (!label) return;
+    onAdd(label);
+    setText('');
+  };
+
+  return (
+    <View style={s.jgWrap}>
+      <TextInput
+        style={[s.ideaInput, { color: cfg.fg, borderColor: cfg.line }]}
+        value={text}
+        onChangeText={setText}
+        onSubmitEditing={submit}
+        blurOnSubmit={false}
+        returnKeyType="done"
+        placeholder="Idee + Enter"
+        placeholderTextColor={cfg.fgMuted}
+      />
+
+      <ScrollView
+        style={s.rosterScroll}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={s.ideaWrap}
+      >
+        {badges.length === 0 ? (
+          <Text style={[s.jgEmpty, { color: cfg.fgMuted }]}>Noch keine Idee.</Text>
+        ) : (
+          badges.map((b, idx) => (
+            <View
+              key={idx}
+              style={[
+                s.badge,
+                { borderColor: cfg.line, backgroundColor: b.active ? cfg.tile : 'transparent' },
+              ]}
+            >
+              <Pressable onPress={() => onToggle(idx)} hitSlop={4}>
+                <Text style={[s.badgeText, { color: b.active ? '#FFFFFF' : cfg.fgMuted }]}>{b.label}</Text>
+              </Pressable>
+              <Pressable onPress={() => onRemove(idx)} hitSlop={4} accessibilityLabel="Idee löschen">
+                <Ionicons name="close" size={12} color={b.active ? '#FFFFFF' : cfg.fgMuted} />
+              </Pressable>
+            </View>
+          ))
+        )}
+      </ScrollView>
+    </View>
+  );
+}
+
 // ─── Themen-Konfiguration (themeunabhängige Farbtupfer) ────────────────────────
 
 interface FunThemeCfg {
@@ -453,6 +521,14 @@ export function FussballKachel() {
     );
   }, []);
 
+  // Trainingsideen-Badges eines Feldes mutieren (TE-31) – funktional.
+  const mutateBadges = useCallback((i: number, fn: (b: TrainingBadge[]) => TrainingBadge[]) => {
+    editedRef.current = true;
+    setDraft((prev) =>
+      prev.map((sec, idx) => (idx === i ? { ...sec, badges: fn(sec.badges ?? []) } : sec)),
+    );
+  }, []);
+
   // Dialog sofort schließen; im Hintergrund speichern (Fehler nur loggen).
   const handleSave = useCallback(() => {
     const theme = openTheme;
@@ -546,6 +622,20 @@ export function FussballKachel() {
                                   mutateNominated(i, (ids) => (ids.includes(id) ? ids : [...ids, id]))
                                 }
                                 onRemove={(id) => mutateNominated(i, (ids) => ids.filter((x) => x !== id))}
+                              />
+                            ) : isIdeasField(openTheme, i) ? (
+                              <IdeasCell
+                                badges={sec?.badges ?? []}
+                                cfg={cfg}
+                                onAdd={(label) =>
+                                  mutateBadges(i, (bs) => [...bs, { label, active: true }])
+                                }
+                                onToggle={(k) =>
+                                  mutateBadges(i, (bs) =>
+                                    bs.map((b, n) => (n === k ? { ...b, active: !b.active } : b)),
+                                  )
+                                }
+                                onRemove={(k) => mutateBadges(i, (bs) => bs.filter((_, n) => n !== k))}
                               />
                             ) : (
                               <TextInput
@@ -664,6 +754,12 @@ const s = StyleSheet.create({
   nomAddBtn: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 9, paddingVertical: 6, alignItems: 'center', justifyContent: 'center' },
   nomDel: { paddingHorizontal: 2, paddingVertical: 2 },
   nomMenuTitle: { fontSize: 11, fontWeight: '700', paddingHorizontal: 14, paddingTop: 10, paddingBottom: 2 },
+
+  // ── Trainingsideen-Badges (TE-31) ──
+  ideaInput: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 6, fontSize: 12 },
+  ideaWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingTop: 6 },
+  badge: { flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1, borderRadius: 12, paddingHorizontal: 8, paddingVertical: 3 },
+  badgeText: { fontSize: 12, fontWeight: '600' },
 
   saveBtn: { borderRadius: 14, paddingVertical: 14, alignItems: 'center', justifyContent: 'center' },
   saveBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
