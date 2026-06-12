@@ -78,6 +78,8 @@ export function BambiniScreen() {
   const [yearInput, setYearInput] = useState('');
   const [sinceInput, setSinceInput] = useState(''); // ISO 'YYYY-MM-DD' oder ''
   const [stoppedInput, setStoppedInput] = useState(false);
+  const [parentInput, setParentInput] = useState('');
+  const [lastNameInput, setLastNameInput] = useState('');
   const [showDatePicker, setShowDatePicker] = useState(false);
 
   const reload = useCallback(async () => {
@@ -110,11 +112,13 @@ export function BambiniScreen() {
   );
 
   const openNew = () => {
-    setEditing({ id: '', name: '', birthYear: 0, registeredSince: '', stopped: false });
+    setEditing({ id: '', name: '', birthYear: 0, registeredSince: '', stopped: false, parentName: '', lastName: '' });
     setNameInput('');
     setYearInput('');
     setSinceInput('');
     setStoppedInput(false);
+    setParentInput('');
+    setLastNameInput('');
   };
 
   const openEdit = (c: Child) => {
@@ -123,6 +127,8 @@ export function BambiniScreen() {
     setYearInput(c.birthYear ? String(c.birthYear) : '');
     setSinceInput(c.registeredSince);
     setStoppedInput(c.stopped);
+    setParentInput(c.parentName);
+    setLastNameInput(c.lastName);
   };
 
   const closeModal = () => setEditing(null);
@@ -135,7 +141,14 @@ export function BambiniScreen() {
     }
     const year = Number(yearInput);
     const birthYear = Number.isFinite(year) && year > 1900 ? Math.trunc(year) : 0;
-    const patch = { name, birthYear, registeredSince: sinceInput, stopped: stoppedInput };
+    const patch = {
+      name,
+      birthYear,
+      registeredSince: sinceInput,
+      stopped: stoppedInput,
+      parentName: parentInput.trim(),
+      lastName: lastNameInput.trim(),
+    };
 
     if (editing && editing.id) {
       persist(children.map((c) => (c.id === editing.id ? { ...c, ...patch } : c)));
@@ -236,6 +249,21 @@ export function BambiniScreen() {
               />
               <Text style={[s.checkLabel, { color: colors.text }]}>Hat aufgehört</Text>
             </Pressable>
+
+            <TextInput
+              style={s.input}
+              value={parentInput}
+              onChangeText={setParentInput}
+              placeholder="Elternname"
+              placeholderTextColor={colors.placeholder}
+            />
+            <TextInput
+              style={s.input}
+              value={lastNameInput}
+              onChangeText={setLastNameInput}
+              placeholder="Nachname"
+              placeholderTextColor={colors.placeholder}
+            />
 
             <View style={s.cardActions}>
               <Pressable onPress={closeModal} style={[s.btn, s.btnGhost]}>

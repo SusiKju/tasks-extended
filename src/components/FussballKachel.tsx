@@ -148,8 +148,8 @@ function JahrgangView({ sel, kids, cfg, onChange }: JahrgangViewProps) {
               >
                 {c.name}
               </Text>
-              {c.birthYear ? (
-                <Text style={[s.lineYear, { color: cfg.fgMuted }]}>{`'${String(c.birthYear).slice(2)}`}</Text>
+              {c.parentName ? (
+                <Text style={[s.jgParent, { color: cfg.fgMuted }]} numberOfLines={1}>{c.parentName}</Text>
               ) : null}
             </View>
           ))
@@ -506,7 +506,7 @@ const s = StyleSheet.create({
   // ── Jahrgang-Ansicht (TE-18) – Wähler + kompakte Namensliste, eine Zeile/Name ──
   rosterScroll: { flex: 1 },
   entryNum: { fontSize: 11, fontWeight: '700', minWidth: 18 },
-  lineYear: { fontSize: 10, fontWeight: '600' },
+  jgParent: { flexShrink: 1, maxWidth: '48%', fontSize: 11, fontStyle: 'italic' },
   jgWrap: { flex: 1, gap: 6 },
   jgSelect: { flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 5 },
   jgSelectText: { flex: 1, fontSize: 12, fontWeight: '700' },

@@ -32,6 +32,10 @@ export interface Child {
   registeredSince: string;
   /** Hat aufgehört (TE-22). */
   stopped: boolean;
+  /** Name des Elternteils – optional ('') (TE-26). Wird in den Fußball-Notizen gezeigt. */
+  parentName: string;
+  /** Nachname – optional ('') (TE-26). */
+  lastName: string;
 }
 
 const makeId = (): string => String(uuid.v4());
@@ -49,6 +53,8 @@ function sanitizeChild(c: any): Child | null {
     birthYear: Number.isFinite(birthYear) && birthYear > 0 ? Math.trunc(birthYear) : 0,
     registeredSince: String(c?.registeredSince ?? ''),
     stopped: !!c?.stopped,
+    parentName: String(c?.parentName ?? ''),
+    lastName: String(c?.lastName ?? ''),
   };
 }
 
@@ -123,7 +129,15 @@ export async function migrateRosterToBambini(uid: string): Promise<void> {
       const key = `${name.toLowerCase()}|${birthYear}`;
       if (seen.has(key)) return;
       seen.add(key);
-      added.push({ id: makeId(), name, birthYear, registeredSince: '', stopped: false });
+      added.push({
+        id: makeId(),
+        name,
+        birthYear,
+        registeredSince: '',
+        stopped: false,
+        parentName: '',
+        lastName: '',
+      });
     });
   });
 
