@@ -225,13 +225,17 @@ interface NominationCellProps {
 function NominationCell({ sel, nominated, kids, cfg, onChangeSel, onAdd, onRemove }: NominationCellProps) {
   const [addOpen, setAddOpen] = useState(false);
 
-  // Nominierte in Reihenfolge auflösen; unbekannte/gelöschte IDs überspringen.
+  // Nominierte in Reihenfolge auflösen; unbekannte/gelöschte IDs und
+  // aufgehörte Spieler überspringen (TE-30) – gekündigte werden nicht gezeigt.
   const byId = new Map(kids.map((k) => [k.id, k]));
-  const nominatedKids = nominated.map((id) => byId.get(id)).filter((k): k is Child => !!k);
+  const nominatedKids = nominated
+    .map((id) => byId.get(id))
+    .filter((k): k is Child => !!k && !k.stopped);
 
-  // Hinzufügbar: im gewählten Jahrgang, noch nicht nominiert, alphabetisch.
+  // Hinzufügbar: im gewählten Jahrgang, noch nicht nominiert, nicht aufgehört,
+  // alphabetisch.
   const addable = childrenForJahrgang(kids, sel)
-    .filter((k) => !nominated.includes(k.id))
+    .filter((k) => !nominated.includes(k.id) && !k.stopped)
     .sort((a, b) => a.name.localeCompare(b.name, 'de'));
 
   return (
@@ -256,12 +260,7 @@ function NominationCell({ sel, nominated, kids, cfg, onChangeSel, onAdd, onRemov
           nominatedKids.map((c, idx) => (
             <View key={c.id} style={[s.jgRow, { borderBottomColor: cfg.line }]}>
               <Text style={[s.entryNum, { color: cfg.fgMuted }]}>{idx + 1}.</Text>
-              <Text
-                style={[s.jgName, { color: cfg.fg }, c.stopped && s.jgNameStopped]}
-                numberOfLines={1}
-              >
-                {c.name}
-              </Text>
+              <Text style={[s.jgName, { color: cfg.fg }]} numberOfLines={1}>{c.name}</Text>
               <Pressable onPress={() => onRemove(c.id)} hitSlop={6} style={s.nomDel} accessibilityLabel="Entfernen">
                 <Ionicons name="close" size={14} color={cfg.fgMuted} />
               </Pressable>
