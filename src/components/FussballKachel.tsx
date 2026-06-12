@@ -72,9 +72,13 @@ function numberLines(text: string): string {
 
 // ─── Jahrgang-Ansicht (TE-18) ──────────────────────────────────────────────────
 
-/** Label einer Jahrgang-Auswahl, z. B. "Jahrgang 2019" oder "ab 2020". */
-function jahrgangLabel(sel: JahrgangSel): string {
-  return sel.mode === 'from' ? `ab ${sel.year}` : `Jahrgang ${sel.year}`;
+/**
+ * Label einer Jahrgang-Auswahl. Voll: "Jahrgang 2019" / "ab 2020".
+ * Kompakt (TE-29, Nominierungs-Karte): "2019" / "ab 2020".
+ */
+function jahrgangLabel(sel: JahrgangSel, compact = false): string {
+  if (sel.mode === 'from') return `ab ${sel.year}`;
+  return compact ? `${sel.year}` : `Jahrgang ${sel.year}`;
 }
 
 function sameSel(a: JahrgangSel, b: JahrgangSel): boolean {
@@ -109,10 +113,12 @@ interface JahrgangSelectProps {
   kids: Child[];
   cfg: FunThemeCfg;
   onChange: (sel: JahrgangSel) => void;
+  /** Kurzes Label ohne "Jahrgang" (TE-29, Nominierungs-Karte). */
+  compact?: boolean;
 }
 
 /** Jahrgang-Wähler (Pressable + Auswahl-Menü) – geteilt von Ansicht & Nominierung. */
-function JahrgangSelect({ sel, kids, cfg, onChange }: JahrgangSelectProps) {
+function JahrgangSelect({ sel, kids, cfg, onChange, compact = false }: JahrgangSelectProps) {
   const [open, setOpen] = useState(false);
   const options = jahrgangOptions(kids, sel);
   return (
@@ -122,7 +128,7 @@ function JahrgangSelect({ sel, kids, cfg, onChange }: JahrgangSelectProps) {
         style={[s.jgSelect, { borderColor: cfg.line }]}
         accessibilityLabel="Jahrgang wählen"
       >
-        <Text style={[s.jgSelectText, { color: cfg.fg }]} numberOfLines={1}>{jahrgangLabel(sel)}</Text>
+        <Text style={[s.jgSelectText, { color: cfg.fg }]} numberOfLines={1}>{jahrgangLabel(sel, compact)}</Text>
         <Ionicons name="chevron-down" size={14} color={cfg.fgMuted} />
       </Pressable>
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
@@ -137,7 +143,7 @@ function JahrgangSelect({ sel, kids, cfg, onChange }: JahrgangSelectProps) {
                     onPress={() => { onChange(opt); setOpen(false); }}
                     style={[s.jgMenuItem, active && { backgroundColor: cfg.cellBg }]}
                   >
-                    <Text style={[s.jgMenuText, { color: cfg.fg }]}>{jahrgangLabel(opt)}</Text>
+                    <Text style={[s.jgMenuText, { color: cfg.fg }]}>{jahrgangLabel(opt, compact)}</Text>
                     {active ? <Ionicons name="checkmark" size={16} color={cfg.fg} /> : null}
                   </Pressable>
                 );
@@ -232,7 +238,7 @@ function NominationCell({ sel, nominated, kids, cfg, onChangeSel, onAdd, onRemov
     <View style={s.jgWrap}>
       <View style={s.nomTop}>
         <View style={s.nomSelectWrap}>
-          <JahrgangSelect sel={sel} kids={kids} cfg={cfg} onChange={onChangeSel} />
+          <JahrgangSelect sel={sel} kids={kids} cfg={cfg} onChange={onChangeSel} compact />
         </View>
         <Pressable
           onPress={() => setAddOpen(true)}
@@ -268,7 +274,7 @@ function NominationCell({ sel, nominated, kids, cfg, onChangeSel, onAdd, onRemov
       <Modal visible={addOpen} transparent animationType="fade" onRequestClose={() => setAddOpen(false)}>
         <Pressable style={s.jgOverlay} onPress={() => setAddOpen(false)}>
           <View style={[s.jgMenu, { backgroundColor: cfg.dialogBg, borderColor: cfg.line }]}>
-            <Text style={[s.nomMenuTitle, { color: cfg.fgMuted }]}>{jahrgangLabel(sel)} – hinzufügen</Text>
+            <Text style={[s.nomMenuTitle, { color: cfg.fgMuted }]}>{jahrgangLabel(sel, true)} – hinzufügen</Text>
             <ScrollView>
               {addable.length === 0 ? (
                 <Text style={[s.jgEmpty, { color: cfg.fgMuted, padding: 12 }]}>
