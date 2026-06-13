@@ -12,6 +12,7 @@ import {
   collection, doc,
   addDoc, setDoc, deleteDoc,
   onSnapshot, query, orderBy,
+  waitForPendingWrites,
 } from 'firebase/firestore';
 import { Note } from '../types';
 
@@ -31,6 +32,10 @@ export function subscribeToPersonalNotes(
     },
     (err) => {
       console.error('[personalNotesService] onSnapshot error:', err.code, err.message);
+      // Temporärer Debug-Alert – wird nach Diagnose wieder entfernt
+      if (typeof window !== 'undefined' && (window as any).alert) {
+        (window as any).alert(`Notizen-Subscription Fehler:\n${err.code}\n${err.message}`);
+      }
       callback([]);
     },
   );
@@ -44,6 +49,8 @@ export async function addPersonalNote(
 ): Promise<string> {
   const col = collection(db, 'families', familyId, 'personalNotesByUser', uid, 'notes');
   const ref = await addDoc(col, note);
+  // Warten bis der Server bestätigt (fängt silent server-side rejects)
+  await waitForPendingWrites(db);
   return ref.id;
 }
 
