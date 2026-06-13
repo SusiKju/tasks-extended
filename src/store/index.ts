@@ -96,6 +96,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   childEmails: {},
   myName: null,
   funTileThemes: [],
+  mailWindowDays: 10,
 };
 
 export const useStore = create<TaskState>()(
@@ -233,7 +234,7 @@ export const useStore = create<TaskState>()(
     }),
     {
       name: 'tasks-extended-store',
-      version: 18,
+      version: 19,
       migrate: (persistedState: any, version: number) => {
         if (version < 1 && persistedState?.tasks) {
           persistedState.tasks = persistedState.tasks.map((t: any) => ({
@@ -329,6 +330,11 @@ export const useStore = create<TaskState>()(
           }
           delete s.funTileEnabled;
           delete s.funTileTheme;
+        }
+        if (version < 19 && persistedState?.settings) {
+          // TE-37: Konfigurierbares Zeitfenster für den Mail-Tab (Default 10 Tage).
+          persistedState.settings.mailWindowDays =
+            persistedState.settings.mailWindowDays ?? 10;
         }
         return persistedState;
       },

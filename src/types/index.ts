@@ -84,7 +84,15 @@ export interface AppSettings {
    * erscheint ein Icon in der Geistesblitze-Zeile. Leeres Array = keine Kachel.
    */
   funTileThemes: FunTileTheme[];
+  /**
+   * TE-37: Zeitfenster für den Mail-Tab in Tagen. Mails älter als N Tage werden
+   * ausgeblendet. Default 10. Angepinnte Mails (TE-38) ignorieren dieses Fenster.
+   */
+  mailWindowDays: number;
 }
+
+/** TE-37: Auswählbare Zeitfenster (in Tagen) für den Mail-Tab. */
+export const MAIL_WINDOW_OPTIONS = [3, 7, 10, 14, 30] as const;
 
 /** Themen der Fokus-Kachel (TE-10). */
 export type FunTileTheme = 'fussball' | 'yoga' | 'garten';

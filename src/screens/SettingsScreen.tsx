@@ -16,7 +16,7 @@ import { Clipboard } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useStore } from '../store';
 import { useTheme, ThemeColors, neonGlow, THEMES } from '../utils/theme';
-import { Theme, FunTileTheme } from '../types';
+import { Theme, FunTileTheme, MAIL_WINDOW_OPTIONS } from '../types';
 import { FUN_THEMES } from '../components/FussballKachel';
 
 const THEME_OPTIONS: { key: Theme; label: string; description: string }[] = [
@@ -668,6 +668,39 @@ export function SettingsScreen() {
             </Pressable>
           );
         })}
+      </View>
+
+      {/* E-Mail (TE-37) */}
+      <View style={styles.section}>
+        <Text style={styles.sectionHeader}>E-Mail</Text>
+        <View style={[styles.row, { flexDirection: 'column', alignItems: 'flex-start', gap: 8 }]}>
+          <View style={{ width: '100%' as any }}>
+            <Text style={styles.rowTitle}>Zeitfenster</Text>
+            <Text style={styles.rowSubtitle}>
+              Nur Mails der letzten {settings.mailWindowDays} Tage anzeigen.
+            </Text>
+          </View>
+          <View style={styles.thresholdButtons}>
+            {MAIL_WINDOW_OPTIONS.map((days) => {
+              const active = settings.mailWindowDays === days;
+              return (
+                <Pressable
+                  key={days}
+                  style={({ pressed }) => [
+                    styles.thresholdBtn,
+                    active && styles.thresholdBtnActive,
+                    pressed && { opacity: 0.7 },
+                  ]}
+                  onPress={() => updateSettings({ mailWindowDays: days })}
+                >
+                  <Text style={[styles.thresholdBtnText, active && styles.thresholdBtnTextActive]}>
+                    {days} Tage
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
       </View>
 
       {/* Darstellung */}

@@ -30,9 +30,13 @@ function extractHeader(headers: Array<{ name: string; value: string }>, name: st
   return headers.find((h) => h.name.toLowerCase() === name.toLowerCase())?.value ?? '';
 }
 
-export async function fetchRecentMails(accessToken: string): Promise<MailMessage[]> {
-  const fiveDaysAgo = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
-  const after = Math.floor(fiveDaysAgo.getTime() / 1000);
+export async function fetchRecentMails(
+  accessToken: string,
+  windowDays = 10
+): Promise<MailMessage[]> {
+  const days = Number.isFinite(windowDays) && windowDays > 0 ? windowDays : 10;
+  const windowStart = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  const after = Math.floor(windowStart.getTime() / 1000);
 
   const listRes = await gmailFetch(
     `/users/me/messages?labelIds=INBOX&q=after:${after}&maxResults=30`,

@@ -2,7 +2,7 @@ import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
-  FlatList,
+  SectionList,
   Pressable,
   StyleSheet,
   ActivityIndicator,
@@ -43,6 +43,49 @@ function parseDisplayFrom(from: string): string {
   const match = from.match(/^"?([^"<]+)"?\s*<?[^>]*>?$/);
   if (match) return match[1].trim();
   return from.replace(/<[^>]+>/, '').trim() || from;
+}
+
+// TE-37: Tages-Überschrift für die visuelle Staffelung der Liste.
+function dayLabel(d: Date): string {
+  const now = new Date();
+  const startOf = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diffDays = Math.round((startOf(now) - startOf(d)) / (24 * 60 * 60 * 1000));
+  if (diffDays <= 0) return 'Heute';
+  if (diffDays === 1) return 'Gestern';
+  return d.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+interface MailSection {
+  key: string;
+  title: string;
+  data: MailMessage[];
+}
+
+// TE-37: Mails nach Kalendertag gruppieren – neueste Gruppe zuerst, innerhalb
+// der Gruppe die neueste Mail oben.
+function groupMailsByDay(mails: MailMessage[]): MailSection[] {
+  const buckets = new Map<string, { ts: number; title: string; data: MailMessage[] }>();
+  for (const m of mails) {
+    const d = new Date(m.date);
+    const valid = !isNaN(d.getTime());
+    const day = valid ? new Date(d.getFullYear(), d.getMonth(), d.getDate()) : null;
+    const key = day ? `${day.getTime()}` : 'unknown';
+    if (!buckets.has(key)) {
+      buckets.set(key, {
+        ts: day ? day.getTime() : -1,
+        title: day ? dayLabel(day) : 'Ohne Datum',
+        data: [],
+      });
+    }
+    buckets.get(key)!.data.push(m);
+  }
+  return Array.from(buckets.entries())
+    .sort((a, b) => b[1].ts - a[1].ts)
+    .map(([key, v]) => ({
+      key,
+      title: v.title,
+      data: v.data.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+    }));
 }
 
 // ─── Mail Item ────────────────────────────────────────────────────────────────
@@ -124,7 +167,7 @@ export function MailScreen() {
     else setLoading(true);
     setError(null);
     try {
-      const result = await fetchRecentMails(token);
+      const result = await fetchRecentMails(token, settings.mailWindowDays);
       setMails(result);
       setLoaded(true);
     } catch (e: any) {
@@ -134,7 +177,7 @@ export function MailScreen() {
         const refreshed = await getValidAccessToken(true);
         if (refreshed && refreshed !== token) {
           try {
-            const result = await fetchRecentMails(refreshed);
+            const result = await fetchRecentMails(refreshed, settings.mailWindowDays);
             setMails(result);
             setLoaded(true);
             return;
@@ -151,7 +194,7 @@ export function MailScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [updateSettings]);
+  }, [updateSettings, settings.mailWindowDays]);
 
   const handleConnect = useCallback(async () => {
     setLoading(true);
@@ -188,13 +231,23 @@ export function MailScreen() {
     }
   }, [settings.googleAccessToken, loaded, loadMails]);
 
+  // TE-37: Zeitfenster im Settings-Tab geändert → Liste neu laden.
+  React.useEffect(() => {
+    if (settings.googleAccessToken && loaded) {
+      loadMails(settings.googleAccessToken);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings.mailWindowDays]);
+
+  const sections = useMemo(() => groupMailsByDay(mails), [mails]);
+
   if (!settings.googleAccessToken) {
     return (
       <View style={styles.center}>
         <Ionicons name="mail-outline" size={56} color={colors.textMuted} />
         <Text style={styles.emptyTitle}>Google Mail verbinden</Text>
         <Text style={styles.emptySubtitle}>
-          Verbinde dein Google-Konto, um Nachrichten der letzten 5 Tage zu sehen.
+          Verbinde dein Google-Konto, um Nachrichten der letzten {settings.mailWindowDays} Tage zu sehen.
         </Text>
         {error && <Text style={styles.errorText}>{error}</Text>}
         <Pressable style={styles.connectButton} onPress={handleConnect} disabled={loading}>
@@ -226,8 +279,8 @@ export function MailScreen() {
           </Pressable>
         </View>
       )}
-      <FlatList
-        data={mails}
+      <SectionList
+        sections={sections}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
           <MailItem
@@ -239,7 +292,11 @@ export function MailScreen() {
             styles={styles}
           />
         )}
-        contentContainerStyle={mails.length === 0 ? styles.emptyContainer : styles.listContent}
+        renderSectionHeader={({ section }) => (
+          <Text style={styles.sectionHeader}>{(section as MailSection).title}</Text>
+        )}
+        stickySectionHeadersEnabled={false}
+        contentContainerStyle={sections.length === 0 ? styles.emptyContainer : styles.listContent}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -248,14 +305,18 @@ export function MailScreen() {
           />
         }
         ListHeaderComponent={
-          <Text style={styles.periodLabel}>E-Mails der letzten 5 Tage · Tippen zum Öffnen</Text>
+          <Text style={styles.periodLabel}>
+            E-Mails der letzten {settings.mailWindowDays} Tage · Tippen zum Öffnen
+          </Text>
         }
         ListEmptyComponent={
           loaded && !error ? (
             <View style={styles.center}>
               <Ionicons name="checkmark-circle-outline" size={48} color={colors.success} />
               <Text style={styles.emptyTitle}>Posteingang leer</Text>
-              <Text style={styles.emptySubtitle}>Keine Nachrichten in den letzten 5 Tagen.</Text>
+              <Text style={styles.emptySubtitle}>
+                Keine Nachrichten in den letzten {settings.mailWindowDays} Tagen.
+              </Text>
             </View>
           ) : null
         }
@@ -276,6 +337,18 @@ function makeStyles(colors: ThemeColors) {
       textAlign: 'center',
       paddingVertical: 10,
       fontWeight: '500',
+    },
+    // TE-37: Tages-Trenner für die gestaffelte Liste
+    sectionHeader: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: colors.textSecondary,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+      backgroundColor: colors.background,
+      paddingTop: 14,
+      paddingBottom: 4,
+      paddingHorizontal: 4,
     },
 
     // Mail card
