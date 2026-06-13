@@ -1209,7 +1209,7 @@ export function DashboardScreen() {
             onMore={() => router.push('/(tabs)/mail')}
             colors={colors}
           />
-          <View style={[styles.card, { borderLeftColor: colors.border, borderLeftWidth: 3 }]}>
+          <View style={[styles.card, !reduceMotion && { borderLeftColor: colors.border, borderLeftWidth: 3 }]}>
             {mailLoading ? (
               <View style={styles.loadingRow}>
                 <ActivityIndicator color={colors.textMuted} size="small" />
@@ -1409,7 +1409,9 @@ function makeStyles(c: ThemeColors, isDark: boolean, calm: boolean) {
 
     // Termine "heute" – gleiche Hervorhebung wie die Geburtstags-Card (TE-120).
     todayEventsGlowCard: {
-      borderLeftWidth: 0,
+      // Neon/Mono: kein linker Rand (Glow trägt die Kante). Calm (TE-44):
+      // einheitlicher 1px-Rahmen wie auf den anderen Seiten.
+      borderLeftWidth: calm ? 1 : 0,
       shadowOffset: { width: 0, height: 0 },
       elevation: 14,
     },
@@ -1514,7 +1516,7 @@ function makeStyles(c: ThemeColors, isDark: boolean, calm: boolean) {
       justifyContent: 'center',
     },
     kidAvatarText: { fontSize: 11, fontWeight: '800', color: '#fff' },
-    kidCard: { marginHorizontal: 0, borderLeftWidth: 0 },
+    kidCard: { marginHorizontal: 0, borderLeftWidth: calm ? 1 : 0 },
     // Gruppenarbeit-Karte (TE-115)
     groupTitle: {
       fontSize: 14,
