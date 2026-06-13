@@ -41,7 +41,7 @@ export function LinkCardBar({ colors }: { colors: ThemeColors; isDark?: boolean 
             style={({ pressed }) => [s.card, { opacity: pressed ? 0.7 : 1 }]}
             onPress={() => openLink(l.url)}
           >
-            <LinkAvatar link={l} size={52} />
+            <LinkAvatar link={l} size={30} fill />
             <Text style={[s.label, { color: colors.textSecondary }]} numberOfLines={1}>{l.title}</Text>
           </Pressable>
         ))}
@@ -53,7 +53,7 @@ export function LinkCardBar({ colors }: { colors: ThemeColors; isDark?: boolean 
 const s = StyleSheet.create({
   section: { paddingHorizontal: 16, gap: 8 },
   headerTitle: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8 },
-  row: { gap: 14, paddingVertical: 2, paddingRight: 8 },
-  card: { alignItems: 'center', gap: 4, width: 60 },
-  label: { fontSize: 10, fontWeight: '600', textAlign: 'center' },
+  row: { gap: 12, paddingVertical: 2, paddingRight: 8 },
+  card: { alignItems: 'center', gap: 3, width: 46 },
+  label: { fontSize: 9, fontWeight: '600', textAlign: 'center' },
 });

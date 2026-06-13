@@ -14,7 +14,7 @@ import { LinkItem, faviconUrl } from '../services/links';
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 
-export function LinkAvatar({ link, size }: { link: LinkItem; size: number }) {
+export function LinkAvatar({ link, size, fill = false }: { link: LinkItem; size: number; fill?: boolean }) {
   const fav = faviconUrl(link.url, 64);
   const [failed, setFailed] = useState(false);
 
@@ -25,12 +25,18 @@ export function LinkAvatar({ link, size }: { link: LinkItem; size: number }) {
   const iconName = (link.icon as IoniconName) ?? 'link-outline';
 
   if (fav && !failed) {
+    // fill: Favicon füllt die ganze Kachel (keine weiße Fläche) – farbiger
+    // Hintergrund trägt transparente Favicons. Sonst: kontaktiert auf Weiß.
+    const imgSize = fill ? size : Math.round(size * 0.62);
     return (
-      <View style={[styles.wrap, { width: size, height: size, borderRadius: radius, backgroundColor: '#FFFFFF' }]}>
+      <View style={[
+        styles.wrap,
+        { width: size, height: size, borderRadius: radius, backgroundColor: fill ? link.color : '#FFFFFF' },
+      ]}>
         <Image
           source={{ uri: fav }}
-          style={{ width: Math.round(size * 0.62), height: Math.round(size * 0.62) }}
-          resizeMode="contain"
+          style={{ width: imgSize, height: imgSize }}
+          resizeMode={fill ? 'cover' : 'contain'}
           onError={() => setFailed(true)}
         />
       </View>
