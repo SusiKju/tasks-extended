@@ -369,7 +369,9 @@ export function NotesScreen() {
       setNotes(n);
       setLoading(false);
     });
-    return unsub;
+    // loading zurücksetzen falls subscription sofort fehlschlägt
+    const loadingGuard = setTimeout(() => setLoading(false), 5000);
+    return () => { unsub(); clearTimeout(loadingGuard); };
   }, [familyId, user?.uid]);
 
   const [modalVisible, setModalVisible] = useState(false);
@@ -423,7 +425,7 @@ export function NotesScreen() {
         {
           text: 'Löschen',
           style: 'destructive',
-          onPress: () => deletePersonalNote(familyId, user.uid!, note.id).catch(() => {}),
+          onPress: () => deletePersonalNote(familyId, user.uid!, note.id).catch((err) => Alert.alert('Fehler beim Löschen', err?.message ?? String(err))),
         },
       ]);
     },
@@ -460,18 +462,18 @@ export function NotesScreen() {
           groupId,
           pinned,
           checklist: checklist && checklist.length > 0 ? checklist : undefined,
-        }).catch(() => {});
+        }).catch((err) => Alert.alert('Fehler beim Speichern', err?.message ?? String(err)));
       } else {
         addPersonalNote(familyId, user.uid, {
           title: title || undefined,
           content,
           color,
-          groupId,
+          groupId: groupId ?? null,
           pinned,
           checklist: checklist && checklist.length > 0 ? checklist : undefined,
           createdAt: now,
           updatedAt: now,
-        }).catch(() => {});
+        }).catch((err) => Alert.alert('Fehler beim Speichern', err?.message ?? String(err)));
       }
       setModalVisible(false);
     },

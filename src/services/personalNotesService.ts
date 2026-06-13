@@ -29,7 +29,10 @@ export function subscribeToPersonalNotes(
       const notes: Note[] = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Note));
       callback(notes);
     },
-    () => {}, // Fehler stillschweigend ignorieren
+    (err) => {
+      console.error('[personalNotesService] onSnapshot error:', err.code, err.message);
+      callback([]);
+    },
   );
 }
 
