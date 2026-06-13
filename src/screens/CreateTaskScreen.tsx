@@ -20,7 +20,6 @@ import { GroupBadge } from '../components/GroupBadge';
 import { AttachmentPreview } from '../components/AttachmentPreview';
 import { DatePickerModal } from '../components/DatePickerModal';
 import { detectGroup } from '../utils/autoGroup';
-import { createCalendarEvent } from '../services/googleCalendar';
 import { useGoogleTasksSync } from '../hooks/useGoogleTasksSync';
 import { useTheme, ThemeColors, toGray } from '../utils/theme';
 import { formatDate } from '../utils/dateFormat';
@@ -172,14 +171,9 @@ export function CreateTaskScreen() {
 
     addTask(task);
 
-    // Calendar Event als visuelle Ergänzung erstellen — ID wird NICHT in googleEventId gespeichert.
-    // googleEventId ist ausschließlich für Google Tasks API IDs reserviert.
-    // Der Sync-Hook (useGoogleTasksSync) übernimmt das Anlegen/Verknüpfen in der Tasks API.
-    if (settings.googleCalendarEnabled && settings.googleCalendarId && task.dueDate && settings.googleAccessToken) {
-      createCalendarEvent(task, settings.googleAccessToken, settings.googleCalendarId).catch(() => {});
-    }
-
-    // Sync mit Google Tasks/Calendar – auch ohne Datum
+    // Tasks werden ausschließlich über die Google Tasks API synchronisiert
+    // (useGoogleTasksSync). Bewusst KEIN Calendar-Event anlegen – sonst entsteht
+    // pro Task ein zusätzlicher Kalender-Termin neben dem Task-Eintrag (TE-45).
     setTimeout(() => syncTasks().catch(() => {}), 500);
 
     setSaving(false);

@@ -1,8 +1,6 @@
 import { Platform } from 'react-native';
 import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
-import { Task } from '../types';
-import { formatDate, localDateStr } from '../utils/dateFormat';
 import { useStore } from '../store';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -397,71 +395,12 @@ export async function listCalendars(accessToken: string): Promise<Array<{ id: st
   }));
 }
 
-export async function createCalendarEvent(
-  task: Task,
-  accessToken: string,
-  calendarId: string
-): Promise<string | null> {
-  if (!task.dueDate) return null;
-
-  const dateStr = localDateStr(task.dueDate);
-  const event = {
-    summary: task.title,
-    description: task.description || undefined,
-    start: { date: dateStr },
-    end: { date: dateStr },
-  };
-
-  const res = await calendarFetch(
-    `/calendars/${encodeURIComponent(calendarId)}/events`,
-    accessToken,
-    'POST',
-    event
-  );
-
-  if (!res.ok) return null;
-  const data = await res.json();
-  return data.id ?? null;
-}
-
-export async function updateCalendarEvent(
-  task: Task,
-  accessToken: string,
-  calendarId: string,
-  eventId: string
-): Promise<boolean> {
-  if (!task.dueDate) return false;
-
-  const dateStr = localDateStr(task.dueDate);
-  const event = {
-    summary: task.title,
-    description: task.description || undefined,
-    start: { date: dateStr },
-    end: { date: dateStr },
-  };
-
-  const res = await calendarFetch(
-    `/calendars/${encodeURIComponent(calendarId)}/events/${eventId}`,
-    accessToken,
-    'PUT',
-    event
-  );
-
-  return res.ok;
-}
-
-export async function deleteCalendarEvent(
-  accessToken: string,
-  calendarId: string,
-  eventId: string
-): Promise<boolean> {
-  const res = await calendarFetch(
-    `/calendars/${encodeURIComponent(calendarId)}/events/${eventId}`,
-    accessToken,
-    'DELETE'
-  );
-  return res.ok || res.status === 404;
-}
+// Hinweis (TE-45): Tasks werden ausschließlich über die Google Tasks API
+// synchronisiert (siehe useGoogleTasksSync). Es werden bewusst KEINE
+// Calendar-Events pro Task angelegt/aktualisiert/gelöscht – das erzeugte
+// sonst einen doppelten Eintrag (Task + Termin) im Google Kalender. Die
+// Calendar-API wird hier nur noch lesend genutzt (listCalendars,
+// listUpcomingEvents) zur Anzeige bestehender Termine im Dashboard.
 
 async function tasksFetch(
   path: string,

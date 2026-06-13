@@ -23,9 +23,6 @@ import { formatDate, isOverdue, isDueToday, toGoogleDateISO } from '../utils/dat
 import { DatePickerModal } from '../components/DatePickerModal';
 import { useTheme, ThemeColors, toGray } from '../utils/theme';
 import {
-  createCalendarEvent,
-  updateCalendarEvent,
-  deleteCalendarEvent,
   updateGoogleTask,
   listTaskLists,
 } from '../services/googleCalendar';
@@ -89,15 +86,6 @@ export function TaskDetailScreen() {
           await updateGoogleTask(token, taskListId, task.googleEventId, gtUpdates).catch(() => {});
         }
       }
-
-      // Calendar event: update or create as secondary display (no ID stored back)
-      if (settings.googleCalendarId && updatedTask.dueDate) {
-        if (task.googleEventId) {
-          updateCalendarEvent(updatedTask, token, settings.googleCalendarId, task.googleEventId).catch(() => {});
-        } else {
-          createCalendarEvent(updatedTask, token, settings.googleCalendarId).catch(() => {});
-        }
-      }
     }
 
     setEditing(false);
@@ -120,24 +108,14 @@ export function TaskDetailScreen() {
         status: newCompleted ? 'completed' : 'needsAction',
       }).catch(() => {});
     }
-
-    // Also sync Calendar event (best-effort)
-    if (settings.googleCalendarId && task.dueDate) {
-      updateCalendarEvent(
-        { ...task, completed: newCompleted },
-        token,
-        settings.googleCalendarId,
-        task.googleEventId
-      ).catch(() => {});
-    }
   }, [id, task, toggleTask, settings]);
 
   const handleDelete = useCallback(() => {
     if (!task) return;
     const doDelete = async () => {
-      if (task.googleEventId && settings.googleAccessToken && settings.googleCalendarId) {
-        await deleteCalendarEvent(settings.googleAccessToken, settings.googleCalendarId, task.googleEventId).catch(() => {});
-      }
+      // Löschung wird über die Google Tasks API propagiert: deleteTask merkt sich
+      // die googleEventId in deletedGoogleEventIds, syncTasks entfernt den Task
+      // dann remote. Kein Calendar-Event mehr anzufassen (TE-45).
       deleteTask(id);
       setTimeout(() => syncTasks().catch(() => {}), 300);
       router.back();

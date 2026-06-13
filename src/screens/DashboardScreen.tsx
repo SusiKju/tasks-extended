@@ -558,7 +558,7 @@ export function DashboardScreen() {
       saveScratchpad(currentFid, uid, latest).catch(() => {});
     }, 1500);
   }, [setScratchpad]);
-  const styles = useMemo(() => makeStyles(colors, isDark), [colors, isDark]);
+  const styles = useMemo(() => makeStyles(colors, isDark, reduceMotion), [colors, isDark, reduceMotion]);
 
   const [mails, setMails] = useState<MailMessage[]>([]);
   const [mailLoading, setMailLoading] = useState(false);
@@ -1039,15 +1039,21 @@ export function DashboardScreen() {
                         style={[
                           styles.card,
                           styles.todayEventsGlowCard,
-                          {
-                            shadowColor: flameAnim.interpolate({
-                              inputRange: [0, 0.25, 0.5, 0.75, 1],
-                              outputRange: ['#FF6B00', '#FF0080', '#FF3B30', '#FF8C00', '#FF0080'],
-                            }),
-                            shadowOpacity: flameAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.5, 0.95, 0.5] }),
-                            shadowRadius: flameAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [10, 34, 10] }),
-                            transform: [{ scale: flameScale }],
-                          },
+                          reduceMotion
+                            // Calm-Theme (TE-44): kein Flammen-Glow – ohne diese
+                            // Gate bliebe selbst bei flameAnim=0 ein statischer
+                            // oranger Schatten (Index-0-Wert) stehen. Schlichte
+                            // Card mit dezentem blauem Rahmen (aus styles.card).
+                            ? { elevation: 0 }
+                            : {
+                                shadowColor: flameAnim.interpolate({
+                                  inputRange: [0, 0.25, 0.5, 0.75, 1],
+                                  outputRange: ['#FF6B00', '#FF0080', '#FF3B30', '#FF8C00', '#FF0080'],
+                                }),
+                                shadowOpacity: flameAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.5, 0.95, 0.5] }),
+                                shadowRadius: flameAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [10, 34, 10] }),
+                                transform: [{ scale: flameScale }],
+                              },
                         ]}
                       >
                         {todayEvents.map((e, i) => renderEvent(e, i, todayEvents, true))}
@@ -1270,7 +1276,7 @@ export function DashboardScreen() {
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-function makeStyles(c: ThemeColors, isDark: boolean) {
+function makeStyles(c: ThemeColors, isDark: boolean, calm: boolean) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: c.background },
     content: { paddingTop: 16, paddingBottom: 48, gap: 24 },
@@ -1312,8 +1318,10 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
       borderRadius: 14,
       overflow: 'hidden',
       borderWidth: 1,
-      // Leuchtende Oberfläche wie im Tasks-Tab: dezenter Neon-Rand + soft Glow.
-      borderColor: isDark ? c.accentNeon + '40' : c.border,
+      // Neon/Mono-Dark: leuchtende Oberfläche wie im Tasks-Tab (weißer Neon-Rand
+      // + soft Glow). Calm-Theme (TE-44): kein weißer Rand, sondern der dezente
+      // blaue Border (c.border); Glow ist via glowSuppressed() ohnehin aus.
+      borderColor: isDark && !calm ? c.accentNeon + '40' : c.border,
       ...(isDark ? neonGlow(c.accentNeon, 'soft') : {}),
     },
 

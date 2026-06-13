@@ -16,7 +16,7 @@ import { TaskCard } from '../components/TaskCard';
 import { Task } from '../types';
 import { isOverdue } from '../utils/dateFormat';
 import { useTheme, ThemeColors, neonGlow } from '../utils/theme';
-import { updateCalendarEvent, updateGoogleTask, listTaskLists } from '../services/googleCalendar';
+import { updateGoogleTask, listTaskLists } from '../services/googleCalendar';
 import { useGoogleTasksSync } from '../hooks/useGoogleTasksSync';
 
 function confirmDelete(title: string, onConfirm: () => void) {
@@ -69,16 +69,6 @@ export function TaskListScreen() {
       await updateGoogleTask(token, taskListId, task.googleEventId, {
         status: newCompleted ? 'completed' : 'needsAction',
       }).catch(() => {});
-    }
-
-    // Also update the Calendar event if one exists (best-effort)
-    if (settings.googleCalendarId && task.dueDate) {
-      await updateCalendarEvent(
-        { ...task, completed: newCompleted },
-        token,
-        settings.googleCalendarId,
-        task.googleEventId
-      ).catch(() => {});
     }
   }, [toggleTask, settings]);
 
