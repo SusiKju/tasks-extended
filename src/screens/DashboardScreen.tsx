@@ -845,11 +845,13 @@ export function DashboardScreen() {
 
         {/* Tasks */}
         <View style={styles.tasksCol}>
-          <SectionLabel
-            title="Heutige Tasks"
-            onMore={() => router.push('/(tabs)/tasks' as any)}
-            colors={colors}
-          />
+          {taskGroups.length > 0 && (
+            <SectionLabel
+              title="Heutige Tasks"
+              onMore={() => router.push('/(tabs)/tasks' as any)}
+              colors={colors}
+            />
+          )}
           {taskGroups.length === 0 ? (
             <View style={styles.emptyChips}>
               <Ionicons name="checkmark-circle-outline" size={16} color={colors.success} />
@@ -918,7 +920,9 @@ export function DashboardScreen() {
       {/* ── Kalender ── */}
       {settings.googleCalendarEnabled && (
         <View style={styles.section}>
-          <SectionLabel title="Heutige Termine" colors={colors} />
+          {calLoading || calEvents.length > 0 ? (
+            <SectionLabel title="Heutige Termine" colors={colors} />
+          ) : null}
           {calLoading ? (
             <View style={[styles.card, styles.loadingRow]}>
               <ActivityIndicator color={mono(C.calendar)} size="small" />
