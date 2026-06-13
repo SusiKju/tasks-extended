@@ -1,55 +1,80 @@
 /**
  * LinkAvatar.tsx
  *
- * Quadratisches Link-Symbol: zeigt das Favicon der Domain, fällt bei Lade-Fehler
- * (oder fehlender URL) auf das hinterlegte Ionicons-Symbol vor farbigem
- * Hintergrund zurück (TE-32). Wird sowohl im Link-Tab als auch in der
- * Dashboard-Schnellleiste verwendet.
+ * Quadratisches Link-Symbol: zeigt das Favicon der Domain vollflächig, fällt bei
+ * Lade-Fehler (oder fehlender URL) auf das hinterlegte Ionicons-Symbol vor
+ * farbigem Hintergrund zurück (TE-32/TE-33).
+ *
+ * TE-35: ringförmiger Rahmen (~4px). Im Neon-Theme (`dark-mono`) regenbogenfarbig
+ * via LinearGradient – wie der Geburtstags-Ring; sonst ein dezenter, einfarbiger
+ * Rahmen. Dieselbe Komponente wird im Link-Tab und in der Dashboard-Leiste genutzt.
  */
 
 import React, { useState, useEffect } from 'react';
 import { View, Image, StyleSheet } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '../utils/theme';
 import { LinkItem, faviconUrl } from '../services/links';
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 
-export function LinkAvatar({ link, size, fill = false }: { link: LinkItem; size: number; fill?: boolean }) {
+const BORDER = 3;
+const RAINBOW = ['#FF0080', '#FF8C00', '#FFE600', '#00FF88', '#00EEFF', '#7A5CFF', '#FF0080'] as const;
+
+export function LinkAvatar({ link, size }: { link: LinkItem; size: number }) {
+  const { colors, theme } = useTheme();
   const fav = faviconUrl(link.url, 64);
   const [failed, setFailed] = useState(false);
 
   // Bei URL-Wechsel erneuten Favicon-Versuch erlauben.
   useEffect(() => { setFailed(false); }, [fav]);
 
-  const radius = Math.round(size * 0.22);
+  // Regenbogen-Ring nur im Neon-Theme (dark-mono); Calm-Theme bleibt schlicht.
+  const rainbow = theme === 'dark-mono';
   const iconName = (link.icon as IoniconName) ?? 'link-outline';
 
-  if (fav && !failed) {
-    // fill: Favicon füllt die ganze Kachel (keine weiße Fläche) – farbiger
-    // Hintergrund trägt transparente Favicons. Sonst: kontaktiert auf Weiß.
-    const imgSize = fill ? size : Math.round(size * 0.62);
-    return (
-      <View style={[
-        styles.wrap,
-        { width: size, height: size, borderRadius: radius, backgroundColor: fill ? link.color : '#FFFFFF' },
-      ]}>
+  const outerRadius = Math.round(size * 0.26);
+  const innerSize = size - BORDER * 2;
+  const innerRadius = Math.round(innerSize * 0.22);
+
+  // Innenfläche: Favicon vollflächig oder Ionicons-Fallback vor Link-Farbe.
+  const inner = (
+    <View style={[styles.inner, { width: innerSize, height: innerSize, borderRadius: innerRadius, backgroundColor: link.color }]}>
+      {fav && !failed ? (
         <Image
           source={{ uri: fav }}
-          style={{ width: imgSize, height: imgSize }}
-          resizeMode={fill ? 'cover' : 'contain'}
+          style={{ width: innerSize, height: innerSize }}
+          resizeMode="cover"
           onError={() => setFailed(true)}
         />
-      </View>
+      ) : (
+        <Ionicons name={iconName} size={Math.round(innerSize * 0.46)} color="#fff" />
+      )}
+    </View>
+  );
+
+  if (rainbow) {
+    return (
+      <LinearGradient
+        colors={RAINBOW}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[styles.ring, { width: size, height: size, borderRadius: outerRadius }]}
+      >
+        {inner}
+      </LinearGradient>
     );
   }
 
   return (
-    <View style={[styles.wrap, { width: size, height: size, borderRadius: radius, backgroundColor: link.color }]}>
-      <Ionicons name={iconName} size={Math.round(size * 0.46)} color="#fff" />
+    <View style={[styles.ring, { width: size, height: size, borderRadius: outerRadius, backgroundColor: colors.border }]}>
+      {inner}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  ring: { alignItems: 'center', justifyContent: 'center', padding: BORDER },
+  inner: { alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
 });

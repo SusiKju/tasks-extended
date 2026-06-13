@@ -41,7 +41,7 @@ export function LinkCardBar({ colors }: { colors: ThemeColors; isDark?: boolean 
             style={({ pressed }) => [s.card, { opacity: pressed ? 0.7 : 1 }]}
             onPress={() => openLink(l.url)}
           >
-            <LinkAvatar link={l} size={30} fill />
+            <LinkAvatar link={l} size={30} />
             <Text style={[s.label, { color: colors.textSecondary }]} numberOfLines={1}>{l.title}</Text>
           </Pressable>
         ))}
