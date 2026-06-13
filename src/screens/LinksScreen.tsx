@@ -19,6 +19,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, ThemeColors, neonGlow } from '../utils/theme';
@@ -108,8 +109,16 @@ function LinkModal({ visible, editing, onSave, onDelete, onClose, colors }: Moda
   const handleSave = async () => {
     if (!canSave) return;
     setSaving(true);
-    try { await onSave({ title, url, icon, color, active }); onClose(); }
-    finally { setSaving(false); }
+    try {
+      await onSave({ title, url, icon, color, active });
+      onClose();
+    } catch (e) {
+      // Fehler nicht verschlucken – sonst „passiert nichts" beim Speichern.
+      console.warn('LinkModal save failed', e);
+      Alert.alert('Speichern fehlgeschlagen', String((e as Error)?.message ?? e));
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleDelete = async () => {
