@@ -12,7 +12,6 @@ import {
   collection, doc,
   addDoc, setDoc, deleteDoc,
   onSnapshot, query, orderBy,
-  waitForPendingWrites,
 } from 'firebase/firestore';
 import { Note } from '../types';
 
@@ -49,8 +48,6 @@ export async function addPersonalNote(
 ): Promise<string> {
   const col = collection(db, 'families', familyId, 'personalNotesByUser', uid, 'notes');
   const ref = await addDoc(col, note);
-  // Warten bis der Server bestätigt (fängt silent server-side rejects)
-  await waitForPendingWrites(db);
   return ref.id;
 }
 
