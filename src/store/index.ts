@@ -102,7 +102,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   childEmails: {},
   myName: null,
   funTileThemes: [],
-  mailWindowDays: 10,
+  mailWindowDays: 7,
 };
 
 export const useStore = create<TaskState>()(
@@ -253,7 +253,7 @@ export const useStore = create<TaskState>()(
     }),
     {
       name: 'tasks-extended-store',
-      version: 20,
+      version: 21,
       migrate: (persistedState: any, version: number) => {
         if (version < 1 && persistedState?.tasks) {
           persistedState.tasks = persistedState.tasks.map((t: any) => ({
@@ -358,6 +358,20 @@ export const useStore = create<TaskState>()(
         if (version < 20) {
           // TE-38: Angepinnte Mails – neu, Default leer.
           persistedState.pinnedMailIds = persistedState.pinnedMailIds ?? [];
+        }
+        if (version < 21 && persistedState?.settings) {
+          // TE-43: Zeitfenster-Optionen geändert (10 entfernt, 75 neu). Werte, die
+          // nicht mehr im Set liegen (v. a. das alte Default 10), auf die nächste
+          // gültige Option snappen.
+          const allowed = [3, 7, 14, 30, 75];
+          const cur = persistedState.settings.mailWindowDays;
+          if (typeof cur !== 'number' || !allowed.includes(cur)) {
+            const base = typeof cur === 'number' ? cur : 7;
+            persistedState.settings.mailWindowDays = allowed.reduce(
+              (best, d) => (Math.abs(d - base) < Math.abs(best - base) ? d : best),
+              allowed[0]
+            );
+          }
         }
         return persistedState;
       },
