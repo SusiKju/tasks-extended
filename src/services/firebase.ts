@@ -1,5 +1,5 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, initializeFirestore, memoryLocalCache } from 'firebase/firestore';
+import { getFirestore } from 'firebase/firestore';
 import { Platform } from 'react-native';
 
 const firebaseConfig = {
@@ -12,13 +12,7 @@ const firebaseConfig = {
 };
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-
-// Web: Memory-only cache – kein IndexedDB-Puffer, alle Writes gehen direkt
-// zum Server. Vermeidet das Problem dass Writes im lokalen Cache hängen
-// und nie den Server erreichen.
-export const db = Platform.OS === 'web'
-  ? initializeFirestore(app, { localCache: memoryLocalCache() })
-  : getFirestore(app);
+export const db = getFirestore(app);
 
 // Firebase Auth – plattformspezifische Initialisierung.
 // Native braucht AsyncStorage-Persistenz, Web den Standard-Browser-Persistenz.
