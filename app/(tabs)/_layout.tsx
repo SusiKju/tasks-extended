@@ -66,6 +66,15 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="links"
+        options={{
+          title: 'Links',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="link-outline" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="groups"
         options={{
           href: null,

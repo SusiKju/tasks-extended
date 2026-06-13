@@ -97,6 +97,11 @@ service cloud.firestore {
       match /geistesKachelByUser/{uid}/tiles/{tileId} {
         allow read, write: if isFamilyMember(familyId) && request.auth.uid == uid;
       }
+
+      // Persönliche Linkliste pro User (TE-32)
+      match /linksByUser/{uid}/links/{linkId} {
+        allow read, write: if isFamilyMember(familyId) && request.auth.uid == uid;
+      }
     }
 
     // ── Fokus-Kachel: strikt privat pro User, nicht geteilt (TE-7/TE-10/TE-12) ──

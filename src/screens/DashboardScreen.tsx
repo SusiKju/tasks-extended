@@ -29,6 +29,7 @@ import {
 import { useFamily } from '../hooks/useFamily';
 import { SharedNotepad } from '../components/SharedNotepad';
 import { GeistesKacheln } from '../components/GeistesKacheln';
+import { LinkCardBar } from '../components/LinkCardBar';
 import { WeatherWidget } from '../components/WeatherWidget';
 import { GoogleConnectBanner } from '../components/GoogleConnectBanner';
 import { CountdownStrip } from '../components/CountdownStrip';
@@ -880,6 +881,9 @@ export function DashboardScreen() {
         </View>
 
       </View>
+
+      {/* ── Links-Schnellleiste (TE-32): nur aktive Links, oberhalb der Geistesblitze ── */}
+      <LinkCardBar colors={colors} isDark={isDark} />
 
       {/* ── Geistesblitze: persönliche Gedanken-Kacheln ── */}
       <GeistesKacheln colors={colors} isDark={isDark} />

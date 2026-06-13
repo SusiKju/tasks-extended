@@ -1,0 +1,143 @@
+/**
+ * links.ts
+ *
+ * Persönliche Linkliste pro User in Firestore.
+ * Pfad: families/{familyId}/linksByUser/{uid}/links/{linkId}
+ *
+ * Privat (nur für den jeweiligen User) – nicht geteilt mit der Familie.
+ * Analog zu geistesKacheln.ts.
+ */
+
+import { Linking } from 'react-native';
+import { db } from './firebase';
+import {
+  collection,
+  doc,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  onSnapshot,
+  Unsubscribe,
+} from 'firebase/firestore';
+
+export interface LinkItem {
+  id: string;
+  title: string;
+  url: string;
+  /** Ionicons-Name als Fallback, falls das Favicon nicht geladen werden kann. */
+  icon: string | null;
+  color: string;
+  /** Nur aktive Links erscheinen in der Karten-Schnellleiste auf dem Dashboard. */
+  active: boolean;
+  createdAt: string;
+}
+
+export type LinkPatch = Partial<Pick<LinkItem, 'title' | 'url' | 'icon' | 'color' | 'active'>>;
+
+const linksCol = (familyId: string, uid: string) =>
+  collection(db, 'families', familyId, 'linksByUser', uid, 'links');
+
+/**
+ * Echtzeit-Listener – neueste Links zuerst (clientseitig sortiert).
+ */
+export function subscribeToLinks(
+  familyId: string,
+  uid: string,
+  onChange: (links: LinkItem[]) => void,
+  onError?: (e: unknown) => void,
+): Unsubscribe {
+  return onSnapshot(
+    linksCol(familyId, uid),
+    (snap) => {
+      const links = snap.docs
+        .map((d) => ({ id: d.id, ...d.data() } as LinkItem))
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      onChange(links);
+    },
+    (e) => {
+      console.warn('subscribeToLinks failed', e);
+      onError?.(e);
+    },
+  );
+}
+
+export async function addLink(
+  familyId: string,
+  uid: string,
+  data: { title: string; url: string; icon: string | null; color: string; active: boolean },
+): Promise<string> {
+  const ref = await addDoc(linksCol(familyId, uid), {
+    title: data.title.trim(),
+    url: normalizeUrl(data.url),
+    icon: data.icon ?? null,
+    color: data.color,
+    active: data.active,
+    createdAt: new Date().toISOString(),
+  });
+  return ref.id;
+}
+
+export async function updateLink(
+  familyId: string,
+  uid: string,
+  id: string,
+  patch: LinkPatch,
+): Promise<void> {
+  const clean: LinkPatch = { ...patch };
+  if (typeof clean.title === 'string') clean.title = clean.title.trim();
+  if (typeof clean.url === 'string') clean.url = normalizeUrl(clean.url);
+  await updateDoc(
+    doc(db, 'families', familyId, 'linksByUser', uid, 'links', id),
+    clean,
+  );
+}
+
+export async function deleteLink(
+  familyId: string,
+  uid: string,
+  id: string,
+): Promise<void> {
+  await deleteDoc(
+    doc(db, 'families', familyId, 'linksByUser', uid, 'links', id),
+  );
+}
+
+// ─── URL-Helfer ─────────────────────────────────────────────────────────────
+
+/** Ergänzt ein fehlendes Protokoll, damit Linking.openURL & Favicon funktionieren. */
+export function normalizeUrl(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return '';
+  if (/^[a-z]+:\/\//i.test(trimmed)) return trimmed;
+  return `https://${trimmed}`;
+}
+
+/** Extrahiert den Host (Domain) aus einer URL – leere Zeichenkette bei Fehler. */
+export function hostFromUrl(raw: string): string {
+  const url = normalizeUrl(raw);
+  try {
+    return new URL(url).hostname;
+  } catch {
+    // Fallback ohne URL-API: alles zwischen Protokoll und erstem "/".
+    const m = url.replace(/^[a-z]+:\/\//i, '').match(/^([^/?#]+)/i);
+    return m ? m[1] : '';
+  }
+}
+
+/** Google-Favicon-Dienst – liefert auch dann ein Icon, wenn die Seite kein eigenes anbietet. */
+export function faviconUrl(rawUrl: string, size = 64): string | null {
+  const host = hostFromUrl(rawUrl);
+  if (!host) return null;
+  return `https://www.google.com/s2/favicons?sz=${size}&domain=${encodeURIComponent(host)}`;
+}
+
+/** Öffnet die (normalisierte) URL extern – Web öffnet Tab, Native den Browser. */
+export async function openLink(rawUrl: string): Promise<void> {
+  const normalized = normalizeUrl(rawUrl);
+  if (!normalized) return;
+  try {
+    await Linking.openURL(normalized);
+  } catch (e) {
+    console.warn('openLink failed', e);
+  }
+}
