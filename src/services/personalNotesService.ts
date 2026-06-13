@@ -31,10 +31,6 @@ export function subscribeToPersonalNotes(
     },
     (err) => {
       console.error('[personalNotesService] onSnapshot error:', err.code, err.message);
-      // Temporärer Debug-Alert – wird nach Diagnose wieder entfernt
-      if (typeof window !== 'undefined' && (window as any).alert) {
-        (window as any).alert(`Notizen-Subscription Fehler:\n${err.code}\n${err.message}`);
-      }
       callback([]);
     },
   );

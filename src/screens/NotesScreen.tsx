@@ -17,8 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useStore } from '../store';
 import { Note, NoteChecklistItem } from '../types';
 import { useTheme, ThemeColors, neonGlow, readableTextOn } from '../utils/theme';
-import { useFamily } from '../hooks/useFamily';
-import { useFirebaseAuth } from '../hooks/useFirebaseAuth';
+import { useAppContext } from '../contexts/AppContext';
 import {
   subscribeToPersonalNotes,
   addPersonalNote,
@@ -355,18 +354,14 @@ export function NotesScreen() {
   const { colors, isDark, mono } = useTheme();
   const styles = useMemo(() => makeStyles(colors, isDark), [colors, isDark]);
   const groups = useStore((s) => s.groups);
-  const { familyId } = useFamily();
-  const { user } = useFirebaseAuth();
+  const { familyId, user } = useAppContext();
 
   const [notes, setNotes] = useState<Note[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Firestore-Echtzeit-Abo
   useEffect(() => {
-    if (!familyId || !user?.uid) {
-      console.warn('[NotesScreen] subscribeToPersonalNotes skip: familyId=' + familyId + ' uid=' + user?.uid);
-      return;
-    }
+    if (!familyId || !user?.uid) return;
     setLoading(true);
     const unsub = subscribeToPersonalNotes(familyId, user.uid, (n) => {
       setNotes(n);
@@ -455,10 +450,7 @@ export function NotesScreen() {
       pinned: boolean,
       checklist?: NoteChecklistItem[],
     ) => {
-      if (!familyId || !user?.uid) {
-        Alert.alert('Nicht eingeloggt', `familyId=${familyId ?? 'null'} uid=${user?.uid ?? 'null'}`);
-        return;
-      }
+      if (!familyId || !user?.uid) return;
       const now = new Date().toISOString();
       if (editingNote) {
         updatePersonalNote(familyId, user.uid, editingNote.id, {

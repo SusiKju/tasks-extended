@@ -13,6 +13,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFirebaseAuth } from '../src/hooks/useFirebaseAuth';
 import { useFamily } from '../src/hooks/useFamily';
 import { handleRedirectResult } from '../src/services/firebaseAuth';
+import { AppContextProvider } from '../src/contexts/AppContext';
 
 export default function RootLayout() {
   const { colors, isDark } = useTheme();
@@ -129,7 +130,7 @@ export default function RootLayout() {
   }
 
   return (
-    <>
+    <AppContextProvider value={{ user, familyId }}>
       {Platform.OS === 'web' && (
         <Head>
           <meta name="application-name" content="TasksExtended" />
@@ -168,6 +169,6 @@ export default function RootLayout() {
           }}
         />
       </Stack>
-    </>
+    </AppContextProvider>
   );
 }
