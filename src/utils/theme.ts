@@ -58,14 +58,25 @@ const DARK_MONO: ThemeColors = {
   successFg: '#000000',
 };
 
-// Ruhiges Alternativ-Theme: dieselbe Schwarz-Weiß-Palette wie DARK_MONO – also
-// identische Kontraste, keine neuen Farben – aber bewusst „still": kein Neon-
-// Glow (siehe neonGlow/neonBorder, die im dark-calm-Theme leer zurückgeben) und
-// keine ambienten Animationen (siehe reduceMotion). Die Differenz zum Mono-Theme
-// ist rein das Fehlen von Leuchten und Bewegung, damit es noch ruhiger wirkt.
-// Glow-Werte stehen auf transparent, weil im Calm-Theme gar nicht geglüht wird.
+// Ruhiges Theme (TE-44): „Flat Dark". Basis bleibt die monochrome DARK_MONO-
+// Palette – reines Schwarz, weißer Text (21:1 Kontrast) – und es wird bewusst
+// nicht geglüht (neonGlow/neonBorder geben im dark-calm-Theme leer zurück) und
+// nicht animiert (reduceMotion). Der einzige Farbeinsatz ist gezielt und
+// sparsam: die dünnen 1px-Rahmen tragen einen dezenten, kühlen Blauton. Alle
+// Akzente (accentNeon, Buttons, Auswahl) bleiben monochrom weiß – das hält das
+// Theme flach und vermeidet, dass farbige Button-Flächen die schwarze
+// accentFg-Schrift unlesbar machen oder die isMono-Heuristik (accentNeon ===
+// '#FFFFFF') brechen.
+//
+// CALM_BORDER ist #4A9EFF (kühles Blau, vom User gewählt) auf ~55% gedimmt –
+// Hue/Sättigung bleiben erhalten, aber dunkel genug, um auf nahezu schwarzem
+// Grund ruhig statt grell zu wirken. Opak, damit der Wert auch dort sauber
+// rendert, wo `border` als Füllung dient (Divider, Switch-Tracks).
+const CALM_BORDER = '#2A578C'; // = #4A9EFF * ~0.55, kühles Blau, dezent
 const DARK_CALM: ThemeColors = {
   ...DARK_MONO,
+  border:       CALM_BORDER,
+  tabBarBorder: CALM_BORDER,
   glowAccent:  'transparent',
   glowDanger:  'transparent',
   glowSuccess: 'transparent',
