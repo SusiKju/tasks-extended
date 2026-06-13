@@ -363,7 +363,10 @@ export function NotesScreen() {
 
   // Firestore-Echtzeit-Abo
   useEffect(() => {
-    if (!familyId || !user?.uid) return;
+    if (!familyId || !user?.uid) {
+      console.warn('[NotesScreen] subscribeToPersonalNotes skip: familyId=' + familyId + ' uid=' + user?.uid);
+      return;
+    }
     setLoading(true);
     const unsub = subscribeToPersonalNotes(familyId, user.uid, (n) => {
       setNotes(n);
@@ -452,7 +455,10 @@ export function NotesScreen() {
       pinned: boolean,
       checklist?: NoteChecklistItem[],
     ) => {
-      if (!familyId || !user?.uid) return;
+      if (!familyId || !user?.uid) {
+        Alert.alert('Nicht eingeloggt', `familyId=${familyId ?? 'null'} uid=${user?.uid ?? 'null'}`);
+        return;
+      }
       const now = new Date().toISOString();
       if (editingNote) {
         updatePersonalNote(familyId, user.uid, editingNote.id, {
