@@ -17,6 +17,7 @@ import {
   updateDoc,
   deleteDoc,
   onSnapshot,
+  writeBatch,
   Unsubscribe,
 } from 'firebase/firestore';
 
@@ -30,12 +31,25 @@ export interface LinkItem {
   /** Nur aktive Links erscheinen in der Karten-Schnellleiste auf dem Dashboard. */
   active: boolean;
   createdAt: string;
+  /** Manuelle Sortierreihenfolge (TE-34); fehlt bei Altdaten → fällt auf createdAt zurück. */
+  order?: number;
 }
 
 export type LinkPatch = Partial<Pick<LinkItem, 'title' | 'url' | 'icon' | 'color' | 'active'>>;
 
 const linksCol = (familyId: string, uid: string) =>
   collection(db, 'families', familyId, 'linksByUser', uid, 'links');
+
+/**
+ * Sortierung: zuerst nach manueller `order` (aufsteigend), Altdaten ohne `order`
+ * danach nach createdAt (neueste zuerst) – wie vor TE-34.
+ */
+export function compareLinks(a: LinkItem, b: LinkItem): number {
+  const ao = a.order ?? Number.POSITIVE_INFINITY;
+  const bo = b.order ?? Number.POSITIVE_INFINITY;
+  if (ao !== bo) return ao - bo;
+  return b.createdAt.localeCompare(a.createdAt);
+}
 
 /**
  * Echtzeit-Listener – neueste Links zuerst (clientseitig sortiert).
@@ -51,7 +65,7 @@ export function subscribeToLinks(
     (snap) => {
       const links = snap.docs
         .map((d) => ({ id: d.id, ...d.data() } as LinkItem))
-        .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+        .sort(compareLinks);
       onChange(links);
     },
     (e) => {
@@ -100,6 +114,22 @@ export async function deleteLink(
   await deleteDoc(
     doc(db, 'families', familyId, 'linksByUser', uid, 'links', id),
   );
+}
+
+/**
+ * Schreibt die neue manuelle Reihenfolge (TE-34): `order` = Index in der Liste.
+ * Ein Batch-Write hält die Reihenfolge atomar konsistent.
+ */
+export async function persistLinkOrder(
+  familyId: string,
+  uid: string,
+  orderedIds: string[],
+): Promise<void> {
+  const batch = writeBatch(db);
+  orderedIds.forEach((id, idx) => {
+    batch.update(doc(db, 'families', familyId, 'linksByUser', uid, 'links', id), { order: idx });
+  });
+  await batch.commit();
 }
 
 // ─── URL-Helfer ─────────────────────────────────────────────────────────────

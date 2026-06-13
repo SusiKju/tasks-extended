@@ -31,6 +31,7 @@ import {
   addLink,
   updateLink,
   deleteLink,
+  persistLinkOrder,
   openLink,
 } from '../services/links';
 import { LinkAvatar } from '../components/LinkAvatar';
@@ -229,11 +230,15 @@ function LinkModal({ visible, editing, onSave, onDelete, onClose, colors }: Moda
 
 // ─── Listenzeile ──────────────────────────────────────────────────────────────
 
-function LinkRow({ link, onEdit, onToggle, onOpen, colors, isDark }: {
+function LinkRow({ link, onEdit, onToggle, onOpen, onMoveUp, onMoveDown, canMoveUp, canMoveDown, colors, isDark }: {
   link: LinkItem;
   onEdit: () => void;
   onToggle: () => void;
   onOpen: () => void;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
   colors: ThemeColors;
   isDark: boolean;
 }) {
@@ -243,6 +248,15 @@ function LinkRow({ link, onEdit, onToggle, onOpen, colors, isDark }: {
       { backgroundColor: colors.surface, borderColor: isDark ? colors.accentNeon + '30' : colors.border },
       isDark ? neonGlow(colors.accentNeon, 'soft') : null,
     ]}>
+      {/* Sortier-Pfeile (TE-34) */}
+      <View style={s.moveCol}>
+        <Pressable onPress={onMoveUp} disabled={!canMoveUp} hitSlop={6} style={s.moveBtn}>
+          <Ionicons name="chevron-up" size={18} color={canMoveUp ? colors.textSecondary : colors.border} />
+        </Pressable>
+        <Pressable onPress={onMoveDown} disabled={!canMoveDown} hitSlop={6} style={s.moveBtn}>
+          <Ionicons name="chevron-down" size={18} color={canMoveDown ? colors.textSecondary : colors.border} />
+        </Pressable>
+      </View>
       <Pressable onPress={onOpen} hitSlop={6}>
         <LinkAvatar link={link} size={40} />
       </Pressable>
@@ -299,6 +313,21 @@ export function LinksScreen() {
     await updateLink(fid, uid, l.id, { active: !l.active });
   }, [fid, uid]);
 
+  // Reihenfolge ändern (TE-34): Position tauschen und die ganze Liste neu
+  // durchnummerieren. Der Snapshot-Listener spiegelt das Ergebnis zurück.
+  const handleMove = useCallback(async (index: number, dir: -1 | 1) => {
+    if (!fid || !uid) return;
+    const target = index + dir;
+    if (target < 0 || target >= links.length) return;
+    const next = [...links];
+    [next[index], next[target]] = [next[target], next[index]];
+    try {
+      await persistLinkOrder(fid, uid, next.map((l) => l.id));
+    } catch (e) {
+      console.warn('persistLinkOrder failed', e);
+    }
+  }, [fid, uid, links]);
+
   return (
     <View style={[s.container, { backgroundColor: colors.background }]}>
       <ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
@@ -312,7 +341,7 @@ export function LinksScreen() {
           </Pressable>
         ) : (
           <View style={{ gap: 8 }}>
-            {links.map((l) => (
+            {links.map((l, i) => (
               <LinkRow
                 key={l.id}
                 link={l}
@@ -321,6 +350,10 @@ export function LinksScreen() {
                 onEdit={() => openEdit(l)}
                 onToggle={() => handleToggle(l)}
                 onOpen={() => openLink(l.url)}
+                onMoveUp={() => handleMove(i, -1)}
+                onMoveDown={() => handleMove(i, 1)}
+                canMoveUp={i > 0}
+                canMoveDown={i < links.length - 1}
               />
             ))}
           </View>
@@ -372,6 +405,8 @@ const s = StyleSheet.create({
   rowTitle: { fontSize: 14, fontWeight: '700' },
   rowUrl: { fontSize: 12, marginTop: 1 },
   rowAction: { padding: 4 },
+  moveCol: { justifyContent: 'center', marginRight: 2 },
+  moveBtn: { paddingHorizontal: 2, paddingVertical: 1 },
 
   // Floating Action Button
   fab: {
