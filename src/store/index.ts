@@ -14,6 +14,8 @@ interface TaskState {
   scratchpad: string;
   scratchpadUpdatedAt: string;
   deletedGoogleEventIds: string[];
+  /** TE-38: Gmail-Message-IDs der angepinnten Mails (immer oben im Mail-Tab). */
+  pinnedMailIds: string[];
 
   // Task actions
   addTask: (task: Task) => void;
@@ -52,6 +54,10 @@ interface TaskState {
 
   // Settings actions
   updateSettings: (updates: Partial<AppSettings>) => void;
+
+  // Mail actions (TE-38)
+  togglePinnedMail: (id: string) => void;
+  unpinMail: (id: string) => void;
 }
 
 const DEFAULT_GROUPS: Group[] = [
@@ -111,6 +117,7 @@ export const useStore = create<TaskState>()(
       scratchpad: '',
       scratchpadUpdatedAt: new Date(0).toISOString(),
       deletedGoogleEventIds: [],
+      pinnedMailIds: [],
 
       addTask: (task) =>
         set((state) => ({ tasks: [task, ...state.tasks] })),
@@ -231,10 +238,22 @@ export const useStore = create<TaskState>()(
 
       updateSettings: (updates) =>
         set((state) => ({ settings: { ...state.settings, ...updates } })),
+
+      togglePinnedMail: (id) =>
+        set((state) => ({
+          pinnedMailIds: state.pinnedMailIds.includes(id)
+            ? state.pinnedMailIds.filter((x) => x !== id)
+            : [...state.pinnedMailIds, id],
+        })),
+
+      unpinMail: (id) =>
+        set((state) => ({
+          pinnedMailIds: state.pinnedMailIds.filter((x) => x !== id),
+        })),
     }),
     {
       name: 'tasks-extended-store',
-      version: 19,
+      version: 20,
       migrate: (persistedState: any, version: number) => {
         if (version < 1 && persistedState?.tasks) {
           persistedState.tasks = persistedState.tasks.map((t: any) => ({
@@ -335,6 +354,10 @@ export const useStore = create<TaskState>()(
           // TE-37: Konfigurierbares Zeitfenster für den Mail-Tab (Default 10 Tage).
           persistedState.settings.mailWindowDays =
             persistedState.settings.mailWindowDays ?? 10;
+        }
+        if (version < 20) {
+          // TE-38: Angepinnte Mails – neu, Default leer.
+          persistedState.pinnedMailIds = persistedState.pinnedMailIds ?? [];
         }
         return persistedState;
       },

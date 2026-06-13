@@ -76,6 +76,43 @@ export async function fetchRecentMails(
   return results.filter((m): m is MailMessage => m !== null);
 }
 
+/**
+ * TE-38: Lädt einzelne Mails anhand ihrer IDs (für angepinnte Mails, die außerhalb
+ * des Zeitfensters liegen und daher nicht im normalen Listen-Request auftauchen).
+ * Nicht mehr existierende Mails (404) werden stillschweigend übersprungen.
+ */
+export async function fetchMailsByIds(
+  accessToken: string,
+  ids: string[]
+): Promise<MailMessage[]> {
+  if (ids.length === 0) return [];
+
+  const results = await Promise.all(
+    ids.map(async (id) => {
+      const res = await gmailFetch(
+        `/users/me/messages/${id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`,
+        accessToken
+      );
+      if (!res.ok) {
+        if (res.status === 401) throw new Error('UNAUTHORIZED');
+        return null;
+      }
+      const data = await res.json();
+      const headers: Array<{ name: string; value: string }> = data.payload?.headers ?? [];
+      return {
+        id,
+        threadId: data.threadId ?? id,
+        from: extractHeader(headers, 'From'),
+        subject: extractHeader(headers, 'Subject'),
+        date: extractHeader(headers, 'Date'),
+        snippet: data.snippet ?? '',
+      } satisfies MailMessage;
+    })
+  );
+
+  return results.filter((m): m is MailMessage => m !== null);
+}
+
 export async function trashMail(accessToken: string, messageId: string): Promise<boolean> {
   const res = await gmailPost(`/users/me/messages/${messageId}/trash`, accessToken);
   return res.ok;

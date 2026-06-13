@@ -15,7 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useStore } from '../store';
 import { useTheme, ThemeColors } from '../utils/theme';
 import { signInWithGoogle, getValidAccessToken } from '../services/googleCalendar';
-import { fetchRecentMails, trashMail, MailMessage } from '../services/googleMail';
+import { fetchRecentMails, fetchMailsByIds, trashMail, MailMessage } from '../services/googleMail';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -93,16 +93,22 @@ function groupMailsByDay(mails: MailMessage[]): MailSection[] {
 interface MailItemProps {
   item: MailMessage;
   expanded: boolean;
+  pinned: boolean;
   onToggle: () => void;
+  onTogglePin: () => void;
   onDelete: (id: string) => void;
   colors: ThemeColors;
   styles: ReturnType<typeof makeStyles>;
 }
 
-function MailItem({ item, expanded, onToggle, onDelete, colors, styles }: MailItemProps) {
+function MailItem({ item, expanded, pinned, onToggle, onTogglePin, onDelete, colors, styles }: MailItemProps) {
   return (
     <Pressable
-      style={({ pressed }) => [styles.mailCard, pressed && !expanded && { opacity: 0.85 }]}
+      style={({ pressed }) => [
+        styles.mailCard,
+        pinned && styles.mailCardPinned,
+        pressed && !expanded && { opacity: 0.85 },
+      ]}
       onPress={onToggle}
     >
       {/* Header row – immer sichtbar */}
@@ -121,19 +127,42 @@ function MailItem({ item, expanded, onToggle, onDelete, colors, styles }: MailIt
             {item.subject || '(Kein Betreff)'}
           </Text>
         </View>
+        {/* TE-38: Pin-Umschalter */}
+        <Pressable
+          onPress={onTogglePin}
+          hitSlop={8}
+          style={({ pressed }) => [{ marginLeft: 6, padding: 2 }, pressed && { opacity: 0.6 }]}
+        >
+          <Ionicons
+            name={pinned ? 'bookmark' : 'bookmark-outline'}
+            size={17}
+            color={pinned ? colors.accentNeon : colors.textMuted}
+          />
+        </Pressable>
         <Ionicons
           name={expanded ? 'chevron-up' : 'chevron-down'}
           size={16}
           color={colors.textSecondary}
-          style={{ marginLeft: 8 }}
+          style={{ marginLeft: 6 }}
         />
       </View>
 
-      {/* Expanded: vollständiger Inhalt + Löschen-Button */}
+      {/* Expanded: vollständiger Inhalt + Aktionen */}
       {expanded && (
         <View style={styles.expandedContent}>
           <Text style={styles.mailSnippet}>{item.snippet}</Text>
           <View style={styles.expandedActions}>
+            <Pressable
+              style={({ pressed }) => [styles.pinBtn, pressed && { opacity: 0.75 }]}
+              onPress={onTogglePin}
+            >
+              <Ionicons
+                name={pinned ? 'bookmark' : 'bookmark-outline'}
+                size={16}
+                color={colors.accentNeon}
+              />
+              <Text style={styles.pinBtnText}>{pinned ? 'Lösen' : 'Anpinnen'}</Text>
+            </Pressable>
             <Pressable
               style={({ pressed }) => [styles.deleteBtn, pressed && { opacity: 0.75 }]}
               onPress={() => onDelete(item.id)}
@@ -151,7 +180,7 @@ function MailItem({ item, expanded, onToggle, onDelete, colors, styles }: MailIt
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export function MailScreen() {
-  const { settings, updateSettings } = useStore();
+  const { settings, updateSettings, pinnedMailIds, togglePinnedMail, unpinMail } = useStore();
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
@@ -162,13 +191,22 @@ export function MailScreen() {
   const [loaded, setLoaded] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
+  // TE-37/TE-38: Fenster-Mails laden und angepinnte Mails außerhalb des Fensters
+  // per ID nachladen, damit sie immer sichtbar bleiben.
+  const fetchWindowed = useCallback(async (token: string): Promise<MailMessage[]> => {
+    const windowMails = await fetchRecentMails(token, settings.mailWindowDays);
+    const have = new Set(windowMails.map((m) => m.id));
+    const missingPinned = pinnedMailIds.filter((id) => !have.has(id));
+    const extra = missingPinned.length ? await fetchMailsByIds(token, missingPinned) : [];
+    return [...extra, ...windowMails];
+  }, [settings.mailWindowDays, pinnedMailIds]);
+
   const loadMails = useCallback(async (token: string, isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
     setError(null);
     try {
-      const result = await fetchRecentMails(token, settings.mailWindowDays);
-      setMails(result);
+      setMails(await fetchWindowed(token));
       setLoaded(true);
     } catch (e: any) {
       if (e?.message === 'UNAUTHORIZED') {
@@ -177,8 +215,7 @@ export function MailScreen() {
         const refreshed = await getValidAccessToken(true);
         if (refreshed && refreshed !== token) {
           try {
-            const result = await fetchRecentMails(refreshed, settings.mailWindowDays);
-            setMails(result);
+            setMails(await fetchWindowed(refreshed));
             setLoaded(true);
             return;
           } catch {
@@ -194,7 +231,7 @@ export function MailScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [updateSettings, settings.mailWindowDays]);
+  }, [updateSettings, fetchWindowed]);
 
   const handleConnect = useCallback(async () => {
     setLoading(true);
@@ -221,9 +258,16 @@ export function MailScreen() {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setExpandedId(null);
     setMails((prev) => prev.filter((m) => m.id !== id));
+    unpinMail(id); // TE-38: gelöschte Mail nicht angepinnt halten
     const ok = await trashMail(settings.googleAccessToken, id);
     if (!ok) setError('Löschen fehlgeschlagen.');
-  }, [settings.googleAccessToken]);
+  }, [settings.googleAccessToken, unpinMail]);
+
+  // TE-38: Pin umschalten – angepinnte Mails wandern nach oben.
+  const handleTogglePin = useCallback((id: string) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    togglePinnedMail(id);
+  }, [togglePinnedMail]);
 
   React.useEffect(() => {
     if (settings.googleAccessToken && !loaded) {
@@ -239,7 +283,18 @@ export function MailScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings.mailWindowDays]);
 
-  const sections = useMemo(() => groupMailsByDay(mails), [mails]);
+  // TE-38: Angepinnte Mails in einer eigenen Sektion ganz oben, der Rest nach Tagen.
+  const pinnedSet = useMemo(() => new Set(pinnedMailIds), [pinnedMailIds]);
+  const sections = useMemo(() => {
+    const pinned = mails
+      .filter((m) => pinnedSet.has(m.id))
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    const rest = mails.filter((m) => !pinnedSet.has(m.id));
+    const out: MailSection[] = [];
+    if (pinned.length) out.push({ key: 'pinned', title: '📌 Angepinnt', data: pinned });
+    out.push(...groupMailsByDay(rest));
+    return out;
+  }, [mails, pinnedSet]);
 
   if (!settings.googleAccessToken) {
     return (
@@ -286,7 +341,9 @@ export function MailScreen() {
           <MailItem
             item={item}
             expanded={expandedId === item.id}
+            pinned={pinnedSet.has(item.id)}
             onToggle={() => handleToggle(item.id)}
+            onTogglePin={() => handleTogglePin(item.id)}
             onDelete={handleDelete}
             colors={colors}
             styles={styles}
@@ -359,6 +416,12 @@ function makeStyles(colors: ThemeColors) {
       borderWidth: 1,
       borderColor: colors.border,
     },
+    // TE-38: visuelle Hervorhebung angepinnter Mails
+    mailCardPinned: {
+      borderColor: colors.accentNeon,
+      borderWidth: 1.5,
+      backgroundColor: colors.accentNeon + '0D',
+    },
     mailHeader: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -394,7 +457,20 @@ function makeStyles(colors: ThemeColors) {
     expandedActions: {
       flexDirection: 'row',
       justifyContent: 'flex-end',
+      gap: 8,
     },
+    pinBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      backgroundColor: colors.surfaceHigh,
+      paddingHorizontal: 16,
+      paddingVertical: 8,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.accentNeon,
+    },
+    pinBtnText: { color: colors.accentNeon, fontWeight: '600', fontSize: 13 },
     deleteBtn: {
       flexDirection: 'row',
       alignItems: 'center',
