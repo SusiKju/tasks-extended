@@ -21,7 +21,7 @@ import { useFirebaseAuth } from '../hooks/useFirebaseAuth';
 import { useGoogleTasksSync } from '../hooks/useGoogleTasksSync';
 import { useGoogleContactsBirthdaysSync } from '../hooks/useGoogleContactsBirthdaysSync';
 import { isOverdue } from '../utils/dateFormat';
-import { fetchRecentMails, MailMessage } from '../services/googleMail';
+import { fetchRecentMails, fetchMailsByIds, MailMessage } from '../services/googleMail';
 import { listUpcomingEvents, CalendarEvent } from '../services/googleCalendar';
 import {
   ChildTask, subscribeToChildTasks,
@@ -470,7 +470,7 @@ export function DashboardScreen() {
   const childName = (id: string) => familyChildren.find((c) => c.id === id)?.name ?? id;
   const childColor = (id: string) => familyChildren.find((c) => c.id === id)?.color ?? CHILD_COLOR_FALLBACK;
   const childEmoji = (id: string) => familyChildren.find((c) => c.id === id)?.emoji ?? null;
-  const { tasks, settings, scratchpad, setScratchpad, birthdays: storeBirthdays } = useStore();
+  const { tasks, settings, scratchpad, setScratchpad, birthdays: storeBirthdays, pinnedMailIds } = useStore();
   const { colors, isDark, theme, mono, isMono, reduceMotion } = useTheme();
   const { user } = useFirebaseAuth();
   const { syncTasks } = useGoogleTasksSync();
@@ -490,6 +490,22 @@ export function DashboardScreen() {
   const spinAnim = useRef(new Animated.Value(0)).current;
   const spinLoop = useRef<Animated.CompositeAnimation | null>(null);
 
+  // TE-41: Fenster-Mails + angepinnte Mails (auch außerhalb des Fensters) laden.
+  const loadDashboardMails = useCallback(async (token: string) => {
+    setMailLoading(true);
+    try {
+      const windowMails = await fetchRecentMails(token);
+      const have = new Set(windowMails.map((m) => m.id));
+      const missingPinned = pinnedMailIds.filter((id) => !have.has(id));
+      const extra = missingPinned.length ? await fetchMailsByIds(token, missingPinned) : [];
+      setMails([...extra, ...windowMails]);
+    } catch {
+      // still – Card bleibt beim letzten Stand
+    } finally {
+      setMailLoading(false);
+    }
+  }, [pinnedMailIds]);
+
   const handleSync = useCallback(async () => {
     if (syncing) return;
     setSyncing(true);
@@ -505,9 +521,7 @@ export function DashboardScreen() {
       ]);
       // Mails + Kalender neu laden
       if (settings.googleAccessToken) {
-        setMailLoading(true);
-        fetchRecentMails(settings.googleAccessToken)
-          .then((r) => setMails(r.slice(0, 5))).catch(() => {}).finally(() => setMailLoading(false));
+        loadDashboardMails(settings.googleAccessToken);
         if (settings.googleCalendarEnabled) {
           setCalLoading(true);
           listUpcomingEvents(settings.googleAccessToken, settings.selectedCalendarIds ?? [], 2)
@@ -525,7 +539,7 @@ export function DashboardScreen() {
       spinAnim.setValue(0);
       setSyncing(false);
     }
-  }, [syncing, syncTasks, syncBirthdays, settings]);
+  }, [syncing, syncTasks, syncBirthdays, settings, loadDashboardMails]);
 
   // Debounced Firestore-Save 1,5 s nach letzter Eingabe
   const uploadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -550,6 +564,20 @@ export function DashboardScreen() {
   const [mailLoading, setMailLoading] = useState(false);
   const [calEvents, setCalEvents] = useState<CalendarEvent[]>([]);
   const [calLoading, setCalLoading] = useState(false);
+
+  // TE-41: Auf dem Dashboard nur angepinnte + ungelesene Mails, angepinnte oben.
+  const pinnedSet = useMemo(() => new Set(pinnedMailIds), [pinnedMailIds]);
+  const dashboardMails = useMemo(() => {
+    return mails
+      .filter((m) => pinnedSet.has(m.id) || m.unread)
+      .sort((a, b) => {
+        const pa = pinnedSet.has(a.id) ? 0 : 1;
+        const pb = pinnedSet.has(b.id) ? 0 : 1;
+        if (pa !== pb) return pa - pb;
+        return new Date(b.date).getTime() - new Date(a.date).getTime();
+      })
+      .slice(0, 5);
+  }, [mails, pinnedSet]);
 
   // Heutige Aufgaben aller Kinder (TE-110) – ein Echtzeit-Listener pro Kind,
   // analog zum Kids-Tab. Abschnitt erscheint nur, wenn mindestens eine Aufgabe da ist.
@@ -664,12 +692,8 @@ export function DashboardScreen() {
 
   useEffect(() => {
     if (!settings.googleAccessToken) return;
-    setMailLoading(true);
-    fetchRecentMails(settings.googleAccessToken)
-      .then((r) => setMails(r.slice(0, 5)))
-      .catch(() => {})
-      .finally(() => setMailLoading(false));
-  }, [settings.googleAccessToken]);
+    loadDashboardMails(settings.googleAccessToken);
+  }, [settings.googleAccessToken, loadDashboardMails]);
 
   useEffect(() => {
     if (!settings.googleAccessToken || !settings.googleCalendarEnabled) return;
@@ -1180,37 +1204,57 @@ export function DashboardScreen() {
               <View style={styles.loadingRow}>
                 <ActivityIndicator color={colors.textMuted} size="small" />
               </View>
-            ) : mails.length === 0 ? (
+            ) : dashboardMails.length === 0 ? (
               <View style={styles.emptyRow}>
                 <Ionicons name="checkmark-circle-outline" size={16} color={colors.success} />
-                <Text style={styles.emptyText}>Posteingang leer</Text>
+                <Text style={styles.emptyText}>Keine angepinnten oder ungelesenen Mails</Text>
               </View>
             ) : (
-              mails.map((mail, i) => (
-                <View
-                  key={mail.id}
-                  style={[styles.mailRow, i < mails.length - 1 && styles.rowDivider]}
-                >
-                  <View style={[styles.mailAvatar, { backgroundColor: colors.surfaceHigh }]}>
-                    <Text style={[styles.mailAvatarText, { color: colors.textSecondary }]}>
-                      {parseDisplayFrom(mail.from).charAt(0).toUpperCase()}
-                    </Text>
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <View style={styles.mailMeta}>
-                      <Text style={[styles.mailFrom, { color: colors.text }]} numberOfLines={1}>
-                        {parseDisplayFrom(mail.from)}
-                      </Text>
-                      <Text style={[styles.mailDate, { color: colors.textMuted }]}>
-                        {formatMailDate(mail.date)}
+              dashboardMails.map((mail, i) => {
+                const pinned = pinnedSet.has(mail.id);
+                return (
+                  <View
+                    key={mail.id}
+                    style={[styles.mailRow, i < dashboardMails.length - 1 && styles.rowDivider]}
+                  >
+                    <View style={[styles.mailAvatar, { backgroundColor: colors.surfaceHigh }]}>
+                      <Text style={[styles.mailAvatarText, { color: colors.textSecondary }]}>
+                        {parseDisplayFrom(mail.from).charAt(0).toUpperCase()}
                       </Text>
                     </View>
-                    <Text style={[styles.mailSubject, { color: colors.textSecondary }]} numberOfLines={1}>
-                      {mail.subject || '(Kein Betreff)'}
-                    </Text>
+                    <View style={{ flex: 1 }}>
+                      <View style={styles.mailMeta}>
+                        <Text
+                          style={[styles.mailFrom, { color: colors.text }, mail.unread && { fontWeight: '800' }]}
+                          numberOfLines={1}
+                        >
+                          {parseDisplayFrom(mail.from)}
+                        </Text>
+                        <Text style={[styles.mailDate, { color: colors.textMuted }]}>
+                          {formatMailDate(mail.date)}
+                        </Text>
+                      </View>
+                      <View style={[styles.mailMeta, { alignItems: 'center', marginBottom: 0 }]}>
+                        <Text
+                          style={[
+                            styles.mailSubject,
+                            { color: mail.unread ? colors.text : colors.textSecondary, flex: 1 },
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {mail.subject || '(Kein Betreff)'}
+                        </Text>
+                        {pinned && (
+                          <Ionicons name="bookmark" size={12} color={colors.accentNeon} style={{ marginLeft: 6 }} />
+                        )}
+                        {mail.unread && !pinned && (
+                          <View style={[styles.unreadDot, { backgroundColor: colors.accentNeon }]} />
+                        )}
+                      </View>
+                    </View>
                   </View>
-                </View>
-              ))
+                );
+              })
             )}
           </View>
         </View>
@@ -1391,6 +1435,7 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
     mailFrom: { fontSize: 13, fontWeight: '600', flex: 1, marginRight: 6 },
     mailDate: { fontSize: 11 },
     mailSubject: { fontSize: 12 },
+    unreadDot: { width: 7, height: 7, borderRadius: 3.5, marginLeft: 6 },
 
     // Calendar
     calRowProminent: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 12, gap: 10 },

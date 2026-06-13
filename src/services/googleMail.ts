@@ -18,6 +18,8 @@ export interface MailMessage {
   subject: string;
   date: string;
   snippet: string;
+  /** TE-41: true, solange die Mail das Gmail-Label UNREAD trägt. */
+  unread: boolean;
 }
 
 async function gmailFetch(path: string, accessToken: string): Promise<Response> {
@@ -69,6 +71,7 @@ export async function fetchRecentMails(
         subject: extractHeader(headers, 'Subject'),
         date: extractHeader(headers, 'Date'),
         snippet: data.snippet ?? '',
+        unread: Array.isArray(data.labelIds) && data.labelIds.includes('UNREAD'),
       } satisfies MailMessage;
     })
   );
@@ -106,6 +109,7 @@ export async function fetchMailsByIds(
         subject: extractHeader(headers, 'Subject'),
         date: extractHeader(headers, 'Date'),
         snippet: data.snippet ?? '',
+        unread: Array.isArray(data.labelIds) && data.labelIds.includes('UNREAD'),
       } satisfies MailMessage;
     })
   );
