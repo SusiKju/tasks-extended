@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { AppState, AppStateStatus, Platform, View, ActivityIndicator } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import Head from 'expo-router/head';
@@ -105,33 +105,48 @@ export default function RootLayout() {
     }
   }, [user]);
 
+  // Kinder-Modus-Flag (TE-74): Gerät als Kinder-Gerät eingerichtet (kinder_child_id
+  // gesetzt)? Wird bei jeder Navigation neu gelesen – deckt Einrichten (Schlüssel
+  // gesetzt → '/') und PIN-Ausstieg (Schlüssel entfernt → Eltern-Modus) ab.
+  // null = noch nicht geladen.
+  const [isChildMode, setIsChildMode] = useState<boolean | null>(null);
+  useEffect(() => {
+    AsyncStorage.getItem('kinder_child_id').then((id) => setIsChildMode(!!id));
+  }, [segments]);
+
   // Auth-Guard: Weiterleitung per useEffect statt <Redirect> (vermeidet Endlosschleife)
   useEffect(() => {
-    if (authLoading || familyLoading) return;
+    if (authLoading || familyLoading || isChildMode === null) return;
     const inAuth = segments[0] === 'login' || segments[0] === 'family-setup';
     if (!user) {
+      // Auch im Kinder-Modus: ohne Session muss sich ein Elternteil anmelden.
+      // Nach dem Login greift der Mitglied-Zweig unten und führt zurück nach '/'.
       if (!inAuth) router.replace('/login');
     } else if (!familyId) {
-      if (segments[0] !== 'family-setup') router.replace('/family-setup');
+      // Eingeloggt, aber (noch) kein Familienmitglied. Kinder-Gerät bleibt im
+      // Kinder-Modus statt im Eltern-Family-Setup zu landen (TE-74).
+      if (isChildMode) {
+        if (segments[0]) router.replace('/');
+      } else if (segments[0] !== 'family-setup') {
+        router.replace('/family-setup');
+      }
     } else {
-      if (inAuth) router.replace('/(tabs)/dashboard');
+      // Eingeloggtes Familienmitglied. Kinder-Gerät bleibt im Kinder-Modus ('/'),
+      // Eltern-Gerät geht aufs Dashboard. TE-74: vorher landete auch das
+      // Kinder-Gerät nach dem Login kurz auf dem Dashboard und musste über einen
+      // separaten, fragilen Guard zurückgebounced werden – Ursache der „leeren
+      // Seite ohne Aufgaben". Jetzt routet der Guard direkt richtig.
+      if (isChildMode) {
+        if (segments[0]) router.replace('/');
+      } else if (inAuth) {
+        router.replace('/(tabs)/dashboard');
+      }
     }
-  }, [user, familyId, authLoading, familyLoading]);
+  }, [user, familyId, authLoading, familyLoading, isChildMode, segments]);
 
-  // Kinder-Geräte-Guard (TE-64): Ist dieses Gerät als Kinder-Gerät eingerichtet
-  // (kinder_child_id gesetzt), landet ein Web-Reload aber auf einer Eltern-Route
-  // (z.B. /(tabs)/kids), sofort zurück auf '/' leiten – dort rendert
-  // app/index.tsx den Kinder-Modus. Ohne diesen Guard bliebe das Gerät nach
-  // einem Reload im Eltern-Modus, weil der Kinder-Check nur in index.tsx läuft.
-  useEffect(() => {
-    if (Platform.OS !== 'web') return;
-    if (authLoading || familyLoading) return;
-    const seg = segments[0];
-    if (!seg || seg === 'login' || seg === 'family-setup') return; // '/' oder Auth-Routen
-    AsyncStorage.getItem('kinder_child_id').then((id) => {
-      if (id) router.replace('/');
-    });
-  }, [segments, authLoading, familyLoading]);
+  // Kinder-Geräte-Guard (TE-64) ist seit TE-74 in den Auth-Guard oben gefaltet:
+  // dort führt der Mitglied-Zweig im Kinder-Modus direkt nach '/', sodass kein
+  // separater, nur-Web Async-Bounce über AsyncStorage mehr nötig (und fehleranfällig) ist.
 
   // Scheduled Push im Eltern-Modus starten sobald familyId + Kinder bekannt sind
   useEffect(() => {
@@ -142,8 +157,8 @@ export default function RootLayout() {
     return () => stopScheduledPush();
   }, [familyId, familyChildren]);
 
-  // Während Auth/Family noch laden: Spinner zeigen
-  if (authLoading || familyLoading) {
+  // Während Auth/Family/Kinder-Modus noch laden: Spinner zeigen
+  if (authLoading || familyLoading || isChildMode === null) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F0F0F5' }}>
         <ActivityIndicator size="large" color="#4F7EF5" />
