@@ -88,6 +88,16 @@ service cloud.firestore {
         allow read, write: if isFamilyMember(familyId) && request.auth.uid == uid;
       }
 
+      // App-Settings pro User (TE-49)
+      match /settingsByUser/{uid} {
+        allow read, write: if isFamilyMember(familyId) && request.auth.uid == uid;
+      }
+
+      // E-Mail-Pins pro User (TE-50)
+      match /mailPinsByUser/{uid} {
+        allow read, write: if isFamilyMember(familyId) && request.auth.uid == uid;
+      }
+
       // Persönliche Notizen pro User
       match /personalNotesByUser/{uid}/notes/{noteId} {
         allow read, write: if isFamilyMember(familyId) && request.auth.uid == uid;

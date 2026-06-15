@@ -58,6 +58,8 @@ interface TaskState {
   // Mail actions (TE-38)
   togglePinnedMail: (id: string) => void;
   unpinMail: (id: string) => void;
+  /** TE-50: ganze Pin-Liste setzen (Hydration aus Firestore). */
+  setPinnedMailIds: (ids: string[]) => void;
 }
 
 const DEFAULT_GROUPS: Group[] = [
@@ -250,6 +252,8 @@ export const useStore = create<TaskState>()(
         set((state) => ({
           pinnedMailIds: state.pinnedMailIds.filter((x) => x !== id),
         })),
+
+      setPinnedMailIds: (ids) => set({ pinnedMailIds: ids }),
     }),
     {
       name: 'tasks-extended-store',

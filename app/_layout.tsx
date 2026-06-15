@@ -12,6 +12,8 @@ import { scheduleCheckIfNeeded, stopScheduledPush } from '../src/services/schedu
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFirebaseAuth } from '../src/hooks/useFirebaseAuth';
 import { useFamily } from '../src/hooks/useFamily';
+import { useSettingsSync } from '../src/hooks/useSettingsSync';
+import { useMailPinsSync } from '../src/hooks/useMailPinsSync';
 import { handleRedirectResult } from '../src/services/firebaseAuth';
 import { AppContextProvider } from '../src/contexts/AppContext';
 
@@ -35,6 +37,11 @@ export default function RootLayout() {
   const segments = useSegments();
   const { user, loading: authLoading } = useFirebaseAuth();
   const { familyId, children: familyChildren, loading: familyLoading } = useFamily();
+
+  // TE-49: App-Settings geräteübergreifend mit Firestore synchronisieren.
+  useSettingsSync();
+  // TE-50: Angepinnte E-Mails geräteübergreifend mit Firestore synchronisieren.
+  useMailPinsSync();
   const syncTasksRef = useRef(syncTasks);
   syncTasksRef.current = syncTasks;
   const syncBirthdaysRef = useRef(syncBirthdays);
