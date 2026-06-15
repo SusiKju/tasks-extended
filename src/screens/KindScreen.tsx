@@ -14,9 +14,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../utils/theme';
 import { useStore } from '../store';
 import {
-  ChildTask, ChildReward, REWARD_TYPES,
+  ChildTask, REWARD_TYPES,
   subscribeToChildTasks, toggleTask, subscribeToPushTrigger,
-  subscribeToChildReward,
 } from '../services/kinderTasks';
 import { ChildConfig, subscribeToChildren } from '../services/family';
 import {
@@ -82,7 +81,6 @@ export default function KindScreen({ onExitChildMode }: Props) {
   const [familyId, setFamilyId] = useState<string | null>(null);
   const [familyChildren, setFamilyChildren] = useState<ChildConfig[]>([]);
   const [tasks, setTasks] = useState<ChildTask[]>([]);
-  const [reward, setReward] = useState<ChildReward | null>(null);
   const [allowanceMonths, setAllowanceMonths] = useState<Record<string, AllowanceMonth>>({});
   const [historyVisible, setHistoryVisible] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -134,9 +132,8 @@ export default function KindScreen({ onExitChildMode }: Props) {
       setToast(true);
       setTimeout(() => setToast(false), 5000);
     });
-    const unsubReward = subscribeToChildReward(familyId, childId, setReward);
     const unsubAllowance = subscribeToAllowanceMonths(familyId, childId, setAllowanceMonths);
-    return () => { unsubTasks(); unsubPush(); unsubReward(); unsubAllowance(); };
+    return () => { unsubTasks(); unsubPush(); unsubAllowance(); };
   }, [childId, familyId]);
 
   // Schatzkiste-Animation auslösen, sobald eine Aufgabe NEU abgehakt wurde (TE-100)
@@ -269,46 +266,21 @@ export default function KindScreen({ onExitChildMode }: Props) {
         </TouchableOpacity>
       </View>
 
-      {/* Schatzkiste-Belohnung (TE-100) – nur wenn KEINE eigene Belohnung definiert ist (TE-108) */}
-      {!reward && (
-        <View style={[s.reward, chestStage.full && s.rewardFull]}>
-          <Animated.Text style={[s.chest, { transform: [{ scale: chestScale }] }]}>
-            {chestStage.emoji}
-          </Animated.Text>
-          <View style={s.rewardBody}>
-            <Text style={s.coins}>
-              🪙 <Animated.Text style={[s.coinNum, { transform: [{ scale: coinScale }] }]}>{done}</Animated.Text>
-            </Text>
-            <Text style={s.rewardMsg}>{chestStage.msg}</Text>
-            <View style={s.rewardBarTrack}>
-              <View style={[s.rewardBarFill, { width: `${Math.round(progress * 100)}%` }]} />
-            </View>
+      {/* Schatzkiste-Belohnung (TE-100) – generischer Tagesfortschritt */}
+      <View style={[s.reward, chestStage.full && s.rewardFull]}>
+        <Animated.Text style={[s.chest, { transform: [{ scale: chestScale }] }]}>
+          {chestStage.emoji}
+        </Animated.Text>
+        <View style={s.rewardBody}>
+          <Text style={s.coins}>
+            🪙 <Animated.Text style={[s.coinNum, { transform: [{ scale: coinScale }] }]}>{done}</Animated.Text>
+          </Text>
+          <Text style={s.rewardMsg}>{chestStage.msg}</Text>
+          <View style={s.rewardBarTrack}>
+            <View style={[s.rewardBarFill, { width: `${Math.round(progress * 100)}%` }]} />
           </View>
         </View>
-      )}
-
-      {/* Freigeschaltete Belohnung (TE-101/TE-106) – Typ groß, lesefreundlich */}
-      {reward && allDone && (
-        <View style={s.rewardUnlock}>
-          <Text style={s.rewardUnlockEmoji}>{REWARD_TYPES[reward.type].emoji}</Text>
-          <View style={{ flex: 1 }}>
-            <Text style={s.rewardUnlockLabel}>🎉 Du hast gewonnen:</Text>
-            <Text style={s.rewardUnlockTitle}>{REWARD_TYPES[reward.type].label}</Text>
-            {!!reward.title && <Text style={s.rewardUnlockDetail}>{reward.title}</Text>}
-          </View>
-        </View>
-      )}
-      {/* Belohnung in Aussicht, solange noch offen (TE-101/TE-106) */}
-      {reward && !allDone && total > 0 && (
-        <View style={s.rewardTeaser}>
-          <Text style={s.rewardTeaserEmoji}>{REWARD_TYPES[reward.type].emoji}</Text>
-          <View style={{ flex: 1 }}>
-            <Text style={s.rewardTeaserText}>Schaff alles und du bekommst:</Text>
-            <Text style={s.rewardTeaserStrong}>{REWARD_TYPES[reward.type].label}</Text>
-            {!!reward.title && <Text style={s.rewardTeaserDetail}>{reward.title}</Text>}
-          </View>
-        </View>
-      )}
+      </View>
 
       {/* Taschengeld-Karte (TE-53) – nur wenn ein Betrag konfiguriert ist */}
       {allowance > 0 && (
@@ -401,6 +373,24 @@ export default function KindScreen({ onExitChildMode }: Props) {
               })()}
               {task.rejected && (
                 <Text style={s.rejectedHint}>❌ Nicht akzeptiert – bitte nochmal machen</Text>
+              )}
+              {/* Belohnung der Aufgabe (TE-61) */}
+              {task.reward && (
+                task.rewardReleased ? (
+                  <Text style={s.taskRewardWon}>
+                    🎉 Freigeschaltet: {REWARD_TYPES[task.reward.type].emoji} {REWARD_TYPES[task.reward.type].label}
+                    {task.reward.title ? ` · ${task.reward.title}` : ''}
+                  </Text>
+                ) : task.done ? (
+                  <Text style={s.taskRewardWait}>
+                    {REWARD_TYPES[task.reward.type].emoji} {REWARD_TYPES[task.reward.type].label} – warten auf Freigabe ⏳
+                  </Text>
+                ) : (
+                  <Text style={s.taskRewardTeaser}>
+                    🎁 Belohnung: {REWARD_TYPES[task.reward.type].emoji} {REWARD_TYPES[task.reward.type].label}
+                    {task.reward.title ? ` · ${task.reward.title}` : ''}
+                  </Text>
+                )
               )}
             </View>
           </TouchableOpacity>
@@ -506,26 +496,10 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
     },
     rewardBarFill: { height: '100%', borderRadius: 99, backgroundColor: '#D4A017' },
     // Freigeschaltete / angekündigte Belohnung (TE-101)
-    rewardUnlock: {
-      flexDirection: 'row', alignItems: 'center', gap: 14,
-      marginHorizontal: 16, marginTop: -4, marginBottom: 4, padding: 16,
-      backgroundColor: '#E8FBEF', borderRadius: 20,
-      borderWidth: 2, borderColor: colors.success,
-    },
-    rewardUnlockEmoji: { fontSize: 56 },
-    rewardUnlockLabel: { fontSize: 15, fontWeight: '700', color: '#1E8E45' },
-    rewardUnlockTitle: { fontSize: 26, fontWeight: '900', color: '#14532D', marginTop: 2 },
-    rewardUnlockDetail: { fontSize: 15, fontWeight: '600', color: '#1E8E45', marginTop: 2 },
-    rewardTeaser: {
-      flexDirection: 'row', alignItems: 'center', gap: 14,
-      marginHorizontal: 16, marginTop: -4, marginBottom: 4, padding: 14,
-      backgroundColor: colors.surface, borderRadius: 16,
-      borderWidth: 1, borderColor: colors.border,
-    },
-    rewardTeaserEmoji: { fontSize: 40 },
-    rewardTeaserText: { fontSize: 14, color: colors.textSecondary },
-    rewardTeaserStrong: { fontSize: 20, fontWeight: '900', color: colors.text, marginTop: 1 },
-    rewardTeaserDetail: { fontSize: 13, color: colors.textSecondary, marginTop: 1 },
+    // Belohnung pro Aufgabe (TE-61) – auf der Aufgabenkarte
+    taskRewardTeaser: { fontSize: 13, fontWeight: '700', color: colors.accentNeon, marginTop: 4 },
+    taskRewardWait: { fontSize: 13, fontWeight: '700', color: colors.textSecondary, marginTop: 4 },
+    taskRewardWon: { fontSize: 14, fontWeight: '800', color: '#1E8E45', marginTop: 4 },
     // Taschengeld-Karte (TE-53/TE-54)
     allowanceCard: {
       flexDirection: 'row', alignItems: 'center', gap: 14,

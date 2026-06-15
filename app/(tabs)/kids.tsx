@@ -32,7 +32,7 @@ import {
   ActivityEntry, ActivityAction,
   ChildReward, RewardType, REWARD_TYPES,
   subscribeToChildTasks, addTask, updateTask, deleteTask, deleteCompletedTasks, rejectTask,
-  subscribeToChildReward, setChildReward,
+  releaseTaskReward,
   getReminderTimes, setReminderTimes, getActivityLog,
 } from '../../src/services/kinderTasks';
 import { useFamily } from '../../src/hooks/useFamily';
@@ -91,10 +91,9 @@ export default function KinderScreen() {
   const [historyChild, setHistoryChild] = useState<string | null>(null);
   const [history, setHistory] = useState<ActivityEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
-  // Belohnungen (TE-101)
-  const [rewardsByChild, setRewardsByChild] = useState<Record<string, ChildReward | null>>({});
-  const [rewardModalVisible, setRewardModalVisible] = useState(false);
-  const [draftRewardType, setDraftRewardType] = useState<RewardType>('tv_series');
+  // Belohnung pro Aufgabe (TE-61): Entwurf für die nächste neue Aufgabe.
+  // Default immer "keine" (null) — wird nach jedem Anlegen wieder zurückgesetzt.
+  const [draftReward, setDraftReward] = useState<ChildReward | null>(null);
   const [draftRewardTitle, setDraftRewardTitle] = useState('');
 
   // Erstes Kind als Standard auswählen sobald Kinder geladen sind
@@ -115,17 +114,6 @@ export default function KinderScreen() {
     return () => unsubs.forEach((u) => u());
   }, [fid, familyChildren]);
 
-  // Belohnungs-Listener für alle Kinder (TE-101)
-  useEffect(() => {
-    if (!fid || familyChildren.length === 0) return;
-    const unsubs = familyChildren.map((child) =>
-      subscribeToChildReward(fid, child.id, (reward) => {
-        setRewardsByChild((prev) => ({ ...prev, [child.id]: reward }));
-      })
-    );
-    return () => unsubs.forEach((u) => u());
-  }, [fid, familyChildren]);
-
   useEffect(() => {
     if (!fid) return;
     getReminderTimes(fid).then((times) => {
@@ -134,17 +122,33 @@ export default function KinderScreen() {
     });
   }, [fid]);
 
+  // Aus dem Reward-Entwurf eine speicherbare Belohnung bauen (Detail optional).
+  // null = keine Belohnung. Kein undefined-Feld (TE-40: Firebase 11 hängt sonst).
+  const buildDraftReward = useCallback((): ChildReward | null => {
+    if (!draftReward) return null;
+    const title = draftRewardTitle.trim();
+    return title ? { type: draftReward.type, title } : { type: draftReward.type };
+  }, [draftReward, draftRewardTitle]);
+
+  const resetDraftReward = useCallback(() => {
+    setDraftReward(null);
+    setDraftRewardTitle('');
+  }, []);
+
   const handleAddTask = useCallback(async () => {
     if (!newTaskTitle.trim() || !fid || !selectedChild) return;
     const title = newTaskTitle.trim();
+    const reward = buildDraftReward();
     await addTask(fid, selectedChild, {
       title,
       done: false,
       date: TODAY,
       createdAt: new Date().toISOString(),
+      ...(reward ? { reward } : {}),
     });
     setNewTaskTitle('');
-  }, [fid, selectedChild, newTaskTitle]);
+    resetDraftReward();
+  }, [fid, selectedChild, newTaskTitle, buildDraftReward, resetDraftReward]);
 
   const toggleGroupChild = useCallback((childId: string) => {
     setGroupSelection((prev) => ({ ...prev, [childId]: !prev[childId] }));
@@ -161,6 +165,7 @@ export default function KinderScreen() {
       return;
     }
     const groupId = uuid.v4() as string;
+    const reward = buildDraftReward();
     try {
       await Promise.all(
         targets.map((id) =>
@@ -171,14 +176,16 @@ export default function KinderScreen() {
             createdAt: new Date().toISOString(),
             groupId,
             groupChildren: targets,
+            ...(reward ? { reward } : {}),
           })
         )
       );
       setNewTaskTitle('');
+      resetDraftReward();
     } catch (e: any) {
       crossInfo('Fehler', e?.message ?? 'Gruppenaufgabe konnte nicht angelegt werden.');
     }
-  }, [fid, familyChildren, newTaskTitle, groupSelection]);
+  }, [fid, familyChildren, newTaskTitle, groupSelection, buildDraftReward, resetDraftReward]);
 
   // Baut die HTML-Mail + verschickt Push & E-Mail für genau ein Kind.
   // Wird sowohl vom Einzel-Button als auch vom "Push & Mail an alle"-Button genutzt (TE-118).
@@ -361,35 +368,14 @@ export default function KinderScreen() {
     setEditingTask(null);
   }, [fid, selectedChild, editingTask]);
 
-  const handleOpenRewardModal = useCallback(() => {
-    const current = rewardsByChild[selectedChild];
-    setDraftRewardType(current?.type ?? 'tv_series');
-    setDraftRewardTitle(current?.title ?? '');
-    setRewardModalVisible(true);
-  }, [rewardsByChild, selectedChild]);
-
-  const handleSaveReward = useCallback(async () => {
-    const title = draftRewardTitle.trim();
-    // Titel ist optional — der Belohnungstyp allein reicht (TE-106).
-    const reward = title
-      ? { type: draftRewardType, title }
-      : { type: draftRewardType };
+  // Belohnung einer abgehakten Aufgabe freigeben/zurückziehen (TE-61).
+  const handleToggleRewardRelease = useCallback(async (childId: string, task: ChildTask) => {
     try {
-      await setChildReward(fid, selectedChild, reward);
-      setRewardModalVisible(false);
+      await releaseTaskReward(fid, childId, task.id, !task.rewardReleased);
     } catch (e: any) {
-      crossInfo('Fehler', e?.message ?? 'Belohnung konnte nicht gespeichert werden.');
+      crossInfo('Fehler', e?.message ?? 'Belohnung konnte nicht freigegeben werden.');
     }
-  }, [fid, selectedChild, draftRewardType, draftRewardTitle]);
-
-  const handleClearReward = useCallback(async () => {
-    try {
-      await setChildReward(fid, selectedChild, null);
-      setRewardModalVisible(false);
-    } catch (e: any) {
-      crossInfo('Fehler', e?.message ?? 'Belohnung konnte nicht entfernt werden.');
-    }
-  }, [fid, selectedChild]);
+  }, [fid]);
 
   const handleOpenHistory = useCallback(async (childId: string) => {
     setHistoryChild(childId);
@@ -431,8 +417,6 @@ export default function KinderScreen() {
 
   const tasks = tasksByChild[selectedChild] ?? [];
   const done = tasks.filter((t) => t.done).length;
-  const currentReward = rewardsByChild[selectedChild] ?? null;
-  const rewardUnlocked = tasks.length > 0 && done === tasks.length;
 
   // Teilnehmer-Kürzel einer Gruppenaufgabe (TE-113/TE-114): bevorzugt die auf der
   // Aufgabe gespeicherte Teilnehmerliste; Fallback (Alt-Aufgaben ohne groupChildren)
@@ -459,13 +443,15 @@ export default function KinderScreen() {
     const map = new Map<string, {
       groupId: string;
       title: string;
-      members: { childId: string; taskId: string; done: boolean }[];
+      reward: ChildReward | null;
+      members: { childId: string; taskId: string; done: boolean; rewardReleased: boolean }[];
     }>();
     for (const child of familyChildren) {
       for (const t of tasksByChild[child.id] ?? []) {
         if (!t.groupId) continue;
-        const entry = map.get(t.groupId) ?? { groupId: t.groupId, title: t.title, members: [] };
-        entry.members.push({ childId: child.id, taskId: t.id, done: t.done });
+        const entry = map.get(t.groupId)
+          ?? { groupId: t.groupId, title: t.title, reward: t.reward ?? null, members: [] };
+        entry.members.push({ childId: child.id, taskId: t.id, done: t.done, rewardReleased: !!t.rewardReleased });
         map.set(t.groupId, entry);
       }
     }
@@ -581,6 +567,42 @@ export default function KinderScreen() {
             <Ionicons name="add" size={22} color={colors.accentFg} />
           </TouchableOpacity>
         </View>
+
+        {/* Belohnung für diese Aufgabe (TE-61) — Default "Keine", nach Anlegen zurückgesetzt. */}
+        <Text style={s.rewardPickerLabel}>Belohnung (optional)</Text>
+        <View style={s.rewardPickerRow}>
+          <TouchableOpacity
+            style={[s.rewardPickerChip, !draftReward && s.rewardPickerChipActive]}
+            onPress={() => setDraftReward(null)}
+          >
+            <Text style={[s.rewardPickerChipText, !draftReward && s.rewardPickerChipTextActive]}>Keine</Text>
+          </TouchableOpacity>
+          {(Object.keys(REWARD_TYPES) as RewardType[]).map((type) => {
+            const sel = draftReward?.type === type;
+            return (
+              <TouchableOpacity
+                key={type}
+                style={[s.rewardPickerChip, sel && s.rewardPickerChipActive]}
+                onPress={() => setDraftReward({ type })}
+              >
+                <Text style={s.rewardPickerEmoji}>{REWARD_TYPES[type].emoji}</Text>
+                <Text style={[s.rewardPickerChipText, sel && s.rewardPickerChipTextActive]}>
+                  {REWARD_TYPES[type].label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+        {draftReward && (
+          <TextInput
+            style={s.input}
+            value={draftRewardTitle}
+            onChangeText={setDraftRewardTitle}
+            placeholder="Detail (optional), z.B. 1 Folge Paw Patrol"
+            placeholderTextColor={colors.placeholder}
+            returnKeyType="done"
+          />
+        )}
       </View>
 
       {/* Inhalt: Gruppenaufgaben-Liste (Gruppe) oder Aufgaben + Belohnung (Einzelne) (TE-56) */}
@@ -603,19 +625,40 @@ export default function KinderScreen() {
                     <Ionicons name="trash-outline" size={18} color={colors.danger} />
                   </TouchableOpacity>
                 </View>
+                {g.reward && (
+                  <Text style={s.taskRewardBadge}>
+                    {REWARD_TYPES[g.reward.type].emoji} {REWARD_TYPES[g.reward.type].label}
+                    {g.reward.title ? ` · ${g.reward.title}` : ''}
+                  </Text>
+                )}
                 <View style={s.groupMemberRow}>
-                  {g.members.map((m) => (
-                    <View key={m.childId} style={s.groupMember}>
-                      <Ionicons
-                        name={m.done ? 'checkmark-circle' : 'ellipse-outline'}
-                        size={14}
-                        color={m.done ? colors.success : colors.textMuted}
-                      />
-                      <Text style={[s.groupMemberText, m.done && { color: colors.success }]}>
-                        {childName(m.childId)}
-                      </Text>
-                    </View>
-                  ))}
+                  {g.members.map((m) => {
+                    // Mit Belohnung: ein erledigtes Mitglied ist tippbar → Belohnung freigeben (TE-61).
+                    const releasable = !!g.reward && m.done;
+                    const Wrapper: any = releasable ? TouchableOpacity : View;
+                    return (
+                      <Wrapper
+                        key={m.childId}
+                        style={[s.groupMember, m.rewardReleased && s.groupMemberReleased]}
+                        {...(releasable
+                          ? { onPress: () => handleToggleRewardRelease(m.childId, { id: m.taskId, rewardReleased: m.rewardReleased } as ChildTask) }
+                          : {})}
+                      >
+                        <Ionicons
+                          name={m.rewardReleased ? 'gift' : m.done ? 'checkmark-circle' : 'ellipse-outline'}
+                          size={14}
+                          color={m.rewardReleased ? '#000' : m.done ? colors.success : colors.textMuted}
+                        />
+                        <Text style={[
+                          s.groupMemberText,
+                          m.done && { color: colors.success },
+                          m.rewardReleased && { color: '#000' },
+                        ]}>
+                          {childName(m.childId)}{releasable ? (m.rewardReleased ? ' ✓' : ' · freigeben') : ''}
+                        </Text>
+                      </Wrapper>
+                    );
+                  })}
                 </View>
                 <Text style={s.groupTaskMeta}>{doneCount}/{g.members.length} erledigt</Text>
               </View>
@@ -657,35 +700,63 @@ export default function KinderScreen() {
           <Text style={s.empty}>Aktuell keine offenen Aufgaben.</Text>
         )}
         {tasks.map((task) => (
-          <View key={task.id} style={s.taskRow}>
-            {/* Abgehakte Aufgaben sind antippbar → ablehnen (zurücksetzen). (TE-103) */}
-            <TouchableOpacity
-              onPress={() => task.done && handleRejectTask(task.id, task.title)}
-              disabled={!task.done}
-            >
-              <Ionicons
-                name={task.done ? 'checkmark-circle' : task.rejected ? 'close-circle' : 'ellipse-outline'}
-                size={22}
-                color={task.done ? colors.success : task.rejected ? colors.danger : colors.textMuted}
-              />
-            </TouchableOpacity>
-            <Text style={[s.taskTitle, task.done && s.taskDone, task.rejected && s.taskRejected]}>
-              {task.title}
-            </Text>
-            {task.groupId && (
-              <View style={s.groupTag}>
-                <Ionicons name="people" size={11} color={colors.accentNeon} />
-                <Text style={s.groupTagText}>{groupShorts(task).join('·')}</Text>
+          <View key={task.id} style={s.taskItem}>
+            <View style={s.taskRow}>
+              {/* Abgehakte Aufgaben sind antippbar → ablehnen (zurücksetzen). (TE-103) */}
+              <TouchableOpacity
+                onPress={() => task.done && handleRejectTask(task.id, task.title)}
+                disabled={!task.done}
+              >
+                <Ionicons
+                  name={task.done ? 'checkmark-circle' : task.rejected ? 'close-circle' : 'ellipse-outline'}
+                  size={22}
+                  color={task.done ? colors.success : task.rejected ? colors.danger : colors.textMuted}
+                />
+              </TouchableOpacity>
+              <Text style={[s.taskTitle, task.done && s.taskDone, task.rejected && s.taskRejected]}>
+                {task.title}
+              </Text>
+              {task.groupId && (
+                <View style={s.groupTag}>
+                  <Ionicons name="people" size={11} color={colors.accentNeon} />
+                  <Text style={s.groupTagText}>{groupShorts(task).join('·')}</Text>
+                </View>
+              )}
+              {task.rejected && <Text style={s.rejectedTag}>abgelehnt</Text>}
+              {dueLabel(task) && <Text style={s.overdueTag}>{dueLabel(task)}</Text>}
+              <TouchableOpacity onPress={() => setEditingTask({ id: task.id, title: task.title })}>
+                <Ionicons name="pencil-outline" size={18} color={colors.accentNeon} />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => handleDeleteTask(task.id, task.title)}>
+                <Ionicons name="trash-outline" size={18} color={colors.danger} />
+              </TouchableOpacity>
+            </View>
+            {/* Belohnung der Aufgabe + Eltern-Freigabe (TE-61) */}
+            {task.reward && (
+              <View style={s.taskRewardRow}>
+                <Text style={s.taskRewardBadge}>
+                  {REWARD_TYPES[task.reward.type].emoji} {REWARD_TYPES[task.reward.type].label}
+                  {task.reward.title ? ` · ${task.reward.title}` : ''}
+                </Text>
+                {task.done ? (
+                  <TouchableOpacity
+                    style={[s.releaseBtn, task.rewardReleased && s.releaseBtnDone]}
+                    onPress={() => handleToggleRewardRelease(selectedChild, task)}
+                  >
+                    <Ionicons
+                      name={task.rewardReleased ? 'checkmark-circle' : 'gift-outline'}
+                      size={13}
+                      color={task.rewardReleased ? '#000' : colors.accentNeon}
+                    />
+                    <Text style={[s.releaseBtnText, task.rewardReleased && s.releaseBtnTextDone]}>
+                      {task.rewardReleased ? 'freigegeben' : 'Freigeben'}
+                    </Text>
+                  </TouchableOpacity>
+                ) : (
+                  <Text style={s.taskRewardPending}>nach Erledigen</Text>
+                )}
               </View>
             )}
-            {task.rejected && <Text style={s.rejectedTag}>abgelehnt</Text>}
-            {dueLabel(task) && <Text style={s.overdueTag}>{dueLabel(task)}</Text>}
-            <TouchableOpacity onPress={() => setEditingTask({ id: task.id, title: task.title })}>
-              <Ionicons name="pencil-outline" size={18} color={colors.accentNeon} />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => handleDeleteTask(task.id, task.title)}>
-              <Ionicons name="trash-outline" size={18} color={colors.danger} />
-            </TouchableOpacity>
           </View>
         ))}
         {done > 0 && (
@@ -701,37 +772,6 @@ export default function KinderScreen() {
         )}
       </View>
 
-      {/* Belohnung (TE-101) */}
-      <View style={s.section}>
-        <View style={s.row}>
-          <Text style={s.sectionTitle}>Belohnung bei allen Aufgaben</Text>
-          <TouchableOpacity onPress={handleOpenRewardModal}>
-            <Ionicons name={currentReward ? 'pencil-outline' : 'add-circle-outline'} size={18} color={colors.accentNeon} />
-          </TouchableOpacity>
-        </View>
-        {currentReward ? (
-          <TouchableOpacity
-            style={[s.rewardCard, rewardUnlocked && s.rewardCardUnlocked]}
-            onPress={handleOpenRewardModal}
-            activeOpacity={0.7}
-          >
-            <Text style={s.rewardEmoji}>{REWARD_TYPES[currentReward.type].emoji}</Text>
-            <View style={{ flex: 1 }}>
-              <Text style={s.rewardTitle}>{REWARD_TYPES[currentReward.type].label}</Text>
-              {!!currentReward.title && <Text style={s.rewardDetail}>{currentReward.title}</Text>}
-              <Text style={s.rewardMeta}>
-                {rewardUnlocked ? '🎉 freigeschaltet' : `noch ${tasks.length - done} offen`}
-              </Text>
-            </View>
-            <Ionicons name="pencil-outline" size={16} color={colors.textMuted} />
-          </TouchableOpacity>
-        ) : (
-          <Text style={s.hint}>
-            Noch keine Belohnung. Tippe auf ＋, um eine festzulegen — sie wird freigeschaltet,
-            wenn {childName(selectedChild)} alle Tagesaufgaben erledigt hat.
-          </Text>
-        )}
-      </View>
         </>
       )}
 
@@ -778,50 +818,6 @@ export default function KinderScreen() {
             <TouchableOpacity style={s.saveBtn} onPress={handleSaveEdit}>
               <Text style={s.saveBtnText}>Speichern</Text>
             </TouchableOpacity>
-          </Pressable>
-        </Pressable>
-      </Modal>
-
-      {/* Belohnungs-Modal (TE-101) */}
-      <Modal visible={rewardModalVisible} transparent animationType="fade">
-        <Pressable style={s.modalOverlay} onPress={() => setRewardModalVisible(false)}>
-          <Pressable style={s.modalBox} onPress={() => {}}>
-            <Text style={s.modalTitle}>Belohnung für {childName(selectedChild)}</Text>
-            <Text style={s.modalHint}>Wird freigeschaltet, wenn alle Tagesaufgaben erledigt sind.</Text>
-            <View style={s.rewardTypeGrid}>
-              {(Object.keys(REWARD_TYPES) as RewardType[]).map((type) => {
-                const isSel = type === draftRewardType;
-                return (
-                  <TouchableOpacity
-                    key={type}
-                    style={[s.rewardTypeChip, isSel && { borderColor: colors.accentNeon, backgroundColor: colors.accentNeon }]}
-                    onPress={() => setDraftRewardType(type)}
-                  >
-                    <Text style={s.rewardTypeEmoji}>{REWARD_TYPES[type].emoji}</Text>
-                    <Text style={[s.rewardTypeLabel, isSel && { color: '#000' }]}>{REWARD_TYPES[type].label}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-            <Text style={s.modalHint}>Details optional — Typ allein reicht.</Text>
-            <TextInput
-              style={s.input}
-              value={draftRewardTitle}
-              onChangeText={setDraftRewardTitle}
-              placeholder="Optional: z.B. 1 Folge Paw Patrol"
-              placeholderTextColor={colors.placeholder}
-              autoFocus
-              returnKeyType="done"
-              onSubmitEditing={handleSaveReward}
-            />
-            <TouchableOpacity style={s.saveBtn} onPress={handleSaveReward}>
-              <Text style={s.saveBtnText}>Speichern</Text>
-            </TouchableOpacity>
-            {currentReward && (
-              <TouchableOpacity onPress={handleClearReward}>
-                <Text style={s.rewardClearText}>Belohnung entfernen</Text>
-              </TouchableOpacity>
-            )}
           </Pressable>
         </Pressable>
       </Modal>
@@ -995,9 +991,40 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
       borderWidth: 1, borderColor: colors.border,
     },
     groupMemberRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-    groupMember: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+    groupMember: {
+      flexDirection: 'row', alignItems: 'center', gap: 4,
+      borderRadius: 8, paddingHorizontal: 6, paddingVertical: 3,
+    },
+    groupMemberReleased: { backgroundColor: colors.accentNeon },
     groupMemberText: { fontSize: 13, color: colors.text },
     groupTaskMeta: { fontSize: 12, color: colors.textMuted },
+    // Belohnung pro Aufgabe (TE-61)
+    rewardPickerLabel: { fontSize: 12, color: colors.textMuted, marginTop: 4 },
+    rewardPickerRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+    rewardPickerChip: {
+      flexDirection: 'row', alignItems: 'center', gap: 4,
+      borderWidth: 1, borderColor: colors.border, borderRadius: 8,
+      paddingHorizontal: 9, paddingVertical: 6, backgroundColor: colors.inputBackground,
+    },
+    rewardPickerChipActive: { borderColor: colors.accentNeon, backgroundColor: colors.accentNeon },
+    rewardPickerEmoji: { fontSize: 14 },
+    rewardPickerChipText: { fontSize: 12, fontWeight: '600', color: colors.text },
+    rewardPickerChipTextActive: { color: '#000' },
+    taskItem: { gap: 2, paddingVertical: 2 },
+    taskRewardRow: {
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+      gap: 8, paddingLeft: 32, paddingBottom: 4,
+    },
+    taskRewardBadge: { flex: 1, fontSize: 12, color: colors.accentNeon, fontWeight: '600' },
+    taskRewardPending: { fontSize: 11, color: colors.textMuted, fontStyle: 'italic' },
+    releaseBtn: {
+      flexDirection: 'row', alignItems: 'center', gap: 4,
+      borderWidth: 1, borderColor: colors.accentNeon, borderRadius: 8,
+      paddingHorizontal: 9, paddingVertical: 4,
+    },
+    releaseBtnDone: { backgroundColor: colors.accentNeon },
+    releaseBtnText: { fontSize: 12, fontWeight: '700', color: colors.accentNeon },
+    releaseBtnTextDone: { color: '#000' },
     input: {
       flex: 1, backgroundColor: colors.inputBackground, borderRadius: 10,
       paddingHorizontal: 12, paddingVertical: 10, color: colors.text,
@@ -1080,24 +1107,4 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
       paddingVertical: 14, alignItems: 'center', borderWidth: 1, borderColor: colors.border,
     },
     modalChildBtnText: { fontSize: 18, fontWeight: '700', color: colors.text },
-    // Belohnung (TE-101)
-    rewardCard: {
-      flexDirection: 'row', alignItems: 'center', gap: 12,
-      backgroundColor: colors.inputBackground, borderRadius: 12, padding: 12,
-      borderWidth: 1, borderColor: colors.border,
-    },
-    rewardCardUnlocked: { borderColor: colors.success, backgroundColor: 'rgba(48,185,85,0.10)' },
-    rewardEmoji: { fontSize: 30 },
-    rewardTitle: { fontSize: 16, fontWeight: '800', color: colors.text },
-    rewardDetail: { fontSize: 13, color: colors.textSecondary, marginTop: 1 },
-    rewardMeta: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
-    rewardTypeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginVertical: 4 },
-    rewardTypeChip: {
-      flexDirection: 'row', alignItems: 'center', gap: 6,
-      borderWidth: 1, borderColor: colors.border, borderRadius: 10,
-      paddingHorizontal: 10, paddingVertical: 8, backgroundColor: colors.inputBackground,
-    },
-    rewardTypeEmoji: { fontSize: 16 },
-    rewardTypeLabel: { fontSize: 13, fontWeight: '600', color: colors.text },
-    rewardClearText: { fontSize: 13, color: colors.danger, textAlign: 'center', marginTop: 4 },
   });

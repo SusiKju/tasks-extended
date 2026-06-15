@@ -82,11 +82,20 @@ export interface ChildTask {
    *  Auf jeder Kopie gespeichert, damit Eltern- UND Kinder-App die Teilnehmer ohne
    *  Cross-Collection-Zugriff anzeigen können. (TE-113/TE-114) */
   groupChildren?: ChildId[];
+  /** Optionale Belohnung für genau diese Aufgabe (TE-61). undefined/null = keine.
+   *  Default beim Anlegen ist immer "keine". Bei Gruppenaufgaben trägt jede Kopie
+   *  dieselbe Belohnung, wird aber pro Kind eigenständig freigegeben. */
+  reward?: ChildReward | null;
+  /** true = Eltern haben die Belohnung dieser Aufgabe freigegeben. Eine Belohnung
+   *  gilt erst als verdient, wenn das Kind die Aufgabe abgehakt hat UND die Eltern
+   *  sie anschließend freigeben (TE-61). */
+  rewardReleased?: boolean;
 }
 
-// ─── Belohnungspakete (TE-101) ────────────────────────────────────────────────
-// Belohnung wird freigeschaltet, sobald das Kind an einem Tag ALLE Aufgaben
-// erledigt hat ("Alle Tagesaufgaben"-Logik). Pro Kind eine stehende Belohnung.
+// ─── Belohnungspakete (TE-101 → TE-61) ───────────────────────────────────────
+// Belohnung hängt seit TE-61 pro Aufgabe (ChildTask.reward), nicht mehr pro Kind.
+// Sie wird verdient, sobald das Kind die Aufgabe abhakt und die Eltern sie über
+// rewardReleased freigeben.
 
 export type RewardType = 'tv_series' | 'tv_movie' | 'screen_time' | 'sweet' | 'other';
 
@@ -313,25 +322,17 @@ export async function getPushTokens(familyId: string, childIds: string[]): Promi
   return result;
 }
 
-// ─── Belohnung lesen/schreiben (TE-101) ──────────────────────────────────────
+// ─── Task-Belohnung freigeben (TE-61) ────────────────────────────────────────
 
-export async function setChildReward(familyId: string, childId: string, reward: ChildReward | null): Promise<void> {
-  await setDoc(childDoc(familyId, childId), { reward }, { merge: true });
-}
-
-export async function getChildReward(familyId: string, childId: string): Promise<ChildReward | null> {
-  const snap = await getDoc(childDoc(familyId, childId));
-  return snap.exists() ? ((snap.data()?.reward as ChildReward | undefined) ?? null) : null;
-}
-
-export function subscribeToChildReward(
+/** Eltern geben die Belohnung einer abgehakten Aufgabe frei (oder ziehen die
+ *  Freigabe zurück). Setzt nur das rewardReleased-Flag auf der jeweiligen Kopie. */
+export async function releaseTaskReward(
   familyId: string,
   childId: string,
-  onChange: (reward: ChildReward | null) => void
-): Unsubscribe {
-  return onSnapshot(childDoc(familyId, childId), (snap) => {
-    onChange(snap.exists() ? ((snap.data()?.reward as ChildReward | undefined) ?? null) : null);
-  });
+  taskId: string,
+  released: boolean
+): Promise<void> {
+  await updateDoc(taskDoc(familyId, childId, taskId), { rewardReleased: released });
 }
 
 // ─── Web-Push-Trigger ────────────────────────────────────────────────────────
