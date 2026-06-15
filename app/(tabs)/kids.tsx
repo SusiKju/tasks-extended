@@ -37,6 +37,10 @@ import {
   getReminderTimes, setReminderTimes, getActivityLog,
 } from '../../src/services/kinderTasks';
 import { useFamily } from '../../src/hooks/useFamily';
+import {
+  AllowanceMonth, subscribeToAllowanceMonths, monthKey,
+  formatEuro, formatMonthLabel, nextAllowanceMonth,
+} from '../../src/services/allowance';
 import { sendHtmlMail } from '../../src/services/googleMail';
 import { sendReminderToAllChildren, sendReminderToChild } from '../../src/services/pushNotifications';
 import { writePushTrigger, writePushTriggerAll } from '../../src/services/kinderTasks';
@@ -77,6 +81,8 @@ export default function KinderScreen() {
   const { settings } = useStore();
   const [selectedChild, setSelectedChild] = useState<string>('');
   const [tasksByChild, setTasksByChild] = useState<Record<string, ChildTask[]>>({});
+  // Taschengeld-Verlauf pro Kind, echtzeit-synchron mit der Kinder-App (TE-72).
+  const [allowanceByChild, setAllowanceByChild] = useState<Record<string, Record<string, AllowanceMonth>>>({});
   const [newTaskTitle, setNewTaskTitle] = useState('');
   // Gruppenaufgabe (TE-111): dieselbe Aufgabe an mehrere ausgewählte Kinder.
   const [groupMode, setGroupMode] = useState(false);
@@ -119,6 +125,19 @@ export default function KinderScreen() {
     const unsubs = familyChildren.map((child) =>
       subscribeToChildTasks(fid, child.id, TODAY, (tasks) => {
         setTasksByChild((prev) => ({ ...prev, [child.id]: tasks }));
+      })
+    );
+    return () => unsubs.forEach((u) => u());
+  }, [fid, familyChildren]);
+
+  // Taschengeld-Verlauf jedes Kindes live mitlesen (TE-72). Gleiche onSnapshot-
+  // Quelle wie die Kinder-App, daher kein veralteter Cache: hakt das Kind ab,
+  // ist der Bestätigungs-Timestamp hier sofort sichtbar.
+  useEffect(() => {
+    if (!fid || familyChildren.length === 0) return;
+    const unsubs = familyChildren.map((child) =>
+      subscribeToAllowanceMonths(fid, child.id, (months) => {
+        setAllowanceByChild((prev) => ({ ...prev, [child.id]: months }));
       })
     );
     return () => unsubs.forEach((u) => u());
@@ -463,6 +482,18 @@ export default function KinderScreen() {
 
   const tasks = tasksByChild[selectedChild] ?? [];
   const done = tasks.filter((t) => t.done).length;
+
+  // Taschengeld des ausgewählten Kindes (TE-72): konfigurierter Betrag, Verlauf
+  // absteigend (neuster Monat zuerst) und der nächste fällige Monat.
+  const selectedChildConfig = familyChildren.find((c) => c.id === selectedChild);
+  const allowanceAmount = selectedChildConfig?.allowance ?? 0;
+  const allowanceMonths = allowanceByChild[selectedChild] ?? {};
+  const allowanceHistory = Object.entries(allowanceMonths)
+    .sort(([a], [b]) => b.localeCompare(a));
+  const allowanceTotal = allowanceHistory.reduce(
+    (sum, [, m]) => sum + (m.received ? m.amount : 0), 0);
+  const nextAllowance = nextAllowanceMonth(allowanceMonths);
+  const nextAllowanceReceived = allowanceMonths[nextAllowance]?.received ?? false;
 
   // Teilnehmer-Kürzel einer Gruppenaufgabe (TE-113/TE-114): bevorzugt die auf der
   // Aufgabe gespeicherte Teilnehmerliste; Fallback (Alt-Aufgaben ohne groupChildren)
@@ -835,6 +866,54 @@ export default function KinderScreen() {
         )}
       </View>
 
+      {/* Taschengeld-Verlauf (TE-72) — echtzeit-synchron mit der Kinder-App */}
+      <View style={s.section}>
+        <View style={s.row}>
+          <Text style={s.sectionTitle}>💶 Taschengeld — {childName(selectedChild)}</Text>
+          {allowanceTotal > 0 && (
+            <Text style={s.allowanceTotal}>{formatEuro(allowanceTotal)} erhalten</Text>
+          )}
+        </View>
+
+        {allowanceAmount > 0 ? (
+          <Text style={s.allowanceNext}>
+            {nextAllowanceReceived
+              ? `${formatMonthLabel(nextAllowance)} steht aus · ${formatEuro(allowanceAmount)}`
+              : `Nächstes Taschengeld: ${formatMonthLabel(nextAllowance)} · ${formatEuro(allowanceAmount)}`}
+          </Text>
+        ) : (
+          <Text style={s.hint}>Kein Taschengeld konfiguriert. In den Einstellungen pro Kind festlegen.</Text>
+        )}
+
+        {allowanceHistory.length === 0 ? (
+          <Text style={s.empty}>Noch keine Taschengeld-Einträge.</Text>
+        ) : (
+          allowanceHistory.map(([key, m]) => (
+            <View key={key} style={s.allowanceRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={s.allowanceMonth}>{formatMonthLabel(key)}</Text>
+                {m.received && m.confirmedAt && (
+                  <Text style={s.allowanceConfirmed}>
+                    Abgehakt am {format(new Date(m.confirmedAt), 'dd.MM.yyyy, HH:mm')}
+                  </Text>
+                )}
+              </View>
+              <Text style={s.allowanceAmount}>{formatEuro(m.amount)}</Text>
+              {m.received ? (
+                <View style={[s.allowanceStatus, s.allowanceStatusOk]}>
+                  <Ionicons name="checkmark-circle" size={13} color={colors.success} />
+                  <Text style={[s.allowanceStatusText, { color: colors.success }]}>erhalten</Text>
+                </View>
+              ) : (
+                <View style={s.allowanceStatus}>
+                  <Text style={[s.allowanceStatusText, { color: colors.textMuted }]}>ausstehend</Text>
+                </View>
+              )}
+            </View>
+          ))
+        )}
+      </View>
+
         </>
       )}
 
@@ -1158,6 +1237,22 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
       textTransform: 'uppercase', letterSpacing: 0.3, overflow: 'hidden',
     },
     empty: { fontSize: 13, color: colors.textMuted, fontStyle: 'italic' },
+    // Taschengeld-Verlauf (TE-72)
+    allowanceTotal: { fontSize: 12, fontWeight: '700', color: colors.success },
+    allowanceNext: { fontSize: 13, color: colors.accentNeon, fontWeight: '600' },
+    allowanceRow: {
+      flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8,
+      borderTopWidth: 1, borderColor: colors.border,
+    },
+    allowanceMonth: { fontSize: 14, fontWeight: '600', color: colors.text },
+    allowanceConfirmed: { fontSize: 11, color: colors.textMuted, marginTop: 1 },
+    allowanceAmount: { fontSize: 14, fontWeight: '700', color: colors.text },
+    allowanceStatus: {
+      flexDirection: 'row', alignItems: 'center', gap: 3,
+      minWidth: 78, justifyContent: 'flex-end',
+    },
+    allowanceStatusOk: {},
+    allowanceStatusText: { fontSize: 12, fontWeight: '700' },
     row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     hint: { fontSize: 12, color: colors.textMuted },
     timesText: { fontSize: 16, color: colors.accentNeon, fontWeight: '600' },

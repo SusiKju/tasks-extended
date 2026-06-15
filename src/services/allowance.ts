@@ -43,6 +43,39 @@ export function monthKey(d: Date = new Date()): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
+/** Betrag als "12 €" bzw. "12,50 €". */
+export function formatEuro(n: number): string {
+  const fixed = Number.isInteger(n) ? String(n) : n.toFixed(2).replace('.', ',');
+  return `${fixed} €`;
+}
+
+const MONTH_NAMES_DE = [
+  'Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
+  'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember',
+];
+
+/** "YYYY-MM" → "Juni 2026". */
+export function formatMonthLabel(key: string): string {
+  const [y, m] = key.split('-');
+  const idx = parseInt(m, 10) - 1;
+  return `${MONTH_NAMES_DE[idx] ?? m} ${y}`;
+}
+
+/**
+ * Monats-Key des nächsten fälligen Taschengelds: der aktuelle Monat, solange er
+ * noch nicht bestätigt wurde, sonst der Folgemonat. Taschengeld läuft monatlich
+ * (allowanceMonths ist nach "YYYY-MM" gekeyt), einen tagesgenauen Termin gibt es
+ * im Modell nicht.
+ */
+export function nextAllowanceMonth(
+  months: Record<string, AllowanceMonth>,
+  today: Date = new Date(),
+): string {
+  const current = monthKey(today);
+  if (!months[current]?.received) return current;
+  return monthKey(new Date(today.getFullYear(), today.getMonth() + 1, 1));
+}
+
 /** Setzt den konfigurierten Monatsbetrag (Eltern, Settings). null = nicht gesetzt. */
 export async function setChildAllowance(
   familyId: string,

@@ -20,26 +20,10 @@ import {
 import { ChildConfig, subscribeToChildren } from '../services/family';
 import {
   AllowanceMonth, subscribeToAllowanceMonths, setAllowanceReceived, monthKey,
+  formatEuro, formatMonthLabel,
 } from '../services/allowance';
 import { registerPushToken } from '../services/pushNotifications';
 import KidThemeCard from '../components/KidThemeCard';
-
-/** Betrag deutsch formatieren: 5 → "5 €", 5.5 → "5,50 €". */
-function formatEuro(n: number): string {
-  const fixed = Number.isInteger(n) ? String(n) : n.toFixed(2).replace('.', ',');
-  return `${fixed} €`;
-}
-
-/** "YYYY-MM" → "Juni 2026". */
-const MONTH_NAMES_DE = [
-  'Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
-  'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember',
-];
-function formatMonthLabel(key: string): string {
-  const [y, m] = key.split('-');
-  const idx = parseInt(m, 10) - 1;
-  return `${MONTH_NAMES_DE[idx] ?? m} ${y}`;
-}
 
 const FAMILY_ID_KEY = 'kinder_family_id';
 import { Platform } from 'react-native';
