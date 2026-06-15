@@ -278,7 +278,7 @@ function NoteCard({ note, onPress, onDelete, onToggleItem, groupName, groupColor
     >
       {/* Löschen-Button */}
       <Pressable
-        onPress={onDelete}
+        onPress={(e) => { e.stopPropagation?.(); onDelete(); }}
         hitSlop={6}
         style={styles.deleteBtn}
       >
