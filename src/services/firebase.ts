@@ -1,5 +1,5 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore } from 'firebase/firestore';
+import { initializeFirestore, getFirestore, memoryLocalCache } from 'firebase/firestore';
 import { Platform } from 'react-native';
 
 const firebaseConfig = {
@@ -12,7 +12,21 @@ const firebaseConfig = {
 };
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-export const db = getFirestore(app);
+
+// Web: memoryLocalCache vermeidet IndexedDB-Multi-Client-Problem bei HMR.
+// Native: Standard-Verhalten (kein expliziter Cache nötig).
+let _db: ReturnType<typeof getFirestore>;
+if (Platform.OS === 'web') {
+  try {
+    _db = initializeFirestore(app, { localCache: memoryLocalCache() });
+  } catch {
+    // Firestore bereits initialisiert (HMR-Reload) – bestehende Instanz verwenden.
+    _db = getFirestore(app);
+  }
+} else {
+  _db = getFirestore(app);
+}
+export const db = _db;
 
 // Firebase Auth – plattformspezifische Initialisierung.
 // Native braucht AsyncStorage-Persistenz, Web den Standard-Browser-Persistenz.

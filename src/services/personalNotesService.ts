@@ -43,8 +43,12 @@ export async function addPersonalNote(
   uid: string,
   note: Omit<Note, 'id'>,
 ): Promise<string> {
+  // Firebase 11 hangs silently when undefined values are present in the document.
+  const clean = Object.fromEntries(
+    Object.entries(note).filter(([, v]) => v !== undefined)
+  ) as Omit<Note, 'id'>;
   const col = collection(db, 'families', familyId, 'personalNotesByUser', uid, 'notes');
-  const ref = await addDoc(col, note);
+  const ref = await addDoc(col, clean);
   return ref.id;
 }
 
