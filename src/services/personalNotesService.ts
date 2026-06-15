@@ -11,7 +11,7 @@ import { db } from './firebase';
 import {
   collection, doc,
   addDoc, setDoc, deleteDoc,
-  onSnapshot, query, orderBy,
+  onSnapshot,
 } from 'firebase/firestore';
 import { Note } from '../types';
 
@@ -22,11 +22,12 @@ export function subscribeToPersonalNotes(
   callback: (notes: Note[]) => void,
 ): () => void {
   const col = collection(db, 'families', familyId, 'personalNotesByUser', uid, 'notes');
-  const q = query(col, orderBy('createdAt', 'desc'));
   return onSnapshot(
-    q,
+    col,
     (snap) => {
-      const notes: Note[] = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Note));
+      const notes: Note[] = snap.docs
+        .map((d) => ({ id: d.id, ...d.data() } as Note))
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
       callback(notes);
     },
     (err) => {
