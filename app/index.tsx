@@ -4,8 +4,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { View, ActivityIndicator, Platform } from 'react-native';
 import KindScreen from '../src/screens/KindScreen';
 
-const VALID_CHILDREN = ['lenny', 'emil', 'hannes', 'liddy'];
-
 export default function Index() {
   const [loading, setLoading] = useState(true);
   const [isChildMode, setIsChildMode] = useState(false);
@@ -18,12 +16,21 @@ export default function Index() {
   }, []);
 
   useEffect(() => {
-    // Auf Web: ?child=X aus URL lesen und direkt in Kind-Modus wechseln
+    // Auf Web: ?child=X (&family=Y) aus URL lesen und direkt in Kind-Modus
+    // wechseln. Child-IDs sind seit der Multi-Tenant-Migration zufällige
+    // Firestore-Doc-IDs (family.ts → addChild ref.id), deshalb gibt es KEINE
+    // hartcodierte Whitelist mehr – jeder nicht-leere child-Param zählt.
+    // Der eigentliche Datenzugriff ist über die angemeldete Session und die
+    // Firestore-Rules abgesichert. Die optionale family-ID wird mitpersistiert,
+    // damit KindScreen die Familie kennt (sonst feuert der Task-Listener nicht).
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       const childParam = params.get('child');
-      if (childParam && VALID_CHILDREN.includes(childParam)) {
-        AsyncStorage.setItem('kinder_child_id', childParam).then(check);
+      const familyParam = params.get('family');
+      if (childParam) {
+        const writes = [AsyncStorage.setItem('kinder_child_id', childParam)];
+        if (familyParam) writes.push(AsyncStorage.setItem('kinder_family_id', familyParam));
+        Promise.all(writes).then(check);
         return;
       }
     }

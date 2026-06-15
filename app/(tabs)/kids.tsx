@@ -198,7 +198,9 @@ export default function KinderScreen() {
 
       const openTasks = (tasksByChild[childId] ?? []).filter((t) => !t.done);
       const doneTasks = (tasksByChild[childId] ?? []).filter((t) => t.done);
-      const appUrl = `https://susikju.github.io/tasks-extended/?child=${childId}`;
+      // family mitgeben, damit der Link self-contained ist: index.tsx persistiert
+      // child + family, KindScreen kann die Aufgaben sofort laden (TE-46).
+      const appUrl = `https://susikju.github.io/tasks-extended/?child=${childId}&family=${fid}`;
 
       const taskRows = (tasks: ChildTask[], done: boolean) =>
         tasks.map((t) => `
