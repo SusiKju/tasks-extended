@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   TextInput, Alert, ActivityIndicator, RefreshControl, Modal, Pressable, Platform,
@@ -452,82 +452,121 @@ export default function KinderScreen() {
     return ids.map((id) => childShort(id));
   };
 
+  // Gruppen-Modus (TE-56): alle heutigen Gruppenaufgaben über alle Kinder hinweg
+  // nach groupId aggregieren. Pro Eintrag Titel + Teilnehmer mit Done-Status und
+  // der jeweiligen taskId (fürs Löschen über alle Kinder hinweg).
+  const groupTasks = useMemo(() => {
+    const map = new Map<string, {
+      groupId: string;
+      title: string;
+      members: { childId: string; taskId: string; done: boolean }[];
+    }>();
+    for (const child of familyChildren) {
+      for (const t of tasksByChild[child.id] ?? []) {
+        if (!t.groupId) continue;
+        const entry = map.get(t.groupId) ?? { groupId: t.groupId, title: t.title, members: [] };
+        entry.members.push({ childId: child.id, taskId: t.id, done: t.done });
+        map.set(t.groupId, entry);
+      }
+    }
+    return [...map.values()];
+  }, [familyChildren, tasksByChild]);
+
+  // Gruppenaufgabe bei allen Teilnehmern löschen (TE-56).
+  const handleDeleteGroupTask = useCallback((entry: { title: string; members: { childId: string; taskId: string }[] }) => {
+    crossAlert('Gruppenaufgabe löschen?', 'Wird bei allen beteiligten Kindern entfernt.', async () => {
+      try {
+        await Promise.all(
+          entry.members.map((m) => deleteTask(fid, m.childId, m.taskId, { actor: 'parent', title: entry.title }))
+        );
+      } catch (e: any) {
+        crossInfo('Fehler beim Löschen', e?.message ?? String(e));
+      }
+    }, true);
+  }, [fid]);
+
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.background }}
       contentContainerStyle={s.container}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => setRefreshing(false)} />}
     >
-      {/* Kind-Auswahl */}
-      <View style={s.childRow}>
-        {familyChildren.map((child) => {
-          const childTaskList = tasksByChild[child.id] ?? [];
-          const childDone = childTaskList.filter((t) => t.done).length;
-          const isSelected = child.id === selectedChild;
-          return (
-            <TouchableOpacity
-              key={child.id}
-              style={[s.childChip, isSelected && { backgroundColor: colors.accentNeon }]}
-              onPress={() => setSelectedChild(child.id)}
-            >
-              <Text style={[s.childName, isSelected && { color: '#000' }]}>
-                {child.emoji ? `${child.emoji} ` : ''}{child.name}
-              </Text>
-              <Text style={[s.childProgress, isSelected && { color: '#000' }]}>
-                {childDone}/{childTaskList.length}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
+      {/* Modus-Umschalter ganz oben (TE-56): steuert die gesamte Seite —
+          Einzelne = Aufgaben pro Kind, Gruppe = Gruppenaufgaben für mehrere Kinder. */}
+      <View style={s.topToggle}>
+        <TouchableOpacity
+          style={[s.topToggleBtn, !groupMode && s.topToggleBtnActive]}
+          onPress={() => setGroupMode(false)}
+        >
+          <Ionicons name="person" size={16} color={!groupMode ? '#000' : colors.textMuted} />
+          <Text style={[s.topToggleText, !groupMode && s.topToggleTextActive]}>Einzelne</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[s.topToggleBtn, groupMode && s.topToggleBtnActive]}
+          onPress={() => setGroupMode(true)}
+        >
+          <Ionicons name="people" size={16} color={groupMode ? '#000' : colors.textMuted} />
+          <Text style={[s.topToggleText, groupMode && s.topToggleTextActive]}>Gruppe</Text>
+        </TouchableOpacity>
       </View>
 
-      {/* Neue Aufgabe — einzeln oder als Gruppenaufgabe (TE-111) */}
-      <View style={s.section}>
-        {/* Umschalter Einzeln / Gruppe */}
-        <View style={s.modeToggle}>
-          <TouchableOpacity
-            style={[s.modeBtn, !groupMode && s.modeBtnActive]}
-            onPress={() => setGroupMode(false)}
-          >
-            <Ionicons name="person-outline" size={14} color={!groupMode ? '#000' : colors.textMuted} />
-            <Text style={[s.modeBtnText, !groupMode && s.modeBtnTextActive]}>Einzeln</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[s.modeBtn, groupMode && s.modeBtnActive]}
-            onPress={() => setGroupMode(true)}
-          >
-            <Ionicons name="people-outline" size={14} color={groupMode ? '#000' : colors.textMuted} />
-            <Text style={[s.modeBtnText, groupMode && s.modeBtnTextActive]}>Gruppe</Text>
-          </TouchableOpacity>
+      {/* Auswahl: ein Kind (Einzelne) oder Kinder zusammenstellen (Gruppe) */}
+      {groupMode ? (
+        <View style={s.section}>
+          <Text style={s.sectionTitle}>Kinder für die Gruppenaufgabe</Text>
+          <View style={s.groupChips}>
+            {familyChildren.map((child) => {
+              const sel = groupSelection[child.id] ?? false;
+              return (
+                <TouchableOpacity
+                  key={child.id}
+                  style={[s.groupChip, sel && { borderColor: colors.accentNeon, backgroundColor: colors.accentNeon }]}
+                  onPress={() => toggleGroupChild(child.id)}
+                >
+                  <Ionicons
+                    name={sel ? 'checkmark-circle' : 'ellipse-outline'}
+                    size={15}
+                    color={sel ? '#000' : colors.textMuted}
+                  />
+                  <Text style={[s.groupChipText, sel && { color: '#000' }]}>
+                    {child.emoji ? `${child.emoji} ` : ''}{child.name}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
         </View>
+      ) : (
+        <View style={s.childRow}>
+          {familyChildren.map((child) => {
+            const childTaskList = tasksByChild[child.id] ?? [];
+            const childDone = childTaskList.filter((t) => t.done).length;
+            const isSelected = child.id === selectedChild;
+            return (
+              <TouchableOpacity
+                key={child.id}
+                style={[s.childChip, isSelected && { backgroundColor: colors.accentNeon }]}
+                onPress={() => setSelectedChild(child.id)}
+              >
+                <Text style={[s.childName, isSelected && { color: '#000' }]}>
+                  {child.emoji ? `${child.emoji} ` : ''}{child.name}
+                </Text>
+                <Text style={[s.childProgress, isSelected && { color: '#000' }]}>
+                  {childDone}/{childTaskList.length}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      )}
 
-        {groupMode ? (
-          <>
-            <Text style={s.sectionTitle}>Gruppenaufgabe für ausgewählte Kinder</Text>
-            <View style={s.groupChips}>
-              {familyChildren.map((child) => {
-                const sel = groupSelection[child.id] ?? false;
-                return (
-                  <TouchableOpacity
-                    key={child.id}
-                    style={[s.groupChip, sel && { borderColor: colors.accentNeon, backgroundColor: colors.accentNeon }]}
-                    onPress={() => toggleGroupChild(child.id)}
-                  >
-                    <Ionicons
-                      name={sel ? 'checkmark-circle' : 'ellipse-outline'}
-                      size={15}
-                      color={sel ? '#000' : colors.textMuted}
-                    />
-                    <Text style={[s.groupChipText, sel && { color: '#000' }]}>{child.name}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </>
-        ) : (
-          <Text style={s.sectionTitle}>Aufgabe für {childName(selectedChild)} hinzufügen</Text>
-        )}
-
+      {/* Aufgabe hinzufügen — Einzel- oder Gruppenaufgabe (TE-56/TE-111) */}
+      <View style={s.section}>
+        <Text style={s.sectionTitle}>
+          {groupMode
+            ? 'Gruppenaufgabe hinzufügen'
+            : `Aufgabe für ${childName(selectedChild)} hinzufügen`}
+        </Text>
         <View style={s.inputRow}>
           <TextInput
             style={s.input}
@@ -544,6 +583,47 @@ export default function KinderScreen() {
         </View>
       </View>
 
+      {/* Inhalt: Gruppenaufgaben-Liste (Gruppe) oder Aufgaben + Belohnung (Einzelne) (TE-56) */}
+      {groupMode ? (
+        <View style={s.section}>
+          <Text style={s.sectionTitle}>Gruppenaufgaben</Text>
+          {groupTasks.length === 0 && (
+            <Text style={s.empty}>
+              Noch keine Gruppenaufgaben. Oben Kinder auswählen und eine Aufgabe hinzufügen.
+            </Text>
+          )}
+          {groupTasks.map((g) => {
+            const doneCount = g.members.filter((m) => m.done).length;
+            const allDone = doneCount === g.members.length;
+            return (
+              <View key={g.groupId} style={s.groupTaskCard}>
+                <View style={s.row}>
+                  <Text style={[s.taskTitle, allDone && s.taskDone]}>{g.title}</Text>
+                  <TouchableOpacity onPress={() => handleDeleteGroupTask(g)}>
+                    <Ionicons name="trash-outline" size={18} color={colors.danger} />
+                  </TouchableOpacity>
+                </View>
+                <View style={s.groupMemberRow}>
+                  {g.members.map((m) => (
+                    <View key={m.childId} style={s.groupMember}>
+                      <Ionicons
+                        name={m.done ? 'checkmark-circle' : 'ellipse-outline'}
+                        size={14}
+                        color={m.done ? colors.success : colors.textMuted}
+                      />
+                      <Text style={[s.groupMemberText, m.done && { color: colors.success }]}>
+                        {childName(m.childId)}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+                <Text style={s.groupTaskMeta}>{doneCount}/{g.members.length} erledigt</Text>
+              </View>
+            );
+          })}
+        </View>
+      ) : (
+        <>
       {/* Aufgabenliste + Status */}
       <View style={s.section}>
         <View style={s.row}>
@@ -652,6 +732,8 @@ export default function KinderScreen() {
           </Text>
         )}
       </View>
+        </>
+      )}
 
       {/* Erinnerungszeiten */}
       <View style={s.section}>
@@ -880,16 +962,20 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
     },
     sectionTitle: { fontSize: 14, fontWeight: '700', color: colors.text },
     inputRow: { flexDirection: 'row', gap: 8 },
-    // Gruppenaufgabe (TE-111)
-    modeToggle: { flexDirection: 'row', gap: 6, marginBottom: 2 },
-    modeBtn: {
-      flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
-      paddingVertical: 8, borderRadius: 10,
-      borderWidth: 1, borderColor: colors.border, backgroundColor: colors.inputBackground,
+    // Top-Modus-Umschalter (TE-56): Einzelne | Gruppe — steuert die ganze Seite
+    topToggle: {
+      flexDirection: 'row', gap: 6, marginBottom: 4,
+      backgroundColor: colors.surface, borderRadius: 14, padding: 6,
+      borderWidth: 1, borderColor: colors.border,
     },
-    modeBtnActive: { backgroundColor: colors.accentNeon, borderColor: colors.accentNeon },
-    modeBtnText: { fontSize: 13, fontWeight: '700', color: colors.textMuted },
-    modeBtnTextActive: { color: '#000' },
+    topToggleBtn: {
+      flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+      paddingVertical: 11, borderRadius: 10,
+    },
+    topToggleBtnActive: { backgroundColor: colors.accentNeon },
+    topToggleText: { fontSize: 15, fontWeight: '800', color: colors.textMuted },
+    topToggleTextActive: { color: '#000' },
+    // Gruppenaufgabe (TE-111)
     groupChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
     groupChip: {
       flexDirection: 'row', alignItems: 'center', gap: 6,
@@ -903,6 +989,15 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
       paddingHorizontal: 6, paddingVertical: 2,
     },
     groupTagText: { fontSize: 11, fontWeight: '800', color: colors.accentNeon, letterSpacing: 0.3 },
+    // Gruppenaufgaben-Liste im Gruppe-Modus (TE-56)
+    groupTaskCard: {
+      backgroundColor: colors.inputBackground, borderRadius: 12, padding: 12, gap: 8,
+      borderWidth: 1, borderColor: colors.border,
+    },
+    groupMemberRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+    groupMember: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+    groupMemberText: { fontSize: 13, color: colors.text },
+    groupTaskMeta: { fontSize: 12, color: colors.textMuted },
     input: {
       flex: 1, backgroundColor: colors.inputBackground, borderRadius: 10,
       paddingHorizontal: 12, paddingVertical: 10, color: colors.text,
