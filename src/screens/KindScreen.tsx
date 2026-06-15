@@ -266,6 +266,64 @@ export default function KindScreen({ onExitChildMode }: Props) {
         </TouchableOpacity>
       </View>
 
+      <ScrollView contentContainerStyle={s.list}>
+        {tasks.length === 0 && (
+          <Text style={s.empty}>Heute keine Aufgaben 🎉</Text>
+        )}
+        {tasks.map((task) => (
+          <TouchableOpacity
+            key={task.id}
+            style={[s.taskCard, task.done && s.taskCardDone, task.rejected && s.taskCardRejected]}
+            onPress={() => handleToggle(task)}
+            activeOpacity={0.7}
+          >
+            <View style={[s.checkbox, task.done && s.checkboxDone, task.rejected && s.checkboxRejected]}>
+              {task.done && <Ionicons name="checkmark" size={18} color={colors.successFg} />}
+              {task.rejected && <Ionicons name="close" size={18} color={colors.dangerFg} />}
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[s.taskText, task.done && s.taskTextDone, task.rejected && s.taskTextRejected]}>
+                {task.title}
+              </Text>
+              {(() => {
+                // Gruppenaufgabe (TE-114/TE-116): andere teilnehmende Kinder anzeigen.
+                const others = (task.groupChildren ?? [])
+                  .filter((id) => id !== childId)
+                  .map((id) => familyChildren.find((c) => c.id === id)?.name ?? id);
+                if (others.length) {
+                  return <Text style={s.groupHint}>👥 Zusammen mit {others.join(', ')}</Text>;
+                }
+                if (task.groupId) {
+                  return <Text style={s.groupHint}>👥 Gruppenaufgabe</Text>;
+                }
+                return null;
+              })()}
+              {task.rejected && (
+                <Text style={s.rejectedHint}>❌ Nicht akzeptiert – bitte nochmal machen</Text>
+              )}
+              {/* Belohnung der Aufgabe (TE-61) */}
+              {task.reward && (
+                task.rewardReleased ? (
+                  <Text style={s.taskRewardWon}>
+                    🎉 Freigeschaltet: {REWARD_TYPES[task.reward.type].emoji} {REWARD_TYPES[task.reward.type].label}
+                    {task.reward.title ? ` · ${task.reward.title}` : ''}
+                  </Text>
+                ) : task.done ? (
+                  <Text style={s.taskRewardWait}>
+                    {REWARD_TYPES[task.reward.type].emoji} {REWARD_TYPES[task.reward.type].label} – warten auf Freigabe ⏳
+                  </Text>
+                ) : (
+                  <Text style={s.taskRewardTeaser}>
+                    🎁 Belohnung: {REWARD_TYPES[task.reward.type].emoji} {REWARD_TYPES[task.reward.type].label}
+                    {task.reward.title ? ` · ${task.reward.title}` : ''}
+                  </Text>
+                )
+              )}
+            </View>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+
       {/* Schatzkiste-Belohnung (TE-100) – generischer Tagesfortschritt */}
       <View style={[s.reward, chestStage.full && s.rewardFull]}>
         <Animated.Text style={[s.chest, { transform: [{ scale: chestScale }] }]}>
@@ -338,64 +396,6 @@ export default function KindScreen({ onExitChildMode }: Props) {
           <Text style={[s.notifBannerText, { color: colors.dangerFg }]}>Benachrichtigungen blockiert — in Browser-Einstellungen erlauben</Text>
         </View>
       )}
-
-      <ScrollView contentContainerStyle={s.list}>
-        {tasks.length === 0 && (
-          <Text style={s.empty}>Heute keine Aufgaben 🎉</Text>
-        )}
-        {tasks.map((task) => (
-          <TouchableOpacity
-            key={task.id}
-            style={[s.taskCard, task.done && s.taskCardDone, task.rejected && s.taskCardRejected]}
-            onPress={() => handleToggle(task)}
-            activeOpacity={0.7}
-          >
-            <View style={[s.checkbox, task.done && s.checkboxDone, task.rejected && s.checkboxRejected]}>
-              {task.done && <Ionicons name="checkmark" size={18} color={colors.successFg} />}
-              {task.rejected && <Ionicons name="close" size={18} color={colors.dangerFg} />}
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[s.taskText, task.done && s.taskTextDone, task.rejected && s.taskTextRejected]}>
-                {task.title}
-              </Text>
-              {(() => {
-                // Gruppenaufgabe (TE-114/TE-116): andere teilnehmende Kinder anzeigen.
-                const others = (task.groupChildren ?? [])
-                  .filter((id) => id !== childId)
-                  .map((id) => familyChildren.find((c) => c.id === id)?.name ?? id);
-                if (others.length) {
-                  return <Text style={s.groupHint}>👥 Zusammen mit {others.join(', ')}</Text>;
-                }
-                if (task.groupId) {
-                  return <Text style={s.groupHint}>👥 Gruppenaufgabe</Text>;
-                }
-                return null;
-              })()}
-              {task.rejected && (
-                <Text style={s.rejectedHint}>❌ Nicht akzeptiert – bitte nochmal machen</Text>
-              )}
-              {/* Belohnung der Aufgabe (TE-61) */}
-              {task.reward && (
-                task.rewardReleased ? (
-                  <Text style={s.taskRewardWon}>
-                    🎉 Freigeschaltet: {REWARD_TYPES[task.reward.type].emoji} {REWARD_TYPES[task.reward.type].label}
-                    {task.reward.title ? ` · ${task.reward.title}` : ''}
-                  </Text>
-                ) : task.done ? (
-                  <Text style={s.taskRewardWait}>
-                    {REWARD_TYPES[task.reward.type].emoji} {REWARD_TYPES[task.reward.type].label} – warten auf Freigabe ⏳
-                  </Text>
-                ) : (
-                  <Text style={s.taskRewardTeaser}>
-                    🎁 Belohnung: {REWARD_TYPES[task.reward.type].emoji} {REWARD_TYPES[task.reward.type].label}
-                    {task.reward.title ? ` · ${task.reward.title}` : ''}
-                  </Text>
-                )
-              )}
-            </View>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
 
       {/* Taschengeld-Verlauf (TE-54) */}
       <Modal visible={historyVisible} transparent animationType="fade">
