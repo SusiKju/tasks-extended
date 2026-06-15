@@ -513,7 +513,7 @@ export function NotesScreen() {
       <View style={styles.filterBar}>
         <View style={styles.filterTopRow}>
           {usedColors.length > 1 && (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow} style={{ flex: 1 }}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRowInline} style={{ flex: 1 }}>
               <Pressable
                 style={[styles.filterDot, filterColor === null && styles.filterDotActive, { borderColor: colors.border }]}
                 onPress={() => setFilterColor(null)}
@@ -624,10 +624,12 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
     filterTopRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      paddingRight: 12,
+      paddingHorizontal: 16,
       gap: 8,
     },
     filterRow: { paddingHorizontal: 16, gap: 8, paddingBottom: 4 },
+    // Innerhalb der filterTopRow (die bereits 16px Gutter hat) – kein doppeltes H-Padding
+    filterRowInline: { gap: 8, paddingBottom: 4 },
     filterDot: {
       width: 32, height: 32, borderRadius: 16,
       borderWidth: 2, borderColor: 'transparent',
@@ -638,7 +640,6 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
       flexDirection: 'row', alignItems: 'center', gap: 4,
       paddingHorizontal: 10, paddingVertical: 6,
       borderRadius: 14, borderWidth: 1,
-      marginRight: 4,
     },
     sortChipText: { fontSize: 12, fontWeight: '500' },
     groupFilterChip: {
