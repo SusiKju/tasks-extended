@@ -22,6 +22,7 @@ import {
   AllowanceMonth, subscribeToAllowanceMonths, setAllowanceReceived, monthKey,
 } from '../services/allowance';
 import { registerPushToken } from '../services/pushNotifications';
+import KidThemeCard from '../components/KidThemeCard';
 
 /** Betrag deutsch formatieren: 5 → "5 €", 5.5 → "5,50 €". */
 function formatEuro(n: number): string {
@@ -267,6 +268,8 @@ export default function KindScreen({ onExitChildMode }: Props) {
       </View>
 
       <ScrollView contentContainerStyle={s.list}>
+        {/* Themen-Anzeige (TE-65): zeigt pro Reload ein neues Item des Kind-Themas. */}
+        {selectedChild?.theme && <KidThemeCard theme={selectedChild.theme} />}
         {tasks.length === 0 && (
           <Text style={s.empty}>Heute keine Aufgaben 🎉</Text>
         )}
