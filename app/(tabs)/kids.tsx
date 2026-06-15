@@ -89,7 +89,15 @@ export default function KinderScreen() {
   const [sending, setSending] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [setupModalVisible, setSetupModalVisible] = useState(false);
-  const [editingTask, setEditingTask] = useState<{ id: string; title: string } | null>(null);
+  // Bearbeiten inkl. Belohnung (TE-63). rewardType=null → keine Belohnung.
+  // groupId merken, damit Änderungen an Gruppenaufgaben auf alle Kopien wirken.
+  const [editingTask, setEditingTask] = useState<{
+    id: string;
+    title: string;
+    groupId?: string | null;
+    rewardType: RewardType | null;
+    rewardDetail: string;
+  } | null>(null);
   const [historyChild, setHistoryChild] = useState<string | null>(null);
   const [history, setHistory] = useState<ActivityEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -366,9 +374,45 @@ export default function KinderScreen() {
   const handleSaveEdit = useCallback(async () => {
     if (!editingTask || !editingTask.title.trim()) return;
     const title = editingTask.title.trim();
-    await updateTask(fid, selectedChild, editingTask.id, { title }, { actor: 'parent', title });
-    setEditingTask(null);
-  }, [fid, selectedChild, editingTask]);
+    const detail = editingTask.rewardDetail.trim();
+    // Neue Belohnung aus dem Formular (kein undefined — TE-40).
+    const newReward: ChildReward | null = editingTask.rewardType
+      ? (detail ? { type: editingTask.rewardType, title: detail } : { type: editingTask.rewardType })
+      : null;
+
+    const sameReward = (a?: ChildReward | null, b?: ChildReward | null) => {
+      const an = a ?? null, bn = b ?? null;
+      if (!an && !bn) return true;
+      if (!an || !bn) return false;
+      return an.type === bn.type && (an.title ?? '') === (bn.title ?? '');
+    };
+
+    // Eine Kopie aktualisieren. Hat sich die Belohnung geändert, Freigabe zurücksetzen.
+    const applyTo = (childId: string, task: ChildTask) => {
+      const updates: Partial<ChildTask> = { title, reward: newReward };
+      if (!sameReward(task.reward, newReward)) updates.rewardReleased = false;
+      return updateTask(fid, childId, task.id, updates, { actor: 'parent', title });
+    };
+
+    try {
+      if (editingTask.groupId) {
+        // Gruppenaufgabe: alle Kopien (über alle Kinder) mit gleicher groupId anpassen.
+        const targets: { childId: string; task: ChildTask }[] = [];
+        for (const child of familyChildren) {
+          for (const t of tasksByChild[child.id] ?? []) {
+            if (t.groupId === editingTask.groupId) targets.push({ childId: child.id, task: t });
+          }
+        }
+        await Promise.all(targets.map(({ childId, task }) => applyTo(childId, task)));
+      } else {
+        const task = (tasksByChild[selectedChild] ?? []).find((t) => t.id === editingTask.id);
+        if (task) await applyTo(selectedChild, task);
+      }
+      setEditingTask(null);
+    } catch (e: any) {
+      crossInfo('Fehler', e?.message ?? 'Aufgabe konnte nicht gespeichert werden.');
+    }
+  }, [fid, selectedChild, editingTask, familyChildren, tasksByChild]);
 
   // Belohnung einer abgehakten Aufgabe freigeben/zurückziehen (TE-61).
   const handleToggleRewardRelease = useCallback(async (childId: string, task: ChildTask) => {
@@ -623,9 +667,20 @@ export default function KinderScreen() {
               <View key={g.groupId} style={s.groupTaskCard}>
                 <View style={s.row}>
                   <Text style={[s.taskTitle, allDone && s.taskDone]}>{g.title}</Text>
-                  <TouchableOpacity onPress={() => handleDeleteGroupTask(g)}>
-                    <Ionicons name="trash-outline" size={18} color={colors.danger} />
-                  </TouchableOpacity>
+                  <View style={s.headerBtnRow}>
+                    <TouchableOpacity onPress={() => setEditingTask({
+                      id: g.members[0]?.taskId ?? '',
+                      title: g.title,
+                      groupId: g.groupId,
+                      rewardType: g.reward?.type ?? null,
+                      rewardDetail: g.reward?.title ?? '',
+                    })}>
+                      <Ionicons name="pencil-outline" size={18} color={colors.accentNeon} />
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => handleDeleteGroupTask(g)}>
+                      <Ionicons name="trash-outline" size={18} color={colors.danger} />
+                    </TouchableOpacity>
+                  </View>
                 </View>
                 {g.reward && (
                   <Text style={s.taskRewardBadge}>
@@ -726,7 +781,13 @@ export default function KinderScreen() {
               )}
               {task.rejected && <Text style={s.rejectedTag}>abgelehnt</Text>}
               {dueLabel(task) && <Text style={s.overdueTag}>{dueLabel(task)}</Text>}
-              <TouchableOpacity onPress={() => setEditingTask({ id: task.id, title: task.title })}>
+              <TouchableOpacity onPress={() => setEditingTask({
+                id: task.id,
+                title: task.title,
+                groupId: task.groupId ?? null,
+                rewardType: task.reward?.type ?? null,
+                rewardDetail: task.reward?.title ?? '',
+              })}>
                 <Ionicons name="pencil-outline" size={18} color={colors.accentNeon} />
               </TouchableOpacity>
               <TouchableOpacity onPress={() => handleDeleteTask(task.id, task.title)}>
@@ -803,11 +864,13 @@ export default function KinderScreen() {
         )}
       </View>
 
-      {/* Edit-Modal */}
+      {/* Edit-Modal — Titel + Belohnung (TE-63) */}
       <Modal visible={!!editingTask} transparent animationType="fade">
         <Pressable style={s.modalOverlay} onPress={() => setEditingTask(null)}>
           <Pressable style={s.modalBox} onPress={() => {}}>
-            <Text style={s.modalTitle}>Aufgabe bearbeiten</Text>
+            <Text style={s.modalTitle}>
+              {editingTask?.groupId ? 'Gruppenaufgabe bearbeiten' : 'Aufgabe bearbeiten'}
+            </Text>
             <TextInput
               style={s.input}
               value={editingTask?.title ?? ''}
@@ -817,6 +880,43 @@ export default function KinderScreen() {
               onSubmitEditing={handleSaveEdit}
               placeholderTextColor={colors.placeholder}
             />
+
+            {/* Belohnung ändern (TE-63) */}
+            <Text style={s.rewardPickerLabel}>Belohnung (optional)</Text>
+            <View style={s.rewardPickerRow}>
+              <TouchableOpacity
+                style={[s.rewardPickerChip, !editingTask?.rewardType && s.rewardPickerChipActive]}
+                onPress={() => setEditingTask((e) => e ? { ...e, rewardType: null } : e)}
+              >
+                <Text style={[s.rewardPickerChipText, !editingTask?.rewardType && s.rewardPickerChipTextActive]}>Keine</Text>
+              </TouchableOpacity>
+              {(Object.keys(REWARD_TYPES) as RewardType[]).map((type) => {
+                const sel = editingTask?.rewardType === type;
+                return (
+                  <TouchableOpacity
+                    key={type}
+                    style={[s.rewardPickerChip, sel && s.rewardPickerChipActive]}
+                    onPress={() => setEditingTask((e) => e ? { ...e, rewardType: type } : e)}
+                  >
+                    <Text style={s.rewardPickerEmoji}>{REWARD_TYPES[type].emoji}</Text>
+                    <Text style={[s.rewardPickerChipText, sel && s.rewardPickerChipTextActive]}>
+                      {REWARD_TYPES[type].label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            {!!editingTask?.rewardType && (
+              <TextInput
+                style={s.input}
+                value={editingTask?.rewardDetail ?? ''}
+                onChangeText={(t) => setEditingTask((e) => e ? { ...e, rewardDetail: t } : e)}
+                placeholder="Detail (optional), z.B. 1 Folge Paw Patrol"
+                placeholderTextColor={colors.placeholder}
+                returnKeyType="done"
+              />
+            )}
+
             <TouchableOpacity style={s.saveBtn} onPress={handleSaveEdit}>
               <Text style={s.saveBtnText}>Speichern</Text>
             </TouchableOpacity>
