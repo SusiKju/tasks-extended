@@ -118,6 +118,21 @@ export default function RootLayout() {
     }
   }, [user, familyId, authLoading, familyLoading]);
 
+  // Kinder-Geräte-Guard (TE-64): Ist dieses Gerät als Kinder-Gerät eingerichtet
+  // (kinder_child_id gesetzt), landet ein Web-Reload aber auf einer Eltern-Route
+  // (z.B. /(tabs)/kids), sofort zurück auf '/' leiten – dort rendert
+  // app/index.tsx den Kinder-Modus. Ohne diesen Guard bliebe das Gerät nach
+  // einem Reload im Eltern-Modus, weil der Kinder-Check nur in index.tsx läuft.
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    if (authLoading || familyLoading) return;
+    const seg = segments[0];
+    if (!seg || seg === 'login' || seg === 'family-setup') return; // '/' oder Auth-Routen
+    AsyncStorage.getItem('kinder_child_id').then((id) => {
+      if (id) router.replace('/');
+    });
+  }, [segments, authLoading, familyLoading]);
+
   // Scheduled Push im Eltern-Modus starten sobald familyId + Kinder bekannt sind
   useEffect(() => {
     if (!familyId || familyChildren.length === 0) return;

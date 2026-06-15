@@ -25,6 +25,7 @@ function crossInfo(title: string, message: string) {
   }
 }
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { useTheme } from '../../src/utils/theme';
 import { useStore } from '../../src/store';
 import {
@@ -62,6 +63,7 @@ const ACTIVITY_UI: Record<ActivityAction, {
 export default function KinderScreen() {
   const { colors } = useTheme();
   const s = styles(colors);
+  const router = useRouter();
 
   const { familyId, children: familyChildren } = useFamily();
   const fid = familyId ?? '';
@@ -897,10 +899,9 @@ export default function KinderScreen() {
                   await AsyncStorage.setItem('kinder_child_id', child.id);
                   await AsyncStorage.setItem('kinder_family_id', fid);
                   setSetupModalVisible(false);
-                  crossInfo(
-                    `✓ Gerät für ${child.name} eingerichtet`,
-                    'Die App wechselt beim nächsten Start in den Kinder-Modus. Jetzt die App neu starten.'
-                  );
+                  // Sofort in den Kinder-Modus wechseln (TE-64) – '/' rendert KindScreen.
+                  // Auch nach einem späteren Reload greift der Guard im RootLayout.
+                  router.replace('/');
                 }}
               >
                 <Text style={s.modalChildBtnText}>{child.emoji ? `${child.emoji} ` : ''}{child.name}</Text>
