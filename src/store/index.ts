@@ -105,6 +105,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   myName: null,
   funTileThemes: [],
   mailWindowDays: 7,
+  parentPin: null,
 };
 
 export const useStore = create<TaskState>()(
@@ -257,7 +258,7 @@ export const useStore = create<TaskState>()(
     }),
     {
       name: 'tasks-extended-store',
-      version: 21,
+      version: 22,
       migrate: (persistedState: any, version: number) => {
         if (version < 1 && persistedState?.tasks) {
           persistedState.tasks = persistedState.tasks.map((t: any) => ({
@@ -376,6 +377,9 @@ export const useStore = create<TaskState>()(
               allowed[0]
             );
           }
+        }
+        if (version < 22 && persistedState?.settings) {
+          persistedState.settings.parentPin = persistedState.settings.parentPin ?? null;
         }
         return persistedState;
       },

@@ -90,6 +90,8 @@ export interface AppSettings {
    * Fenster. Erlaubte Werte: siehe MAIL_WINDOW_OPTIONS.
    */
   mailWindowDays: number;
+  /** TE-60: PIN zum Verlassen des Kinder-Modus. null = Fallback '1234'. */
+  parentPin: string | null;
 }
 
 /** TE-37/TE-43: Auswählbare Zeitfenster (in Tagen) für den Mail-Tab. */

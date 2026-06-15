@@ -95,6 +95,7 @@ export function SettingsScreen() {
   const [codeCopied, setCodeCopied] = useState(false);
   const [confirmLeave, setConfirmLeave] = useState(false);
   const [leavingFamily, setLeavingFamily] = useState(false);
+  const [pinVisible, setPinVisible] = useState(false);
 
   // Kind-Modal
   const [childModal, setChildModal] = useState<{
@@ -578,6 +579,36 @@ export function SettingsScreen() {
                 </View>
               </View>
             ))}
+          </View>
+
+          {/* Eltern-PIN (TE-60) */}
+          <View style={[styles.row, { gap: 8 }]}>
+            <Ionicons name="lock-closed-outline" size={20} color={colors.accentNeon} />
+            <View style={[styles.rowContent, { flex: 1 }]}>
+              <Text style={styles.rowTitle}>Eltern-PIN</Text>
+              <Text style={styles.rowSubtitle}>
+                {settings.parentPin ? 'Individueller PIN gesetzt' : 'Kein PIN gesetzt – Fallback ist "1234"'}
+              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 }}>
+                <TextInput
+                  style={[styles.settingInput, { flex: 1 }]}
+                  value={settings.parentPin ?? ''}
+                  onChangeText={(v) => updateSettings({ parentPin: v.trim() === '' ? null : v.trim() })}
+                  placeholder="z.B. 9876"
+                  placeholderTextColor={colors.placeholder}
+                  secureTextEntry={!pinVisible}
+                  keyboardType="number-pad"
+                  maxLength={8}
+                />
+                <Pressable onPress={() => setPinVisible((v) => !v)} style={{ padding: 6 }}>
+                  <Ionicons
+                    name={pinVisible ? 'eye-off-outline' : 'eye-outline'}
+                    size={20}
+                    color={colors.textSecondary}
+                  />
+                </Pressable>
+              </View>
+            </View>
           </View>
 
           {/* Familie verlassen */}

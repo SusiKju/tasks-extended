@@ -12,6 +12,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../utils/theme';
+import { useStore } from '../store';
 import {
   ChildTask, ChildReward, REWARD_TYPES,
   subscribeToChildTasks, toggleTask, subscribeToPushTrigger,
@@ -54,7 +55,6 @@ import { format } from 'date-fns';
 
 const TODAY = format(new Date(), 'yyyy-MM-dd');
 const STORAGE_KEY = 'kinder_child_id';
-const PARENT_PIN = '1234'; // TODO: aus Einstellungen lesen
 
 // ── Schatzkiste-Belohnung ────────────────────────────────────────────────────
 // Spiegelt rewardStage() aus kinder/index.html, damit App- und Web-Ansicht
@@ -76,6 +76,7 @@ interface Props {
 export default function KindScreen({ onExitChildMode }: Props) {
   const { colors } = useTheme();
   const s = styles(colors);
+  const parentPin = useStore((state) => state.settings.parentPin ?? '1234');
 
   const [childId, setChildId] = useState<string | null>(null);
   const [familyId, setFamilyId] = useState<string | null>(null);
@@ -179,7 +180,7 @@ export default function KindScreen({ onExitChildMode }: Props) {
   }, [childId, familyId, allowanceMonths]);
 
   const handlePinSubmit = useCallback(async () => {
-    if (pinInput === PARENT_PIN) {
+    if (pinInput === parentPin) {
       setPinModalVisible(false);
       setPinInput('');
       setPinError(false);
