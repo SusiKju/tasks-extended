@@ -17,7 +17,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useStore } from '../store';
 import { Note, NoteChecklistItem } from '../types';
 import { useTheme, ThemeColors, neonGlow, readableTextOn } from '../utils/theme';
-import { useAppContext } from '../contexts/AppContext';
+import { useFirebaseAuth } from '../hooks/useFirebaseAuth';
+import { useFamily } from '../hooks/useFamily';
 import {
   subscribeToPersonalNotes,
   addPersonalNote,
@@ -354,7 +355,8 @@ export function NotesScreen() {
   const { colors, isDark, mono } = useTheme();
   const styles = useMemo(() => makeStyles(colors, isDark), [colors, isDark]);
   const groups = useStore((s) => s.groups);
-  const { familyId, user } = useAppContext();
+  const { user } = useFirebaseAuth();
+  const { familyId } = useFamily();
 
   const [notes, setNotes] = useState<Note[]>([]);
   const [loading, setLoading] = useState(true);
