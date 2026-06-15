@@ -57,11 +57,12 @@ interface NoteModalProps {
     checklist?: NoteChecklistItem[],
   ) => void;
   onClose: () => void;
+  onDelete: () => void;
   colors: ThemeColors;
   styles: ReturnType<typeof makeStyles>;
 }
 
-function NoteModal({ visible, note, onSave, onClose, colors, styles }: NoteModalProps) {
+function NoteModal({ visible, note, onSave, onClose, onDelete, colors, styles }: NoteModalProps) {
   const { mono } = useTheme();
   const groups = useStore((s) => s.groups);
   const [title, setTitle] = useState('');
@@ -134,6 +135,11 @@ function NoteModal({ visible, note, onSave, onClose, colors, styles }: NoteModal
             {note ? 'Notiz bearbeiten' : 'Neue Notiz'}
           </Text>
           <View style={styles.modalActions}>
+            {note ? (
+              <Pressable onPress={onDelete} style={styles.pinBtn} hitSlop={8}>
+                <Ionicons name="trash-outline" size={22} color={colors.textSecondary} />
+              </Pressable>
+            ) : null}
             <Pressable onPress={() => setIsChecklist((v) => !v)} style={styles.pinBtn} hitSlop={8}>
               <Ionicons
                 name={isChecklist ? 'checkbox' : 'checkbox-outline'}
@@ -254,14 +260,13 @@ function NoteModal({ visible, note, onSave, onClose, colors, styles }: NoteModal
 interface NoteCardProps {
   note: Note;
   onPress: () => void;
-  onDelete: () => void;
   onToggleItem: (index: number) => void;
   groupName?: string;
   groupColor?: string;
   styles: ReturnType<typeof makeStyles>;
 }
 
-function NoteCard({ note, onPress, onDelete, onToggleItem, groupName, groupColor, styles }: NoteCardProps) {
+function NoteCard({ note, onPress, onToggleItem, groupName, groupColor, styles }: NoteCardProps) {
   const { mono, colors } = useTheme();
   const maxItems = note.title ? 3 : 4;
 
@@ -276,15 +281,6 @@ function NoteCard({ note, onPress, onDelete, onToggleItem, groupName, groupColor
       onPress={onPress}
       android_ripple={{ color: 'rgba(0,0,0,0.1)' }}
     >
-      {/* Löschen-Button */}
-      <Pressable
-        onPress={(e) => { e.stopPropagation?.(); onDelete(); }}
-        hitSlop={6}
-        style={styles.deleteBtn}
-      >
-        <Ionicons name="close" size={13} color="rgba(0,0,0,0.5)" />
-      </Pressable>
-
       {/* Badges */}
       <View style={styles.cardBadgeRow}>
         {note.pinned ? <Ionicons name="pin" size={11} color="rgba(0,0,0,0.5)" /> : null}
@@ -420,14 +416,19 @@ export function NotesScreen() {
   const handleDelete = useCallback(
     (note: Note) => {
       if (!familyId || !user?.uid) return;
-      Alert.alert('Notiz löschen', 'Diese Notiz wirklich löschen?', [
-        { text: 'Abbrechen', style: 'cancel' },
-        {
-          text: 'Löschen',
-          style: 'destructive',
-          onPress: () => deletePersonalNote(familyId, user.uid!, note.id).catch((err) => Alert.alert('Fehler beim Löschen', err?.message ?? String(err))),
-        },
-      ]);
+      const doDelete = () =>
+        deletePersonalNote(familyId, user.uid!, note.id).catch((err) =>
+          Alert.alert('Fehler beim Löschen', err?.message ?? String(err)),
+        );
+      // Alert funktioniert auf Web nicht — window.confirm als Fallback.
+      if (Platform.OS === 'web') {
+        if (window.confirm('Diese Notiz wirklich löschen?')) doDelete();
+      } else {
+        Alert.alert('Notiz löschen', 'Diese Notiz wirklich löschen?', [
+          { text: 'Abbrechen', style: 'cancel' },
+          { text: 'Löschen', style: 'destructive', onPress: doDelete },
+        ]);
+      }
     },
     [familyId, user?.uid],
   );
@@ -493,7 +494,6 @@ export function NotesScreen() {
                 key={note.id}
                 note={note}
                 onPress={() => handleEdit(note)}
-                onDelete={() => handleDelete(note)}
                 onToggleItem={(idx) => handleToggleItem(note, idx)}
                 groupName={group?.name}
                 groupColor={group?.color}
@@ -504,7 +504,7 @@ export function NotesScreen() {
         </View>
       ));
     },
-    [groupMap, handleEdit, handleDelete, handleToggleItem, styles],
+    [groupMap, handleEdit, handleToggleItem, styles],
   );
 
   return (
@@ -604,6 +604,10 @@ export function NotesScreen() {
         note={editingNote}
         onSave={handleSave}
         onClose={() => setModalVisible(false)}
+        onDelete={() => {
+          if (editingNote) handleDelete(editingNote);
+          setModalVisible(false);
+        }}
         colors={colors}
         styles={styles}
       />
@@ -654,23 +658,12 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
       justifyContent: 'space-between',
       marginBottom: GRID_GAP,
     },
-    deleteBtn: {
-      position: 'absolute',
-      top: 6, right: 6,
-      width: 22, height: 22,
-      borderRadius: 11,
-      alignItems: 'center', justifyContent: 'center',
-      backgroundColor: 'rgba(0,0,0,0.12)',
-      zIndex: 1,
-    },
     cardBadgeRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 5,
       marginBottom: 4,
       minHeight: 14,
-      // Reserve space so pin icon doesn't push the delete button
-      paddingRight: 20,
     },
     noteCardTitle: {
       fontSize: 11, fontWeight: '700',
