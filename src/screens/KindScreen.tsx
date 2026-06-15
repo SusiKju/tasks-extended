@@ -268,8 +268,6 @@ export default function KindScreen({ onExitChildMode }: Props) {
       </View>
 
       <ScrollView contentContainerStyle={s.list}>
-        {/* Themen-Anzeige (TE-65): zeigt pro Reload ein neues Item des Kind-Themas. */}
-        {selectedChild?.theme && <KidThemeCard theme={selectedChild.theme} />}
         {tasks.length === 0 && (
           <Text style={s.empty}>Heute keine Aufgaben 🎉</Text>
         )}
@@ -325,6 +323,8 @@ export default function KindScreen({ onExitChildMode }: Props) {
             </View>
           </TouchableOpacity>
         ))}
+        {/* Themen-Anzeige (TE-65): ganz unten, nach den Aufgaben. */}
+        {selectedChild?.theme && <KidThemeCard theme={selectedChild.theme} />}
       </ScrollView>
 
       {/* Schatzkiste-Belohnung (TE-100) – generischer Tagesfortschritt */}

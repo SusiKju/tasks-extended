@@ -9,7 +9,7 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  View, Text, StyleSheet, Image, ActivityIndicator, TouchableOpacity,
+  View, Text, StyleSheet, Image, ActivityIndicator, TouchableOpacity, Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, ThemeColors } from '../utils/theme';
@@ -90,6 +90,12 @@ export default function KidThemeCard({ theme }: Props) {
             </View>
           )}
           <Text style={s.extract} numberOfLines={4}>{item.extract}</Text>
+          <TouchableOpacity
+            onPress={() => Linking.openURL(item.sourceUrl).catch(() => {})}
+            hitSlop={6}
+          >
+            <Text style={s.link}>Auf Wikipedia ansehen →</Text>
+          </TouchableOpacity>
         </>
       )}
     </View>
@@ -130,6 +136,7 @@ const styles = (c: ThemeColors) => StyleSheet.create({
   },
   factText: { fontSize: 13, fontWeight: '600', color: c.accentFg },
   extract: { fontSize: 14, color: c.textSecondary, lineHeight: 20 },
+  link: { fontSize: 14, fontWeight: '600', color: c.accentNeon },
   errorText: { fontSize: 15, color: c.text },
   errorHint: { fontSize: 12, color: c.textMuted },
 });
