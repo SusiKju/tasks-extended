@@ -18,7 +18,27 @@ import {
   subscribeToChildReward,
 } from '../services/kinderTasks';
 import { ChildConfig, subscribeToChildren } from '../services/family';
+import {
+  AllowanceMonth, subscribeToAllowanceMonths, setAllowanceReceived, monthKey,
+} from '../services/allowance';
 import { registerPushToken } from '../services/pushNotifications';
+
+/** Betrag deutsch formatieren: 5 → "5 €", 5.5 → "5,50 €". */
+function formatEuro(n: number): string {
+  const fixed = Number.isInteger(n) ? String(n) : n.toFixed(2).replace('.', ',');
+  return `${fixed} €`;
+}
+
+/** "YYYY-MM" → "Juni 2026". */
+const MONTH_NAMES_DE = [
+  'Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
+  'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember',
+];
+function formatMonthLabel(key: string): string {
+  const [y, m] = key.split('-');
+  const idx = parseInt(m, 10) - 1;
+  return `${MONTH_NAMES_DE[idx] ?? m} ${y}`;
+}
 
 const FAMILY_ID_KEY = 'kinder_family_id';
 import { Platform } from 'react-native';
@@ -62,6 +82,8 @@ export default function KindScreen({ onExitChildMode }: Props) {
   const [familyChildren, setFamilyChildren] = useState<ChildConfig[]>([]);
   const [tasks, setTasks] = useState<ChildTask[]>([]);
   const [reward, setReward] = useState<ChildReward | null>(null);
+  const [allowanceMonths, setAllowanceMonths] = useState<Record<string, AllowanceMonth>>({});
+  const [historyVisible, setHistoryVisible] = useState(false);
   const [loading, setLoading] = useState(true);
   const [pinModalVisible, setPinModalVisible] = useState(false);
   const [pinInput, setPinInput] = useState('');
@@ -112,7 +134,8 @@ export default function KindScreen({ onExitChildMode }: Props) {
       setTimeout(() => setToast(false), 5000);
     });
     const unsubReward = subscribeToChildReward(familyId, childId, setReward);
-    return () => { unsubTasks(); unsubPush(); unsubReward(); };
+    const unsubAllowance = subscribeToAllowanceMonths(familyId, childId, setAllowanceMonths);
+    return () => { unsubTasks(); unsubPush(); unsubReward(); unsubAllowance(); };
   }, [childId, familyId]);
 
   // Schatzkiste-Animation auslösen, sobald eine Aufgabe NEU abgehakt wurde (TE-100)
@@ -146,6 +169,14 @@ export default function KindScreen({ onExitChildMode }: Props) {
     if (!childId || !familyId) return;
     await toggleTask(familyId, childId, task.id, !task.done, { actor: 'child', title: task.title });
   }, [childId, familyId]);
+
+  // Taschengeld für den aktuellen Monat bestätigen/widerrufen (TE-53).
+  const handleToggleAllowance = useCallback(async (amount: number) => {
+    if (!childId || !familyId) return;
+    const key = monthKey();
+    const received = !(allowanceMonths[key]?.received ?? false);
+    await setAllowanceReceived(familyId, childId, key, received, amount);
+  }, [childId, familyId, allowanceMonths]);
 
   const handlePinSubmit = useCallback(async () => {
     if (pinInput === PARENT_PIN) {
@@ -208,6 +239,17 @@ export default function KindScreen({ onExitChildMode }: Props) {
   // Schatzkiste-Belohnung (TE-100)
   const chestStage = rewardStage(done, total);
 
+  // Taschengeld (TE-53/TE-54)
+  const selectedChild = familyChildren.find((c) => c.id === childId);
+  const allowance = selectedChild?.allowance ?? 0;
+  const thisMonthKey = monthKey();
+  const allowanceReceived = allowanceMonths[thisMonthKey]?.received ?? false;
+  // Verlauf absteigend sortiert (neuster Monat zuerst) – Basis für TE-54.
+  const allowanceHistory = Object.entries(allowanceMonths)
+    .sort(([a], [b]) => b.localeCompare(a));
+  const allowanceTotal = allowanceHistory.reduce(
+    (sum, [, m]) => sum + (m.received ? m.amount : 0), 0);
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       {/* Header */}
@@ -263,6 +305,34 @@ export default function KindScreen({ onExitChildMode }: Props) {
             <Text style={s.rewardTeaserText}>Schaff alles und du bekommst:</Text>
             <Text style={s.rewardTeaserStrong}>{REWARD_TYPES[reward.type].label}</Text>
             {!!reward.title && <Text style={s.rewardTeaserDetail}>{reward.title}</Text>}
+          </View>
+        </View>
+      )}
+
+      {/* Taschengeld-Karte (TE-53) – nur wenn ein Betrag konfiguriert ist */}
+      {allowance > 0 && (
+        <View style={[s.allowanceCard, allowanceReceived && s.allowanceCardDone]}>
+          <Text style={s.allowanceEmoji}>💶</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={s.allowanceLabel}>Taschengeld {formatMonthLabel(thisMonthKey)}</Text>
+            <Text style={s.allowanceAmount}>{formatEuro(allowance)}</Text>
+            <Text style={s.allowanceHint}>
+              {allowanceReceived ? 'Erhalten ✓' : 'Schon bekommen? Hier abhaken.'}
+            </Text>
+          </View>
+          <View style={s.allowanceActions}>
+            <TouchableOpacity
+              style={[s.allowanceCheck, allowanceReceived && s.allowanceCheckDone]}
+              onPress={() => handleToggleAllowance(allowance)}
+              activeOpacity={0.7}
+            >
+              {allowanceReceived && <Ionicons name="checkmark" size={22} color={colors.successFg} />}
+            </TouchableOpacity>
+            {allowanceHistory.length > 0 && (
+              <TouchableOpacity onPress={() => setHistoryVisible(true)} hitSlop={8}>
+                <Text style={s.allowanceHistoryLink}>Verlauf</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
       )}
@@ -335,6 +405,34 @@ export default function KindScreen({ onExitChildMode }: Props) {
           </TouchableOpacity>
         ))}
       </ScrollView>
+
+      {/* Taschengeld-Verlauf (TE-54) */}
+      <Modal visible={historyVisible} transparent animationType="fade">
+        <Pressable style={s.historyOverlay} onPress={() => setHistoryVisible(false)}>
+          <Pressable style={s.historyBox} onPress={() => {}}>
+            <Text style={s.historyTitle}>💶 Taschengeld-Verlauf</Text>
+            <Text style={s.historyTotal}>Insgesamt erhalten: {formatEuro(allowanceTotal)}</Text>
+            {allowanceHistory.length === 0 ? (
+              <Text style={s.historyEmpty}>Noch keine Einträge.</Text>
+            ) : (
+              <ScrollView>
+                {allowanceHistory.map(([key, m]) => (
+                  <View key={key} style={s.historyRow}>
+                    <Text style={s.historyMonth}>{formatMonthLabel(key)}</Text>
+                    <Text style={s.historyAmount}>{formatEuro(m.amount)}</Text>
+                    {m.received
+                      ? <Text style={s.historyStatusOk}>✓</Text>
+                      : <Text style={s.historyStatusOpen}>offen</Text>}
+                  </View>
+                ))}
+              </ScrollView>
+            )}
+            <TouchableOpacity style={s.historyClose} onPress={() => setHistoryVisible(false)}>
+              <Text style={s.historyCloseText}>Schließen</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {/* PIN-Modal */}
       <Modal visible={pinModalVisible} transparent animationType="fade">
@@ -427,6 +525,43 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
     rewardTeaserText: { fontSize: 14, color: colors.textSecondary },
     rewardTeaserStrong: { fontSize: 20, fontWeight: '900', color: colors.text, marginTop: 1 },
     rewardTeaserDetail: { fontSize: 13, color: colors.textSecondary, marginTop: 1 },
+    // Taschengeld-Karte (TE-53/TE-54)
+    allowanceCard: {
+      flexDirection: 'row', alignItems: 'center', gap: 14,
+      marginHorizontal: 16, marginTop: 4, marginBottom: 4, padding: 16,
+      backgroundColor: '#EAF2FF', borderRadius: 20,
+      borderWidth: 2, borderColor: '#9BC0FF',
+    },
+    allowanceCardDone: {
+      backgroundColor: '#E8FBEF', borderColor: colors.success,
+    },
+    allowanceEmoji: { fontSize: 44 },
+    allowanceLabel: { fontSize: 14, fontWeight: '700', color: '#2A5B9E' },
+    allowanceAmount: { fontSize: 26, fontWeight: '900', color: '#14305E', marginTop: 1 },
+    allowanceHint: { fontSize: 13, color: '#3A6BB5', marginTop: 2 },
+    allowanceActions: { alignItems: 'center', gap: 8 },
+    allowanceCheck: {
+      width: 40, height: 40, borderRadius: 20, borderWidth: 2.5,
+      borderColor: '#9BC0FF', justifyContent: 'center', alignItems: 'center',
+    },
+    allowanceCheckDone: { backgroundColor: colors.success, borderColor: colors.success },
+    allowanceHistoryLink: { fontSize: 13, fontWeight: '700', color: '#2A5BB5', textDecorationLine: 'underline' },
+    // History-Modal (TE-54)
+    historyOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 24 },
+    historyBox: { backgroundColor: colors.surface, borderRadius: 20, padding: 20, maxHeight: '80%' as any },
+    historyTitle: { fontSize: 20, fontWeight: '800', color: colors.text, marginBottom: 4 },
+    historyTotal: { fontSize: 15, fontWeight: '700', color: colors.success, marginBottom: 12 },
+    historyRow: {
+      flexDirection: 'row', alignItems: 'center', gap: 10,
+      paddingVertical: 10, borderTopWidth: 1, borderColor: colors.border,
+    },
+    historyMonth: { flex: 1, fontSize: 15, color: colors.text },
+    historyAmount: { fontSize: 15, fontWeight: '700', color: colors.text },
+    historyStatusOk: { fontSize: 18, color: colors.success },
+    historyStatusOpen: { fontSize: 14, color: colors.textMuted },
+    historyEmpty: { fontSize: 14, color: colors.textMuted, textAlign: 'center', paddingVertical: 20 },
+    historyClose: { backgroundColor: colors.accentNeon, borderRadius: 12, paddingVertical: 12, alignItems: 'center', marginTop: 16 },
+    historyCloseText: { fontWeight: '700', fontSize: 15, color: '#000' },
     // Toast
     toast: {
       backgroundColor: colors.accentNeon, padding: 14, paddingHorizontal: 20,

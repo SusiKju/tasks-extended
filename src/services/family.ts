@@ -49,6 +49,8 @@ export interface ChildConfig {
   color: string;
   /** Optionales Emoji statt Anfangsbuchstabe, z. B. "🦁" */
   emoji?: string | null;
+  /** Monatliches Taschengeld in EUR (TE-52). null/undefined = nicht konfiguriert. */
+  allowance?: number | null;
   createdAt: string;
 }
 

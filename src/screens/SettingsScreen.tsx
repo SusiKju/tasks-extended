@@ -46,6 +46,15 @@ import {
   subscribeToMembers, leaveFamily,
   addChild, updateChild, deleteChild,
 } from '../services/family';
+import { setChildAllowance } from '../services/allowance';
+
+/** Eingabe-Toleranz: "5,50" → 5.5, leer → null, ungültig/negativ → null. */
+function parseAllowance(text: string): number | null {
+  const t = text.trim().replace(',', '.');
+  if (t === '') return null;
+  const n = parseFloat(t);
+  return Number.isFinite(n) && n >= 0 ? n : null;
+}
 
 // Vorauswahl für Kind-Farben
 const CHILD_COLORS = [
@@ -97,6 +106,20 @@ export function SettingsScreen() {
   } | null>(null);
   const [savingChild, setSavingChild] = useState(false);
   const [confirmDeleteChildId, setConfirmDeleteChildId] = useState<string | null>(null);
+  // Taschengeld-Eingabe (TE-52): lokaler Roh-Text pro Kind, damit "5," beim
+  // Tippen nicht sofort zu null geparst wird. Persistiert beim Verlassen des Felds.
+  const [allowanceDrafts, setAllowanceDrafts] = useState<Record<string, string>>({});
+
+  const handleAllowanceCommit = useCallback(async (child: ChildConfig, text: string) => {
+    if (!familyId) return;
+    const amount = parseAllowance(text);
+    if (amount === (child.allowance ?? null)) return; // keine Änderung
+    try {
+      await setChildAllowance(familyId, child.id, amount);
+    } catch (e: any) {
+      Alert.alert('Fehler', e?.message ?? 'Taschengeld speichern fehlgeschlagen.');
+    }
+  }, [familyId]);
 
   useEffect(() => {
     if (!familyId) return;
@@ -537,6 +560,22 @@ export function SettingsScreen() {
                   keyboardType="email-address"
                   autoCapitalize="none"
                 />
+                {/* Taschengeld pro Monat (TE-52) */}
+                <View style={styles.allowanceRow}>
+                  <Ionicons name="cash-outline" size={16} color={colors.textSecondary} />
+                  <Text style={[styles.rowSubtitle, { flex: 1 }]}>Taschengeld / Monat</Text>
+                  <TextInput
+                    style={[styles.settingInput, styles.allowanceInput]}
+                    placeholder="0"
+                    placeholderTextColor={colors.placeholder}
+                    value={allowanceDrafts[child.id] ?? (child.allowance != null ? String(child.allowance) : '')}
+                    onChangeText={(v) => setAllowanceDrafts((d) => ({ ...d, [child.id]: v }))}
+                    onEndEditing={(e) => handleAllowanceCommit(child, e.nativeEvent.text)}
+                    onBlur={() => handleAllowanceCommit(child, allowanceDrafts[child.id] ?? '')}
+                    keyboardType="decimal-pad"
+                  />
+                  <Text style={styles.rowSubtitle}>€</Text>
+                </View>
               </View>
             ))}
           </View>
@@ -933,6 +972,19 @@ function makeStyles(c: ThemeColors) {
       justifyContent: 'center',
     },
     childColorDotText: { fontSize: 14 },
+    // Taschengeld-Zeile (TE-52)
+    allowanceRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      marginLeft: 44,
+      marginTop: 4,
+    },
+    allowanceInput: {
+      width: 70,
+      textAlign: 'right',
+      fontSize: 13,
+    },
     // Kind-Modal
     modalOverlay: {
       flex: 1,
