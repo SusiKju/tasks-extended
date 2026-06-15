@@ -277,7 +277,7 @@ function NoteCard({ note, onPress, onToggleItem, groupName, groupColor, styles }
 
   return (
     <Pressable
-      style={({ pressed }) => [styles.noteCard, { backgroundColor: mono(note.color) }, pressed && { opacity: 0.85 }]}
+      style={({ pressed }) => [styles.noteCard, { backgroundColor: note.color }, pressed && { opacity: 0.85 }]}
       onPress={onPress}
       android_ripple={{ color: 'rgba(0,0,0,0.1)' }}
     >
