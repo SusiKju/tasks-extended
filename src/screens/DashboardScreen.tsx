@@ -888,6 +888,21 @@ export function DashboardScreen() {
       });
     }
 
+    // Notizblock – persönliche Notizen aus dem Scratchpad (TE-81), kein Termin.
+    // Quelle ist derselbe `scratchpad`-Store-Wert wie der Notizblock selbst, daher
+    // fließen Änderungen aus dem Notizblock automatisch in den Feed ein. Leere
+    // Einträge (frische, noch ungetippte Notiz) werden ausgelassen.
+    parseScratchpad(scratchpad).forEach((entry, idx) => {
+      const text = entry.text.trim();
+      if (!text) return;
+      items.push({
+        key: `note:${idx}`,
+        category: 'note',
+        group: 'later',
+        title: text,
+      });
+    });
+
     // Taschengeld – Kinder, deren Betrag für den laufenden Monat noch offen ist (TE-78).
     for (const c of openAllowanceChildren) {
       items.push({
@@ -905,6 +920,7 @@ export function DashboardScreen() {
     tasks, familyChildren, childTasks, dashboardMails, pinnedSet,
     todayEvents, todayBirthdays, feedSharedNotes,
     feedGeistesKacheln, openAllowanceChildren, currentAllowanceMonth, router,
+    scratchpad,
   ]);
 
   useEffect(() => {

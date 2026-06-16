@@ -3,7 +3,7 @@
  *
  * "Mein Tag" – konfigurierbarer Dashboard-Block (DashboardBlockKey 'feed').
  * Vereint alle "zu erledigenden"/anstehenden Dinge (Tasks, Kinder-Aufgaben, Mail,
- * Termine, Geburtstage, Geteilte Liste, Geistesblitze, Taschengeld)
+ * Termine, Geburtstage, Geteilte Liste, Geistesblitze, Notizblock, Taschengeld)
  * als EINE durchgehende Liste – schlank, ohne Zeitgruppen-Header/-Karten.
  * Jede Kategorie hat ein eigenes, farbiges Icon (gut unterscheidbar in beiden
  * dunklen Themes). Wichtige/überfällige Items werden über ein dunkelrosa
@@ -34,6 +34,7 @@ export type FeedCategory =
   | 'mail'
   | 'sharedList'
   | 'geistesblitz'
+  | 'note'
   | 'allowance';
 
 /** Interne Dringlichkeits-Einstufung – steuert nur die Default-Sortierung, keine Header mehr. */
@@ -66,6 +67,7 @@ const CATEGORY_ICON: Record<FeedCategory, IconName> = {
   mail: 'mail-outline',
   sharedList: 'share-social-outline',
   geistesblitz: 'bulb-outline',
+  note: 'document-text-outline',
   allowance: 'cash-outline', // ungenutzt, da Glyph (siehe CATEGORY_GLYPH) – Fallback für Typ-Vollständigkeit.
 };
 
@@ -81,6 +83,7 @@ const CATEGORY_COLOR: Record<FeedCategory, string> = {
   mail: '#38bdf8', // hellblau
   sharedList: '#fbbf24', // amber
   geistesblitz: '#fde047', // gelb
+  note: '#fb923c', // orange
   allowance: '#2dd4bf', // türkis
 };
 
@@ -96,7 +99,8 @@ const CATEGORY_PRIORITY: Record<FeedCategory, number> = {
   mail: 4,
   sharedList: 5,
   geistesblitz: 6,
-  allowance: 7,
+  note: 7,
+  allowance: 8,
 };
 
 const GROUP_ORDER: FeedGroupKey[] = ['overdue', 'today', 'tomorrow', 'later'];
