@@ -50,6 +50,12 @@ export interface FeedItem {
   important?: boolean;
   overdue?: boolean;
   onPress?: () => void;
+  /**
+   * Optionale Item-eigene Markerfarbe. Aktuell nur für `note`: jede Notiz aus
+   * dem Notizblock trägt ihre Bubble-Farbe, damit das Feed-Bullet exakt dem
+   * Dashboard-Notizblock entspricht. Fällt auf CATEGORY_COLOR zurück.
+   */
+  color?: string;
 }
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
@@ -193,7 +199,13 @@ export function FeedBlock({
               pressed && item.onPress ? { opacity: 0.6 } : null,
             ]}
           >
-            {CATEGORY_GLYPH[item.category] ? (
+            {item.category === 'note' ? (
+              // Notizen: rundes Bullet wie im Dashboard-Notizblock, in der Farbe
+              // der jeweiligen Notiz (item.color), statt eines Ionicons-Icons.
+              <View style={styles.noteBulletWrap}>
+                <View style={[styles.noteBullet, { backgroundColor: item.color ?? CATEGORY_COLOR.note }]} />
+              </View>
+            ) : CATEGORY_GLYPH[item.category] ? (
               <Text style={[styles.glyph, { color: CATEGORY_COLOR[item.category] }]}>
                 {CATEGORY_GLYPH[item.category]}
               </Text>
@@ -270,6 +282,18 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 14,
     fontWeight: '700',
+  },
+  // 16er-Spalte wie die Icons, damit das Bullet bündig zu den anderen Items sitzt.
+  noteBulletWrap: {
+    width: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // Gleiche Maße wie das Bullet im Notizblock (padStyles.bullet).
+  noteBullet: {
+    width: 10,
+    height: 10,
+    borderRadius: 999,
   },
   subtitle: {
     fontSize: 11,

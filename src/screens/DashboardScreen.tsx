@@ -891,8 +891,11 @@ export function DashboardScreen() {
     // Notizblock – persönliche Notizen aus dem Scratchpad (TE-81), kein Termin.
     // Quelle ist derselbe `scratchpad`-Store-Wert wie der Notizblock selbst, daher
     // fließen Änderungen aus dem Notizblock automatisch in den Feed ein. Leere
-    // Einträge (frische, noch ungetippte Notiz) werden ausgelassen.
-    parseScratchpad(scratchpad).forEach((entry, idx) => {
+    // Einträge (frische, noch ungetippte Notiz) werden ausgelassen. Die Bullet-
+    // Farbe wird exakt wie im Notizblock berechnet (mono → monoDotColor, sonst die
+    // Bubble-Farbe der Notiz), damit Feed und Notizblock identisch aussehen.
+    const isNeonTheme = isDark && colors.accentNeon === '#00EEFF';
+    parseScratchpad(scratchpad, isNeonTheme).forEach((entry, idx) => {
       const text = entry.text.trim();
       if (!text) return;
       items.push({
@@ -900,6 +903,7 @@ export function DashboardScreen() {
         category: 'note',
         group: 'later',
         title: text,
+        color: isMono ? monoDotColor(idx) : entry.color,
       });
     });
 
@@ -920,7 +924,7 @@ export function DashboardScreen() {
     tasks, familyChildren, childTasks, dashboardMails, pinnedSet,
     todayEvents, todayBirthdays, feedSharedNotes,
     feedGeistesKacheln, openAllowanceChildren, currentAllowanceMonth, router,
-    scratchpad,
+    scratchpad, isMono, isDark, colors,
   ]);
 
   useEffect(() => {
