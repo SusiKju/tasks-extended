@@ -490,11 +490,13 @@ export function DashboardScreen() {
   const spinAnim = useRef(new Animated.Value(0)).current;
   const spinLoop = useRef<Animated.CompositeAnimation | null>(null);
 
-  // TE-41: Fenster-Mails + angepinnte Mails (auch außerhalb des Fensters) laden.
+  // TE-41/TE-75: Fenster-Mails + angepinnte Mails (auch außerhalb des Fensters) laden.
+  // Das Fenster folgt settings.mailWindowDays (wie MailScreen, TE-37), damit ein
+  // geändertes Zeitfenster die angeheftete Mails nicht aus der Card verdrängt.
   const loadDashboardMails = useCallback(async (token: string) => {
     setMailLoading(true);
     try {
-      const windowMails = await fetchRecentMails(token);
+      const windowMails = await fetchRecentMails(token, settings.mailWindowDays);
       const have = new Set(windowMails.map((m) => m.id));
       const missingPinned = pinnedMailIds.filter((id) => !have.has(id));
       const extra = missingPinned.length ? await fetchMailsByIds(token, missingPinned) : [];
@@ -504,7 +506,7 @@ export function DashboardScreen() {
     } finally {
       setMailLoading(false);
     }
-  }, [pinnedMailIds]);
+  }, [pinnedMailIds, settings.mailWindowDays]);
 
   const handleSync = useCallback(async () => {
     if (syncing) return;
