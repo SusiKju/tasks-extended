@@ -108,6 +108,7 @@ export interface AppSettings {
 export type DashboardBlockKey =
   | 'birthdays'
   | 'weather'
+  | 'feed'
   | 'tasks'
   | 'scratchpad'
   | 'links'
@@ -122,6 +123,7 @@ export type DashboardBlockKey =
 export const DASHBOARD_BLOCKS: { key: DashboardBlockKey; label: string; description: string }[] = [
   { key: 'birthdays',     label: 'Geburtstage',         description: 'Heutige Geburtstage ganz oben.' },
   { key: 'weather',       label: 'Wetter',              description: 'Wettervorhersage neben dem Sync-Button.' },
+  { key: 'feed',          label: 'Mein Tag',            description: 'Alle anstehenden Dinge als eine Liste, mit dezentem Icon je Kategorie.' },
   { key: 'tasks',         label: 'Heutige Tasks',       description: 'Überfällige und heute fällige Aufgaben.' },
   { key: 'scratchpad',    label: 'Notizblock',          description: 'Persönlicher Notizblock.' },
   { key: 'links',         label: 'Links',               description: 'Schnellleiste mit deinen Links.' },
@@ -134,10 +136,10 @@ export const DASHBOARD_BLOCKS: { key: DashboardBlockKey; label: string; descript
   { key: 'mail',          label: 'Posteingang',         description: 'Angepinnte und ungelesene Mails.' },
 ];
 
-/** TE-77: Default-Sichtbarkeit – alle Dashboard-Blöcke aktiv. */
+/** TE-77: Default-Sichtbarkeit – alle Dashboard-Blöcke aktiv, außer 'feed' (neu, Opt-in). */
 export const DEFAULT_DASHBOARD_BLOCKS: Record<DashboardBlockKey, boolean> =
   DASHBOARD_BLOCKS.reduce(
-    (acc, b) => { acc[b.key] = true; return acc; },
+    (acc, b) => { acc[b.key] = b.key !== 'feed'; return acc; },
     {} as Record<DashboardBlockKey, boolean>
   );
 

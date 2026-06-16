@@ -10,6 +10,7 @@ import {
   Animated,
   Platform,
   Dimensions,
+  Modal,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -26,7 +27,7 @@ import { listUpcomingEvents, CalendarEvent } from '../services/googleCalendar';
 import {
   ChildTask, subscribeToChildTasks,
 } from '../services/kinderTasks';
-import { AllowanceMonth, subscribeToAllowanceMonths, monthKey, formatEuro } from '../services/allowance';
+import { AllowanceMonth, subscribeToAllowanceMonths, monthKey, formatEuro, formatMonthLabel } from '../services/allowance';
 import { useFamily } from '../hooks/useFamily';
 import { SharedNotepad } from '../components/SharedNotepad';
 import { GeistesKacheln } from '../components/GeistesKacheln';
@@ -34,6 +35,10 @@ import { LinkCardBar } from '../components/LinkCardBar';
 import { WeatherWidget } from '../components/WeatherWidget';
 import { GoogleConnectBanner } from '../components/GoogleConnectBanner';
 import { CountdownStrip } from '../components/CountdownStrip';
+import { FeedBlock, FeedItem } from '../components/FeedBlock';
+import { subscribeToFeedOrder, saveFeedOrder, FeedOrder } from '../services/feedOrderService';
+import { SharedNoteItem, subscribeToSharedNotes } from '../services/sharedNotes';
+import { GeistesKachel, subscribeToGeistesKacheln } from '../services/geistesKacheln';
 import { Task, DashboardBlockKey } from '../types';
 
 // Fallback-Farbe falls Kind keine Farbe gesetzt hat
@@ -49,6 +54,20 @@ function dueInfo(task?: ChildTask): { label: string; overdue: boolean } | null {
   if (task.date === TODAY) return { label: 'heute', overdue: false };
   const [, m, d] = task.date.split('-');
   return { label: `${d}.${m}.`, overdue };
+}
+
+/**
+ * Feed-Block ("Mein Tag", TE-?): ordnet ein "YYYY-MM-DD"-Datum einer der vier
+ * Zeitgruppen zu (Überfällig/Heute/Morgen/Ohne Termin) – dieselbe Semantik wie
+ * der bisherige Tasks-Block, nur über alle Item-Kategorien hinweg angewandt.
+ * Kein Datum (null/undefined) landet immer in "Ohne Termin".
+ */
+function feedDateGroup(dateStr: string | null | undefined): 'overdue' | 'today' | 'tomorrow' | 'later' {
+  if (!dateStr) return 'later';
+  if (dateStr < TODAY) return 'overdue';
+  if (dateStr === TODAY) return 'today';
+  const tomorrow = format(new Date(Date.now() + 86400000), 'yyyy-MM-dd');
+  return dateStr === tomorrow ? 'tomorrow' : 'later';
 }
 
 // ─── Colors ───────────────────────────────────────────────────────────────────
@@ -495,6 +514,10 @@ export function DashboardScreen() {
   // Sync-Button
   const [syncing, setSyncing] = useState(false);
   const spinAnim = useRef(new Animated.Value(0)).current;
+
+  // "Mein Tag" (Feed): erscheint nicht mehr inline auf dem Dashboard,
+  // sondern wird über das Icon links neben dem Sync-Button als Dialog geöffnet.
+  const [feedDialogOpen, setFeedDialogOpen] = useState(false);
   const spinLoop = useRef<Animated.CompositeAnimation | null>(null);
 
   // TE-41/TE-75: Fenster-Mails + angepinnte Mails (auch außerhalb des Fensters) laden.
@@ -624,6 +647,56 @@ export function DashboardScreen() {
     [familyChildren, allowanceByChild, currentAllowanceMonth]
   );
 
+  // ── Feed-Block ("Mein Tag"): zusätzliche Datenquellen, die bisher nur in den ──
+  // jeweiligen Einzel-Komponenten geladen wurden (Geteilte Liste, Countdowns,
+  // Geistesblitze). Werden hier zusätzlich abonniert, damit der Feed sie als
+  // Items zeigen kann – die Einzel-Blöcke laden ihre Daten weiterhin selbst.
+  const [feedSharedNotes, setFeedSharedNotes] = useState<SharedNoteItem[]>([]);
+  useEffect(() => {
+    if (!fid) return;
+    const unsub = subscribeToSharedNotes(
+      fid,
+      (active) => setFeedSharedNotes(active),
+      () => setFeedSharedNotes([]),
+    );
+    return unsub;
+  }, [fid]);
+
+  const [feedGeistesKacheln, setFeedGeistesKacheln] = useState<GeistesKachel[]>([]);
+  useEffect(() => {
+    if (!fid || !user?.uid) return;
+    const unsub = subscribeToGeistesKacheln(
+      fid,
+      user.uid,
+      (tiles) => setFeedGeistesKacheln(tiles),
+      () => setFeedGeistesKacheln([]),
+    );
+    return unsub;
+  }, [fid, user?.uid]);
+
+  // "Mein Tag": manuelle Sortierung der flachen Liste, pro User in Firestore
+  // persistiert und live synchronisiert (siehe feedOrderService.ts).
+  const [feedOrder, setFeedOrder] = useState<FeedOrder>([]);
+  const feedOrderSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!fid || !user?.uid) return;
+    const unsub = subscribeToFeedOrder(fid, user.uid, (order) => setFeedOrder(order));
+    return unsub;
+  }, [fid, user?.uid]);
+
+  const handleFeedReorder = useCallback(
+    (orderedKeys: string[]) => {
+      setFeedOrder(orderedKeys);
+      if (fid && user?.uid) {
+        if (feedOrderSaveTimer.current) clearTimeout(feedOrderSaveTimer.current);
+        feedOrderSaveTimer.current = setTimeout(() => {
+          saveFeedOrder(fid, user.uid, orderedKeys);
+        }, 500);
+      }
+    },
+    [fid, user?.uid],
+  );
+
   // Gruppenaufgaben (TE-115): Kopien mit gemeinsamer groupId über die Kinder hinweg
   // zu je einer Gruppe bündeln – jede wird zu einer eigenen Extrakarte.
   const groupTasks = useMemo(() => {
@@ -721,6 +794,118 @@ export function DashboardScreen() {
   // Hervorhebung (Glow/Regenbogen) ist aktiv, sobald es heute etwas zu feiern
   // ODER einen Termin gibt – beide teilen sich denselben "Flammen"-Look (TE-120).
   const hasHighlight = todayBirthdays.length > 0 || todayEvents.length > 0;
+
+  // Alle Quellen zu einer einheitlichen Item-Liste verschmelzen (TE-?: "Mein Tag").
+  // Nur berechnet/gerendert, wenn der Block aktiv ist – additiv, ersetzt keine
+  // bestehenden Blöcke (siehe .drills/2026-06-16/unified-feed-block.md).
+  const feedItems = useMemo<FeedItem[]>(() => {
+    const items: FeedItem[] = [];
+
+    // Eigene Tasks (alle offenen, über alle Zeitgruppen).
+    for (const t of tasks) {
+      if (t.completed) continue;
+      items.push({
+        key: `task:${t.id}`,
+        category: 'task',
+        group: feedDateGroup(t.dueDate),
+        title: t.title,
+        important: !!t.important,
+        overdue: !t.completed && !!t.dueDate && t.dueDate < TODAY,
+        onPress: () => router.push(`/task/${t.id}` as any),
+      });
+    }
+
+    // Kinder-Aufgaben (alle offenen je Kind, inkl. Gruppenaufgaben einzeln je Kind).
+    for (const child of familyChildren) {
+      for (const t of (childTasks[child.id] ?? [])) {
+        if (t.done) continue;
+        items.push({
+          key: `kidTask:${child.id}:${t.id}`,
+          category: 'kidsTask',
+          group: feedDateGroup(t.date),
+          title: `${t.title} · ${childName(child.id)}`,
+          overdue: t.date < TODAY,
+          onPress: () => router.push('/(tabs)/kids' as any),
+        });
+      }
+    }
+
+    // Posteingang (angepinnt/ungelesen) – kein eigenes Fälligkeitsdatum → "Ohne Termin".
+    for (const m of dashboardMails) {
+      items.push({
+        key: `mail:${m.id}`,
+        category: 'mail',
+        group: 'later',
+        title: parseDisplayFrom(m.from),
+        subtitle: m.subject || '(Kein Betreff)',
+        important: pinnedSet.has(m.id),
+        onPress: () => router.push('/(tabs)/mail' as any),
+      });
+    }
+
+    // Kalender-Termine (nur heute – Termine für morgen werden im Feed nicht angezeigt).
+    for (const e of todayEvents) {
+      items.push({
+        key: `calendar:${e.id}`,
+        category: 'calendar',
+        group: 'today',
+        title: e.summary || '(Ohne Titel)',
+        subtitle: e.location ?? undefined,
+      });
+    }
+
+    // Geburtstage (heute).
+    for (const b of todayBirthdays) {
+      items.push({
+        key: `birthday:${b.id}`,
+        category: 'birthday',
+        group: 'today',
+        title: b.name,
+        important: true,
+      });
+    }
+
+    // Geteilte Liste – offene (nicht abgehakte) Einträge, kein Termin.
+    for (const n of feedSharedNotes) {
+      if (n.done) continue;
+      items.push({
+        key: `sharedList:${n.id}`,
+        category: 'sharedList',
+        group: 'later',
+        title: n.text,
+        subtitle: `von ${n.addedBy}`,
+        onPress: () => router.push('/(tabs)' as any),
+      });
+    }
+
+    // Geistesblitze – persönliche Notiz-Kacheln, kein Termin.
+    for (const k of feedGeistesKacheln) {
+      items.push({
+        key: `geistesblitz:${k.id}`,
+        category: 'geistesblitz',
+        group: 'later',
+        title: k.text,
+      });
+    }
+
+    // Taschengeld – Kinder, deren Betrag für den laufenden Monat noch offen ist (TE-78).
+    for (const c of openAllowanceChildren) {
+      items.push({
+        key: `allowance:${c.id}`,
+        category: 'allowance',
+        group: 'later',
+        title: `Taschengeld ${childName(c.id)}`,
+        subtitle: `${formatEuro(c.allowance ?? 0)} · ${formatMonthLabel(currentAllowanceMonth)}`,
+        onPress: () => router.push('/(tabs)/kids' as any),
+      });
+    }
+
+    return items;
+  }, [
+    tasks, familyChildren, childTasks, dashboardMails, pinnedSet,
+    todayEvents, todayBirthdays, feedSharedNotes,
+    feedGeistesKacheln, openAllowanceChildren, currentAllowanceMonth, router,
+  ]);
 
   useEffect(() => {
     if (!settings.googleAccessToken) return;
@@ -853,24 +1038,60 @@ export function DashboardScreen() {
       {/* ── Google-Connect-Banner (nur wenn noch nicht verbunden) ── */}
       {!settings.googleCalendarEnabled && <GoogleConnectBanner colors={colors} />}
 
-      {/* ── Wettervorhersage (TE-126, links) + Sync-Button (rechts) ── */}
+      {/* ── Wettervorhersage (TE-126, links) + "Mein Tag"-Icon + Sync-Button (rechts) ── */}
       <View style={styles.syncRow}>
         {showBlock('weather') ? <WeatherWidget colors={colors} /> : <View />}
-        <Pressable
-          onPress={handleSync}
-          disabled={syncing}
-          style={({ pressed }) => [styles.syncBtn, { opacity: pressed ? 0.6 : 1 }]}
-          hitSlop={12}
-        >
-          <Animated.View style={{
-            transform: [{
-              rotate: spinAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] })
-            }]
-          }}>
-            <Ionicons name="sync-outline" size={18} color={colors.textSecondary} />
-          </Animated.View>
-        </Pressable>
+        <View style={styles.syncRowRight}>
+          {showBlock('feed') && (
+            <Pressable
+              onPress={() => setFeedDialogOpen(true)}
+              style={({ pressed }) => [styles.syncBtn, { opacity: pressed ? 0.6 : 1 }]}
+              hitSlop={12}
+            >
+              <Ionicons name="today-outline" size={18} color={colors.textSecondary} />
+            </Pressable>
+          )}
+          <Pressable
+            onPress={handleSync}
+            disabled={syncing}
+            style={({ pressed }) => [styles.syncBtn, { opacity: pressed ? 0.6 : 1 }]}
+            hitSlop={12}
+          >
+            <Animated.View style={{
+              transform: [{
+                rotate: spinAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] })
+              }]
+            }}>
+              <Ionicons name="sync-outline" size={18} color={colors.textSecondary} />
+            </Animated.View>
+          </Pressable>
+        </View>
       </View>
+
+      {/* ── "Mein Tag" (Feed): nicht mehr inline auf dem Dashboard, sondern als Dialog ── */}
+      {/* über das Icon links neben dem Sync-Button (siehe oben), additiv, standardmäßig AUS. */}
+      {showBlock('feed') && (
+        <Modal
+          visible={feedDialogOpen}
+          animationType="slide"
+          transparent
+          onRequestClose={() => setFeedDialogOpen(false)}
+        >
+          <View style={[styles.feedModalOverlay, { backgroundColor: 'rgba(0,0,0,0.5)' }]}>
+            <View style={[styles.feedModalCard, { backgroundColor: colors.background }]}>
+              <View style={styles.feedModalHeader}>
+                <Text style={[styles.feedModalTitle, { color: colors.text }]}>Mein Tag</Text>
+                <Pressable onPress={() => setFeedDialogOpen(false)} hitSlop={12}>
+                  <Ionicons name="close" size={22} color={colors.textSecondary} />
+                </Pressable>
+              </View>
+              <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
+                <FeedBlock items={feedItems} colors={colors} manualOrder={feedOrder} onReorder={handleFeedReorder} />
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
+      )}
 
       {/* ── Tasks + Scratchpad ── */}
       {(showBlock('tasks') || showBlock('scratchpad')) && (
@@ -1357,10 +1578,37 @@ function makeStyles(c: ThemeColors, isDark: boolean, calm: boolean) {
       paddingHorizontal: 16,
       marginBottom: -8,
     },
+    syncRowRight: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
     syncBtn: {
       padding: 4,
       borderRadius: 16,
       ...(isDark ? neonGlow(c.accentNeon, 'soft') : {}),
+    },
+
+    feedModalOverlay: {
+      flex: 1,
+      justifyContent: 'flex-end',
+    },
+    feedModalCard: {
+      maxHeight: '80%',
+      borderTopLeftRadius: 20,
+      borderTopRightRadius: 20,
+      paddingTop: 16,
+    },
+    feedModalHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 20,
+      paddingBottom: 12,
+    },
+    feedModalTitle: {
+      fontSize: 17,
+      fontWeight: '700',
     },
 
     section: {},
