@@ -32,9 +32,14 @@ export function subscribeToFeedOrder(
   return onSnapshot(
     ref,
     (snap) => {
-      callback(snap.data()?.order ?? []);
+      const data = snap.data()?.order;
+      // Defensive: falls noch ein alter Dokument-Stand (z.B. per-Gruppe-Objekt
+      // statt flacher Liste) vorliegt, nicht crashen, sondern auf Default zurückfallen.
+      callback(Array.isArray(data) ? data : []);
     },
-    () => {}, // Fehler stillschweigend ignorieren
+    (err) => {
+      console.error('[feedOrderService] subscribeToFeedOrder fehlgeschlagen:', err);
+    },
   );
 }
 
@@ -47,5 +52,9 @@ export async function saveFeedOrder(
   order: FeedOrder,
 ): Promise<void> {
   const ref = doc(db, 'families', familyId, 'feedOrderByUser', uid);
-  await setDoc(ref, { order, updatedAt: new Date().toISOString() }, { merge: true });
+  try {
+    await setDoc(ref, { order, updatedAt: new Date().toISOString() }, { merge: true });
+  } catch (err) {
+    console.error('[feedOrderService] saveFeedOrder fehlgeschlagen:', err);
+  }
 }
