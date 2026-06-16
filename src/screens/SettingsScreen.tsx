@@ -16,7 +16,7 @@ import { Clipboard } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useStore } from '../store';
 import { useTheme, ThemeColors, neonGlow, THEMES } from '../utils/theme';
-import { Theme, FunTileTheme, MAIL_WINDOW_OPTIONS } from '../types';
+import { Theme, FunTileTheme, MAIL_WINDOW_OPTIONS, DASHBOARD_BLOCKS, DEFAULT_DASHBOARD_BLOCKS } from '../types';
 import { FUN_THEMES } from '../components/FussballKachel';
 
 const THEME_OPTIONS: { key: Theme; label: string; description: string }[] = [
@@ -793,6 +793,38 @@ export function SettingsScreen() {
             })}
           </View>
         </View>
+      </View>
+
+      {/* Dashboard-Blöcke (TE-77) */}
+      <View style={styles.section}>
+        <Text style={styles.sectionHeader}>Dashboard</Text>
+        <Text style={[styles.rowSubtitle, { paddingHorizontal: 4, marginBottom: 6 }]}>
+          Welche Blöcke auf dem Dashboard angezeigt werden.
+        </Text>
+        {DASHBOARD_BLOCKS.map((block) => {
+          const active = (settings.dashboardBlocks ?? DEFAULT_DASHBOARD_BLOCKS)[block.key] !== false;
+          return (
+            <Pressable
+              key={block.key}
+              style={({ pressed }) => [styles.themeRow, active && styles.themeRowActive, pressed && { opacity: 0.85 }]}
+              onPress={() => updateSettings({
+                dashboardBlocks: {
+                  ...DEFAULT_DASHBOARD_BLOCKS,
+                  ...settings.dashboardBlocks,
+                  [block.key]: !active,
+                },
+              })}
+            >
+              <View style={styles.rowContent}>
+                <Text style={styles.rowTitle}>{block.label}</Text>
+                <Text style={styles.rowSubtitle}>{block.description}</Text>
+              </View>
+              {active
+                ? <Ionicons name="checkmark-circle" size={22} color={colors.accentNeon} />
+                : <Ionicons name="ellipse-outline" size={22} color={colors.textMuted} />}
+            </Pressable>
+          );
+        })}
       </View>
 
       {/* Darstellung */}

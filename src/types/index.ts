@@ -92,7 +92,52 @@ export interface AppSettings {
   mailWindowDays: number;
   /** TE-60: PIN zum Verlassen des Kinder-Modus. null = Fallback '1234'. */
   parentPin: string | null;
+  /**
+   * TE-77: Sichtbarkeit der einzelnen Dashboard-Blöcke. Pro Block-Key ein
+   * Boolean; fehlt ein Key (alter Stand / neuer Block), gilt er als sichtbar.
+   * Siehe DASHBOARD_BLOCKS für Reihenfolge und Labels.
+   */
+  dashboardBlocks: Record<DashboardBlockKey, boolean>;
 }
+
+/**
+ * TE-77: Konfigurierbares Dashboard – jeder Inhaltsblock kann in den Settings
+ * einzeln ein-/ausgeschaltet werden. Die Keys sind stabil (werden persistiert),
+ * die Reihenfolge im Katalog entspricht der Render-Reihenfolge im Dashboard.
+ */
+export type DashboardBlockKey =
+  | 'birthdays'
+  | 'weather'
+  | 'tasks'
+  | 'scratchpad'
+  | 'links'
+  | 'geistesblitze'
+  | 'countdowns'
+  | 'calendar'
+  | 'sharedList'
+  | 'kidsTasks'
+  | 'mail';
+
+export const DASHBOARD_BLOCKS: { key: DashboardBlockKey; label: string; description: string }[] = [
+  { key: 'birthdays',     label: 'Geburtstage',         description: 'Heutige Geburtstage ganz oben.' },
+  { key: 'weather',       label: 'Wetter',              description: 'Wettervorhersage neben dem Sync-Button.' },
+  { key: 'tasks',         label: 'Heutige Tasks',       description: 'Überfällige und heute fällige Aufgaben.' },
+  { key: 'scratchpad',    label: 'Notizblock',          description: 'Persönlicher Notizblock.' },
+  { key: 'links',         label: 'Links',               description: 'Schnellleiste mit deinen Links.' },
+  { key: 'geistesblitze', label: 'Geistesblitze',       description: 'Persönliche Gedanken-Kacheln.' },
+  { key: 'countdowns',    label: 'Countdowns',          description: 'Countdowns bis zu Ereignissen.' },
+  { key: 'calendar',      label: 'Termine',             description: 'Heutige Kalender-Termine.' },
+  { key: 'sharedList',    label: 'Geteilte Liste',      description: 'Gemeinsame Notiz-/Einkaufsliste.' },
+  { key: 'kidsTasks',     label: 'Aufgaben der Kinder', description: 'Heutige Aufgaben aller Kinder.' },
+  { key: 'mail',          label: 'Posteingang',         description: 'Angepinnte und ungelesene Mails.' },
+];
+
+/** TE-77: Default-Sichtbarkeit – alle Dashboard-Blöcke aktiv. */
+export const DEFAULT_DASHBOARD_BLOCKS: Record<DashboardBlockKey, boolean> =
+  DASHBOARD_BLOCKS.reduce(
+    (acc, b) => { acc[b.key] = true; return acc; },
+    {} as Record<DashboardBlockKey, boolean>
+  );
 
 /** TE-37/TE-43: Auswählbare Zeitfenster (in Tagen) für den Mail-Tab. */
 export const MAIL_WINDOW_OPTIONS = [3, 7, 14, 30, 75] as const;

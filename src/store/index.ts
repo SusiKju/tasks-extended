@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Task, Group, AppSettings, Attachment, Note, Birthday, Countdown } from '../types';
+import { Task, Group, AppSettings, Attachment, Note, Birthday, Countdown, DEFAULT_DASHBOARD_BLOCKS } from '../types';
 
 interface TaskState {
   _hydrated?: boolean;
@@ -106,6 +106,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   funTileThemes: [],
   mailWindowDays: 7,
   parentPin: null,
+  dashboardBlocks: { ...DEFAULT_DASHBOARD_BLOCKS },
 };
 
 export const useStore = create<TaskState>()(
@@ -258,7 +259,7 @@ export const useStore = create<TaskState>()(
     }),
     {
       name: 'tasks-extended-store',
-      version: 22,
+      version: 23,
       migrate: (persistedState: any, version: number) => {
         if (version < 1 && persistedState?.tasks) {
           persistedState.tasks = persistedState.tasks.map((t: any) => ({
@@ -380,6 +381,11 @@ export const useStore = create<TaskState>()(
         }
         if (version < 22 && persistedState?.settings) {
           persistedState.settings.parentPin = persistedState.settings.parentPin ?? null;
+        }
+        if (version < 23 && persistedState?.settings) {
+          // TE-77: Konfigurierbare Dashboard-Blöcke – Default: alle sichtbar.
+          persistedState.settings.dashboardBlocks =
+            persistedState.settings.dashboardBlocks ?? { ...DEFAULT_DASHBOARD_BLOCKS };
         }
         return persistedState;
       },

@@ -33,7 +33,7 @@ import { LinkCardBar } from '../components/LinkCardBar';
 import { WeatherWidget } from '../components/WeatherWidget';
 import { GoogleConnectBanner } from '../components/GoogleConnectBanner';
 import { CountdownStrip } from '../components/CountdownStrip';
-import { Task } from '../types';
+import { Task, DashboardBlockKey } from '../types';
 
 // Fallback-Farbe falls Kind keine Farbe gesetzt hat
 const CHILD_COLOR_FALLBACK = '#4f86f7';
@@ -471,6 +471,12 @@ export function DashboardScreen() {
   const childColor = (id: string) => familyChildren.find((c) => c.id === id)?.color ?? CHILD_COLOR_FALLBACK;
   const childEmoji = (id: string) => familyChildren.find((c) => c.id === id)?.emoji ?? null;
   const { tasks, settings, scratchpad, setScratchpad, birthdays: storeBirthdays, pinnedMailIds } = useStore();
+  // TE-77: nur aktivierte Dashboard-Blöcke rendern. Fehlt ein Key (alter Stand /
+  // neuer Block), gilt er als sichtbar – so verschwindet nichts versehentlich.
+  const showBlock = useCallback(
+    (key: DashboardBlockKey) => settings.dashboardBlocks?.[key] !== false,
+    [settings.dashboardBlocks]
+  );
   const { colors, isDark, theme, mono, isMono, reduceMotion } = useTheme();
   const { user } = useFirebaseAuth();
   const { syncTasks } = useGoogleTasksSync();
@@ -753,7 +759,7 @@ export function DashboardScreen() {
     >
 
       {/* ── Geburtstage: ganz oben ── */}
-      {todayBirthdays.length > 0 && (
+      {showBlock('birthdays') && todayBirthdays.length > 0 && (
         richBirthday ? (
           // Neon-Dark: AI-Style mit rotierendem Regenbogen-Rand + atmendem Flammen-Glow.
           <Animated.View
@@ -825,7 +831,7 @@ export function DashboardScreen() {
 
       {/* ── Wettervorhersage (TE-126, links) + Sync-Button (rechts) ── */}
       <View style={styles.syncRow}>
-        <WeatherWidget colors={colors} />
+        {showBlock('weather') ? <WeatherWidget colors={colors} /> : <View />}
         <Pressable
           onPress={handleSync}
           disabled={syncing}
@@ -843,9 +849,11 @@ export function DashboardScreen() {
       </View>
 
       {/* ── Tasks + Scratchpad ── */}
+      {(showBlock('tasks') || showBlock('scratchpad')) && (
       <View style={styles.topRow}>
 
         {/* Tasks */}
+        {showBlock('tasks') && (
         <View style={styles.tasksCol}>
           {taskGroups.length > 0 && (
             <SectionLabel
@@ -896,8 +904,10 @@ export function DashboardScreen() {
             </View>
           )}
         </View>
+        )}
 
         {/* Scratchpad */}
+        {showBlock('scratchpad') && (
         <View style={styles.scratchCol}>
           <SectionLabel title="Notizblock" colors={colors} />
           <Scratchpad
@@ -907,20 +917,22 @@ export function DashboardScreen() {
             colors={colors}
           />
         </View>
+        )}
 
       </View>
+      )}
 
       {/* ── Links-Schnellleiste (TE-32): nur aktive Links, oberhalb der Geistesblitze ── */}
-      <LinkCardBar colors={colors} isDark={isDark} />
+      {showBlock('links') && <LinkCardBar colors={colors} isDark={isDark} />}
 
       {/* ── Geistesblitze: persönliche Gedanken-Kacheln ── */}
-      <GeistesKacheln colors={colors} isDark={isDark} />
+      {showBlock('geistesblitze') && <GeistesKacheln colors={colors} isDark={isDark} />}
 
       {/* ── Countdowns (TE-128): filigrane, motivierende Karten oberhalb der Termine ── */}
-      <CountdownStrip colors={colors} />
+      {showBlock('countdowns') && <CountdownStrip colors={colors} />}
 
       {/* ── Kalender ── */}
-      {settings.googleCalendarEnabled && (
+      {showBlock('calendar') && settings.googleCalendarEnabled && (
         <View style={styles.section}>
           {calLoading || calEvents.length > 0 ? (
             <SectionLabel title="Heutige Termine" colors={colors} />
@@ -1071,10 +1083,10 @@ export function DashboardScreen() {
 
       {/* ── Geteilte Liste (TE-121): bewusst auffällig gestaltete Card, ── */}
       {/* damit z. B. eine gemeinsame Einkaufsliste mit dem Partner sofort ins Auge fällt. */}
-      <SharedNotepad colors={colors} isDark={isDark} />
+      {showBlock('sharedList') && <SharedNotepad colors={colors} isDark={isDark} />}
 
       {/* ── Aufgaben der Kinder (TE-110/TE-115) ── */}
-      {(childrenWithTasks.length > 0 || groupTasks.length > 0) && (
+      {showBlock('kidsTasks') && (childrenWithTasks.length > 0 || groupTasks.length > 0) && (
         <View style={styles.section}>
           <SectionLabel
             title="Aufgaben der Kinder"
@@ -1204,7 +1216,7 @@ export function DashboardScreen() {
       )}
 
       {/* ── Posteingang ── */}
-      {settings.googleAccessToken && (
+      {showBlock('mail') && settings.googleAccessToken && (
         <View style={styles.section}>
           <SectionLabel
             title="Posteingang"
