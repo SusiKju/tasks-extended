@@ -26,6 +26,7 @@ import { listUpcomingEvents, CalendarEvent } from '../services/googleCalendar';
 import {
   ChildTask, subscribeToChildTasks,
 } from '../services/kinderTasks';
+import { AllowanceMonth, subscribeToAllowanceMonths, monthKey, formatEuro } from '../services/allowance';
 import { useFamily } from '../hooks/useFamily';
 import { SharedNotepad } from '../components/SharedNotepad';
 import { GeistesKacheln } from '../components/GeistesKacheln';
@@ -599,6 +600,29 @@ export function DashboardScreen() {
     );
     return () => unsubs.forEach((u) => u());
   }, [fid, familyChildren]);
+
+  // Taschengeld-Status pro Kind (TE-78): ein Echtzeit-Listener pro Kind, analog
+  // zu den Kinder-Aufgaben oben.
+  const [allowanceByChild, setAllowanceByChild] = useState<Record<string, Record<string, AllowanceMonth>>>({});
+  useEffect(() => {
+    if (!fid || familyChildren.length === 0) return;
+    const unsubs = familyChildren.map((child) =>
+      subscribeToAllowanceMonths(fid, child.id, (months) =>
+        setAllowanceByChild((prev) => ({ ...prev, [child.id]: months }))
+      )
+    );
+    return () => unsubs.forEach((u) => u());
+  }, [fid, familyChildren]);
+
+  // Kinder mit konfiguriertem Taschengeld, das für den laufenden Monat noch
+  // nicht bestätigt wurde.
+  const currentAllowanceMonth = monthKey();
+  const openAllowanceChildren = useMemo(
+    () => familyChildren.filter(
+      (c) => (c.allowance ?? 0) > 0 && !allowanceByChild[c.id]?.[currentAllowanceMonth]?.received
+    ),
+    [familyChildren, allowanceByChild, currentAllowanceMonth]
+  );
 
   // Gruppenaufgaben (TE-115): Kopien mit gemeinsamer groupId über die Kinder hinweg
   // zu je einer Gruppe bündeln – jede wird zu einer eigenen Extrakarte.
@@ -1211,6 +1235,37 @@ export function DashboardScreen() {
                 })}
               </View>
             )}
+          </View>
+        </View>
+      )}
+
+      {/* ── Taschengeld (TE-78): wer hat das Taschengeld für den laufenden Monat noch nicht bekommen? ── */}
+      {showBlock('allowance') && openAllowanceChildren.length > 0 && (
+        <View style={styles.section}>
+          <SectionLabel
+            title="Taschengeld offen"
+            onMore={() => router.push('/(tabs)/kids' as any)}
+            colors={colors}
+          />
+          <View style={[styles.card, styles.kidCard]}>
+            {openAllowanceChildren.map((child, i) => (
+              <View
+                key={child.id}
+                style={[styles.kidRow, i < openAllowanceChildren.length - 1 && styles.rowDivider]}
+              >
+                <View style={[styles.kidAvatar, { backgroundColor: childColor(child.id) }]}>
+                  <Text style={styles.kidAvatarText}>
+                    {childEmoji(child.id) ?? childName(child.id).charAt(0)}
+                  </Text>
+                </View>
+                <Text style={[styles.kidTaskText, { color: colors.text }]} numberOfLines={1}>
+                  {childName(child.id)}
+                </Text>
+                <Text style={[styles.dueBadge, styles.dueBadgeOverdue]}>
+                  {formatEuro(child.allowance ?? 0)}
+                </Text>
+              </View>
+            ))}
           </View>
         </View>
       )}

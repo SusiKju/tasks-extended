@@ -116,6 +116,7 @@ export type DashboardBlockKey =
   | 'calendar'
   | 'sharedList'
   | 'kidsTasks'
+  | 'allowance'
   | 'mail';
 
 export const DASHBOARD_BLOCKS: { key: DashboardBlockKey; label: string; description: string }[] = [
@@ -129,6 +130,7 @@ export const DASHBOARD_BLOCKS: { key: DashboardBlockKey; label: string; descript
   { key: 'calendar',      label: 'Termine',             description: 'Heutige Kalender-Termine.' },
   { key: 'sharedList',    label: 'Geteilte Liste',      description: 'Gemeinsame Notiz-/Einkaufsliste.' },
   { key: 'kidsTasks',     label: 'Aufgaben der Kinder', description: 'Heutige Aufgaben aller Kinder.' },
+  { key: 'allowance',     label: 'Taschengeld',         description: 'Kinder, deren Taschengeld für den laufenden Monat noch offen ist.' },
   { key: 'mail',          label: 'Posteingang',         description: 'Angepinnte und ungelesene Mails.' },
 ];
 
