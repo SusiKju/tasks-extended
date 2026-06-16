@@ -1098,6 +1098,7 @@ export function DashboardScreen() {
           onRequestClose={() => setFeedDialogOpen(false)}
         >
           <View style={[styles.feedModalOverlay, { backgroundColor: 'rgba(0,0,0,0.5)' }]}>
+            <Pressable style={StyleSheet.absoluteFill} onPress={() => setFeedDialogOpen(false)} />
             <View style={[styles.feedModalCard, { backgroundColor: colors.background }]}>
               <View style={styles.feedModalHeader}>
                 <Text style={[styles.feedModalTitle, { color: colors.text }]}>Mein Tag</Text>
