@@ -16,7 +16,7 @@ import { Clipboard } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useStore } from '../store';
 import { useTheme, ThemeColors, neonGlow, THEMES } from '../utils/theme';
-import { Theme, FunTileTheme, KidTheme, MAIL_WINDOW_OPTIONS } from '../types';
+import { Theme, FunTileTheme, MAIL_WINDOW_OPTIONS } from '../types';
 import { FUN_THEMES } from '../components/FussballKachel';
 
 const THEME_OPTIONS: { key: Theme; label: string; description: string }[] = [
@@ -60,16 +60,6 @@ function parseAllowance(text: string): number | null {
 const CHILD_COLORS = [
   '#4f86f7', '#f76e4f', '#22c55e', '#d946ef',
   '#f59e0b', '#06b6d4', '#8b5cf6', '#ec4899',
-];
-
-/**
- * Auswählbare Interessens-Themen pro Kind (TE-65). Erweiterbar: ein neues Thema
- * braucht nur einen weiteren Eintrag hier und die passende Datenquelle im
- * Content-Service (TE-69).
- */
-const KID_THEME_OPTIONS: { value: KidTheme; label: string; icon: string }[] = [
-  { value: 'fussball', label: 'Fußball', icon: '⚽' },
-  { value: 'lego', label: 'Lego', icon: '🧱' },
 ];
 
 function crossAlert(title: string, message: string, onConfirm: () => void) {
@@ -130,18 +120,6 @@ export function SettingsScreen() {
       await setChildAllowance(familyId, child.id, amount);
     } catch (e: any) {
       Alert.alert('Fehler', e?.message ?? 'Taschengeld speichern fehlgeschlagen.');
-    }
-  }, [familyId]);
-
-  /** Interessens-Thema eines Kindes setzen/abwählen (TE-65). */
-  const handleSetTheme = useCallback(async (child: ChildConfig, theme: KidTheme | null) => {
-    if (!familyId) return;
-    const next = (child.theme ?? null) === theme ? null : theme; // erneutes Tippen wählt ab
-    if (next === (child.theme ?? null)) return;
-    try {
-      await updateChild(familyId, child.id, { theme: next });
-    } catch (e: any) {
-      Alert.alert('Fehler', e?.message ?? 'Thema speichern fehlgeschlagen.');
     }
   }, [familyId]);
 
@@ -621,31 +599,6 @@ export function SettingsScreen() {
                   />
                   <Text style={styles.rowSubtitle}>€</Text>
                 </View>
-                {/* Interessens-Thema (TE-65) – steuert die Themen-Anzeige in der Kinder-App */}
-                <View style={styles.kidThemeRow}>
-                  <Ionicons name="sparkles-outline" size={16} color={colors.textSecondary} />
-                  <Text style={[styles.rowSubtitle, { flex: 1 }]}>Thema</Text>
-                  <View style={styles.themePills}>
-                    {KID_THEME_OPTIONS.map((opt) => {
-                      const active = (child.theme ?? null) === opt.value;
-                      return (
-                        <Pressable
-                          key={opt.value}
-                          onPress={() => handleSetTheme(child, opt.value)}
-                          style={({ pressed }) => [
-                            styles.themePill,
-                            active && styles.themePillActive,
-                            pressed && { opacity: 0.6 },
-                          ]}
-                        >
-                          <Text style={[styles.themePillText, active && styles.themePillTextActive]}>
-                            {opt.icon} {opt.label}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                </View>
               </View>
             ))}
           </View>
@@ -1085,32 +1038,6 @@ function makeStyles(c: ThemeColors) {
       textAlign: 'right',
       fontSize: 13,
     },
-    // Themen-Auswahl pro Kind (TE-65)
-    kidThemeRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 8,
-      marginLeft: 44,
-      marginTop: 4,
-    },
-    themePills: {
-      flexDirection: 'row',
-      gap: 6,
-    },
-    themePill: {
-      paddingHorizontal: 10,
-      paddingVertical: 5,
-      borderRadius: 14,
-      borderWidth: 1,
-      borderColor: c.border,
-      backgroundColor: c.surfaceHigh,
-    },
-    themePillActive: {
-      backgroundColor: c.accent,
-      borderColor: c.accent,
-    },
-    themePillText: { fontSize: 12, color: c.textSecondary },
-    themePillTextActive: { color: c.accentFg, fontWeight: '600' },
     // Kind-Modal
     modalOverlay: {
       flex: 1,

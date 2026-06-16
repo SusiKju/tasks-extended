@@ -24,7 +24,6 @@ import {
 } from 'firebase/firestore';
 import { User } from 'firebase/auth';
 import { db } from './firebase';
-import { KidTheme } from '../types';
 
 // ── Typen ────────────────────────────────────────────────────────────────────
 
@@ -52,11 +51,6 @@ export interface ChildConfig {
   emoji?: string | null;
   /** Monatliches Taschengeld in EUR (TE-52). null/undefined = nicht konfiguriert. */
   allowance?: number | null;
-  /**
-   * Interessens-Thema für die dynamische Themen-Anzeige in der Kinder-App
-   * (TE-65). null/undefined = kein Thema, keine Anzeige.
-   */
-  theme?: KidTheme | null;
   createdAt: string;
 }
 
@@ -261,18 +255,17 @@ export async function addChild(
     name: name.trim(),
     color,
     emoji: emoji ?? null,
-    theme: null,
     createdAt: new Date().toISOString(),
   };
   await setDoc(ref, child);
   return ref.id;
 }
 
-/** Aktualisiert Name, Farbe, Emoji oder Thema (TE-65) eines Kindes. */
+/** Aktualisiert Name, Farbe oder Emoji eines Kindes. */
 export async function updateChild(
   familyId: string,
   childId: string,
-  updates: Partial<Pick<ChildConfig, 'name' | 'color' | 'emoji' | 'theme'>>
+  updates: Partial<Pick<ChildConfig, 'name' | 'color' | 'emoji'>>
 ): Promise<void> {
   const { updateDoc } = await import('firebase/firestore');
   await updateDoc(doc(childrenConfigCol(familyId), childId), updates);

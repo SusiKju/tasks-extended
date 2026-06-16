@@ -100,15 +100,6 @@ export const MAIL_WINDOW_OPTIONS = [3, 7, 14, 30, 75] as const;
 /** Themen der Fokus-Kachel (TE-10). */
 export type FunTileTheme = 'fussball' | 'yoga' | 'garten';
 
-/**
- * TE-65: Interessens-Thema eines Kindes für die dynamische Themen-Anzeige in
- * der Kinder-App. Pro Reload wird ein passendes Item (z.B. Fußballspieler,
- * Lego-Set) angezeigt. `null` = kein Thema gewählt, keine Anzeige.
- * Erweiterbar: ein neues Thema braucht nur einen weiteren String + Registry-
- * Eintrag im Content-Service (TE-69).
- */
-export type KidTheme = 'fussball' | 'lego';
-
 export interface NoteChecklistItem {
   text: string;
   checked: boolean;

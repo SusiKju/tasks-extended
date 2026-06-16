@@ -23,7 +23,6 @@ import {
   formatEuro, formatMonthLabel,
 } from '../services/allowance';
 import { registerPushToken } from '../services/pushNotifications';
-import KidThemeCard from '../components/KidThemeCard';
 
 const FAMILY_ID_KEY = 'kinder_family_id';
 import { Platform } from 'react-native';
@@ -307,8 +306,6 @@ export default function KindScreen({ onExitChildMode }: Props) {
             </View>
           </TouchableOpacity>
         ))}
-        {/* Themen-Anzeige (TE-65): ganz unten, nach den Aufgaben. */}
-        {selectedChild?.theme && <KidThemeCard theme={selectedChild.theme} />}
       </ScrollView>
 
       {/* Schatzkiste-Belohnung (TE-100) – generischer Tagesfortschritt */}
