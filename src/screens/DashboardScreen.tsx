@@ -611,6 +611,14 @@ export function DashboardScreen() {
       .slice(0, 5);
   }, [mails, pinnedSet]);
 
+  // TE-84: Im "Mein Tag"-Feed sollen nur tatsächlich gepinnte Mails erscheinen,
+  // anders als die Dashboard-Mail-Card (pinned+unread, TE-41).
+  const feedPinnedMails = useMemo(() => {
+    return mails
+      .filter((m) => pinnedSet.has(m.id))
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [mails, pinnedSet]);
+
   // Heutige Aufgaben aller Kinder (TE-110) – ein Echtzeit-Listener pro Kind,
   // analog zum Kids-Tab. Abschnitt erscheint nur, wenn mindestens eine Aufgabe da ist.
   const [childTasks, setChildTasks] = useState<Record<string, ChildTask[]>>({});
@@ -802,10 +810,14 @@ export function DashboardScreen() {
     const items: FeedItem[] = [];
 
     // Eigene Tasks (alle offenen, über alle Zeitgruppen).
+    // Key: bei Google-Tasks-Sync die googleEventId verwenden statt der lokalen
+    // Firestore-/Store-ID – die lokale ID kann je Gerät unterschiedlich entstehen
+    // (z.B. lokal angelegt vs. von Google importiert), die googleEventId ist
+    // geräteübergreifend stabil und damit für die manuelle Sortierung nötig.
     for (const t of tasks) {
       if (t.completed) continue;
       items.push({
-        key: `task:${t.id}`,
+        key: `task:${t.googleEventId ?? t.id}`,
         category: 'task',
         group: feedDateGroup(t.dueDate),
         title: t.title,
@@ -830,15 +842,15 @@ export function DashboardScreen() {
       }
     }
 
-    // Posteingang (angepinnt/ungelesen) – kein eigenes Fälligkeitsdatum → "Ohne Termin".
-    for (const m of dashboardMails) {
+    // Posteingang (TE-84: nur gepinnt) – kein eigenes Fälligkeitsdatum → "Ohne Termin".
+    for (const m of feedPinnedMails) {
       items.push({
         key: `mail:${m.id}`,
         category: 'mail',
         group: 'later',
         title: parseDisplayFrom(m.from),
         subtitle: m.subject || '(Kein Betreff)',
-        important: pinnedSet.has(m.id),
+        important: true,
         onPress: () => router.push('/(tabs)/mail' as any),
       });
     }
@@ -921,7 +933,7 @@ export function DashboardScreen() {
 
     return items;
   }, [
-    tasks, familyChildren, childTasks, dashboardMails, pinnedSet,
+    tasks, familyChildren, childTasks, feedPinnedMails, pinnedSet,
     todayEvents, todayBirthdays, feedSharedNotes,
     feedGeistesKacheln, openAllowanceChildren, currentAllowanceMonth, router,
     scratchpad, isMono, isDark, colors,

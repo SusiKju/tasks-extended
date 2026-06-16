@@ -140,11 +140,41 @@ export function useGoogleTasksSync() {
     // Re-read tasks so we see freshly imported ones (they already have googleEventId set).
     const freshTasks = useStore.getState().tasks;
 
+    // Bereits verknüpfte googleEventIds vormerken, damit ein Match-by-title
+    // weiter unten keinen Google-Task "stiehlt", der schon einem anderen
+    // lokalen Task zugeordnet ist.
+    const claimedGoogleIds = new Set(
+      freshTasks.filter((t) => t.googleEventId).map((t) => t.googleEventId as string)
+    );
+
     for (const local of freshTasks) {
       // Skip completed tasks — don't push them as new, they're done
       if (local.completed) continue;
 
       if (!local.googleEventId) {
+        // Bevor ein neuer Google Task angelegt wird: prüfen, ob bereits ein
+        // (noch unverknüpfter) Google Task mit demselben Titel + Datum
+        // existiert. Das passiert z. B., wenn derselbe Task fast gleichzeitig
+        // auf zwei Geräten lokal angelegt wurde, bevor beide synchronisiert
+        // hatten — ohne diesen Check würde sonst auf JEDEM Gerät ein eigener
+        // Google Task erzeugt ("Duplikat"), und die beiden Kopien bekommen
+        // nie dieselbe googleEventId → manuelle Reihenfolge kann nie
+        // geräteübergreifend matchen (sieht aus wie "Sync funktioniert nicht").
+        const localDueStr = local.dueDate ? localDateStr(local.dueDate) : null;
+        const existingMatch = googleTasks.find((gt) => {
+          if (!gt.id || claimedGoogleIds.has(gt.id)) return false;
+          if ((gt.title ?? '').trim().toLowerCase() !== local.title.trim().toLowerCase()) return false;
+          const gtDueStr = gt.due ? gt.due.split('T')[0] : null;
+          return gtDueStr === localDueStr;
+        });
+
+        if (existingMatch) {
+          claimedGoogleIds.add(existingMatch.id);
+          updateTask(local.id, { googleEventId: existingMatch.id });
+          result.updated++;
+          continue;
+        }
+
         // New local task — push to Google Tasks
         const { result: newId } = await withTokenRefresh(
           token,
@@ -158,6 +188,7 @@ export function useGoogleTasksSync() {
           )
         );
         if (typeof newId === 'string' && newId) {
+          claimedGoogleIds.add(newId);
           updateTask(local.id, { googleEventId: newId });
           result.pushed++;
         } else {
@@ -193,6 +224,29 @@ export function useGoogleTasksSync() {
             (t) => updateGoogleTask(t, taskListId, local.googleEventId!, updates)
           ).catch(() => {});
         }
+      }
+    }
+
+    // ── 6. Diagnose: bereits bestehende Duplikate sichtbar machen ───────────────
+    // Nicht-destruktiv (kein Auto-Löschen) – nur Hinweis, falls zwei offene
+    // Tasks mit gleichem Titel unterschiedliche googleEventId haben. Das ist
+    // die Ursache, wenn die manuelle Feed-Reihenfolge für einen bestimmten
+    // Google-Tasks-Task partout nicht geräteübergreifend syncen will: es sind
+    // in Wahrheit zwei verschiedene Tasks (zwei verschiedene googleEventId),
+    // die nur zufällig gleich heißen.
+    const finalTasks = useStore.getState().tasks.filter((t) => !t.completed && t.googleEventId);
+    const byTitle = new Map<string, typeof finalTasks>();
+    for (const t of finalTasks) {
+      const key = t.title.trim().toLowerCase();
+      byTitle.set(key, [...(byTitle.get(key) ?? []), t]);
+    }
+    for (const [title, group] of byTitle) {
+      const distinctGoogleIds = new Set(group.map((t) => t.googleEventId));
+      if (distinctGoogleIds.size > 1) {
+        console.warn(
+          `[TaskSync] Mögliches Duplikat erkannt: "${title}" existiert ${distinctGoogleIds.size}× mit unterschiedlicher googleEventId`,
+          group.map((t) => ({ id: t.id, googleEventId: t.googleEventId })),
+        );
       }
     }
 
