@@ -161,6 +161,37 @@ export function faviconUrl(rawUrl: string, size = 64): string | null {
   return `https://www.google.com/s2/favicons?sz=${size}&domain=${encodeURIComponent(host)}`;
 }
 
+/**
+ * Fallback wenn Google's Favicon-Dienst eine Domain nicht kennt (404, TE-86):
+ * lädt das HTML der Seite und liest deren eigenes <link rel="icon">-Tag aus.
+ * Bei mehreren rel="icon"-Treffern gewinnt die größte sizes-Angabe.
+ */
+export async function fetchPageFaviconUrl(rawUrl: string): Promise<string | null> {
+  const pageUrl = normalizeUrl(rawUrl);
+  if (!pageUrl) return null;
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    const res = await fetch(pageUrl, { signal: controller.signal });
+    clearTimeout(timeout);
+    if (!res.ok) return null;
+    const html = await res.text();
+    const icons = (html.match(/<link\s[^>]*>/gi) ?? [])
+      .map((tag) => ({
+        rel: tag.match(/rel=["']([^"']+)["']/i)?.[1]?.toLowerCase() ?? '',
+        href: tag.match(/href=["']([^"']+)["']/i)?.[1],
+        sizes: tag.match(/sizes=["']([^"']+)["']/i)?.[1],
+      }))
+      .filter((t): t is { rel: string; href: string; sizes: string | undefined } => !!t.href && /icon/.test(t.rel));
+    if (icons.length === 0) return null;
+    const sizeOf = (s?: string) => parseInt(s?.match(/(\d+)x\d+/)?.[1] ?? '0', 10);
+    const best = icons.filter((t) => t.rel === 'icon').sort((a, b) => sizeOf(b.sizes) - sizeOf(a.sizes))[0] ?? icons[0];
+    return new URL(best.href, pageUrl).toString();
+  } catch {
+    return null;
+  }
+}
+
 /** Öffnet die (normalisierte) URL extern – Web öffnet Tab, Native den Browser. */
 export async function openLink(rawUrl: string): Promise<void> {
   const normalized = normalizeUrl(rawUrl);
