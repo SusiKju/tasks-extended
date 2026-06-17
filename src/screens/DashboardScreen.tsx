@@ -373,13 +373,6 @@ function Scratchpad({
     onChange(serializeScratchpad(next));
   }, [entries, onChange]);
 
-  const addEntry = useCallback((afterIdx: number) => {
-    const next = [...entries];
-    next.splice(afterIdx + 1, 0, { text: '', color: NOTE_DEFAULT_COLOR });
-    onChange(serializeScratchpad(next));
-    setTimeout(() => inputRefs.current[afterIdx + 1]?.focus(), 40);
-  }, [entries, onChange]);
-
   // TE-85: neue Notiz mit höchster Priorität (Position 0) + Default-Pink.
   // Ist die einzige vorhandene Notiz noch leer, wird sie wiederverwendet statt
   // eine zweite leere Bubble zu erzeugen.
@@ -443,11 +436,12 @@ function Scratchpad({
             value={entry.text}
             onChangeText={(t) => updateEntry(idx, t)}
             onKeyPress={(e) => handleKeyPress(idx, e)}
-            onSubmitEditing={() => addEntry(idx)}
+            // TE-85: Enter legt keine neue Notiz mehr an (das macht der +-Button),
+            // sondern schließt die Eingabe nur ab (blurOnSubmit).
             placeholder={idx === 0 && entries.length === 1 ? 'Notiz…' : ''}
             placeholderTextColor={fg + '55'}
             returnKeyType="done"
-            blurOnSubmit={false}
+            blurOnSubmit
           />
           {/* X immer rechts, oben ausgerichtet damit er bei zweizeiligem Text sichtbar bleibt */}
           <Pressable
