@@ -34,7 +34,7 @@ import {
   ChildReward, RewardType, REWARD_TYPES,
   subscribeToChildTasks, addTask, updateTask, deleteTask, deleteCompletedTasks, rejectTask,
   releaseTaskReward,
-  getReminderTimes, setReminderTimes, getActivityLog,
+  getActivityLog,
 } from '../../src/services/kinderTasks';
 import { useFamily } from '../../src/hooks/useFamily';
 import {
@@ -89,9 +89,6 @@ export default function KinderScreen() {
   const [groupSelection, setGroupSelection] = useState<Record<string, boolean>>({});
   const [mailingChild, setMailingChild] = useState<string | null>(null);
   const [sendingAllMail, setSendingAllMail] = useState(false);
-  const [reminderTimes, setReminderTimesState] = useState<string[]>(['15:00', '17:00']);
-  const [editingTimes, setEditingTimes] = useState(false);
-  const [timesInput, setTimesInput] = useState('15:00, 17:00');
   const [sending, setSending] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [setupModalVisible, setSetupModalVisible] = useState(false);
@@ -142,14 +139,6 @@ export default function KinderScreen() {
     );
     return () => unsubs.forEach((u) => u());
   }, [fid, familyChildren]);
-
-  useEffect(() => {
-    if (!fid) return;
-    getReminderTimes(fid).then((times) => {
-      setReminderTimesState(times);
-      setTimesInput(times.join(', '));
-    });
-  }, [fid]);
 
   // Aus dem Reward-Entwurf eine speicherbare Belohnung bauen (Detail optional).
   // null = keine Belohnung. Kein undefined-Feld (TE-40: Firebase 11 hängt sonst).
@@ -464,13 +453,6 @@ export default function KinderScreen() {
       setHistoryLoading(false);
     }
   }, [fid]);
-
-  const handleSaveTimes = useCallback(async () => {
-    const times = timesInput.split(',').map((t) => t.trim()).filter(Boolean);
-    await setReminderTimes(fid, times);
-    setReminderTimesState(times);
-    setEditingTimes(false);
-  }, [fid, timesInput]);
 
   const handleSendNow = useCallback(async () => {
     setSending(true);
@@ -929,32 +911,6 @@ export default function KinderScreen() {
         </>
       )}
 
-      {/* Erinnerungszeiten */}
-      <View style={s.section}>
-        <View style={s.row}>
-          <Text style={s.sectionTitle}>Erinnerungszeiten</Text>
-          <TouchableOpacity onPress={() => setEditingTimes(!editingTimes)}>
-            <Ionicons name="pencil-outline" size={18} color={colors.accentNeon} />
-          </TouchableOpacity>
-        </View>
-        {editingTimes ? (
-          <>
-            <Text style={s.hint}>Kommagetrennt, z.B. "08:00, 15:00, 17:00"</Text>
-            <TextInput
-              style={s.input}
-              value={timesInput}
-              onChangeText={setTimesInput}
-              placeholderTextColor={colors.placeholder}
-            />
-            <TouchableOpacity style={s.saveBtn} onPress={handleSaveTimes}>
-              <Text style={s.saveBtnText}>Speichern</Text>
-            </TouchableOpacity>
-          </>
-        ) : (
-          <Text style={s.timesText}>{reminderTimes.join('  ·  ')}</Text>
-        )}
-      </View>
-
       {/* Edit-Modal — Titel + Belohnung (TE-63) */}
       <Modal visible={!!editingTask} transparent animationType="fade">
         <Pressable style={s.modalOverlay} onPress={() => setEditingTask(null)}>
@@ -1069,13 +1025,6 @@ export default function KinderScreen() {
         </Pressable>
       </Modal>
 
-      {/* Kinder-Gerät einrichten */}
-      <TouchableOpacity style={s.setupBtn} onPress={() => setSetupModalVisible(true)}>
-        <Ionicons name="phone-portrait-outline" size={18} color={colors.accentNeon} />
-        <Text style={s.setupBtnText}>Dieses Gerät als Kinder-Gerät einrichten</Text>
-        <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-      </TouchableOpacity>
-
       {/* Setup-Modal: Kind auswählen */}
       <Modal visible={setupModalVisible} transparent animationType="fade">
         <Pressable style={s.modalOverlay} onPress={() => setSetupModalVisible(false)}>
@@ -1102,13 +1051,13 @@ export default function KinderScreen() {
         </Pressable>
       </Modal>
 
-      {/* Push jetzt senden */}
+      {/* Push jetzt senden — dezent gestaltet (TE-90), damit die Buttons weniger präsent wirken */}
       <TouchableOpacity style={s.pushBtn} onPress={handleSendNow} disabled={sending}>
         {sending ? (
-          <ActivityIndicator color={colors.accentFg} />
+          <ActivityIndicator color={colors.textMuted} />
         ) : (
           <>
-            <Ionicons name="notifications-outline" size={20} color={colors.accentFg} />
+            <Ionicons name="notifications-outline" size={18} color={colors.textMuted} />
             <Text style={s.pushBtnText}>App-Push an alle (nur wenn App offen)</Text>
           </>
         )}
@@ -1116,18 +1065,24 @@ export default function KinderScreen() {
 
       {/* Push & Mail an alle (TE-118) */}
       <TouchableOpacity
-        style={[s.pushBtn, { marginTop: 10, backgroundColor: colors.accentNeon }]}
+        style={[s.pushBtn, { marginTop: 10 }]}
         onPress={handleSendAllMail}
         disabled={sendingAllMail}
       >
         {sendingAllMail ? (
-          <ActivityIndicator color="#000" />
+          <ActivityIndicator color={colors.textMuted} />
         ) : (
           <>
-            <Ionicons name="mail-outline" size={20} color="#000" />
-            <Text style={[s.pushBtnText, { color: '#000' }]}>Push & Mail an alle</Text>
+            <Ionicons name="mail-outline" size={18} color={colors.textMuted} />
+            <Text style={s.pushBtnText}>Push & Mail an alle</Text>
           </>
         )}
+      </TouchableOpacity>
+
+      {/* Kinder-Gerät einrichten — bewusst dezent ans Seitenende (TE-89), damit er nicht versehentlich angetippt wird */}
+      <TouchableOpacity style={s.setupBtn} onPress={() => setSetupModalVisible(true)}>
+        <Ionicons name="phone-portrait-outline" size={14} color={colors.textMuted} />
+        <Text style={s.setupBtnText}>Dieses Gerät als Kinder-Gerät einrichten</Text>
       </TouchableOpacity>
     </ScrollView>
   );
@@ -1268,17 +1223,17 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
     allowanceStatusText: { fontSize: 12, fontWeight: '700' },
     row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     hint: { fontSize: 12, color: colors.textMuted },
-    timesText: { fontSize: 16, color: colors.accentNeon, fontWeight: '600' },
     saveBtn: {
       backgroundColor: colors.accentNeon, borderRadius: 10,
       paddingVertical: 10, alignItems: 'center',
     },
     saveBtnText: { color: '#000', fontWeight: '700', fontSize: 14 },
     pushBtn: {
-      flexDirection: 'row', backgroundColor: colors.accent, borderRadius: 14,
-      paddingVertical: 14, justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 8,
+      flexDirection: 'row', backgroundColor: colors.surface, borderRadius: 12,
+      borderWidth: 1, borderColor: colors.border,
+      paddingVertical: 11, justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 8,
     },
-    pushBtnText: { color: colors.accentFg, fontWeight: '700', fontSize: 15 },
+    pushBtnText: { color: colors.textSecondary, fontWeight: '600', fontSize: 14 },
     headerBtnRow: { flexDirection: 'row', gap: 8 },
     pushChildBtn: {
       flexDirection: 'row', alignItems: 'center', gap: 4,
@@ -1302,11 +1257,10 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
     historyMeta: { fontSize: 11, color: colors.textMuted, marginTop: 1 },
     historyTime: { fontSize: 13, fontWeight: '600', color: colors.accentNeon },
     setupBtn: {
-      flexDirection: 'row', alignItems: 'center', gap: 10,
-      backgroundColor: colors.surface, borderRadius: 14, padding: 14,
-      borderWidth: 1, borderColor: colors.border, marginTop: 8,
+      flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6,
+      paddingVertical: 10, marginTop: 16,
     },
-    setupBtnText: { flex: 1, fontSize: 14, color: colors.accentNeon, fontWeight: '600' },
+    setupBtnText: { fontSize: 12, color: colors.textMuted, fontWeight: '500' },
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
     modalBox: { backgroundColor: colors.surface, borderRadius: 20, padding: 24, width: 300, gap: 10 },
     modalTitle: { fontSize: 18, fontWeight: '700', color: colors.text, textAlign: 'center' },
