@@ -38,7 +38,7 @@ import {
 } from '../../src/services/kinderTasks';
 import { useFamily } from '../../src/hooks/useFamily';
 import {
-  AllowanceMonth, subscribeToAllowanceMonths, monthKey,
+  AllowanceMonth, subscribeToAllowanceMonths, monthKey, setAllowanceReceived,
   formatEuro, formatMonthLabel, nextAllowanceMonth,
 } from '../../src/services/allowance';
 import { sendHtmlMail } from '../../src/services/googleMail';
@@ -441,6 +441,15 @@ export default function KinderScreen() {
       crossInfo('Fehler', e?.message ?? 'Belohnung konnte nicht freigegeben werden.');
     }
   }, [fid]);
+
+  // Taschengeld-Übergabe direkt im Kindertab bestätigen/widerrufen (TE-92).
+  const handleToggleAllowanceReceived = useCallback(async (month: string, received: boolean, amount: number) => {
+    try {
+      await setAllowanceReceived(fid, selectedChild, month, !received, amount);
+    } catch (e: any) {
+      crossInfo('Fehler', e?.message ?? 'Taschengeld-Status konnte nicht gespeichert werden.');
+    }
+  }, [fid, selectedChild]);
 
   const handleOpenHistory = useCallback(async (childId: string) => {
     setHistoryChild(childId);
@@ -899,16 +908,19 @@ export default function KinderScreen() {
                 )}
               </View>
               <Text style={s.allowanceAmount}>{formatEuro(m.amount)}</Text>
-              {m.received ? (
-                <View style={[s.allowanceStatus, s.allowanceStatusOk]}>
-                  <Ionicons name="checkmark-circle" size={13} color={colors.success} />
-                  <Text style={[s.allowanceStatusText, { color: colors.success }]}>erhalten</Text>
-                </View>
-              ) : (
-                <View style={s.allowanceStatus}>
-                  <Text style={[s.allowanceStatusText, { color: colors.textMuted }]}>ausstehend</Text>
-                </View>
-              )}
+              <TouchableOpacity
+                style={[s.allowanceStatus, m.received && s.allowanceStatusOk]}
+                onPress={() => handleToggleAllowanceReceived(key, m.received, m.amount)}
+              >
+                <Ionicons
+                  name={m.received ? 'checkmark-circle' : 'ellipse-outline'}
+                  size={13}
+                  color={m.received ? colors.success : colors.textMuted}
+                />
+                <Text style={[s.allowanceStatusText, { color: m.received ? colors.success : colors.textMuted }]}>
+                  {m.received ? 'erhalten' : 'übergeben?'}
+                </Text>
+              </TouchableOpacity>
             </View>
           ))
         )}
@@ -1250,6 +1262,7 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
     allowanceStatus: {
       flexDirection: 'row', alignItems: 'center', gap: 3,
       minWidth: 78, justifyContent: 'flex-end',
+      paddingVertical: 6, paddingHorizontal: 4,
     },
     allowanceStatusOk: {},
     allowanceStatusText: { fontSize: 12, fontWeight: '700' },
