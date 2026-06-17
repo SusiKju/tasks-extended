@@ -84,8 +84,10 @@ export default function KinderScreen() {
   // Taschengeld-Verlauf pro Kind, echtzeit-synchron mit der Kinder-App (TE-72).
   const [allowanceByChild, setAllowanceByChild] = useState<Record<string, Record<string, AllowanceMonth>>>({});
   const [newTaskTitle, setNewTaskTitle] = useState('');
-  // Gruppenaufgabe (TE-111): dieselbe Aufgabe an mehrere ausgewählte Kinder.
-  const [groupMode, setGroupMode] = useState(false);
+  // Modus-Umschalter (TE-93): Einzelne | Gruppe | Extras. groupMode wird daraus
+  // abgeleitet, damit der bestehende Code unverändert auf groupMode zugreifen kann.
+  const [mode, setMode] = useState<'single' | 'group' | 'extras'>('single');
+  const groupMode = mode === 'group';
   const [groupSelection, setGroupSelection] = useState<Record<string, boolean>>({});
   const [mailingChild, setMailingChild] = useState<string | null>(null);
   const [sendingAllMail, setSendingAllMail] = useState(false);
@@ -545,25 +547,36 @@ export default function KinderScreen() {
       contentContainerStyle={s.container}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => setRefreshing(false)} />}
     >
-      {/* Modus-Umschalter ganz oben (TE-56): steuert die gesamte Seite —
-          Einzelne = Aufgaben pro Kind, Gruppe = Gruppenaufgaben für mehrere Kinder. */}
+      {/* Modus-Umschalter ganz oben (TE-56/TE-93): steuert die gesamte Seite —
+          Einzelne = Aufgaben pro Kind, Gruppe = Gruppenaufgaben für mehrere Kinder,
+          Extras = Push-/Geräte-Aktionen. */}
       <View style={s.topToggle}>
         <TouchableOpacity
-          style={[s.topToggleBtn, !groupMode && s.topToggleBtnActive]}
-          onPress={() => setGroupMode(false)}
+          style={[s.topToggleBtn, mode === 'single' && s.topToggleBtnActive]}
+          onPress={() => setMode('single')}
         >
-          <Ionicons name="person" size={16} color={!groupMode ? '#000' : colors.textMuted} />
-          <Text style={[s.topToggleText, !groupMode && s.topToggleTextActive]}>Einzelne</Text>
+          <Ionicons name="person" size={16} color={mode === 'single' ? '#000' : colors.textMuted} />
+          <Text style={[s.topToggleText, mode === 'single' && s.topToggleTextActive]}>Einzelne</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[s.topToggleBtn, groupMode && s.topToggleBtnActive]}
-          onPress={() => setGroupMode(true)}
+          style={[s.topToggleBtn, mode === 'group' && s.topToggleBtnActive]}
+          onPress={() => setMode('group')}
         >
-          <Ionicons name="people" size={16} color={groupMode ? '#000' : colors.textMuted} />
-          <Text style={[s.topToggleText, groupMode && s.topToggleTextActive]}>Gruppe</Text>
+          <Ionicons name="people" size={16} color={mode === 'group' ? '#000' : colors.textMuted} />
+          <Text style={[s.topToggleText, mode === 'group' && s.topToggleTextActive]}>Gruppe</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[s.topToggleBtn, mode === 'extras' && s.topToggleBtnActive]}
+          onPress={() => setMode('extras')}
+        >
+          <Ionicons name="apps" size={16} color={mode === 'extras' ? '#000' : colors.textMuted} />
+          <Text style={[s.topToggleText, mode === 'extras' && s.topToggleTextActive]}>Extras</Text>
         </TouchableOpacity>
       </View>
 
+      {/* Haupt-Inhalt nur in Einzelne/Gruppe — im Extras-Tab ausgeblendet (TE-93) */}
+      {mode !== 'extras' && (
+        <>
       {/* Auswahl: ein Kind (Einzelne) oder Kinder zusammenstellen (Gruppe) */}
       {groupMode ? (
         <View style={s.section}>
@@ -910,6 +923,8 @@ export default function KinderScreen() {
 
         </>
       )}
+        </>
+      )}
 
       {/* Edit-Modal — Titel + Belohnung (TE-63) */}
       <Modal visible={!!editingTask} transparent animationType="fade">
@@ -1051,39 +1066,47 @@ export default function KinderScreen() {
         </Pressable>
       </Modal>
 
-      {/* Push jetzt senden — dezent gestaltet (TE-90), damit die Buttons weniger präsent wirken */}
-      <TouchableOpacity style={s.pushBtn} onPress={handleSendNow} disabled={sending}>
-        {sending ? (
-          <ActivityIndicator color={colors.textMuted} />
-        ) : (
-          <>
-            <Ionicons name="notifications-outline" size={18} color={colors.textMuted} />
-            <Text style={s.pushBtnText}>App-Push an alle (nur wenn App offen)</Text>
-          </>
-        )}
-      </TouchableOpacity>
+      {/* Extras-Tab (TE-93): Push-/Mail-Aktionen an alle + Gerät einrichten.
+          Vorher dauerhaft am Seitenende, jetzt nur im Extras-Tab sichtbar. */}
+      {mode === 'extras' && (
+        <View style={s.section}>
+          <Text style={s.sectionTitle}>Extras</Text>
 
-      {/* Push & Mail an alle (TE-118) */}
-      <TouchableOpacity
-        style={[s.pushBtn, { marginTop: 10 }]}
-        onPress={handleSendAllMail}
-        disabled={sendingAllMail}
-      >
-        {sendingAllMail ? (
-          <ActivityIndicator color={colors.textMuted} />
-        ) : (
-          <>
-            <Ionicons name="mail-outline" size={18} color={colors.textMuted} />
-            <Text style={s.pushBtnText}>Push & Mail an alle</Text>
-          </>
-        )}
-      </TouchableOpacity>
+          {/* Push jetzt senden — dezent gestaltet (TE-90), damit die Buttons weniger präsent wirken */}
+          <TouchableOpacity style={s.pushBtn} onPress={handleSendNow} disabled={sending}>
+            {sending ? (
+              <ActivityIndicator color={colors.textMuted} />
+            ) : (
+              <>
+                <Ionicons name="notifications-outline" size={18} color={colors.textMuted} />
+                <Text style={s.pushBtnText}>App-Push an alle (nur wenn App offen)</Text>
+              </>
+            )}
+          </TouchableOpacity>
 
-      {/* Kinder-Gerät einrichten — bewusst dezent ans Seitenende (TE-89), damit er nicht versehentlich angetippt wird */}
-      <TouchableOpacity style={s.setupBtn} onPress={() => setSetupModalVisible(true)}>
-        <Ionicons name="phone-portrait-outline" size={14} color={colors.textMuted} />
-        <Text style={s.setupBtnText}>Dieses Gerät als Kinder-Gerät einrichten</Text>
-      </TouchableOpacity>
+          {/* Push & Mail an alle (TE-118) */}
+          <TouchableOpacity
+            style={[s.pushBtn, { marginTop: 10 }]}
+            onPress={handleSendAllMail}
+            disabled={sendingAllMail}
+          >
+            {sendingAllMail ? (
+              <ActivityIndicator color={colors.textMuted} />
+            ) : (
+              <>
+                <Ionicons name="mail-outline" size={18} color={colors.textMuted} />
+                <Text style={s.pushBtnText}>Push & Mail an alle</Text>
+              </>
+            )}
+          </TouchableOpacity>
+
+          {/* Kinder-Gerät einrichten — bewusst dezent (TE-89), damit er nicht versehentlich angetippt wird */}
+          <TouchableOpacity style={s.setupBtn} onPress={() => setSetupModalVisible(true)}>
+            <Ionicons name="phone-portrait-outline" size={14} color={colors.textMuted} />
+            <Text style={s.setupBtnText}>Dieses Gerät als Kinder-Gerät einrichten</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </ScrollView>
   );
 }
