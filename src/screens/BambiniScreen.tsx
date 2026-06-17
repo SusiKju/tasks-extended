@@ -25,6 +25,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme, ThemeColors } from '../utils/theme';
 import { useFirebaseAuth } from '../hooks/useFirebaseAuth';
 import { DatePickerModal } from '../components/DatePickerModal';
+import { FussballKachel } from '../components/FussballKachel';
 import {
   Child,
   loadBambini,
@@ -203,6 +204,9 @@ export function BambiniScreen() {
         </ScrollView>
       )}
 
+      {/* TE-87: gleiches Icon/gleiche Aktion wie das Fußball-Icon auf dem Dashboard. */}
+      <FussballKachel forceTheme="fussball" iconStyle={s.fabFussball} iconSize={26} />
+
       <Pressable style={s.fab} onPress={openNew} accessibilityLabel="Kind hinzufügen">
         <Ionicons name="add" size={28} color={colors.accentFg} />
       </Pressable>
@@ -335,6 +339,20 @@ function makeStyles(c: ThemeColors) {
       backgroundColor: c.accent,
       alignItems: 'center',
       justifyContent: 'center',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.3,
+      shadowRadius: 6,
+      elevation: 6,
+    },
+    // TE-87: zweiter FAB links neben dem Plus-Icon, öffnet den Fußball-Notizdialog.
+    fabFussball: {
+      position: 'absolute',
+      right: 86,
+      bottom: 24,
+      width: 56,
+      height: 56,
+      borderRadius: 28,
       shadowColor: '#000',
       shadowOffset: { width: 0, height: 2 },
       shadowOpacity: 0.3,

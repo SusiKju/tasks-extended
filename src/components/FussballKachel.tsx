@@ -27,6 +27,8 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  StyleProp,
+  ViewStyle,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFirebaseAuth } from '../hooks/useFirebaseAuth';
@@ -470,7 +472,19 @@ function ThemeBackground({ theme, chalk }: { theme: FunTileTheme; chalk: string 
 /** Reihenfolge der Icons folgt der festen Themen-Reihenfolge, nicht der Auswahl. */
 const THEME_ORDER: FunTileTheme[] = ['fussball', 'yoga', 'garten'];
 
-export function FussballKachel() {
+interface FussballKachelProps {
+  /**
+   * Erzwingt genau ein Thema unabhängig von den Dashboard-Settings (TE-87:
+   * Bambini-Tab will immer den Fußball-Notizdialog öffnen können, egal ob
+   * das Thema dort aktiviert ist).
+   */
+  forceTheme?: FunTileTheme;
+  /** Style-Override für die Icon-Kachel, z. B. um sie als FAB zu positionieren. */
+  iconStyle?: StyleProp<ViewStyle>;
+  iconSize?: number;
+}
+
+export function FussballKachel({ forceTheme, iconStyle, iconSize = 18 }: FussballKachelProps = {}) {
   const { user } = useFirebaseAuth();
   // Defensive Defaults: alt persistierte Stände kennen das Array evtl. noch
   // nicht (Migration v18).
@@ -539,8 +553,9 @@ export function FussballKachel() {
     );
   }, [uid, openTheme, draft]);
 
-  // Nur die in den Settings ausgewählten Themen, in fester Reihenfolge.
-  const activeThemes = THEME_ORDER.filter((t) => themes.includes(t));
+  // Nur die in den Settings ausgewählten Themen, in fester Reihenfolge –
+  // außer forceTheme erzwingt genau ein Thema (TE-87).
+  const activeThemes = forceTheme ? [forceTheme] : THEME_ORDER.filter((t) => themes.includes(t));
   if (activeThemes.length === 0) return null;
 
   const cfg = openTheme ? (FUN_THEMES[openTheme] ?? FUN_THEMES.fussball) : null;
@@ -554,12 +569,17 @@ export function FussballKachel() {
           return (
             <Pressable
               key={t}
-              style={({ pressed }) => [s.iconTile, { backgroundColor: c.tile }, pressed && { opacity: 0.85 }]}
+              style={({ pressed }) => [
+                s.iconTile,
+                { backgroundColor: c.tile },
+                iconStyle,
+                pressed && { opacity: 0.85 },
+              ]}
               onPress={() => openDialog(t)}
               accessibilityRole="button"
               accessibilityLabel={`${c.label}-Notizen öffnen`}
             >
-              <Ionicons name={c.icon} size={18} color="#FFFFFF" />
+              <Ionicons name={c.icon} size={iconSize} color="#FFFFFF" />
             </Pressable>
           );
         })}
