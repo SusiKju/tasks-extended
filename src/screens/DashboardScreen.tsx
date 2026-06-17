@@ -137,9 +137,11 @@ function chipDueLabel(task: Task): string {
 // ─── Section Label ────────────────────────────────────────────────────────────
 
 function SectionLabel({
-  title, onMore, moreLabel = 'Alle →', colors,
+  title, onMore, moreLabel = 'Alle →', colors, onAdd,
 }: {
   title: string; onMore?: () => void; moreLabel?: string; colors: ThemeColors;
+  // TE-85: optionaler Plus-Button rechts im Header (Notizblock).
+  onAdd?: () => void;
 }) {
   return (
     <View style={labelStyles.row}>
@@ -147,6 +149,11 @@ function SectionLabel({
       {onMore && (
         <Pressable onPress={onMore} hitSlop={8}>
           <Text style={[labelStyles.more, { color: colors.textMuted }]}>{moreLabel}</Text>
+        </Pressable>
+      )}
+      {onAdd && (
+        <Pressable onPress={onAdd} hitSlop={8} style={[labelStyles.addBtn, { borderColor: colors.border }]}>
+          <Ionicons name="add" size={16} color={colors.textSecondary} />
         </Pressable>
       )}
     </View>
@@ -170,6 +177,14 @@ const labelStyles = StyleSheet.create({
   more: {
     fontSize: 11,
     fontWeight: '600',
+  },
+  addBtn: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
 
@@ -288,68 +303,40 @@ const chipStyles = StyleSheet.create({
 
 interface ScratchEntry { text: string; color: string; }
 
-// Neutrale dunkle Palette (Light + Dark-Soft)
-const BUBBLE_PALETTE_NEUTRAL = [
-  '#1E3A5F', '#2D1B4E', '#1A3A2E', '#3D1F1F',
-  '#1F3D30', '#3D2D1F', '#1F2D3D', '#2D3D1F',
-  '#3A1F3A', '#1F3A3A', '#2A2040', '#40201A',
+// TE-85: feste, vom Nutzer wählbare Notiz-Farben. Default ist Dunkles Pink.
+// Die gewählte Farbe (entry.color) gewinnt ab jetzt über die Theme-Automatik.
+const NOTE_COLOR_OPTIONS: { key: string; label: string; color: string }[] = [
+  { key: 'pink',   label: 'Dunkles Pink', color: '#C2185B' },
+  { key: 'blue',   label: 'Neonblau',     color: '#2299FF' },
+  { key: 'green',  label: 'Neongrün',     color: '#00FF88' },
+  { key: 'yellow', label: 'Neongelb',     color: '#FFE600' },
+  { key: 'gray',   label: 'Grau',         color: '#9E9E9E' },
 ];
+const NOTE_DEFAULT_COLOR = NOTE_COLOR_OPTIONS[0].color; // Dunkles Pink
 
-// Neon-Palette: knallige Vollfarben mit weißem Text
-const BUBBLE_PALETTE_NEON = [
-  '#FF1177', // Neon-Magenta
-  '#00CCEE', // Neon-Cyan
-  '#2299FF', // Elektrisch-Blau
-  '#CC00FF', // Neon-Lila
-  '#00FF88', // Neon-Grün
-  '#FF6600', // Neon-Orange
-  '#FFE600', // Elektrisch-Gelb  → dunkler Text nötig
-  '#FF0066', // Hot-Pink
-  '#00AAFF', // Himmelblau-Neon
-  '#AA00FF', // Violett-Neon
-];
-
-let _lastNeonPaletteIdx = -1;
-function randomBubbleColor(isNeon = false): string {
-  const palette = isNeon ? BUBBLE_PALETTE_NEON : BUBBLE_PALETTE_NEUTRAL;
-  // kein zweimal hintereinander die gleiche Farbe
-  let idx: number;
-  do { idx = Math.floor(Math.random() * palette.length); }
-  while (idx === _lastNeonPaletteIdx && palette.length > 1);
-  _lastNeonPaletteIdx = idx;
-  return palette[idx];
+// Lesbare Textfarbe für eine solide Bubble: helle Hintergründe (Gelb/Grün/Grau)
+// brauchen dunklen Text, dunkle (Pink/Blau) weißen. Luminanz nach Rec. 601.
+function readableText(bg: string): string {
+  const hex = bg.replace('#', '');
+  if (hex.length < 6) return '#FFFFFF';
+  const r = parseInt(hex.slice(0, 2), 16);
+  const g = parseInt(hex.slice(2, 4), 16);
+  const b = parseInt(hex.slice(4, 6), 16);
+  const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+  return lum > 150 ? '#1A1A1A' : '#FFFFFF';
 }
 
-const NEON_FIRST_COLOR = '#FF1177';
-
-/**
- * Stabiler, pseudo-zufälliger Punkt-Farbton pro Eintrags-Position für das
- * Mono-Theme (TE-87). Deterministisch über die Position → flackert nicht beim
- * Tippen und braucht keine persistierte Farbe, sieht aber zufällig gestreut aus.
- */
-function monoDotColor(idx: number): string {
-  const h = ((idx + 1) * 2654435761) >>> 0; // Knuth-Multiplikativ-Hash
-  return BUBBLE_PALETTE_NEON[h % BUBBLE_PALETTE_NEON.length];
-}
-
-function parseScratchpad(raw: string, isNeon = false): ScratchEntry[] {
-  const firstColor = isNeon ? NEON_FIRST_COLOR : randomBubbleColor(false);
-  if (!raw || raw.trim() === '') return [{ text: '', color: firstColor }];
+// TE-85: Farben werden jetzt explizit pro Notiz gewählt (Default Dunkles Pink),
+// daher keine Theme-abhängige Auto-Vergabe und kein Erzwingen der ersten Farbe.
+function parseScratchpad(raw: string): ScratchEntry[] {
+  if (!raw || raw.trim() === '') return [{ text: '', color: NOTE_DEFAULT_COLOR }];
   try {
     const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed) && parsed.length > 0) {
-      // Erste Notiz im Neon-Theme immer auf #FF1177 setzen
-      if (isNeon) parsed[0] = { ...parsed[0], color: NEON_FIRST_COLOR };
-      return parsed;
-    }
+    if (Array.isArray(parsed) && parsed.length > 0) return parsed;
   } catch {}
-  const palette = isNeon ? BUBBLE_PALETTE_NEON : BUBBLE_PALETTE_NEUTRAL;
   const lines = raw.split('\n').filter((l) => l.trim() !== '' && !l.startsWith('─'));
-  if (lines.length === 0) return [{ text: '', color: firstColor }];
-  return lines.map((text, i) => ({
-    text,
-    color: i === 0 && isNeon ? NEON_FIRST_COLOR : palette[i % palette.length],
-  }));
+  if (lines.length === 0) return [{ text: '', color: NOTE_DEFAULT_COLOR }];
+  return lines.map((text) => ({ text, color: NOTE_DEFAULT_COLOR }));
 }
 
 function serializeScratchpad(entries: ScratchEntry[]): string {
@@ -357,31 +344,55 @@ function serializeScratchpad(entries: ScratchEntry[]): string {
 }
 
 function Scratchpad({
-  value, onChange, isDark, colors,
+  value, onChange, isDark, colors, registerAdd,
 }: {
   value: string;
   onChange: (t: string) => void;
   isDark: boolean;
   colors: ThemeColors;
+  // TE-85: erlaubt dem Header-Plus-Button, eine Notiz oben anzulegen.
+  registerAdd?: (fn: () => void) => void;
 }) {
   const isNeon = isDark && colors.accentNeon === '#00EEFF';
   // Erkennt beide monochromen Themes (dunkles Schwarz-Weiß UND sein helles
   // Negativ) – unabhängig von isDark, denn das Negativ-Theme ist hell.
   const isMono = colors.accentNeon === '#FFFFFF' || colors.accentNeon === '#000000';
-  const entries = useMemo(() => parseScratchpad(value, isNeon), [value, isNeon]);
+  const entries = useMemo(() => parseScratchpad(value), [value]);
   const inputRefs = useRef<(any)[]>([]);
+  // TE-85: welche Notiz hat gerade die Farbauswahl offen (null = keine).
+  const [pickerIdx, setPickerIdx] = useState<number | null>(null);
 
   const updateEntry = useCallback((idx: number, text: string) => {
     const next = entries.map((e, i) => i === idx ? { ...e, text } : e);
     onChange(serializeScratchpad(next));
   }, [entries, onChange]);
 
+  // TE-85: gewählte Farbe einer Notiz setzen.
+  const updateColor = useCallback((idx: number, color: string) => {
+    const next = entries.map((e, i) => i === idx ? { ...e, color } : e);
+    onChange(serializeScratchpad(next));
+  }, [entries, onChange]);
+
   const addEntry = useCallback((afterIdx: number) => {
     const next = [...entries];
-    next.splice(afterIdx + 1, 0, { text: '', color: randomBubbleColor(isNeon) });
+    next.splice(afterIdx + 1, 0, { text: '', color: NOTE_DEFAULT_COLOR });
     onChange(serializeScratchpad(next));
     setTimeout(() => inputRefs.current[afterIdx + 1]?.focus(), 40);
-  }, [entries, onChange, isNeon]);
+  }, [entries, onChange]);
+
+  // TE-85: neue Notiz mit höchster Priorität (Position 0) + Default-Pink.
+  // Ist die einzige vorhandene Notiz noch leer, wird sie wiederverwendet statt
+  // eine zweite leere Bubble zu erzeugen.
+  const addEntryAtTop = useCallback(() => {
+    if (entries.length === 1 && entries[0].text === '') {
+      onChange(serializeScratchpad([{ text: '', color: NOTE_DEFAULT_COLOR }]));
+    } else {
+      onChange(serializeScratchpad([{ text: '', color: NOTE_DEFAULT_COLOR }, ...entries]));
+    }
+    setTimeout(() => inputRefs.current[0]?.focus(), 40);
+  }, [entries, onChange]);
+
+  useEffect(() => { registerAdd?.(addEntryAtTop); }, [registerAdd, addEntryAtTop]);
 
   const removeEntry = useCallback((idx: number) => {
     if (entries.length <= 1) { updateEntry(0, ''); return; }
@@ -401,13 +412,17 @@ function Scratchpad({
       {entries.map((entry, idx) => {
         // Neon-Theme: Tasks-Tab-Stil – keine Füllung, Rahmen + Schrift in der
         // Bubble-Farbe + Glow. Bessere Lesbarkeit, einheitlicher Look.
-        // Sonst (dark-soft/neutral): solide Bubble mit weißem Text. Im
-        // monochromen Theme – egal ob dunkel oder als Negativ hell – kommt
-        // stattdessen die Theme-Textfarbe zum Einsatz, sonst wäre der Text
-        // im hellen Negativ-Theme weiß auf hell und unleserlich.
-        const fg = isNeon ? entry.color : isMono ? colors.text : '#fff';
+        // Sonst (dark-soft/neutral): solide Bubble; Textfarbe wird per Luminanz
+        // gewählt (TE-85), damit helle Farben wie Gelb dunklen Text bekommen.
+        // Im monochromen Theme bleibt die Theme-Textfarbe, der gewählte Farbton
+        // erscheint stattdessen im Bullet-Punkt.
+        const fg = isNeon ? entry.color : isMono ? colors.text : readableText(entry.color);
+        // Bullet zeigt die gewählte Farbe (Neon/Mono) bzw. einen Kontrastpunkt
+        // (Neutral, dort ist die Bubble selbst schon eingefärbt).
+        const bulletColor = isNeon || isMono ? entry.color : fg + '99';
         return (
-        <View key={idx} style={[
+        <View key={idx}>
+        <View style={[
           padStyles.bubble,
           isNeon
             ? { backgroundColor: entry.color + '14', borderWidth: 1.5, borderColor: entry.color, ...neonGlow(entry.color, 'soft') }
@@ -415,8 +430,13 @@ function Scratchpad({
             ? { backgroundColor: colors.surfaceHigh, borderWidth: 1, borderColor: colors.border }
             : { backgroundColor: entry.color },
         ]}>
-          {/* Bullet zentriert zur ersten Textzeile */}
-          <View style={[padStyles.bullet, { backgroundColor: isMono ? monoDotColor(idx) : fg + '99' }]} />
+          {/* Bullet ist zugleich der Farb-Picker-Auslöser (TE-85). */}
+          <Pressable
+            onPress={() => setPickerIdx((cur) => (cur === idx ? null : idx))}
+            hitSlop={8}
+          >
+            <View style={[padStyles.bullet, { backgroundColor: bulletColor }]} />
+          </Pressable>
           <TextInput
             ref={(r) => { inputRefs.current[idx] = r; }}
             style={[padStyles.bubbleInput, { color: fg }]}
@@ -437,6 +457,29 @@ function Scratchpad({
           >
             <Ionicons name="close" size={16} color={colors.danger} />
           </Pressable>
+        </View>
+        {/* Farbauswahl: fünf feste Optionen, sichtbar beim Anlegen wie beim Bearbeiten. */}
+        {pickerIdx === idx && (
+          <View style={[padStyles.palette, { backgroundColor: colors.surfaceHigh, borderColor: colors.border }]}>
+            {NOTE_COLOR_OPTIONS.map((opt) => {
+              const selected = entry.color === opt.color;
+              return (
+                <Pressable
+                  key={opt.key}
+                  onPress={() => { updateColor(idx, opt.color); setPickerIdx(null); }}
+                  hitSlop={6}
+                  style={[
+                    padStyles.swatch,
+                    { backgroundColor: opt.color },
+                    selected && { borderWidth: 2, borderColor: colors.text },
+                  ]}
+                >
+                  {selected && <Ionicons name="checkmark" size={12} color={readableText(opt.color)} />}
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
         </View>
         );
       })}
@@ -477,6 +520,25 @@ const padStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
+  },
+  // TE-85: Farbauswahl-Reihe unter der Notiz.
+  palette: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 4,
+    marginBottom: 2,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignSelf: 'flex-start',
+  },
+  swatch: {
+    width: 20,
+    height: 20,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
 
@@ -579,6 +641,8 @@ export function DashboardScreen() {
   fidRef.current = fid;
   const uidRef = useRef(user?.uid);
   uidRef.current = user?.uid;
+  // TE-85: Brücke zum Plus-Button im Notizblock-Header → fügt oben eine Notiz an.
+  const scratchAddRef = useRef<(() => void) | null>(null);
   const handleScratchpadChange = useCallback((text: string) => {
     setScratchpad(text);
     if (uploadTimer.current) clearTimeout(uploadTimer.current);
@@ -904,10 +968,9 @@ export function DashboardScreen() {
     // Quelle ist derselbe `scratchpad`-Store-Wert wie der Notizblock selbst, daher
     // fließen Änderungen aus dem Notizblock automatisch in den Feed ein. Leere
     // Einträge (frische, noch ungetippte Notiz) werden ausgelassen. Die Bullet-
-    // Farbe wird exakt wie im Notizblock berechnet (mono → monoDotColor, sonst die
-    // Bubble-Farbe der Notiz), damit Feed und Notizblock identisch aussehen.
-    const isNeonTheme = isDark && colors.accentNeon === '#00EEFF';
-    parseScratchpad(scratchpad, isNeonTheme).forEach((entry, idx) => {
+    // Farbe ist die vom Nutzer gewählte Notiz-Farbe (TE-85), damit Feed und
+    // Notizblock identisch aussehen – auch im Mono-Theme.
+    parseScratchpad(scratchpad).forEach((entry, idx) => {
       const text = entry.text.trim();
       if (!text) return;
       items.push({
@@ -915,7 +978,7 @@ export function DashboardScreen() {
         category: 'note',
         group: 'later',
         title: text,
-        color: isMono ? monoDotColor(idx) : entry.color,
+        color: entry.color,
       });
     });
 
@@ -1187,12 +1250,14 @@ export function DashboardScreen() {
         {/* Scratchpad */}
         {showBlock('scratchpad') && (
         <View style={styles.scratchCol}>
-          <SectionLabel title="Notizblock" colors={colors} />
+          {/* TE-85: Plus-Button im Header legt eine neue Notiz ganz oben an. */}
+          <SectionLabel title="Notizblock" colors={colors} onAdd={() => scratchAddRef.current?.()} />
           <Scratchpad
             value={scratchpad}
             onChange={handleScratchpadChange}
             isDark={isDark}
             colors={colors}
+            registerAdd={(fn) => { scratchAddRef.current = fn; }}
           />
         </View>
         )}
