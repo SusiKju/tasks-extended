@@ -260,6 +260,10 @@ export function BambiniScreen() {
             </ScrollView>
           ) : null}
 
+          {yearFilter !== null || stoppedFilter !== null ? (
+            <Text style={s.resultCount}>{filtered.length} Treffer</Text>
+          ) : null}
+
           <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
             {children.length === 0 ? (
               <Text style={s.empty}>Noch keine Kinder. Mit „+" anlegen.</Text>
@@ -406,6 +410,7 @@ function makeStyles(c: ThemeColors) {
     // verfügbaren Platz teilen und auf eine Restbreite zusammengequetscht werden.
     quickFiltersScroll: { flexGrow: 0, flexShrink: 0 },
     quickFilters: { flexDirection: 'row', gap: 8, marginHorizontal: 12, marginTop: 10 },
+    resultCount: { color: c.textSecondary, fontSize: 12, fontWeight: '600', marginHorizontal: 12, marginTop: 6 },
     filterChip: {
       backgroundColor: c.inputBackground,
       borderWidth: 1,
