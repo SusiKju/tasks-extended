@@ -74,9 +74,10 @@ export function BambiniScreen() {
   const [children, setChildren] = useState<Child[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
-  // TE-99: Quickfilter unter der Suchleiste (Jahrgang, aufgehört).
+  // TE-99: Quickfilter unter der Suchleiste (Jahrgang, aufgehört/aktiv).
+  // stoppedFilter: null = alle, true = nur aufgehört, false = nur aktiv (nicht aufgehört).
   const [yearFilter, setYearFilter] = useState<number | null>(null);
-  const [stoppedFilter, setStoppedFilter] = useState(false);
+  const [stoppedFilter, setStoppedFilter] = useState<boolean | null>(null);
 
   // Modal-State: editing === null → zu; mit Child → bearbeiten; mit '' id → neu.
   const [editing, setEditing] = useState<Child | null>(null);
@@ -181,7 +182,7 @@ export function BambiniScreen() {
       if (!matchesQuery) return false;
     }
     if (yearFilter !== null && c.birthYear !== yearFilter) return false;
-    if (stoppedFilter && !c.stopped) return false;
+    if (stoppedFilter !== null && c.stopped !== stoppedFilter) return false;
     return true;
   });
 
@@ -229,14 +230,21 @@ export function BambiniScreen() {
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
+              style={s.quickFiltersScroll}
               contentContainerStyle={s.quickFilters}
               keyboardShouldPersistTaps="handled"
             >
               <Pressable
-                style={[s.filterChip, stoppedFilter && s.filterChipActive]}
-                onPress={() => setStoppedFilter((v) => !v)}
+                style={[s.filterChip, stoppedFilter === false && s.filterChipActive]}
+                onPress={() => setStoppedFilter((v) => (v === false ? null : false))}
               >
-                <Text style={[s.filterChipText, stoppedFilter && s.filterChipTextActive]}>Aufgehört</Text>
+                <Text style={[s.filterChipText, stoppedFilter === false && s.filterChipTextActive]}>Aktiv</Text>
+              </Pressable>
+              <Pressable
+                style={[s.filterChip, stoppedFilter === true && s.filterChipActive]}
+                onPress={() => setStoppedFilter((v) => (v === true ? null : true))}
+              >
+                <Text style={[s.filterChipText, stoppedFilter === true && s.filterChipTextActive]}>Aufgehört</Text>
               </Pressable>
               {yearCounts.map(({ year }) => (
                 <Pressable
@@ -393,6 +401,10 @@ function makeStyles(c: ThemeColors) {
     },
 
     // TE-99: Quickfilter-Pills unter der Suchleiste.
+    // RN-ScrollView ist standardmäßig flexGrow/flexShrink: 1 (auch horizontal) —
+    // als Sibling der großen Listen-ScrollView würde sie sich sonst den
+    // verfügbaren Platz teilen und auf eine Restbreite zusammengequetscht werden.
+    quickFiltersScroll: { flexGrow: 0, flexShrink: 0 },
     quickFilters: { flexDirection: 'row', gap: 8, marginHorizontal: 12, marginTop: 10 },
     filterChip: {
       backgroundColor: c.inputBackground,
