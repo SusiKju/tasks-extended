@@ -214,25 +214,25 @@ export function FeedBlock({
                 <View style={[styles.noteBullet, { backgroundColor: item.color ?? CATEGORY_COLOR.note }]} />
               </View>
             ) : CATEGORY_GLYPH[item.category] ? (
-              <Text style={[styles.glyph, { color: CATEGORY_COLOR[item.category] }]}>
+              <Text selectable={false} style={[styles.glyph, { color: CATEGORY_COLOR[item.category] }]}>
                 {CATEGORY_GLYPH[item.category]}
               </Text>
             ) : (
               <Ionicons name={CATEGORY_ICON[item.category]} size={16} color={CATEGORY_COLOR[item.category]} />
             )}
             <View style={{ flex: 1 }}>
-              <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>
+              <Text selectable={false} style={[styles.title, { color: colors.text }]} numberOfLines={1}>
                 {item.title}
               </Text>
               {item.subtitle ? (
-                <Text style={[styles.subtitle, { color: colors.textMuted }]} numberOfLines={1}>
+                <Text selectable={false} style={[styles.subtitle, { color: colors.textMuted }]} numberOfLines={1}>
                   {item.subtitle}
                 </Text>
               ) : null}
             </View>
             {flagged ? (
               <View style={styles.badge}>
-                <Text style={styles.badgeText}>
+                <Text selectable={false} style={styles.badgeText}>
                   {item.overdue ? 'Überfällig' : item.category === 'mail' ? 'Pinned' : 'Wichtig'}
                 </Text>
               </View>
