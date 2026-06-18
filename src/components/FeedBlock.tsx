@@ -202,7 +202,6 @@ export function FeedBlock({
         return (
           <Pressable
             key={item.key}
-            disabled={!item.onPress}
             onPress={() => {
               if (suppressNextPress.current) {
                 suppressNextPress.current = false;
