@@ -74,6 +74,9 @@ export function BambiniScreen() {
   const [children, setChildren] = useState<Child[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
+  // TE-99: Quickfilter unter der Suchleiste (Jahrgang, aufgehört).
+  const [yearFilter, setYearFilter] = useState<number | null>(null);
+  const [stoppedFilter, setStoppedFilter] = useState(false);
 
   // Modal-State: editing === null → zu; mit Child → bearbeiten; mit '' id → neu.
   const [editing, setEditing] = useState<Child | null>(null);
@@ -166,17 +169,21 @@ export function BambiniScreen() {
   };
 
   // TE-96: Live-Filter ab drei Zeichen (Vor-/Nachname, Elternname, Jahrgang).
+  // TE-99: zusätzlich Quickfilter nach Jahrgang und „aufgehört".
   const q = query.trim().toLowerCase();
-  const filtered =
-    q.length >= 3
-      ? children.filter(
-          (c) =>
-            c.name.toLowerCase().includes(q) ||
-            c.lastName.toLowerCase().includes(q) ||
-            c.parentName.toLowerCase().includes(q) ||
-            String(c.birthYear).includes(q),
-        )
-      : children;
+  const filtered = children.filter((c) => {
+    if (q.length >= 3) {
+      const matchesQuery =
+        c.name.toLowerCase().includes(q) ||
+        c.lastName.toLowerCase().includes(q) ||
+        c.parentName.toLowerCase().includes(q) ||
+        String(c.birthYear).includes(q);
+      if (!matchesQuery) return false;
+    }
+    if (yearFilter !== null && c.birthYear !== yearFilter) return false;
+    if (stoppedFilter && !c.stopped) return false;
+    return true;
+  });
 
   // Nach Jahrgang gruppieren (children kommen bereits sortiert).
   const groups: { year: number; items: Child[] }[] = [];
@@ -218,11 +225,38 @@ export function BambiniScreen() {
             />
           ) : null}
 
+          {children.length > 0 ? (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={s.quickFilters}
+              keyboardShouldPersistTaps="handled"
+            >
+              <Pressable
+                style={[s.filterChip, stoppedFilter && s.filterChipActive]}
+                onPress={() => setStoppedFilter((v) => !v)}
+              >
+                <Text style={[s.filterChipText, stoppedFilter && s.filterChipTextActive]}>Aufgehört</Text>
+              </Pressable>
+              {yearCounts.map(({ year }) => (
+                <Pressable
+                  key={year}
+                  style={[s.filterChip, yearFilter === year && s.filterChipActive]}
+                  onPress={() => setYearFilter((v) => (v === year ? null : year))}
+                >
+                  <Text style={[s.filterChipText, yearFilter === year && s.filterChipTextActive]}>
+                    {year || 'Ohne Jahrgang'}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          ) : null}
+
           <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
             {children.length === 0 ? (
               <Text style={s.empty}>Noch keine Kinder. Mit „+" anlegen.</Text>
             ) : groups.length === 0 ? (
-              <Text style={s.empty}>Keine Treffer für „{query.trim()}".</Text>
+              <Text style={s.empty}>Keine Treffer.</Text>
             ) : (
               groups.map((g) => (
               <View key={g.year} style={s.group}>
@@ -357,6 +391,20 @@ function makeStyles(c: ThemeColors) {
       marginHorizontal: 12,
       marginTop: 12,
     },
+
+    // TE-99: Quickfilter-Pills unter der Suchleiste.
+    quickFilters: { flexDirection: 'row', gap: 8, marginHorizontal: 12, marginTop: 10 },
+    filterChip: {
+      backgroundColor: c.inputBackground,
+      borderWidth: 1,
+      borderColor: c.border,
+      borderRadius: 16,
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+    },
+    filterChipActive: { backgroundColor: c.accent, borderColor: c.accent },
+    filterChipText: { color: c.textSecondary, fontSize: 13, fontWeight: '600' },
+    filterChipTextActive: { color: c.accentFg },
 
     group: { marginBottom: 16 },
     groupTitle: { color: c.textSecondary, fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 },
