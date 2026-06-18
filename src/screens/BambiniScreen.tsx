@@ -195,6 +195,8 @@ export function BambiniScreen() {
     else yearCounts.push({ year: c.birthYear, count: 1 });
   });
   yearCounts.sort((a, b) => a.year - b.year);
+  const yearSummary = yearCounts.map(({ year, count }) => `${year || '—'}: ${count}`).join(', ');
+  const overviewText = `${children.length} Kinder · ${stoppedCount} aufgehört${yearSummary ? ' · ' + yearSummary : ''}`;
 
   return (
     <View style={s.container}>
@@ -203,29 +205,7 @@ export function BambiniScreen() {
       ) : (
         <>
           {children.length > 0 ? (
-            <View style={s.overview}>
-              <View style={s.overviewStat}>
-                <Text style={s.overviewValue}>{children.length}</Text>
-                <Text style={s.overviewLabel}>Kinder</Text>
-              </View>
-              <View style={s.overviewStat}>
-                <Text style={s.overviewValue}>{stoppedCount}</Text>
-                <Text style={s.overviewLabel}>aufgehört</Text>
-              </View>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={s.overviewYears}
-              >
-                {yearCounts.map(({ year, count }) => (
-                  <View key={year} style={s.overviewYearChip}>
-                    <Text style={s.overviewYearChipText}>
-                      {year ? year : '—'} · {count}
-                    </Text>
-                  </View>
-                ))}
-              </ScrollView>
-            </View>
+            <Text style={s.overview}>{overviewText}</Text>
           ) : null}
 
           {children.length > 0 ? (
@@ -363,35 +343,14 @@ function makeStyles(c: ThemeColors) {
     scroll: { padding: 12, paddingBottom: 96 },
     empty: { color: c.textSecondary, textAlign: 'center', marginTop: 40, fontSize: 14 },
 
-    // TE-97: kompakte Übersicht über alle Kinder.
+    // TE-97: kompakte Übersicht über alle Kinder, reiner Text ohne Button-Optik.
     overview: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 10,
+      color: c.textSecondary,
+      fontSize: 12,
+      fontWeight: '600',
       marginHorizontal: 12,
-      marginTop: 12,
+      marginTop: 10,
     },
-    overviewStat: {
-      backgroundColor: c.surface,
-      borderWidth: 1,
-      borderColor: c.border,
-      borderRadius: 10,
-      paddingHorizontal: 12,
-      paddingVertical: 6,
-      alignItems: 'center',
-    },
-    overviewValue: { color: c.text, fontSize: 16, fontWeight: '800' },
-    overviewLabel: { color: c.textSecondary, fontSize: 10, fontWeight: '600' },
-    overviewYears: { flexDirection: 'row', gap: 6 },
-    overviewYearChip: {
-      backgroundColor: c.inputBackground,
-      borderWidth: 1,
-      borderColor: c.border,
-      borderRadius: 8,
-      paddingHorizontal: 8,
-      paddingVertical: 6,
-    },
-    overviewYearChipText: { color: c.textSecondary, fontSize: 12, fontWeight: '600' },
 
     // TE-98: SearchInput-Komponente mit globalem Design.
     searchInputMargin: {
