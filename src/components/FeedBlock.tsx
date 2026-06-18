@@ -20,7 +20,10 @@
  * Long-Press hebt ein Item hervor (Mehrfach-Auswahl möglich, siehe
  * feedHighlightService.ts) und zieht es an den Anfang der Liste – neu
  * ausgewählte Items landen ans Ende der bereits hervorgehobenen Gruppe,
- * nicht ganz oben (applyHighlightOrder).
+ * nicht ganz oben (applyHighlightOrder). Innerhalb der hervorgehobenen
+ * Gruppe bleiben die Items über die Auf/Ab-Pfeile frei sortierbar, genau
+ * wie der Rest der Liste – die Gruppierung ändert nur, WO die Gruppe als
+ * Ganzes sitzt, nicht WIE sie sich intern sortieren lässt.
  *
  * Design abgestimmt per /drill-Interview, siehe .drills/2026-06-16/unified-feed-block.md
  * (Phase 3: Layout-Vereinfachung + Badge + farbige Icons, nachträglich angepasst).
@@ -158,15 +161,17 @@ function applyManualOrder(sorted: FeedItem[], order?: string[]): FeedItem[] {
 }
 
 /**
- * Zieht per Long-Press hervorgehobene Items an den Anfang der Liste – in der
- * Reihenfolge ihrer Auswahl (zuerst Ausgewähltes oben, zuletzt Ausgewähltes
- * direkt darunter, vor den nicht hervorgehobenen Items). Alles Übrige bleibt
- * in der bisherigen (Default- oder manuellen) Reihenfolge dahinter.
+ * Zieht per Long-Press hervorgehobene Items an den Anfang der Liste. Die
+ * Reihenfolge INNERHALB der hervorgehobenen Gruppe (und innerhalb des
+ * Rests) kommt unverändert aus `sorted` – also aus der manuellen
+ * Sortierung, falls gesetzt – damit die Auf/Ab-Pfeile auch hervorgehobene
+ * Items weiterhin frei sortieren können. Wo ein frisch hervorgehobenes
+ * Item innerhalb der Gruppe landet, wird separat beim Long-Press-Handler
+ * über onReorder festgelegt (ans Ende der Gruppe), nicht hier.
  */
 function applyHighlightOrder(sorted: FeedItem[], highlightedKeys: string[]): FeedItem[] {
   if (highlightedKeys.length === 0) return sorted;
-  const byKey = new Map(sorted.map((i) => [i.key, i] as const));
-  const highlighted = highlightedKeys.map((k) => byKey.get(k)).filter((i): i is FeedItem => !!i);
+  const highlighted = sorted.filter((i) => highlightedKeys.includes(i.key));
   const rest = sorted.filter((i) => !highlightedKeys.includes(i.key));
   return [...highlighted, ...rest];
 }
@@ -186,10 +191,10 @@ export function FeedBlock({
   /** Wird mit der vollständigen neuen Key-Reihenfolge der Liste aufgerufen. */
   onReorder?: (orderedKeys: string[]) => void;
   /**
-   * Keys der per Long-Press hervorgehobenen Items, in Auswahl-Reihenfolge
-   * (ältestes zuerst), persistiert via feedHighlightService.ts. Mehrfach-
-   * Auswahl möglich; hervorgehobene Items werden in dieser Reihenfolge an
-   * den Anfang der Liste gezogen (siehe applyHighlightOrder).
+   * Keys der per Long-Press hervorgehobenen Items (Mehrfach-Auswahl möglich),
+   * persistiert via feedHighlightService.ts. Werden als Gruppe an den Anfang
+   * der Liste gezogen; die Reihenfolge innerhalb der Gruppe folgt weiterhin
+   * `manualOrder`/den Auf-Ab-Pfeilen (siehe applyHighlightOrder).
    */
   highlightedKeys?: string[];
   /** Wird mit der vollständigen neuen Highlight-Key-Liste aufgerufen. */
@@ -236,11 +241,23 @@ export function FeedBlock({
             onLongPress={() => {
               suppressNextPress.current = true;
               const isHighlighted = highlightedKeys.includes(item.key);
-              onHighlight?.(
-                isHighlighted
-                  ? highlightedKeys.filter((k) => k !== item.key)
-                  : [...highlightedKeys, item.key],
-              );
+              if (isHighlighted) {
+                onHighlight?.(highlightedKeys.filter((k) => k !== item.key));
+                return;
+              }
+              onHighlight?.([...highlightedKeys, item.key]);
+              // Neu hervorgehobenes Item ans Ende der bereits hervorgehobenen
+              // Gruppe schieben (nicht irgendwohin, wo es die Default-/manuelle
+              // Sortierung sonst hinlegen würde) – als expliziter Reorder, damit
+              // diese Position danach genauso frei per Pfeil verschiebbar bleibt
+              // wie jede andere.
+              const withoutItem = sorted.filter((i) => i.key !== item.key);
+              let insertAt = 0;
+              while (insertAt < withoutItem.length && highlightedKeys.includes(withoutItem[insertAt].key)) {
+                insertAt++;
+              }
+              const reordered = [...withoutItem.slice(0, insertAt), item, ...withoutItem.slice(insertAt)];
+              onReorder?.(reordered.map((i) => i.key));
             }}
             delayLongPress={1000}
             style={({ pressed }) => [
