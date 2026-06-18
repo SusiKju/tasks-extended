@@ -219,7 +219,7 @@ export function FeedBlock({
               i < sorted.length - 1 && { borderBottomColor: colors.border, borderBottomWidth: 1 },
               pressed && item.onPress ? { opacity: 0.6 } : null,
               item.key === highlightedKey
-                ? { borderWidth: 2, borderColor: colors.accent, borderRadius: 8, ...neonGlow(colors.accentNeon, 'medium') }
+                ? { backgroundColor: colors.accent + '26', ...neonGlow(colors.accentNeon, 'soft') }
                 : null,
             ]}
           >
