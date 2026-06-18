@@ -93,6 +93,11 @@ service cloud.firestore {
         allow read, write: if isFamilyMember(familyId) && request.auth.uid == uid;
       }
 
+      // "Mein Tag"-Feed: per Long-Press hervorgehobenes Item pro User (TE-95)
+      match /feedHighlightByUser/{uid} {
+        allow read, write: if isFamilyMember(familyId) && request.auth.uid == uid;
+      }
+
       // App-Settings pro User (TE-49)
       match /settingsByUser/{uid} {
         allow read, write: if isFamilyMember(familyId) && request.auth.uid == uid;

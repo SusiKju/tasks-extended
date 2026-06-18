@@ -37,6 +37,7 @@ import { GoogleConnectBanner } from '../components/GoogleConnectBanner';
 import { CountdownStrip } from '../components/CountdownStrip';
 import { FeedBlock, FeedItem } from '../components/FeedBlock';
 import { subscribeToFeedOrder, saveFeedOrder, FeedOrder } from '../services/feedOrderService';
+import { subscribeToFeedHighlight, saveFeedHighlight } from '../services/feedHighlightService';
 import { SharedNoteItem, subscribeToSharedNotes } from '../services/sharedNotes';
 import { GeistesKachel, subscribeToGeistesKacheln } from '../services/geistesKacheln';
 import { Task, DashboardBlockKey } from '../types';
@@ -763,6 +764,23 @@ export function DashboardScreen() {
     [fid, user?.uid],
   );
 
+  // "Mein Tag": per Long-Press hervorgehobenes Item (TE-95), pro User in
+  // Firestore persistiert und live synchronisiert (siehe feedHighlightService.ts).
+  const [feedHighlightKey, setFeedHighlightKey] = useState<string | null>(null);
+  useEffect(() => {
+    if (!fid || !user?.uid) return;
+    const unsub = subscribeToFeedHighlight(fid, user.uid, (key) => setFeedHighlightKey(key));
+    return unsub;
+  }, [fid, user?.uid]);
+
+  const handleFeedHighlight = useCallback(
+    (key: string | null) => {
+      setFeedHighlightKey(key);
+      if (fid && user?.uid) saveFeedHighlight(fid, user.uid, key);
+    },
+    [fid, user?.uid],
+  );
+
   // Gruppenaufgaben (TE-115): Kopien mit gemeinsamer groupId über die Kinder hinweg
   // zu je einer Gruppe bündeln – jede wird zu einer eigenen Extrakarte.
   const groupTasks = useMemo(() => {
@@ -1176,7 +1194,14 @@ export function DashboardScreen() {
                 </Pressable>
               </View>
               <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
-                <FeedBlock items={feedItems} colors={colors} manualOrder={feedOrder} onReorder={handleFeedReorder} />
+                <FeedBlock
+                  items={feedItems}
+                  colors={colors}
+                  manualOrder={feedOrder}
+                  onReorder={handleFeedReorder}
+                  highlightedKey={feedHighlightKey}
+                  onHighlight={handleFeedHighlight}
+                />
               </ScrollView>
             </View>
           </View>

@@ -157,6 +157,8 @@ export function FeedBlock({
   colors,
   manualOrder,
   onReorder,
+  highlightedKey = null,
+  onHighlight,
 }: {
   items: FeedItem[];
   colors: ThemeColors;
@@ -164,11 +166,12 @@ export function FeedBlock({
   manualOrder?: string[];
   /** Wird mit der vollständigen neuen Key-Reihenfolge der Liste aufgerufen. */
   onReorder?: (orderedKeys: string[]) => void;
+  /** Key des per Long-Press hervorgehobenen Items, persistiert via feedHighlightService.ts. */
+  highlightedKey?: string | null;
+  /** Wird mit dem neuen Highlight-Key aufgerufen (null = Hervorhebung aufheben). */
+  onHighlight?: (key: string | null) => void;
 }) {
   const sorted = applyManualOrder(sortItems(items), manualOrder);
-  // Long-Press hebt genau ein Item per kräftigem Rahmen hervor; erneuter
-  // Long-Press auf das gleiche Item hebt die Hervorhebung wieder auf.
-  const [highlightedKey, setHighlightedKey] = React.useState<string | null>(null);
 
   const moveItem = (index: number, dir: -1 | 1) => {
     const targetIndex = index + dir;
@@ -196,7 +199,7 @@ export function FeedBlock({
             key={item.key}
             disabled={!item.onPress}
             onPress={item.onPress}
-            onLongPress={() => setHighlightedKey((prev) => (prev === item.key ? null : item.key))}
+            onLongPress={() => onHighlight?.(item.key === highlightedKey ? null : item.key)}
             delayLongPress={1000}
             style={({ pressed }) => [
               styles.row,
