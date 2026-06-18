@@ -24,7 +24,7 @@
 import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { ThemeColors } from '../utils/theme';
+import { ThemeColors, neonGlow } from '../utils/theme';
 
 export type FeedCategory =
   | 'birthday'
@@ -166,6 +166,9 @@ export function FeedBlock({
   onReorder?: (orderedKeys: string[]) => void;
 }) {
   const sorted = applyManualOrder(sortItems(items), manualOrder);
+  // Long-Press hebt genau ein Item per kräftigem Rahmen hervor; erneuter
+  // Long-Press auf das gleiche Item hebt die Hervorhebung wieder auf.
+  const [highlightedKey, setHighlightedKey] = React.useState<string | null>(null);
 
   const moveItem = (index: number, dir: -1 | 1) => {
     const targetIndex = index + dir;
@@ -193,10 +196,15 @@ export function FeedBlock({
             key={item.key}
             disabled={!item.onPress}
             onPress={item.onPress}
+            onLongPress={() => setHighlightedKey((prev) => (prev === item.key ? null : item.key))}
+            delayLongPress={1000}
             style={({ pressed }) => [
               styles.row,
               i < sorted.length - 1 && { borderBottomColor: colors.border, borderBottomWidth: 1 },
               pressed && item.onPress ? { opacity: 0.6 } : null,
+              item.key === highlightedKey
+                ? { borderWidth: 2, borderColor: colors.accent, borderRadius: 8, ...neonGlow(colors.accentNeon, 'medium') }
+                : null,
             ]}
           >
             {item.category === 'note' ? (
