@@ -764,19 +764,20 @@ export function DashboardScreen() {
     [fid, user?.uid],
   );
 
-  // "Mein Tag": per Long-Press hervorgehobenes Item (TE-95), pro User in
-  // Firestore persistiert und live synchronisiert (siehe feedHighlightService.ts).
-  const [feedHighlightKey, setFeedHighlightKey] = useState<string | null>(null);
+  // "Mein Tag": per Long-Press hervorgehobene Items (TE-95, Mehrfach-Auswahl
+  // möglich), pro User in Firestore persistiert und live synchronisiert
+  // (siehe feedHighlightService.ts).
+  const [feedHighlightKeys, setFeedHighlightKeys] = useState<string[]>([]);
   useEffect(() => {
     if (!fid || !user?.uid) return;
-    const unsub = subscribeToFeedHighlight(fid, user.uid, (key) => setFeedHighlightKey(key));
+    const unsub = subscribeToFeedHighlight(fid, user.uid, (keys) => setFeedHighlightKeys(keys));
     return unsub;
   }, [fid, user?.uid]);
 
   const handleFeedHighlight = useCallback(
-    (key: string | null) => {
-      setFeedHighlightKey(key);
-      if (fid && user?.uid) saveFeedHighlight(fid, user.uid, key);
+    (keys: string[]) => {
+      setFeedHighlightKeys(keys);
+      if (fid && user?.uid) saveFeedHighlight(fid, user.uid, keys);
     },
     [fid, user?.uid],
   );
@@ -1199,7 +1200,7 @@ export function DashboardScreen() {
                   colors={colors}
                   manualOrder={feedOrder}
                   onReorder={handleFeedReorder}
-                  highlightedKey={feedHighlightKey}
+                  highlightedKeys={feedHighlightKeys}
                   onHighlight={handleFeedHighlight}
                 />
               </ScrollView>

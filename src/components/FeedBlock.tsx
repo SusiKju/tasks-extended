@@ -17,6 +17,11 @@
  * Eintrag fallen auf die Default-Sortierung zurück (überfällig/wichtig
  * zuerst, dann Dringlichkeit, dann Kategorie) und werden dahinter angehängt.
  *
+ * Long-Press hebt ein Item hervor (Mehrfach-Auswahl möglich, siehe
+ * feedHighlightService.ts) und zieht es an den Anfang der Liste – neu
+ * ausgewählte Items landen ans Ende der bereits hervorgehobenen Gruppe,
+ * nicht ganz oben (applyHighlightOrder).
+ *
  * Design abgestimmt per /drill-Interview, siehe .drills/2026-06-16/unified-feed-block.md
  * (Phase 3: Layout-Vereinfachung + Badge + farbige Icons, nachträglich angepasst).
  */
@@ -152,12 +157,26 @@ function applyManualOrder(sorted: FeedItem[], order?: string[]): FeedItem[] {
   return ordered;
 }
 
+/**
+ * Zieht per Long-Press hervorgehobene Items an den Anfang der Liste – in der
+ * Reihenfolge ihrer Auswahl (zuerst Ausgewähltes oben, zuletzt Ausgewähltes
+ * direkt darunter, vor den nicht hervorgehobenen Items). Alles Übrige bleibt
+ * in der bisherigen (Default- oder manuellen) Reihenfolge dahinter.
+ */
+function applyHighlightOrder(sorted: FeedItem[], highlightedKeys: string[]): FeedItem[] {
+  if (highlightedKeys.length === 0) return sorted;
+  const byKey = new Map(sorted.map((i) => [i.key, i] as const));
+  const highlighted = highlightedKeys.map((k) => byKey.get(k)).filter((i): i is FeedItem => !!i);
+  const rest = sorted.filter((i) => !highlightedKeys.includes(i.key));
+  return [...highlighted, ...rest];
+}
+
 export function FeedBlock({
   items,
   colors,
   manualOrder,
   onReorder,
-  highlightedKey = null,
+  highlightedKeys = [],
   onHighlight,
 }: {
   items: FeedItem[];
@@ -166,12 +185,17 @@ export function FeedBlock({
   manualOrder?: string[];
   /** Wird mit der vollständigen neuen Key-Reihenfolge der Liste aufgerufen. */
   onReorder?: (orderedKeys: string[]) => void;
-  /** Key des per Long-Press hervorgehobenen Items, persistiert via feedHighlightService.ts. */
-  highlightedKey?: string | null;
-  /** Wird mit dem neuen Highlight-Key aufgerufen (null = Hervorhebung aufheben). */
-  onHighlight?: (key: string | null) => void;
+  /**
+   * Keys der per Long-Press hervorgehobenen Items, in Auswahl-Reihenfolge
+   * (ältestes zuerst), persistiert via feedHighlightService.ts. Mehrfach-
+   * Auswahl möglich; hervorgehobene Items werden in dieser Reihenfolge an
+   * den Anfang der Liste gezogen (siehe applyHighlightOrder).
+   */
+  highlightedKeys?: string[];
+  /** Wird mit der vollständigen neuen Highlight-Key-Liste aufgerufen. */
+  onHighlight?: (keys: string[]) => void;
 }) {
-  const sorted = applyManualOrder(sortItems(items), manualOrder);
+  const sorted = applyHighlightOrder(applyManualOrder(sortItems(items), manualOrder), highlightedKeys);
   // Pressable feuert onPress beim Loslassen IMMER, auch nach einem
   // onLongPress – ohne diese Sperre würde der Long-Press das Highlight
   // setzen und im selben Zug item.onPress (Navigation) auslösen, sodass
@@ -211,14 +235,19 @@ export function FeedBlock({
             }}
             onLongPress={() => {
               suppressNextPress.current = true;
-              onHighlight?.(item.key === highlightedKey ? null : item.key);
+              const isHighlighted = highlightedKeys.includes(item.key);
+              onHighlight?.(
+                isHighlighted
+                  ? highlightedKeys.filter((k) => k !== item.key)
+                  : [...highlightedKeys, item.key],
+              );
             }}
             delayLongPress={1000}
             style={({ pressed }) => [
               styles.row,
               i < sorted.length - 1 && { borderBottomColor: colors.border, borderBottomWidth: 1 },
               pressed && item.onPress ? { opacity: 0.6 } : null,
-              item.key === highlightedKey
+              highlightedKeys.includes(item.key)
                 ? { backgroundColor: colors.accent + '26', ...neonGlow(colors.accentNeon, 'soft') }
                 : null,
             ]}
