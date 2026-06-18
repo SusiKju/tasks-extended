@@ -172,6 +172,11 @@ export function FeedBlock({
   onHighlight?: (key: string | null) => void;
 }) {
   const sorted = applyManualOrder(sortItems(items), manualOrder);
+  // Pressable feuert onPress beim Loslassen IMMER, auch nach einem
+  // onLongPress – ohne diese Sperre würde der Long-Press das Highlight
+  // setzen und im selben Zug item.onPress (Navigation) auslösen, sodass
+  // der Rahmen nie sichtbar wird.
+  const suppressNextPress = React.useRef(false);
 
   const moveItem = (index: number, dir: -1 | 1) => {
     const targetIndex = index + dir;
@@ -198,8 +203,17 @@ export function FeedBlock({
           <Pressable
             key={item.key}
             disabled={!item.onPress}
-            onPress={item.onPress}
-            onLongPress={() => onHighlight?.(item.key === highlightedKey ? null : item.key)}
+            onPress={() => {
+              if (suppressNextPress.current) {
+                suppressNextPress.current = false;
+                return;
+              }
+              item.onPress?.();
+            }}
+            onLongPress={() => {
+              suppressNextPress.current = true;
+              onHighlight?.(item.key === highlightedKey ? null : item.key);
+            }}
             delayLongPress={1000}
             style={({ pressed }) => [
               styles.row,
