@@ -72,6 +72,7 @@ export function BambiniScreen() {
 
   const [children, setChildren] = useState<Child[]>([]);
   const [loading, setLoading] = useState(true);
+  const [query, setQuery] = useState('');
 
   // Modal-State: editing === null → zu; mit Child → bearbeiten; mit '' id → neu.
   const [editing, setEditing] = useState<Child | null>(null);
@@ -163,9 +164,22 @@ export function BambiniScreen() {
     confirmDelete(c.name, () => persist(children.filter((x) => x.id !== c.id)));
   };
 
+  // TE-96: Live-Filter ab drei Zeichen (Vor-/Nachname, Elternname, Jahrgang).
+  const q = query.trim().toLowerCase();
+  const filtered =
+    q.length >= 3
+      ? children.filter(
+          (c) =>
+            c.name.toLowerCase().includes(q) ||
+            c.lastName.toLowerCase().includes(q) ||
+            c.parentName.toLowerCase().includes(q) ||
+            String(c.birthYear).includes(q),
+        )
+      : children;
+
   // Nach Jahrgang gruppieren (children kommen bereits sortiert).
   const groups: { year: number; items: Child[] }[] = [];
-  children.forEach((c) => {
+  filtered.forEach((c) => {
     const g = groups.find((x) => x.year === c.birthYear);
     if (g) g.items.push(c);
     else groups.push({ year: c.birthYear, items: [c] });
@@ -176,11 +190,34 @@ export function BambiniScreen() {
       {loading ? (
         <ActivityIndicator style={{ marginTop: 32 }} color={colors.accent} />
       ) : (
-        <ScrollView contentContainerStyle={s.scroll}>
-          {children.length === 0 ? (
-            <Text style={s.empty}>Noch keine Kinder. Mit „+" anlegen.</Text>
-          ) : (
-            groups.map((g) => (
+        <>
+          {children.length > 0 ? (
+            <View style={s.searchBar}>
+              <Ionicons name="search" size={18} color={colors.textSecondary} />
+              <TextInput
+                style={s.searchInput}
+                value={query}
+                onChangeText={setQuery}
+                placeholder="Suchen (ab 3 Zeichen)"
+                placeholderTextColor={colors.placeholder}
+                autoCorrect={false}
+                clearButtonMode="while-editing"
+              />
+              {query ? (
+                <Pressable onPress={() => setQuery('')} hitSlop={8} accessibilityLabel="Suche leeren">
+                  <Ionicons name="close-circle" size={18} color={colors.textSecondary} />
+                </Pressable>
+              ) : null}
+            </View>
+          ) : null}
+
+          <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
+            {children.length === 0 ? (
+              <Text style={s.empty}>Noch keine Kinder. Mit „+" anlegen.</Text>
+            ) : groups.length === 0 ? (
+              <Text style={s.empty}>Keine Treffer für „{query.trim()}".</Text>
+            ) : (
+              groups.map((g) => (
               <View key={g.year} style={s.group}>
                 <Text style={s.groupTitle}>{g.year ? `Jahrgang ${g.year}` : 'Ohne Jahrgang'}</Text>
                 {g.items.map((c) => (
@@ -197,11 +234,12 @@ export function BambiniScreen() {
                       <Ionicons name="trash-outline" size={18} color={colors.textSecondary} />
                     </Pressable>
                   </Pressable>
-                ))}
-              </View>
-            ))
-          )}
-        </ScrollView>
+                  ))}
+                </View>
+              ))
+            )}
+          </ScrollView>
+        </>
       )}
 
       {/* TE-87: gleiches Icon/gleiche Aktion wie das Fußball-Icon auf dem Dashboard. */}
@@ -297,6 +335,22 @@ function makeStyles(c: ThemeColors) {
     container: { flex: 1, backgroundColor: c.background },
     scroll: { padding: 12, paddingBottom: 96 },
     empty: { color: c.textSecondary, textAlign: 'center', marginTop: 40, fontSize: 14 },
+
+    // TE-96: Live-Suchfeld über der Liste.
+    searchBar: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      backgroundColor: c.inputBackground,
+      borderWidth: 1,
+      borderColor: c.border,
+      borderRadius: 10,
+      paddingHorizontal: 12,
+      paddingVertical: Platform.OS === 'ios' ? 10 : 4,
+      marginHorizontal: 12,
+      marginTop: 12,
+    },
+    searchInput: { flex: 1, color: c.text, fontSize: 15 },
 
     group: { marginBottom: 16 },
     groupTitle: { color: c.textSecondary, fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 },
