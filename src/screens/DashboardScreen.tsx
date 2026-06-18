@@ -302,7 +302,12 @@ const chipStyles = StyleSheet.create({
 
 // ─── Scratchpad (Notiz-Bubbles) ───────────────────────────────────────────────
 
-interface ScratchEntry { text: string; color: string; }
+interface ScratchEntry { id?: string; text: string; color: string; }
+
+/** Stabile, kollisionsarme ID für eine neue Notiz (siehe TE-95-Migration unten). */
+function makeNoteId(): string {
+  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+}
 
 // TE-85: feste, vom Nutzer wählbare Notiz-Farben. Default ist Dunkles Pink.
 // Die gewählte Farbe (entry.color) gewinnt ab jetzt über die Theme-Automatik.
@@ -379,14 +384,25 @@ function Scratchpad({
   // eine zweite leere Bubble zu erzeugen.
   const addEntryAtTop = useCallback(() => {
     if (entries.length === 1 && entries[0].text === '') {
-      onChange(serializeScratchpad([{ text: '', color: NOTE_DEFAULT_COLOR }]));
+      onChange(serializeScratchpad([{ id: entries[0].id ?? makeNoteId(), text: '', color: NOTE_DEFAULT_COLOR }]));
     } else {
-      onChange(serializeScratchpad([{ text: '', color: NOTE_DEFAULT_COLOR }, ...entries]));
+      onChange(serializeScratchpad([{ id: makeNoteId(), text: '', color: NOTE_DEFAULT_COLOR }, ...entries]));
     }
     setTimeout(() => inputRefs.current[0]?.focus(), 40);
   }, [entries, onChange]);
 
   useEffect(() => { registerAdd?.(addEntryAtTop); }, [registerAdd, addEntryAtTop]);
+
+  // TE-95: Notizen ohne stabile id (Alt-Daten, oder eine vor dieser Migration
+  // angelegte Notiz) bekommen einmalig eine – sonst hängen sich Feed-Highlight
+  // und manuelle Feed-Sortierung (beide referenzieren `note:${id}`) an die
+  // Array-Position statt an die Notiz selbst, und eine neu eingefügte Notiz an
+  // Position 0 "erbt" optisch das Highlight/die Position der alten Notiz 0.
+  useEffect(() => {
+    if (entries.some((e) => !e.id)) {
+      onChange(serializeScratchpad(entries.map((e) => (e.id ? e : { ...e, id: makeNoteId() }))));
+    }
+  }, [entries, onChange]);
 
   const removeEntry = useCallback((idx: number) => {
     if (entries.length <= 1) { updateEntry(0, ''); return; }
@@ -987,7 +1003,11 @@ export function DashboardScreen() {
       const text = entry.text.trim();
       if (!text) return;
       items.push({
-        key: `note:${idx}`,
+        // Stabile entry.id statt Array-Index (TE-95): sonst "erbt" eine neu
+        // oben eingefügte Notiz Highlight/manuelle Sortierung der alten
+        // Notiz an Position 0, weil sich nur der Index, nicht die Notiz
+        // selbst, verschoben hat.
+        key: `note:${entry.id ?? idx}`,
         category: 'note',
         group: 'later',
         title: text,
