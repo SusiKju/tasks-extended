@@ -18,6 +18,7 @@ import { isOverdue } from '../utils/dateFormat';
 import { useTheme, ThemeColors, neonGlow } from '../utils/theme';
 import { updateGoogleTask, listTaskLists } from '../services/googleCalendar';
 import { useGoogleTasksSync } from '../hooks/useGoogleTasksSync';
+import { SearchInput } from '../components/SearchInput';
 
 function confirmDelete(title: string, onConfirm: () => void) {
   if (Platform.OS === 'web') {
@@ -156,21 +157,13 @@ export function TaskListScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.searchRow}>
-        <Ionicons name="search-outline" size={16} color={colors.textSecondary} />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Suchen…"
-          placeholderTextColor={colors.placeholder}
-          value={search}
-          onChangeText={setSearch}
-        />
-        {search ? (
-          <TouchableOpacity onPress={() => setSearch('')}>
-            <Ionicons name="close-circle" size={16} color={colors.textMuted} />
-          </TouchableOpacity>
-        ) : null}
-      </View>
+      <SearchInput
+        value={search}
+        onChangeText={setSearch}
+        placeholder="Suchen…"
+        colors={colors}
+        style={styles.searchInputMargin}
+      />
 
       <View style={styles.filterRow}>
         {(['all', 'open', 'overdue', 'done'] as FilterMode[]).map((f) => {
@@ -318,23 +311,9 @@ export function TaskListScreen() {
 function makeStyles(c: ThemeColors, isDark: boolean) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: c.background },
-    searchRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      backgroundColor: c.surface,
+    searchInputMargin: {
       marginHorizontal: 16,
       marginTop: 12,
-      borderRadius: 10,
-      paddingHorizontal: 10,
-      paddingVertical: 8,
-      gap: 6,
-      borderWidth: 1,
-      borderColor: c.border,
-    },
-    searchInput: {
-      flex: 1,
-      fontSize: 15,
-      color: c.text,
     },
     filterRow: {
       flexDirection: 'row',

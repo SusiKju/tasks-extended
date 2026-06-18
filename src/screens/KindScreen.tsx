@@ -173,7 +173,7 @@ export default function KindScreen({ onExitChildMode }: Props) {
       setPinError(true);
       setPinInput('');
     }
-  }, [pinInput]);
+  }, [pinInput, parentPin]);
 
   if (loading) {
     return (

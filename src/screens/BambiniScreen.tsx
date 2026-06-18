@@ -26,6 +26,7 @@ import { useTheme, ThemeColors } from '../utils/theme';
 import { useFirebaseAuth } from '../hooks/useFirebaseAuth';
 import { DatePickerModal } from '../components/DatePickerModal';
 import { FussballKachel } from '../components/FussballKachel';
+import { SearchInput } from '../components/SearchInput';
 import {
   Child,
   loadBambini,
@@ -185,6 +186,16 @@ export function BambiniScreen() {
     else groups.push({ year: c.birthYear, items: [c] });
   });
 
+  // TE-97: Übersicht über alle Kinder (ungefiltert, unabhängig von der Suche).
+  const stoppedCount = children.filter((c) => c.stopped).length;
+  const yearCounts: { year: number; count: number }[] = [];
+  children.forEach((c) => {
+    const y = yearCounts.find((x) => x.year === c.birthYear);
+    if (y) y.count += 1;
+    else yearCounts.push({ year: c.birthYear, count: 1 });
+  });
+  yearCounts.sort((a, b) => a.year - b.year);
+
   return (
     <View style={s.container}>
       {loading ? (
@@ -192,23 +203,39 @@ export function BambiniScreen() {
       ) : (
         <>
           {children.length > 0 ? (
-            <View style={s.searchBar}>
-              <Ionicons name="search" size={18} color={colors.textSecondary} />
-              <TextInput
-                style={s.searchInput}
-                value={query}
-                onChangeText={setQuery}
-                placeholder="Suchen (ab 3 Zeichen)"
-                placeholderTextColor={colors.placeholder}
-                autoCorrect={false}
-                clearButtonMode="while-editing"
-              />
-              {query ? (
-                <Pressable onPress={() => setQuery('')} hitSlop={8} accessibilityLabel="Suche leeren">
-                  <Ionicons name="close-circle" size={18} color={colors.textSecondary} />
-                </Pressable>
-              ) : null}
+            <View style={s.overview}>
+              <View style={s.overviewStat}>
+                <Text style={s.overviewValue}>{children.length}</Text>
+                <Text style={s.overviewLabel}>Kinder</Text>
+              </View>
+              <View style={s.overviewStat}>
+                <Text style={s.overviewValue}>{stoppedCount}</Text>
+                <Text style={s.overviewLabel}>aufgehört</Text>
+              </View>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={s.overviewYears}
+              >
+                {yearCounts.map(({ year, count }) => (
+                  <View key={year} style={s.overviewYearChip}>
+                    <Text style={s.overviewYearChipText}>
+                      {year ? year : '—'} · {count}
+                    </Text>
+                  </View>
+                ))}
+              </ScrollView>
             </View>
+          ) : null}
+
+          {children.length > 0 ? (
+            <SearchInput
+              value={query}
+              onChangeText={setQuery}
+              placeholder="Suchen (ab 3 Zeichen)"
+              colors={colors}
+              style={s.searchInputMargin}
+            />
           ) : null}
 
           <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
@@ -336,21 +363,41 @@ function makeStyles(c: ThemeColors) {
     scroll: { padding: 12, paddingBottom: 96 },
     empty: { color: c.textSecondary, textAlign: 'center', marginTop: 40, fontSize: 14 },
 
-    // TE-96: Live-Suchfeld über der Liste.
-    searchBar: {
+    // TE-97: kompakte Übersicht über alle Kinder.
+    overview: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 8,
-      backgroundColor: c.inputBackground,
+      gap: 10,
+      marginHorizontal: 12,
+      marginTop: 12,
+    },
+    overviewStat: {
+      backgroundColor: c.surface,
       borderWidth: 1,
       borderColor: c.border,
       borderRadius: 10,
       paddingHorizontal: 12,
-      paddingVertical: Platform.OS === 'ios' ? 10 : 4,
+      paddingVertical: 6,
+      alignItems: 'center',
+    },
+    overviewValue: { color: c.text, fontSize: 16, fontWeight: '800' },
+    overviewLabel: { color: c.textSecondary, fontSize: 10, fontWeight: '600' },
+    overviewYears: { flexDirection: 'row', gap: 6 },
+    overviewYearChip: {
+      backgroundColor: c.inputBackground,
+      borderWidth: 1,
+      borderColor: c.border,
+      borderRadius: 8,
+      paddingHorizontal: 8,
+      paddingVertical: 6,
+    },
+    overviewYearChipText: { color: c.textSecondary, fontSize: 12, fontWeight: '600' },
+
+    // TE-98: SearchInput-Komponente mit globalem Design.
+    searchInputMargin: {
       marginHorizontal: 12,
       marginTop: 12,
     },
-    searchInput: { flex: 1, color: c.text, fontSize: 15 },
 
     group: { marginBottom: 16 },
     groupTitle: { color: c.textSecondary, fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 },
