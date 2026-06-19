@@ -139,11 +139,9 @@ function chipDueLabel(task: Task): string {
 // ─── Section Label ────────────────────────────────────────────────────────────
 
 function SectionLabel({
-  title, onMore, moreLabel = 'Alle →', colors, onAdd,
+  title, onMore, moreLabel = 'Alle →', colors,
 }: {
   title: string; onMore?: () => void; moreLabel?: string; colors: ThemeColors;
-  // TE-85: optionaler Plus-Button rechts im Header (Notizblock).
-  onAdd?: () => void;
 }) {
   return (
     <View style={labelStyles.row}>
@@ -151,11 +149,6 @@ function SectionLabel({
       {onMore && (
         <Pressable onPress={onMore} hitSlop={8}>
           <Text style={[labelStyles.more, { color: colors.textMuted }]}>{moreLabel}</Text>
-        </Pressable>
-      )}
-      {onAdd && (
-        <Pressable onPress={onAdd} hitSlop={8} style={[labelStyles.addBtn, { borderColor: colors.border }]}>
-          <Ionicons name="add" size={16} color={colors.textSecondary} />
         </Pressable>
       )}
     </View>
@@ -179,14 +172,6 @@ const labelStyles = StyleSheet.create({
   more: {
     fontSize: 11,
     fontWeight: '600',
-  },
-  addBtn: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
 });
 
@@ -1010,14 +995,15 @@ export function DashboardScreen() {
         </View>
         )}
 
-        {/* Scratchpad – TE-104: nur Anzeige. Das Plus springt in den Tasks-Tab und
-            öffnet dort direkt eine neue Notiz; bearbeitet wird ausschließlich dort. */}
+        {/* Scratchpad – TE-104: nur Anzeige, bearbeitet wird ausschließlich im
+            Tasks-Tab. TE-108: „Alle →“-Pfeil statt Plus-Icon, analog zu den
+            anderen Dashboard-Elementen. */}
         {showBlock('scratchpad') && (
         <View style={styles.scratchCol}>
           <SectionLabel
             title="Notizblock"
             colors={colors}
-            onAdd={() => router.push({ pathname: '/(tabs)/tasks', params: { newNote: String(Date.now()) } } as any)}
+            onMore={() => router.push('/(tabs)/tasks' as any)}
           />
           <Scratchpad
             value={scratchpad}

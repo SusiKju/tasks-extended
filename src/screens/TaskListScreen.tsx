@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useCallback, useEffect, useRef } from 'react';
+import React, { useMemo, useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,7 +8,7 @@ import {
   Alert,
   Platform,
 } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useStore } from '../store';
 import { TaskCard } from '../components/TaskCard';
@@ -47,12 +47,6 @@ export function TaskListScreen() {
   // TE-104: persönlicher Notizblock – hier voll bearbeitbar (auf dem Dashboard nur Anzeige).
   const { scratchpad, onChange: onScratchpadChange } = useScratchpad();
   const scratchAddRef = useRef<(() => void) | null>(null);
-  // Über das +-Icon auf dem Dashboard kommt newNote als wechselnder Param rein →
-  // direkt eine neue Notiz oben anlegen und fokussieren.
-  const { newNote } = useLocalSearchParams<{ newNote?: string }>();
-  useEffect(() => {
-    if (newNote) scratchAddRef.current?.();
-  }, [newNote]);
 
   const toggleSelection = useCallback((id: string) => {
     setSelectedIds((prev) => {
