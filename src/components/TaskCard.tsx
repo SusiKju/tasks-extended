@@ -5,7 +5,7 @@ import { Task } from '../types';
 import { GroupBadge } from './GroupBadge';
 import { formatDate, isDueToday, isOverdue } from '../utils/dateFormat';
 import { useStore } from '../store';
-import { useTheme, ThemeColors, neonGlow, neonBorder } from '../utils/theme';
+import { useTheme, ThemeColors } from '../utils/theme';
 
 interface Props {
   task: Task;
@@ -36,23 +36,16 @@ export function TaskCard({ task, onPress, onToggle, onDelete, isSelected, onSele
     : 'transparent';
 
   const isHighlighted = leftBorderColor !== 'transparent';
-  const cardGlow = isDark && isHighlighted && !isSelected
-    ? neonGlow(leftBorderColor, 'medium')
-    : {};
-  // Im Neon-Theme: jede Card bekommt einen dezenten Accent-Tint am Rand
-  const neonCardBorder = isDark && !isHighlighted && !isSelected
-    ? { borderColor: colors.border, borderWidth: 1 }
-    : {};
 
   return (
     <TouchableOpacity
       style={[
         styles.card,
         task.completed && !isSelected && styles.completed,
-        { borderLeftColor: leftBorderColor, borderLeftWidth: isHighlighted ? 4 : 1 },
+        // TE-108: flache Listenzeile – nur ein dünner Akzent-Balken links bei
+        // überfällig/heute/ausgewählt, sonst keine eigene Umrandung.
+        { borderLeftColor: leftBorderColor, borderLeftWidth: isHighlighted ? 3 : 0 },
         isSelected && styles.selectedCard,
-        neonCardBorder,
-        cardGlow,
       ]}
       onPress={onPress}
       activeOpacity={0.7}
@@ -129,31 +122,23 @@ export function TaskCard({ task, onPress, onToggle, onDelete, isSelected, onSele
 
 function makeStyles(c: ThemeColors, _isDark: boolean) {
   return StyleSheet.create({
+    // TE-108: flache Listenzeile statt eigener Card (kein Box-in-Box-Effekt).
+    // Trennung nur über eine dünne untere Linie; Abstand kommt vom Container.
     card: {
       flexDirection: 'row',
       alignItems: 'center',
-      backgroundColor: c.surface,
-      borderRadius: 10,
-      // TE-107: keine horizontale Einrückung mehr – Abstand kommt vom Container.
-      // Schlanker in der Höhe (weniger Padding, kleinerer vertikaler Abstand).
-      paddingVertical: 8,
-      paddingHorizontal: 10,
-      marginVertical: 3,
+      paddingVertical: 9,
+      paddingHorizontal: 6,
       gap: 10,
-      borderWidth: 1,
-      borderColor: c.border,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.06,
-      shadowRadius: 4,
-      elevation: 2,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: c.border,
     },
     completed: {
       opacity: 0.55,
     },
     selectedCard: {
       backgroundColor: c.accent + '15',
-      borderColor: c.accent + '55',
+      borderRadius: 8,
     },
     toggleBtn: {},
     content: {
