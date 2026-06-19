@@ -287,7 +287,7 @@ export function BambiniScreen() {
                   ) : null}
                 </View>
                 {g.items.map((c) => (
-                  <Pressable key={c.id} style={s.row} onPress={() => openEdit(c)}>
+                  <Pressable key={c.id} style={[s.row, status === 'aktiv' && s.rowActive]} onPress={() => openEdit(c)}>
                     <View style={s.rowMain}>
                       <Text style={[s.rowName, c.stopped && s.rowNameStopped]} numberOfLines={1}>{c.name}</Text>
                       {c.registeredSince ? (
@@ -455,6 +455,7 @@ function makeStyles(c: ThemeColors) {
       paddingHorizontal: 12,
       marginBottom: 6,
     },
+    rowActive: { borderColor: c.accent, borderWidth: 1.5 },
     rowMain: { flex: 1 },
     rowName: { color: c.text, fontSize: 15, fontWeight: '600' },
     rowNameStopped: { textDecorationLine: 'line-through', color: c.textSecondary },
