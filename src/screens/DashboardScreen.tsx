@@ -236,7 +236,7 @@ function TaskChip({
     : null;
 
   return (
-    <Animated.View style={{ opacity: blinkAnim, maxWidth: '100%' }}>
+    <Animated.View style={{ opacity: blinkAnim, maxWidth: '47%' }}>
       <Pressable
         style={({ pressed }) => [
           chipStyles.chip,
@@ -270,11 +270,12 @@ const chipStyles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     gap: 3,
-    // TE-114: Pille nie breiter als ~47 % der Spalte – so passen pro Zeile
-    // immer mindestens zwei Pillen nebeneinander, kürzere sogar drei. Langer
-    // Text wird per numberOfLines={1} mit Ellipse abgeschnitten.
+    // Die ~47-%-Breitenkappung (TE-114) sitzt auf dem jeweils äußeren Flex-Kind
+    // (Animated.View bei TaskChip, Pressable bei NoteChip), nicht hier – sonst
+    // würde sie bei TaskChip relativ zur auto-breiten Hülle statt zur Spalte
+    // berechnet und der Text kollabiert auf 0.
     alignSelf: 'flex-start',
-    maxWidth: '47%',
+    maxWidth: '100%',
   },
   title: {
     fontSize: 12,
@@ -309,7 +310,7 @@ function NoteChip({ entry, onPress }: { entry: ScratchEntry; onPress: () => void
         chipStyles.chip,
         { backgroundColor: bgColor, borderColor, borderWidth: isDark ? 1.5 : 1,
           opacity: pressed ? 0.7 : entry.done ? 0.55 : 1,
-          paddingVertical: 5, paddingHorizontal: 9 },
+          paddingVertical: 5, paddingHorizontal: 9, maxWidth: '47%' },
         glow,
       ]}
       onPress={onPress}
