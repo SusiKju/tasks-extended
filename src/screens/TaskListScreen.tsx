@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,7 +9,7 @@ import {
   Alert,
   Platform,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useStore } from '../store';
 import { TaskCard } from '../components/TaskCard';
@@ -19,7 +19,8 @@ import { useTheme, ThemeColors, neonGlow } from '../utils/theme';
 import { updateGoogleTask, listTaskLists } from '../services/googleCalendar';
 import { useGoogleTasksSync } from '../hooks/useGoogleTasksSync';
 import { SearchInput } from '../components/SearchInput';
-import { SharedNotepad } from '../components/SharedNotepad';
+import { Scratchpad } from '../components/Scratchpad';
+import { useScratchpad } from '../hooks/useScratchpad';
 
 function confirmDelete(title: string, onConfirm: () => void) {
   if (Platform.OS === 'web') {
@@ -44,6 +45,16 @@ export function TaskListScreen() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const { colors, isDark, mono } = useTheme();
   const styles = useMemo(() => makeStyles(colors, isDark), [colors, isDark]);
+
+  // TE-104: persönlicher Notizblock – hier voll bearbeitbar (auf dem Dashboard nur Anzeige).
+  const { scratchpad, onChange: onScratchpadChange } = useScratchpad();
+  const scratchAddRef = useRef<(() => void) | null>(null);
+  // Über das +-Icon auf dem Dashboard kommt newNote als wechselnder Param rein →
+  // direkt eine neue Notiz oben anlegen und fokussieren.
+  const { newNote } = useLocalSearchParams<{ newNote?: string }>();
+  useEffect(() => {
+    if (newNote) scratchAddRef.current?.();
+  }, [newNote]);
 
   const toggleSelection = useCallback((id: string) => {
     setSelectedIds((prev) => {
@@ -241,11 +252,33 @@ export function TaskListScreen() {
         ))}
       </View>
 
-      {/* TE-104: Notizblock-Abschnitt – voll funktionsfähig, oberhalb der Tasks. */}
+      {/* TE-104: Notizblock-Abschnitt – hier bearbeitbar, oberhalb der Task-Liste.
+          Als ListHeaderComponent, damit er mitscrollt und auch bei leerer Liste sichtbar bleibt. */}
       <SectionList
         sections={sections}
         keyExtractor={(item) => item.id}
-        ListHeaderComponent={<SharedNotepad colors={colors} isDark={isDark} />}
+        ListHeaderComponent={
+          <View style={styles.notepadSection}>
+            <View style={styles.notepadHeader}>
+              <Ionicons name="document-text-outline" size={16} color={colors.text} />
+              <Text style={styles.notepadTitle}>Notizblock</Text>
+              <TouchableOpacity
+                onPress={() => scratchAddRef.current?.()}
+                style={styles.notepadAddBtn}
+                hitSlop={8}
+              >
+                <Ionicons name="add" size={18} color={colors.accent} />
+              </TouchableOpacity>
+            </View>
+            <Scratchpad
+              value={scratchpad}
+              onChange={onScratchpadChange}
+              isDark={isDark}
+              colors={colors}
+              registerAdd={(fn) => { scratchAddRef.current = fn; }}
+            />
+          </View>
+        }
         renderItem={({ item }) => (
           <TaskCard
             task={item}
@@ -264,8 +297,8 @@ export function TaskListScreen() {
           </View>
         )}
         ListEmptyComponent={
-          <View style={styles.empty}>
-            <Ionicons name="checkmark-done-circle-outline" size={56} color={colors.textMuted} />
+          <View style={styles.emptyInline}>
+            <Ionicons name="checkmark-done-circle-outline" size={48} color={colors.textMuted} />
             <Text style={styles.emptyTitle}>Keine Tasks</Text>
             <Text style={styles.emptySubtitle}>Tippe auf + um einen neuen Task anzulegen</Text>
           </View>
@@ -369,6 +402,25 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
     },
     list: { paddingBottom: 100 },
     listWithBulkBar: { paddingBottom: 90 },
+    // TE-104: Notizblock-Abschnitt oberhalb der Task-Liste.
+    notepadSection: {
+      marginHorizontal: 16,
+      marginTop: 8,
+      marginBottom: 4,
+      padding: 12,
+      borderRadius: 12,
+      backgroundColor: c.surface,
+      borderWidth: 1,
+      borderColor: c.border,
+      gap: 6,
+    },
+    notepadHeader: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    notepadTitle: { fontSize: 14, fontWeight: '700', color: c.text, flex: 1 },
+    notepadAddBtn: {
+      width: 28, height: 28, borderRadius: 14,
+      alignItems: 'center', justifyContent: 'center',
+      borderWidth: 1, borderColor: c.border,
+    },
     sectionHeader: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -392,6 +444,14 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
       alignItems: 'center',
       justifyContent: 'center',
       gap: 8,
+      paddingBottom: 60,
+    },
+    // TE-104: leere Task-Liste innerhalb der SectionList (unter dem Notizblock).
+    emptyInline: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      paddingTop: 48,
       paddingBottom: 60,
     },
     emptyTitle: { fontSize: 17, fontWeight: '600', color: c.textSecondary },

@@ -17,7 +17,8 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useStore } from '../store';
 import { useTheme, ThemeColors, readableTextOn, neonGlow } from '../utils/theme';
-import { subscribeToScratchpad, saveScratchpad } from '../services/scratchpadService';
+import { useScratchpad } from '../hooks/useScratchpad';
+import { Scratchpad, parseScratchpad } from '../components/Scratchpad';
 import { useFirebaseAuth } from '../hooks/useFirebaseAuth';
 import { useGoogleTasksSync } from '../hooks/useGoogleTasksSync';
 import { useGoogleContactsBirthdaysSync } from '../hooks/useGoogleContactsBirthdaysSync';
@@ -300,259 +301,6 @@ const chipStyles = StyleSheet.create({
   },
 });
 
-// ─── Scratchpad (Notiz-Bubbles) ───────────────────────────────────────────────
-
-interface ScratchEntry { id?: string; text: string; color: string; }
-
-/** Stabile, kollisionsarme ID für eine neue Notiz (siehe TE-95-Migration unten). */
-function makeNoteId(): string {
-  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
-}
-
-// TE-85: feste, vom Nutzer wählbare Notiz-Farben. Default ist Dunkles Pink.
-// Die gewählte Farbe (entry.color) gewinnt ab jetzt über die Theme-Automatik.
-const NOTE_COLOR_OPTIONS: { key: string; label: string; color: string }[] = [
-  { key: 'pink',   label: 'Dunkles Pink', color: '#C2185B' },
-  { key: 'blue',   label: 'Neonblau',     color: '#2299FF' },
-  { key: 'green',  label: 'Neongrün',     color: '#00FF88' },
-  { key: 'yellow', label: 'Neongelb',     color: '#FFE600' },
-  { key: 'gray',   label: 'Grau',         color: '#9E9E9E' },
-];
-const NOTE_DEFAULT_COLOR = NOTE_COLOR_OPTIONS[0].color; // Dunkles Pink
-
-// Lesbare Textfarbe für eine solide Bubble: helle Hintergründe (Gelb/Grün/Grau)
-// brauchen dunklen Text, dunkle (Pink/Blau) weißen. Luminanz nach Rec. 601.
-function readableText(bg: string): string {
-  const hex = bg.replace('#', '');
-  if (hex.length < 6) return '#FFFFFF';
-  const r = parseInt(hex.slice(0, 2), 16);
-  const g = parseInt(hex.slice(2, 4), 16);
-  const b = parseInt(hex.slice(4, 6), 16);
-  const lum = 0.299 * r + 0.587 * g + 0.114 * b;
-  return lum > 150 ? '#1A1A1A' : '#FFFFFF';
-}
-
-// TE-85: Farben werden jetzt explizit pro Notiz gewählt (Default Dunkles Pink),
-// daher keine Theme-abhängige Auto-Vergabe und kein Erzwingen der ersten Farbe.
-function parseScratchpad(raw: string): ScratchEntry[] {
-  if (!raw || raw.trim() === '') return [{ text: '', color: NOTE_DEFAULT_COLOR }];
-  try {
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-  } catch {}
-  const lines = raw.split('\n').filter((l) => l.trim() !== '' && !l.startsWith('─'));
-  if (lines.length === 0) return [{ text: '', color: NOTE_DEFAULT_COLOR }];
-  return lines.map((text) => ({ text, color: NOTE_DEFAULT_COLOR }));
-}
-
-function serializeScratchpad(entries: ScratchEntry[]): string {
-  return JSON.stringify(entries);
-}
-
-function Scratchpad({
-  value, onChange, isDark, colors, registerAdd,
-}: {
-  value: string;
-  onChange: (t: string) => void;
-  isDark: boolean;
-  colors: ThemeColors;
-  // TE-85: erlaubt dem Header-Plus-Button, eine Notiz oben anzulegen.
-  registerAdd?: (fn: () => void) => void;
-}) {
-  const isNeon = isDark && colors.accentNeon === '#00EEFF';
-  // Erkennt beide monochromen Themes (dunkles Schwarz-Weiß UND sein helles
-  // Negativ) – unabhängig von isDark, denn das Negativ-Theme ist hell.
-  const isMono = colors.accentNeon === '#FFFFFF' || colors.accentNeon === '#000000';
-  const entries = useMemo(() => parseScratchpad(value), [value]);
-  const inputRefs = useRef<(any)[]>([]);
-  // TE-85: welche Notiz hat gerade die Farbauswahl offen (null = keine).
-  const [pickerIdx, setPickerIdx] = useState<number | null>(null);
-
-  const updateEntry = useCallback((idx: number, text: string) => {
-    const next = entries.map((e, i) => i === idx ? { ...e, text } : e);
-    onChange(serializeScratchpad(next));
-  }, [entries, onChange]);
-
-  // TE-85: gewählte Farbe einer Notiz setzen.
-  const updateColor = useCallback((idx: number, color: string) => {
-    const next = entries.map((e, i) => i === idx ? { ...e, color } : e);
-    onChange(serializeScratchpad(next));
-  }, [entries, onChange]);
-
-  // TE-85: neue Notiz mit höchster Priorität (Position 0) + Default-Pink.
-  // Ist die einzige vorhandene Notiz noch leer, wird sie wiederverwendet statt
-  // eine zweite leere Bubble zu erzeugen.
-  const addEntryAtTop = useCallback(() => {
-    if (entries.length === 1 && entries[0].text === '') {
-      onChange(serializeScratchpad([{ id: entries[0].id ?? makeNoteId(), text: '', color: NOTE_DEFAULT_COLOR }]));
-    } else {
-      onChange(serializeScratchpad([{ id: makeNoteId(), text: '', color: NOTE_DEFAULT_COLOR }, ...entries]));
-    }
-    setTimeout(() => inputRefs.current[0]?.focus(), 40);
-  }, [entries, onChange]);
-
-  useEffect(() => { registerAdd?.(addEntryAtTop); }, [registerAdd, addEntryAtTop]);
-
-  // TE-95: Notizen ohne stabile id (Alt-Daten, oder eine vor dieser Migration
-  // angelegte Notiz) bekommen einmalig eine – sonst hängen sich Feed-Highlight
-  // und manuelle Feed-Sortierung (beide referenzieren `note:${id}`) an die
-  // Array-Position statt an die Notiz selbst, und eine neu eingefügte Notiz an
-  // Position 0 "erbt" optisch das Highlight/die Position der alten Notiz 0.
-  useEffect(() => {
-    if (entries.some((e) => !e.id)) {
-      onChange(serializeScratchpad(entries.map((e) => (e.id ? e : { ...e, id: makeNoteId() }))));
-    }
-  }, [entries, onChange]);
-
-  const removeEntry = useCallback((idx: number) => {
-    if (entries.length <= 1) { updateEntry(0, ''); return; }
-    const next = entries.filter((_, i) => i !== idx);
-    onChange(serializeScratchpad(next));
-    setTimeout(() => inputRefs.current[Math.max(0, idx - 1)]?.focus(), 40);
-  }, [entries, onChange, updateEntry]);
-
-  const handleKeyPress = useCallback((idx: number, e: any) => {
-    if (e.nativeEvent.key === 'Backspace' && entries[idx].text === '') {
-      removeEntry(idx);
-    }
-  }, [entries, removeEntry]);
-
-  return (
-    <View style={padStyles.container}>
-      {entries.map((entry, idx) => {
-        // Neon-Theme: Tasks-Tab-Stil – keine Füllung, Rahmen + Schrift in der
-        // Bubble-Farbe + Glow. Bessere Lesbarkeit, einheitlicher Look.
-        // Sonst (dark-soft/neutral): solide Bubble; Textfarbe wird per Luminanz
-        // gewählt (TE-85), damit helle Farben wie Gelb dunklen Text bekommen.
-        // Im monochromen Theme bleibt die Theme-Textfarbe, der gewählte Farbton
-        // erscheint stattdessen im Bullet-Punkt.
-        const fg = isNeon ? entry.color : isMono ? colors.text : readableText(entry.color);
-        // Bullet zeigt die gewählte Farbe (Neon/Mono) bzw. einen Kontrastpunkt
-        // (Neutral, dort ist die Bubble selbst schon eingefärbt).
-        const bulletColor = isNeon || isMono ? entry.color : fg + '99';
-        return (
-        <View key={idx}>
-        <View style={[
-          padStyles.bubble,
-          isNeon
-            ? { backgroundColor: entry.color + '14', borderWidth: 1.5, borderColor: entry.color, ...neonGlow(entry.color, 'soft') }
-            : isMono
-            ? { backgroundColor: colors.surfaceHigh, borderWidth: 1, borderColor: colors.border }
-            : { backgroundColor: entry.color },
-        ]}>
-          {/* Bullet ist zugleich der Farb-Picker-Auslöser (TE-85). */}
-          <Pressable
-            onPress={() => setPickerIdx((cur) => (cur === idx ? null : idx))}
-            hitSlop={8}
-          >
-            <View style={[padStyles.bullet, { backgroundColor: bulletColor }]} />
-          </Pressable>
-          <TextInput
-            ref={(r) => { inputRefs.current[idx] = r; }}
-            style={[padStyles.bubbleInput, { color: fg }]}
-            value={entry.text}
-            onChangeText={(t) => updateEntry(idx, t)}
-            onKeyPress={(e) => handleKeyPress(idx, e)}
-            // TE-85: Enter legt keine neue Notiz mehr an (das macht der +-Button),
-            // sondern schließt die Eingabe nur ab (blurOnSubmit).
-            placeholder={idx === 0 && entries.length === 1 ? 'Notiz…' : ''}
-            placeholderTextColor={fg + '55'}
-            returnKeyType="done"
-            blurOnSubmit
-          />
-          {/* X immer rechts, oben ausgerichtet damit er bei zweizeiligem Text sichtbar bleibt */}
-          <Pressable
-            onPress={() => removeEntry(idx)}
-            hitSlop={8}
-            style={[padStyles.deleteBtn, { backgroundColor: colors.danger + '22' }]}
-          >
-            <Ionicons name="close" size={16} color={colors.danger} />
-          </Pressable>
-        </View>
-        {/* Farbauswahl: fünf feste Optionen, sichtbar beim Anlegen wie beim Bearbeiten. */}
-        {pickerIdx === idx && (
-          <View style={[padStyles.palette, { backgroundColor: colors.surfaceHigh, borderColor: colors.border }]}>
-            {NOTE_COLOR_OPTIONS.map((opt) => {
-              const selected = entry.color === opt.color;
-              return (
-                <Pressable
-                  key={opt.key}
-                  onPress={() => { updateColor(idx, opt.color); setPickerIdx(null); }}
-                  hitSlop={6}
-                  style={[
-                    padStyles.swatch,
-                    { backgroundColor: opt.color },
-                    selected && { borderWidth: 2, borderColor: colors.text },
-                  ]}
-                >
-                  {selected && <Ionicons name="checkmark" size={12} color={readableText(opt.color)} />}
-                </Pressable>
-              );
-            })}
-          </View>
-        )}
-        </View>
-        );
-      })}
-    </View>
-  );
-}
-
-const padStyles = StyleSheet.create({
-  container: {
-    gap: 4,
-  },
-  bubble: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    gap: 5,
-  },
-  bullet: {
-    width: 10,
-    height: 10,
-    borderRadius: 999,
-    flexShrink: 0,
-  },
-  bubbleInput: {
-    flex: 1,
-    minWidth: 0,        // verhindert, dass langer Text den X-Button rausschiebt
-    color: '#FFFFFF',
-    fontSize: 13,
-    lineHeight: 18,
-    padding: 0,
-  },
-  deleteBtn: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  // TE-85: Farbauswahl-Reihe unter der Notiz.
-  palette: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 4,
-    marginBottom: 2,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    borderWidth: 1,
-    alignSelf: 'flex-start',
-  },
-  swatch: {
-    width: 20,
-    height: 20,
-    borderRadius: 999,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
-
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export function DashboardScreen() {
@@ -563,7 +311,10 @@ export function DashboardScreen() {
   const childName = (id: string) => familyChildren.find((c) => c.id === id)?.name ?? id;
   const childColor = (id: string) => familyChildren.find((c) => c.id === id)?.color ?? CHILD_COLOR_FALLBACK;
   const childEmoji = (id: string) => familyChildren.find((c) => c.id === id)?.emoji ?? null;
-  const { tasks, settings, scratchpad, setScratchpad, birthdays: storeBirthdays, pinnedMailIds } = useStore();
+  const { tasks, settings, birthdays: storeBirthdays, pinnedMailIds } = useStore();
+  // TE-104: Notizblock-Wert + Firestore-Abo zentral aus dem Hook. Das Dashboard
+  // zeigt ihn nur an (readOnly); bearbeitet wird er im Tasks-Tab.
+  const { scratchpad } = useScratchpad();
   // TE-77: nur aktivierte Dashboard-Blöcke rendern. Fehlt ein Key (alter Stand /
   // neuer Block), gilt er als sichtbar – so verschwindet nichts versehentlich.
   const showBlock = useCallback(
@@ -574,15 +325,6 @@ export function DashboardScreen() {
   const { user } = useFirebaseAuth();
   const { syncTasks } = useGoogleTasksSync();
   const { syncBirthdays } = useGoogleContactsBirthdaysSync();
-
-  // Firestore-Echtzeit-Abo für den persönlichen Scratchpad
-  useEffect(() => {
-    if (!fid || !user?.uid) return;
-    const unsub = subscribeToScratchpad(fid, user.uid, (raw) => {
-      setScratchpad(raw);
-    });
-    return unsub;
-  }, [fid, user?.uid]);
 
   // Sync-Button
   const [syncing, setSyncing] = useState(false);
@@ -646,25 +388,6 @@ export function DashboardScreen() {
     }
   }, [syncing, syncTasks, syncBirthdays, settings, loadDashboardMails]);
 
-  // Debounced Firestore-Save 1,5 s nach letzter Eingabe
-  const uploadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const fidRef = useRef(fid);
-  fidRef.current = fid;
-  const uidRef = useRef(user?.uid);
-  uidRef.current = user?.uid;
-  // TE-85: Brücke zum Plus-Button im Notizblock-Header → fügt oben eine Notiz an.
-  const scratchAddRef = useRef<(() => void) | null>(null);
-  const handleScratchpadChange = useCallback((text: string) => {
-    setScratchpad(text);
-    if (uploadTimer.current) clearTimeout(uploadTimer.current);
-    uploadTimer.current = setTimeout(() => {
-      const currentFid = fidRef.current;
-      const uid = uidRef.current;
-      if (!currentFid || !uid) return;
-      const { scratchpad: latest } = useStore.getState();
-      saveScratchpad(currentFid, uid, latest).catch(() => {});
-    }, 1500);
-  }, [setScratchpad]);
   const styles = useMemo(() => makeStyles(colors, isDark, reduceMotion), [colors, isDark, reduceMotion]);
 
   const [mails, setMails] = useState<MailMessage[]>([]);
@@ -1287,17 +1010,20 @@ export function DashboardScreen() {
         </View>
         )}
 
-        {/* Scratchpad */}
+        {/* Scratchpad – TE-104: nur Anzeige. Das Plus springt in den Tasks-Tab und
+            öffnet dort direkt eine neue Notiz; bearbeitet wird ausschließlich dort. */}
         {showBlock('scratchpad') && (
         <View style={styles.scratchCol}>
-          {/* TE-85: Plus-Button im Header legt eine neue Notiz ganz oben an. */}
-          <SectionLabel title="Notizblock" colors={colors} onAdd={() => scratchAddRef.current?.()} />
+          <SectionLabel
+            title="Notizblock"
+            colors={colors}
+            onAdd={() => router.push({ pathname: '/(tabs)/tasks', params: { newNote: String(Date.now()) } } as any)}
+          />
           <Scratchpad
             value={scratchpad}
-            onChange={handleScratchpadChange}
             isDark={isDark}
             colors={colors}
-            registerAdd={(fn) => { scratchAddRef.current = fn; }}
+            readOnly
           />
         </View>
         )}
@@ -1466,15 +1192,7 @@ export function DashboardScreen() {
 
       {/* ── Geteilte Liste (TE-121): bewusst auffällig gestaltete Card, ── */}
       {/* damit z. B. eine gemeinsame Einkaufsliste mit dem Partner sofort ins Auge fällt. */}
-      {/* TE-104: Dashboard zeigt die Liste nur noch an – gepflegt wird sie im Tasks-Tab. */}
-      {showBlock('sharedList') && (
-        <SharedNotepad
-          colors={colors}
-          isDark={isDark}
-          readOnly
-          onOpenInTasks={() => router.push('/(tabs)/tasks' as any)}
-        />
-      )}
+      {showBlock('sharedList') && <SharedNotepad colors={colors} isDark={isDark} />}
 
       {/* ── Aufgaben der Kinder (TE-110/TE-115) ── */}
       {showBlock('kidsTasks') && (childrenWithTasks.length > 0 || groupTasks.length > 0) && (
