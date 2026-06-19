@@ -17,7 +17,6 @@ import { isOverdue } from '../utils/dateFormat';
 import { useTheme, ThemeColors, neonGlow } from '../utils/theme';
 import { updateGoogleTask, listTaskLists } from '../services/googleCalendar';
 import { useGoogleTasksSync } from '../hooks/useGoogleTasksSync';
-import { SearchInput } from '../components/SearchInput';
 import { Scratchpad } from '../components/Scratchpad';
 import { useScratchpad } from '../hooks/useScratchpad';
 
@@ -39,7 +38,6 @@ export function TaskListScreen() {
   const { tasks, settings, toggleTask, deleteTask, deleteTasks } = useStore();
   const { syncTasks } = useGoogleTasksSync();
   const [filter, setFilter] = useState<FilterMode>('open');
-  const [search, setSearch] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const { colors, isDark } = useTheme();
   const styles = useMemo(() => makeStyles(colors, isDark), [colors, isDark]);
@@ -94,15 +92,9 @@ export function TaskListScreen() {
     if (filter === 'open') list = list.filter((t) => !t.completed);
     if (filter === 'overdue') list = list.filter((t) => isOverdue(t.dueDate) && !t.completed);
     if (filter === 'done') list = list.filter((t) => t.completed);
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      list = list.filter(
-        (t) => t.title.toLowerCase().includes(q) || t.description.toLowerCase().includes(q)
-      );
-    }
 
     return list;
-  }, [tasks, filter, search]);
+  }, [tasks, filter]);
 
   const allFilteredSelected =
     filtered.length > 0 && filtered.every((t) => selectedIds.has(t.id));
@@ -183,13 +175,6 @@ export function TaskListScreen() {
           </View>
 
           <View style={styles.groupBody}>
-            <SearchInput
-              value={search}
-              onChangeText={setSearch}
-              placeholder="Suchen…"
-              colors={colors}
-            />
-
             {/* Kompakter Status-Filter (kein Gruppen-/Label-Filter mehr, TE-106) */}
             <View style={styles.filterRow}>
               {(['all', 'open', 'overdue', 'done'] as FilterMode[]).map((f) => {

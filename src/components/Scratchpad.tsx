@@ -172,7 +172,7 @@ export function Scratchpad({
             />
             <Text
               style={[padStyles.rowText, { color: colors.text }, entry.done && { textDecorationLine: 'line-through', color: colors.textMuted }]}
-              numberOfLines={2}
+              numberOfLines={1}
             >
               {entry.text}
             </Text>
