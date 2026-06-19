@@ -4,8 +4,7 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  SectionList,
-  TextInput,
+  ScrollView,
   Alert,
   Platform,
 } from 'react-native';
@@ -41,7 +40,6 @@ export function TaskListScreen() {
   const { syncTasks } = useGoogleTasksSync();
   const [filter, setFilter] = useState<FilterMode>('open');
   const [search, setSearch] = useState('');
-  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const { colors, isDark, mono } = useTheme();
   const styles = useMemo(() => makeStyles(colors, isDark), [colors, isDark]);
@@ -102,7 +100,6 @@ export function TaskListScreen() {
     if (filter === 'open') list = list.filter((t) => !t.completed);
     if (filter === 'overdue') list = list.filter((t) => isOverdue(t.dueDate) && !t.completed);
     if (filter === 'done') list = list.filter((t) => t.completed);
-    if (selectedGroupId) list = list.filter((t) => t.groupId === selectedGroupId);
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter(
@@ -111,7 +108,7 @@ export function TaskListScreen() {
     }
 
     return list;
-  }, [tasks, filter, selectedGroupId, search]);
+  }, [tasks, filter, search]);
 
   const allFilteredSelected =
     filtered.length > 0 && filtered.every((t) => selectedIds.has(t.id));
@@ -169,162 +166,125 @@ export function TaskListScreen() {
 
   return (
     <View style={styles.container}>
-      <SearchInput
-        value={search}
-        onChangeText={setSearch}
-        placeholder="Suchen…"
-        colors={colors}
-        style={styles.searchInputMargin}
-      />
-
-      <View style={styles.filterRow}>
-        {(['all', 'open', 'overdue', 'done'] as FilterMode[]).map((f) => {
-          const isActive = filter === f;
-          const isDanger = f === 'overdue' && isActive;
-          return (
+      {/* TE-106: Notizblock- und Tasks-Bereich als zwei klar getrennte, gleich
+          gestaltete Boxen in einem ScrollView. Die Task-Liste liegt innerhalb
+          der Tasks-Box, damit der Bereich als geschlossene Einheit lesbar ist. */}
+      <ScrollView
+        contentContainerStyle={[styles.scrollContent, hasSelection && styles.listWithBulkBar]}
+        keyboardShouldPersistTaps="handled"
+      >
+        {/* ── Notizblock-Bereich ── */}
+        <View style={styles.groupCard}>
+          <View style={styles.groupHeader}>
+            <Ionicons name="document-text-outline" size={18} color={colors.text} />
+            <Text style={styles.groupTitle}>Notizblock</Text>
             <TouchableOpacity
-              key={f}
-              style={[
-                styles.chip,
-                isActive && (isDanger ? styles.chipDanger : styles.chipActive),
-              ]}
-              onPress={() => setFilter(f)}
+              onPress={() => scratchAddRef.current?.()}
+              style={styles.bigAddBtn}
+              activeOpacity={0.85}
             >
-              {f === 'overdue' ? (
-                <Ionicons
-                  name="alert-circle-outline"
-                  size={12}
-                  color={isActive ? '#fff' : colors.danger}
-                />
-              ) : null}
-              <Text
-                style={[
-                  styles.chipText,
-                  isActive && styles.chipTextActive,
-                  !isActive && f === 'overdue' && { color: colors.danger },
-                ]}
-              >
-                {f === 'all'
-                  ? 'Alle'
-                  : f === 'open'
-                  ? 'Offen'
-                  : f === 'overdue'
-                  ? 'Abgelaufen'
-                  : 'Erledigt'}
-              </Text>
+              <Ionicons name="add" size={26} color={isDark ? colors.accentNeon : '#fff'} />
             </TouchableOpacity>
-          );
-        })}
+          </View>
+          <View style={styles.groupBody}>
+            <Scratchpad
+              value={scratchpad}
+              onChange={onScratchpadChange}
+              isDark={isDark}
+              colors={colors}
+              registerAdd={(fn) => { scratchAddRef.current = fn; }}
+            />
+          </View>
+        </View>
 
-        <View style={styles.divider} />
-
-        <TouchableOpacity
-          style={[styles.chip, !selectedGroupId && styles.chipActive]}
-          onPress={() => setSelectedGroupId(null)}
-        >
-          <Text style={[styles.chipText, !selectedGroupId && styles.chipTextActive]}>
-            Alle Gruppen
-          </Text>
-        </TouchableOpacity>
-
-        {groups.map((g) => (
-          <TouchableOpacity
-            key={g.id}
-            style={[
-              styles.chip,
-              selectedGroupId === g.id && {
-                backgroundColor: mono(g.color) + '22',
-                borderColor: mono(g.color),
-              },
-            ]}
-            onPress={() => setSelectedGroupId(g.id === selectedGroupId ? null : g.id)}
-          >
-            <View style={[styles.chipDot, { backgroundColor: mono(g.color) }]} />
-            <Text
-              style={[
-                styles.chipText,
-                selectedGroupId === g.id && { color: mono(g.color), fontWeight: '600' },
-              ]}
+        {/* ── Tasks-Bereich ── */}
+        <View style={styles.groupCard}>
+          <View style={styles.groupHeader}>
+            <Ionicons name="checkmark-circle-outline" size={18} color={colors.text} />
+            <Text style={styles.groupTitle}>Tasks</Text>
+            <TouchableOpacity
+              onPress={() => router.push('/task/new')}
+              style={styles.bigAddBtn}
+              activeOpacity={0.85}
             >
-              {g.name}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+              <Ionicons name="add" size={26} color={isDark ? colors.accentNeon : '#fff'} />
+            </TouchableOpacity>
+          </View>
 
-      {/* TE-104/TE-105: Notizblock- und Tasks-Abschnitt teilen sich denselben
-          Card-Header mit großem +-Button. Beide als ListHeaderComponent, damit
-          sie mitscrollen und auch bei leerer Task-Liste sichtbar bleiben. */}
-      <SectionList
-        sections={sections}
-        keyExtractor={(item) => item.id}
-        ListHeaderComponent={
-          <>
-            {/* Notizblock-Abschnitt – bearbeitbar */}
-            <View style={styles.groupCard}>
-              <View style={styles.groupHeader}>
-                <Ionicons name="document-text-outline" size={18} color={colors.text} />
-                <Text style={styles.groupTitle}>Notizblock</Text>
-                <TouchableOpacity
-                  onPress={() => scratchAddRef.current?.()}
-                  style={styles.bigAddBtn}
-                  activeOpacity={0.85}
-                >
-                  <Ionicons name="add" size={26} color={isDark ? colors.accentNeon : '#fff'} />
-                </TouchableOpacity>
-              </View>
-              <Scratchpad
-                value={scratchpad}
-                onChange={onScratchpadChange}
-                isDark={isDark}
-                colors={colors}
-                registerAdd={(fn) => { scratchAddRef.current = fn; }}
-              />
+          <View style={styles.groupBody}>
+            <SearchInput
+              value={search}
+              onChangeText={setSearch}
+              placeholder="Suchen…"
+              colors={colors}
+            />
+
+            {/* Kompakter Status-Filter (kein Gruppen-/Label-Filter mehr, TE-106) */}
+            <View style={styles.filterRow}>
+              {(['all', 'open', 'overdue', 'done'] as FilterMode[]).map((f) => {
+                const isActive = filter === f;
+                const isDanger = f === 'overdue' && isActive;
+                return (
+                  <TouchableOpacity
+                    key={f}
+                    style={[
+                      styles.chip,
+                      isActive && (isDanger ? styles.chipDanger : styles.chipActive),
+                    ]}
+                    onPress={() => setFilter(f)}
+                  >
+                    <Text
+                      style={[
+                        styles.chipText,
+                        isActive && styles.chipTextActive,
+                        !isActive && f === 'overdue' && { color: colors.danger },
+                      ]}
+                    >
+                      {f === 'all'
+                        ? 'Alle'
+                        : f === 'open'
+                        ? 'Offen'
+                        : f === 'overdue'
+                        ? 'Abgelaufen'
+                        : 'Erledigt'}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
 
-            {/* Tasks-Abschnitt – gleicher Header-Look, großer +-Button statt FAB */}
-            <View style={styles.groupCard}>
-              <View style={styles.groupHeader}>
-                <Ionicons name="checkmark-circle-outline" size={18} color={colors.text} />
-                <Text style={styles.groupTitle}>Tasks</Text>
-                <TouchableOpacity
-                  onPress={() => router.push('/task/new')}
-                  style={styles.bigAddBtn}
-                  activeOpacity={0.85}
-                >
-                  <Ionicons name="add" size={26} color={isDark ? colors.accentNeon : '#fff'} />
-                </TouchableOpacity>
+            {/* Gruppierte Task-Liste innerhalb der Box */}
+            {sections.length === 0 ? (
+              <View style={styles.emptyInline}>
+                <Ionicons name="checkmark-done-circle-outline" size={44} color={colors.textMuted} />
+                <Text style={styles.emptyTitle}>Keine Tasks</Text>
+                <Text style={styles.emptySubtitle}>Tippe auf + um einen neuen Task anzulegen</Text>
               </View>
-            </View>
-          </>
-        }
-        renderItem={({ item }) => (
-          <TaskCard
-            task={item}
-            onPress={() => router.push(`/task/${item.id}` as any)}
-            onToggle={() => handleToggle(item)}
-            onDelete={() => handleSingleDelete(item.id, item.title)}
-            isSelected={selectedIds.has(item.id)}
-            onSelectToggle={() => toggleSelection(item.id)}
-          />
-        )}
-        renderSectionHeader={({ section }) => (
-          <View style={styles.sectionHeader}>
-            <View style={[styles.sectionDot, { backgroundColor: mono(section.color) }]} />
-            <Text style={styles.sectionTitle}>{section.title}</Text>
-            <Text style={styles.sectionCount}>{section.data.length}</Text>
+            ) : (
+              sections.map((section) => (
+                <View key={section.title}>
+                  <View style={styles.sectionHeader}>
+                    <View style={[styles.sectionDot, { backgroundColor: mono(section.color) }]} />
+                    <Text style={styles.sectionTitle}>{section.title}</Text>
+                    <Text style={styles.sectionCount}>{section.data.length}</Text>
+                  </View>
+                  {section.data.map((item) => (
+                    <TaskCard
+                      key={item.id}
+                      task={item}
+                      onPress={() => router.push(`/task/${item.id}` as any)}
+                      onToggle={() => handleToggle(item)}
+                      onDelete={() => handleSingleDelete(item.id, item.title)}
+                      isSelected={selectedIds.has(item.id)}
+                      onSelectToggle={() => toggleSelection(item.id)}
+                    />
+                  ))}
+                </View>
+              ))
+            )}
           </View>
-        )}
-        ListEmptyComponent={
-          <View style={styles.emptyInline}>
-            <Ionicons name="checkmark-done-circle-outline" size={48} color={colors.textMuted} />
-            <Text style={styles.emptyTitle}>Keine Tasks</Text>
-            <Text style={styles.emptySubtitle}>Tippe auf + um einen neuen Task anzulegen</Text>
-          </View>
-        }
-        contentContainerStyle={[styles.list, hasSelection && styles.listWithBulkBar]}
-        stickySectionHeadersEnabled={false}
-      />
+        </View>
+      </ScrollView>
 
       {hasSelection && (
         <View style={styles.bulkBar}>
@@ -357,14 +317,10 @@ export function TaskListScreen() {
 function makeStyles(c: ThemeColors, isDark: boolean) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: c.background },
-    searchInputMargin: {
-      marginHorizontal: 16,
-      marginTop: 12,
-    },
+    scrollContent: { paddingTop: 4, paddingBottom: 32 },
+    // TE-106: kompakter Status-Filter (kleinere Chips, kein H-Padding – sitzt in der Box).
     filterRow: {
       flexDirection: 'row',
-      paddingHorizontal: 16,
-      paddingVertical: 10,
       gap: 6,
       flexWrap: 'wrap',
       alignItems: 'center',
@@ -372,9 +328,9 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
     chip: {
       flexDirection: 'row',
       alignItems: 'center',
-      paddingHorizontal: 10,
-      paddingVertical: 5,
-      borderRadius: 14,
+      paddingHorizontal: 9,
+      paddingVertical: 3,
+      borderRadius: 11,
       backgroundColor: c.surface,
       borderWidth: 1,
       borderColor: c.border,
@@ -392,40 +348,38 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
       borderWidth: isDark ? 1.5 : 1,
       ...(isDark ? neonGlow(c.danger, 'medium') : {}),
     },
-    chipDot: {
-      width: 6,
-      height: 6,
-      borderRadius: 3,
-    },
     chipText: {
-      fontSize: 13,
+      fontSize: 12,
       color: c.textSecondary,
     },
     chipTextActive: {
       color: isDark ? c.accentNeon : '#fff',
       fontWeight: '600',
     },
-    divider: {
-      width: 1,
-      height: 16,
-      backgroundColor: c.border,
-      marginHorizontal: 2,
-    },
-    list: { paddingBottom: 100 },
     listWithBulkBar: { paddingBottom: 90 },
-    // TE-105: gemeinsamer Card-Look für Notizblock- und Tasks-Abschnitt.
+    // TE-105/TE-106: gemeinsamer Box-Look für die zwei klar getrennten Bereiche.
     groupCard: {
-      marginHorizontal: 16,
+      marginHorizontal: 12,
       marginTop: 10,
       marginBottom: 2,
-      padding: 12,
-      borderRadius: 12,
+      borderRadius: 14,
       backgroundColor: c.surface,
       borderWidth: 1,
       borderColor: c.border,
-      gap: 8,
+      overflow: 'hidden',
     },
-    groupHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    // Header sitzt oben in der Box, durch eine Trennlinie klar vom Inhalt abgesetzt.
+    groupHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      borderBottomWidth: 1,
+      borderBottomColor: c.border,
+      backgroundColor: c.surfaceHigh,
+    },
+    groupBody: { padding: 12, gap: 8 },
     groupTitle: { fontSize: 16, fontWeight: '700', color: c.text, flex: 1 },
     // Großer, einheitlicher +-Button (ersetzt FAB + kleinen Notizblock-+).
     // Look identisch zum vorherigen FAB: Neon-Rahmen+Glow im Dark, gefüllt im Light.
@@ -440,8 +394,8 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
     sectionHeader: {
       flexDirection: 'row',
       alignItems: 'center',
-      paddingHorizontal: 20,
-      paddingTop: 16,
+      paddingHorizontal: 2,
+      paddingTop: 12,
       paddingBottom: 6,
       gap: 6,
     },
@@ -455,20 +409,13 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
       paddingVertical: 1,
       borderRadius: 8,
     },
-    empty: {
-      flex: 1,
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: 8,
-      paddingBottom: 60,
-    },
-    // TE-104: leere Task-Liste innerhalb der SectionList (unter dem Notizblock).
+    // Leere Task-Liste innerhalb der Tasks-Box (TE-104/TE-106).
     emptyInline: {
       alignItems: 'center',
       justifyContent: 'center',
-      gap: 8,
-      paddingTop: 48,
-      paddingBottom: 60,
+      gap: 6,
+      paddingTop: 24,
+      paddingBottom: 24,
     },
     emptyTitle: { fontSize: 17, fontWeight: '600', color: c.textSecondary },
     emptySubtitle: {
