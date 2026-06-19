@@ -1139,7 +1139,7 @@ export function DashboardScreen() {
                       { color: eventTextColor }
                     ]}>{time}</Text>
                   </View>
-                  {/* Titel */}
+                  {/* Titel + Ort in einer Zeile (TE-116) */}
                   <View style={{ flex: 1 }}>
                     <Text
                       style={[
@@ -1149,12 +1149,8 @@ export function DashboardScreen() {
                       numberOfLines={1}
                     >
                       {event.summary}
+                      {event.location && prominent ? ` · 📍 ${event.location}` : ''}
                     </Text>
-                    {event.location && prominent ? (
-                      <Text style={[styles.calSub, { color: colors.textMuted }]} numberOfLines={1}>
-                        📍 {event.location}
-                      </Text>
-                    ) : null}
                   </View>
                 </View>
               );
