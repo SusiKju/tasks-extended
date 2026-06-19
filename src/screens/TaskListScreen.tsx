@@ -252,32 +252,51 @@ export function TaskListScreen() {
         ))}
       </View>
 
-      {/* TE-104: Notizblock-Abschnitt – hier bearbeitbar, oberhalb der Task-Liste.
-          Als ListHeaderComponent, damit er mitscrollt und auch bei leerer Liste sichtbar bleibt. */}
+      {/* TE-104/TE-105: Notizblock- und Tasks-Abschnitt teilen sich denselben
+          Card-Header mit großem +-Button. Beide als ListHeaderComponent, damit
+          sie mitscrollen und auch bei leerer Task-Liste sichtbar bleiben. */}
       <SectionList
         sections={sections}
         keyExtractor={(item) => item.id}
         ListHeaderComponent={
-          <View style={styles.notepadSection}>
-            <View style={styles.notepadHeader}>
-              <Ionicons name="document-text-outline" size={16} color={colors.text} />
-              <Text style={styles.notepadTitle}>Notizblock</Text>
-              <TouchableOpacity
-                onPress={() => scratchAddRef.current?.()}
-                style={styles.notepadAddBtn}
-                hitSlop={8}
-              >
-                <Ionicons name="add" size={18} color={colors.accent} />
-              </TouchableOpacity>
+          <>
+            {/* Notizblock-Abschnitt – bearbeitbar */}
+            <View style={styles.groupCard}>
+              <View style={styles.groupHeader}>
+                <Ionicons name="document-text-outline" size={18} color={colors.text} />
+                <Text style={styles.groupTitle}>Notizblock</Text>
+                <TouchableOpacity
+                  onPress={() => scratchAddRef.current?.()}
+                  style={styles.bigAddBtn}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name="add" size={26} color={isDark ? colors.accentNeon : '#fff'} />
+                </TouchableOpacity>
+              </View>
+              <Scratchpad
+                value={scratchpad}
+                onChange={onScratchpadChange}
+                isDark={isDark}
+                colors={colors}
+                registerAdd={(fn) => { scratchAddRef.current = fn; }}
+              />
             </View>
-            <Scratchpad
-              value={scratchpad}
-              onChange={onScratchpadChange}
-              isDark={isDark}
-              colors={colors}
-              registerAdd={(fn) => { scratchAddRef.current = fn; }}
-            />
-          </View>
+
+            {/* Tasks-Abschnitt – gleicher Header-Look, großer +-Button statt FAB */}
+            <View style={styles.groupCard}>
+              <View style={styles.groupHeader}>
+                <Ionicons name="checkmark-circle-outline" size={18} color={colors.text} />
+                <Text style={styles.groupTitle}>Tasks</Text>
+                <TouchableOpacity
+                  onPress={() => router.push('/task/new')}
+                  style={styles.bigAddBtn}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name="add" size={26} color={isDark ? colors.accentNeon : '#fff'} />
+                </TouchableOpacity>
+              </View>
+            </View>
+          </>
         }
         renderItem={({ item }) => (
           <TaskCard
@@ -307,7 +326,7 @@ export function TaskListScreen() {
         stickySectionHeadersEnabled={false}
       />
 
-      {hasSelection ? (
+      {hasSelection && (
         <View style={styles.bulkBar}>
           <TouchableOpacity style={styles.bulkSelectAll} onPress={handleSelectAll}>
             <Ionicons
@@ -330,14 +349,6 @@ export function TaskListScreen() {
             </TouchableOpacity>
           </View>
         </View>
-      ) : (
-        <TouchableOpacity
-          style={styles.fab}
-          onPress={() => router.push('/task/new')}
-          activeOpacity={0.85}
-        >
-          <Ionicons name="add" size={28} color={isDark ? colors.accentNeon : '#fff'} />
-        </TouchableOpacity>
       )}
     </View>
   );
@@ -402,24 +413,29 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
     },
     list: { paddingBottom: 100 },
     listWithBulkBar: { paddingBottom: 90 },
-    // TE-104: Notizblock-Abschnitt oberhalb der Task-Liste.
-    notepadSection: {
+    // TE-105: gemeinsamer Card-Look für Notizblock- und Tasks-Abschnitt.
+    groupCard: {
       marginHorizontal: 16,
-      marginTop: 8,
-      marginBottom: 4,
+      marginTop: 10,
+      marginBottom: 2,
       padding: 12,
       borderRadius: 12,
       backgroundColor: c.surface,
       borderWidth: 1,
       borderColor: c.border,
-      gap: 6,
+      gap: 8,
     },
-    notepadHeader: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-    notepadTitle: { fontSize: 14, fontWeight: '700', color: c.text, flex: 1 },
-    notepadAddBtn: {
-      width: 28, height: 28, borderRadius: 14,
+    groupHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    groupTitle: { fontSize: 16, fontWeight: '700', color: c.text, flex: 1 },
+    // Großer, einheitlicher +-Button (ersetzt FAB + kleinen Notizblock-+).
+    // Look identisch zum vorherigen FAB: Neon-Rahmen+Glow im Dark, gefüllt im Light.
+    bigAddBtn: {
+      width: 44, height: 44, borderRadius: 22,
       alignItems: 'center', justifyContent: 'center',
-      borderWidth: 1, borderColor: c.border,
+      backgroundColor: isDark ? 'transparent' : c.accent,
+      borderWidth: isDark ? 1.5 : 0,
+      borderColor: c.accentNeon,
+      ...(isDark ? neonGlow(c.accentNeon, 'hard') : {}),
     },
     sectionHeader: {
       flexDirection: 'row',
@@ -460,28 +476,6 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
       color: c.textSecondary,
       textAlign: 'center',
       paddingHorizontal: 40,
-    },
-    fab: {
-      position: 'absolute',
-      right: 20,
-      bottom: 32,
-      width: 56,
-      height: 56,
-      borderRadius: 28,
-      backgroundColor: isDark ? 'transparent' : c.accent,
-      borderWidth: isDark ? 1.5 : 0,
-      borderColor: isDark ? c.accentNeon : 'transparent',
-      alignItems: 'center',
-      justifyContent: 'center',
-      ...(isDark
-        ? neonGlow(c.accentNeon, 'hard')
-        : {
-            shadowColor: c.accent,
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.4,
-            shadowRadius: 8,
-            elevation: 6,
-          }),
     },
     bulkBar: {
       position: 'absolute',
