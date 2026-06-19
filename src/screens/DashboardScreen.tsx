@@ -127,7 +127,7 @@ function chipDueLabel(task: Task): string {
       const due = new Date(d); due.setHours(0, 0, 0, 0);
       const diff = Math.round((due.getTime() - today.getTime()) / 86400000);
       if (diff < 0) parts.push('!');          // kurz: überfällig
-      else if (diff === 0) parts.push('Heute');
+      else if (diff === 0) { /* TE-114: kein „Heute"-Label auf der Pille */ }
       else if (diff === 1) parts.push('Mo.');  // Morgen → Mo.
       else parts.push(d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' }));
     } catch {}
@@ -270,9 +270,11 @@ const chipStyles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     gap: 3,
-    // prevent chip from exceeding column width
+    // TE-114: Pille nie breiter als ~47 % der Spalte – so passen pro Zeile
+    // immer mindestens zwei Pillen nebeneinander, kürzere sogar drei. Langer
+    // Text wird per numberOfLines={1} mit Ellipse abgeschnitten.
     alignSelf: 'flex-start',
-    maxWidth: '100%',
+    maxWidth: '47%',
   },
   title: {
     fontSize: 12,
