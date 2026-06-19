@@ -163,20 +163,20 @@ export function Scratchpad({
         {filled.map((entry, idx) => (
           <View
             key={entry.id ?? idx}
-            style={[padStyles.row, idx < filled.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }]}
+            style={[padStyles.rowCompact, idx < filled.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }]}
           >
             <Ionicons
               name={entry.done ? 'checkmark-circle' : 'ellipse-outline'}
-              size={22}
+              size={15}
               color={entry.done ? colors.success : colors.textMuted}
             />
             <Text
-              style={[padStyles.rowText, { color: colors.text }, entry.done && { textDecorationLine: 'line-through', color: colors.textMuted }]}
+              style={[padStyles.rowTextCompact, { color: colors.text }, entry.done && { textDecorationLine: 'line-through', color: colors.textMuted }]}
               numberOfLines={1}
             >
               {entry.text}
             </Text>
-            <View style={[padStyles.colorDot, { backgroundColor: entry.color }]} />
+            <View style={[padStyles.colorDotCompact, { backgroundColor: entry.color }]} />
           </View>
         ))}
       </View>
@@ -268,6 +268,27 @@ const padStyles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 18,
     padding: 0,
+  },
+  // TE-113: kompakte Lesemodus-Zeile (~50% niedriger), da nicht bearbeitbar.
+  rowCompact: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 2,
+    paddingHorizontal: 10,
+  },
+  rowTextCompact: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: 12.5,
+    lineHeight: 15,
+    padding: 0,
+  },
+  colorDotCompact: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    flexShrink: 0,
   },
   colorDot: {
     width: 12,
