@@ -23,6 +23,12 @@ export function subscribeToScratchpad(
   return onSnapshot(
     ref,
     (snap) => {
+      // TE-115: nur server-bestätigte Stände anwenden. Lokale Änderungen sind
+      // bereits optimistisch im Store; würden wir hier auch unbestätigte
+      // (pending) Snapshots übernehmen, überschreibt ein gerade abgesetzter
+      // history-Write (eigenes Doc, anderes Feld) den noch nicht geflushten,
+      // debounced raw-Stand mit dem ALTEN raw – die gelöschte Notiz käme zurück.
+      if (snap.metadata.hasPendingWrites) return;
       callback(snap.data()?.raw ?? '');
     },
     () => {}, // Fehler stillschweigend ignorieren
@@ -60,6 +66,10 @@ export function subscribeToScratchpadHistory(
   return onSnapshot(
     ref,
     (snap) => {
+      // TE-115: symmetrisch zum raw-Abo – nur server-bestätigte Stände anwenden,
+      // damit ein debounced raw-Write den lokal schon gesetzten Verlauf nicht
+      // mit einem veralteten history-Feld überschreibt.
+      if (snap.metadata.hasPendingWrites) return;
       callback(snap.data()?.history ?? '');
     },
     () => {}, // Fehler stillschweigend ignorieren
