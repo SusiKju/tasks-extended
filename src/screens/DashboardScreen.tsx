@@ -18,7 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useStore } from '../store';
 import { useTheme, ThemeColors, readableTextOn, neonGlow } from '../utils/theme';
 import { useScratchpad } from '../hooks/useScratchpad';
-import { Scratchpad, parseScratchpad } from '../components/Scratchpad';
+import { parseScratchpad, ScratchEntry } from '../components/Scratchpad';
 import { useFirebaseAuth } from '../hooks/useFirebaseAuth';
 import { useGoogleTasksSync } from '../hooks/useGoogleTasksSync';
 import { useGoogleContactsBirthdaysSync } from '../hooks/useGoogleContactsBirthdaysSync';
@@ -285,6 +285,46 @@ const chipStyles = StyleSheet.create({
     flexShrink: 1,
   },
 });
+
+// ─── Note Chip (TE-114) ─────────────────────────────────────────────────────────
+// Persönliche Notizen aus dem Notizblock als gefloatete Pillen – gleiche Optik wie
+// die Task-Chips, damit Tasks (links) und Notizen (rechts) auf dem Dashboard
+// einheitlich aussehen. Klick führt in den Tasks-Tab, wo der Notizblock liegt.
+function NoteChip({ entry, onPress }: { entry: ScratchEntry; onPress: () => void }) {
+  const { isDark } = useTheme();
+  // Die vom Nutzer gewählte Notiz-Farbe gewinnt immer – auch im Mono-Theme,
+  // analog zum „Mein Tag"-Feed (TE-85). Dark: nur Rahmen + farbige Schrift + Glow,
+  // Light: solide Füllung mit lesbarem Text – exakt wie TaskChip.
+  const chipColor   = entry.color;
+  const borderColor = chipColor;
+  const bgColor     = isDark ? chipColor + '18' : chipColor;
+  const textColor   = isDark ? chipColor : readableTextOn(chipColor);
+  const glow        = isDark ? neonGlow(borderColor, 'soft') : null;
+
+  return (
+    <Pressable
+      style={({ pressed }) => [
+        chipStyles.chip,
+        { backgroundColor: bgColor, borderColor, borderWidth: isDark ? 1.5 : 1,
+          opacity: pressed ? 0.7 : entry.done ? 0.55 : 1,
+          paddingVertical: 5, paddingHorizontal: 9 },
+        glow,
+      ]}
+      onPress={onPress}
+    >
+      <Text
+        style={[
+          chipStyles.title,
+          { color: textColor, fontSize: 11 },
+          entry.done && { textDecorationLine: 'line-through' },
+        ]}
+        numberOfLines={1}
+      >
+        {entry.text}
+      </Text>
+    </Pressable>
+  );
+}
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
@@ -995,24 +1035,37 @@ export function DashboardScreen() {
         </View>
         )}
 
-        {/* Scratchpad – TE-104: nur Anzeige, bearbeitet wird ausschließlich im
-            Tasks-Tab. TE-108: „Alle →“-Pfeil statt Plus-Icon, analog zu den
-            anderen Dashboard-Elementen. */}
-        {showBlock('scratchpad') && (
-        <View style={styles.scratchCol}>
-          <SectionLabel
-            title="Notizblock"
-            colors={colors}
-            onMore={() => router.push('/(tabs)/tasks' as any)}
-          />
-          <Scratchpad
-            value={scratchpad}
-            isDark={isDark}
-            colors={colors}
-            readOnly
-          />
-        </View>
-        )}
+        {/* Notizblock – TE-114: Notizen als gefloatete Pillen, einheitlich mit den
+            Task-Chips links. Nur Anzeige; bearbeitet wird ausschließlich im
+            Tasks-Tab (Klick auf eine Pille bzw. „Alle →" führt dorthin). */}
+        {showBlock('scratchpad') && (() => {
+          const notes = parseScratchpad(scratchpad).filter((e) => e.text.trim() !== '');
+          return (
+            <View style={styles.scratchCol}>
+              <SectionLabel
+                title="Notizblock"
+                colors={colors}
+                onMore={() => router.push('/(tabs)/tasks' as any)}
+              />
+              {notes.length === 0 ? (
+                <View style={styles.emptyChips}>
+                  <Ionicons name="document-text-outline" size={16} color={colors.textMuted} />
+                  <Text style={[styles.emptyText, { color: colors.textMuted }]}>Keine Notizen</Text>
+                </View>
+              ) : (
+                <View style={styles.chipWrap}>
+                  {notes.map((entry, idx) => (
+                    <NoteChip
+                      key={entry.id ?? idx}
+                      entry={entry}
+                      onPress={() => router.push('/(tabs)/tasks' as any)}
+                    />
+                  ))}
+                </View>
+              )}
+            </View>
+          );
+        })()}
 
       </View>
       )}

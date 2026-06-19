@@ -13,6 +13,8 @@ interface TaskState {
   settings: AppSettings;
   scratchpad: string;
   scratchpadUpdatedAt: string;
+  /** TE-112: Verlauf gelöschter Scratchpad-Notizen, serialisiert als JSON-String. */
+  scratchpadHistory: string;
   deletedGoogleEventIds: string[];
   /** TE-38: Gmail-Message-IDs der angepinnten Mails (immer oben im Mail-Tab). */
   pinnedMailIds: string[];
@@ -51,6 +53,8 @@ interface TaskState {
 
   // Scratchpad
   setScratchpad: (text: string) => void;
+  /** TE-112: Verlauf gelöschter Notizen setzen (Serialisiert). */
+  setScratchpadHistory: (raw: string) => void;
 
   // Settings actions
   updateSettings: (updates: Partial<AppSettings>) => void;
@@ -120,6 +124,7 @@ export const useStore = create<TaskState>()(
       settings: DEFAULT_SETTINGS,
       scratchpad: '',
       scratchpadUpdatedAt: new Date(0).toISOString(),
+      scratchpadHistory: '',
       deletedGoogleEventIds: [],
       pinnedMailIds: [],
 
@@ -240,6 +245,8 @@ export const useStore = create<TaskState>()(
 
       setScratchpad: (text) => set({ scratchpad: text, scratchpadUpdatedAt: new Date().toISOString() }),
 
+      setScratchpadHistory: (raw) => set({ scratchpadHistory: raw }),
+
       updateSettings: (updates) =>
         set((state) => ({ settings: { ...state.settings, ...updates } })),
 
@@ -259,7 +266,7 @@ export const useStore = create<TaskState>()(
     }),
     {
       name: 'tasks-extended-store',
-      version: 23,
+      version: 24,
       migrate: (persistedState: any, version: number) => {
         if (version < 1 && persistedState?.tasks) {
           persistedState.tasks = persistedState.tasks.map((t: any) => ({
@@ -386,6 +393,10 @@ export const useStore = create<TaskState>()(
           // TE-77: Konfigurierbare Dashboard-Blöcke – Default: alle sichtbar.
           persistedState.settings.dashboardBlocks =
             persistedState.settings.dashboardBlocks ?? { ...DEFAULT_DASHBOARD_BLOCKS };
+        }
+        if (version < 24) {
+          // TE-112: Verlauf gelöschter Scratchpad-Notizen – neu, Default leer.
+          persistedState.scratchpadHistory = persistedState.scratchpadHistory ?? '';
         }
         return persistedState;
       },

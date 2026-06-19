@@ -43,7 +43,14 @@ export function TaskListScreen() {
   const styles = useMemo(() => makeStyles(colors, isDark), [colors, isDark]);
 
   // TE-104: persönlicher Notizblock – hier voll bearbeitbar (auf dem Dashboard nur Anzeige).
-  const { scratchpad, onChange: onScratchpadChange } = useScratchpad();
+  const {
+    scratchpad,
+    onChange: onScratchpadChange,
+    history: scratchpadHistory,
+    archiveNote,
+    removeHistory,
+    clearHistory,
+  } = useScratchpad();
   const scratchAddRef = useRef<(() => void) | null>(null);
 
   const toggleSelection = useCallback((id: string) => {
@@ -156,6 +163,10 @@ export function TaskListScreen() {
               isDark={isDark}
               colors={colors}
               registerAdd={(fn) => { scratchAddRef.current = fn; }}
+              history={scratchpadHistory}
+              onArchive={archiveNote}
+              onRemoveHistory={removeHistory}
+              onClearHistory={clearHistory}
             />
           </View>
         </View>

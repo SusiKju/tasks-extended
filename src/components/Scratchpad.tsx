@@ -18,6 +18,25 @@ import { ThemeColors } from '../utils/theme';
 
 export interface ScratchEntry { id?: string; text: string; color: string; done?: boolean; }
 
+// TE-112: ein im Verlauf archivierter (gelöschter) Notiz-Eintrag.
+export interface ScratchHistoryEntry { id: string; text: string; color: string; archivedAt: string; }
+
+/** Maximale Anzahl Verlaufseinträge – ältere fallen hinten raus. */
+export const SCRATCH_HISTORY_MAX = 50;
+
+export function parseScratchHistory(raw: string): ScratchHistoryEntry[] {
+  if (!raw || raw.trim() === '') return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return parsed.filter((e) => e && typeof e.text === 'string');
+  } catch {}
+  return [];
+}
+
+export function serializeScratchHistory(entries: ScratchHistoryEntry[]): string {
+  return JSON.stringify(entries);
+}
+
 /** Stabile, kollisionsarme ID für eine neue Notiz (siehe TE-95-Migration unten). */
 export function makeNoteId(): string {
   return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
@@ -46,6 +65,22 @@ function readableText(bg: string): string {
   return lum > 150 ? '#1A1A1A' : '#FFFFFF';
 }
 
+// TE-112: kurze, deutsche Relativzeit für den Verlauf ("gerade", "vor 3 Min.",
+// "vor 2 Std.", "gestern", sonst Datum).
+function relativeTime(iso: string): string {
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return '';
+  const diffMin = Math.floor((Date.now() - then) / 60000);
+  if (diffMin < 1) return 'gerade';
+  if (diffMin < 60) return `vor ${diffMin} Min.`;
+  const diffH = Math.floor(diffMin / 60);
+  if (diffH < 24) return `vor ${diffH} Std.`;
+  const diffD = Math.floor(diffH / 24);
+  if (diffD === 1) return 'gestern';
+  if (diffD < 7) return `vor ${diffD} Tagen`;
+  return new Date(then).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+}
+
 // TE-85: Farben werden jetzt explizit pro Notiz gewählt (Default Dunkles Pink),
 // daher keine Theme-abhängige Auto-Vergabe und kein Erzwingen der ersten Farbe.
 export function parseScratchpad(raw: string): ScratchEntry[] {
@@ -65,6 +100,7 @@ export function serializeScratchpad(entries: ScratchEntry[]): string {
 
 export function Scratchpad({
   value, onChange, isDark, colors, registerAdd, readOnly = false,
+  history = [], onArchive, onRemoveHistory, onClearHistory,
 }: {
   value: string;
   // Im readOnly-Modus nicht erforderlich – die Anzeige verändert nichts.
@@ -75,11 +111,18 @@ export function Scratchpad({
   registerAdd?: (fn: () => void) => void;
   // TE-104: Dashboard zeigt den Notizblock nur an (kein Anlegen/Bearbeiten/Löschen).
   readOnly?: boolean;
+  // TE-112: Verlauf gelöschter Notizen (nur im editierbaren Block sichtbar).
+  history?: ScratchHistoryEntry[];
+  onArchive?: (entry: ScratchEntry) => void;
+  onRemoveHistory?: (id: string) => void;
+  onClearHistory?: () => void;
 }) {
   const entries = useMemo(() => parseScratchpad(value), [value]);
   const inputRefs = useRef<(any)[]>([]);
   // TE-85: welche Notiz hat gerade die Farbauswahl offen (null = keine).
   const [pickerIdx, setPickerIdx] = useState<number | null>(null);
+  // TE-112: ist der Verlaufs-Bereich aufgeklappt?
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   const emit = useCallback((s: string) => { onChange?.(s); }, [onChange]);
 
@@ -129,11 +172,23 @@ export function Scratchpad({
   }, [entries, emit, readOnly]);
 
   const removeEntry = useCallback((idx: number) => {
+    // TE-112: Notiz mit Inhalt vor dem Entfernen in den Verlauf legen.
+    const removed = entries[idx];
+    if (removed && removed.text.trim() !== '') onArchive?.(removed);
     if (entries.length <= 1) { updateEntry(0, ''); return; }
     const next = entries.filter((_, i) => i !== idx);
     emit(serializeScratchpad(next));
     setTimeout(() => inputRefs.current[Math.max(0, idx - 1)]?.focus(), 40);
-  }, [entries, emit, updateEntry]);
+  }, [entries, emit, updateEntry, onArchive]);
+
+  // TE-112: archivierte Notiz wieder oben in die Liste holen.
+  const restoreFromHistory = useCallback((h: ScratchHistoryEntry) => {
+    const note: ScratchEntry = { id: makeNoteId(), text: h.text, color: h.color };
+    // Eine einzelne leere Platzhalter-Notiz dabei ersetzen statt davor stapeln.
+    const base = entries.length === 1 && entries[0].text === '' ? [] : entries;
+    emit(serializeScratchpad([note, ...base]));
+    onRemoveHistory?.(h.id);
+  }, [entries, emit, onRemoveHistory]);
 
   const handleKeyPress = useCallback((idx: number, e: any) => {
     if (e.nativeEvent.key === 'Backspace' && entries[idx].text === '') {
@@ -184,7 +239,8 @@ export function Scratchpad({
   }
 
   return (
-    <View style={[padStyles.mergedList, { borderColor: colors.border, backgroundColor: colors.surface }]}>
+    <View>
+      <View style={[padStyles.mergedList, { borderColor: colors.border, backgroundColor: colors.surface }]}>
       {entries.map((entry, idx) => (
         <View
           key={entry.id ?? idx}
@@ -243,6 +299,61 @@ export function Scratchpad({
           )}
         </View>
       ))}
+      </View>
+
+      {/* TE-112: Verlauf gelöschter Notizen – aufklappbar, nur wenn vorhanden. */}
+      {history.length > 0 && (
+        <View style={padStyles.historyWrap}>
+          <Pressable
+            onPress={() => setHistoryOpen((v) => !v)}
+            hitSlop={6}
+            style={padStyles.historyHeader}
+          >
+            <Ionicons
+              name={historyOpen ? 'chevron-down' : 'chevron-forward'}
+              size={16}
+              color={colors.textMuted}
+            />
+            <Ionicons name="time-outline" size={15} color={colors.textMuted} />
+            <Text style={[padStyles.historyTitle, { color: colors.textMuted }]}>
+              Verlauf ({history.length})
+            </Text>
+            {historyOpen && onClearHistory && (
+              <Pressable onPress={onClearHistory} hitSlop={8} style={padStyles.historyClear}>
+                <Text style={[padStyles.historyClearText, { color: colors.textMuted }]}>leeren</Text>
+              </Pressable>
+            )}
+          </Pressable>
+
+          {historyOpen && (
+            <View style={[padStyles.mergedList, { borderColor: colors.border, backgroundColor: colors.surface }]}>
+              {history.map((h, idx) => (
+                <View
+                  key={h.id}
+                  style={[padStyles.row, idx < history.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }]}
+                >
+                  <View style={[padStyles.colorDot, { backgroundColor: h.color, borderColor: colors.border }]} />
+                  <Text
+                    style={[padStyles.rowText, { color: colors.textMuted }]}
+                    numberOfLines={1}
+                  >
+                    {h.text}
+                  </Text>
+                  <Text style={[padStyles.historyTime, { color: colors.textMuted }]}>
+                    {relativeTime(h.archivedAt)}
+                  </Text>
+                  <Pressable onPress={() => restoreFromHistory(h)} hitSlop={8} style={padStyles.trashBtn}>
+                    <Ionicons name="arrow-undo-outline" size={18} color={colors.textMuted} />
+                  </Pressable>
+                  <Pressable onPress={() => onRemoveHistory?.(h.id)} hitSlop={8} style={padStyles.trashBtn}>
+                    <Ionicons name="close" size={18} color={colors.textMuted} />
+                  </Pressable>
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
+      )}
     </View>
   );
 }
@@ -329,4 +440,31 @@ const padStyles = StyleSheet.create({
     paddingVertical: 8,
   },
   emptyText: { fontSize: 13 },
+  // TE-112: Verlaufs-Bereich unter dem Notizblock.
+  historyWrap: {
+    marginTop: 10,
+  },
+  historyHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 2,
+  },
+  historyTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  historyClear: {
+    marginLeft: 'auto',
+    paddingHorizontal: 4,
+  },
+  historyClearText: {
+    fontSize: 12,
+    textDecorationLine: 'underline',
+  },
+  historyTime: {
+    fontSize: 11,
+    flexShrink: 0,
+  },
 });
