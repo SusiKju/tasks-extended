@@ -19,6 +19,7 @@ import { useTheme, ThemeColors, neonGlow } from '../utils/theme';
 import { updateGoogleTask, listTaskLists } from '../services/googleCalendar';
 import { useGoogleTasksSync } from '../hooks/useGoogleTasksSync';
 import { SearchInput } from '../components/SearchInput';
+import { SharedNotepad } from '../components/SharedNotepad';
 
 function confirmDelete(title: string, onConfirm: () => void) {
   if (Platform.OS === 'web') {
@@ -240,37 +241,38 @@ export function TaskListScreen() {
         ))}
       </View>
 
-      {filtered.length === 0 ? (
-        <View style={styles.empty}>
-          <Ionicons name="checkmark-done-circle-outline" size={56} color={colors.textMuted} />
-          <Text style={styles.emptyTitle}>Keine Tasks</Text>
-          <Text style={styles.emptySubtitle}>Tippe auf + um einen neuen Task anzulegen</Text>
-        </View>
-      ) : (
-        <SectionList
-          sections={sections}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <TaskCard
-              task={item}
-              onPress={() => router.push(`/task/${item.id}` as any)}
-              onToggle={() => handleToggle(item)}
-              onDelete={() => handleSingleDelete(item.id, item.title)}
-              isSelected={selectedIds.has(item.id)}
-              onSelectToggle={() => toggleSelection(item.id)}
-            />
-          )}
-          renderSectionHeader={({ section }) => (
-            <View style={styles.sectionHeader}>
-              <View style={[styles.sectionDot, { backgroundColor: mono(section.color) }]} />
-              <Text style={styles.sectionTitle}>{section.title}</Text>
-              <Text style={styles.sectionCount}>{section.data.length}</Text>
-            </View>
-          )}
-          contentContainerStyle={[styles.list, hasSelection && styles.listWithBulkBar]}
-          stickySectionHeadersEnabled={false}
-        />
-      )}
+      {/* TE-104: Notizblock-Abschnitt – voll funktionsfähig, oberhalb der Tasks. */}
+      <SectionList
+        sections={sections}
+        keyExtractor={(item) => item.id}
+        ListHeaderComponent={<SharedNotepad colors={colors} isDark={isDark} />}
+        renderItem={({ item }) => (
+          <TaskCard
+            task={item}
+            onPress={() => router.push(`/task/${item.id}` as any)}
+            onToggle={() => handleToggle(item)}
+            onDelete={() => handleSingleDelete(item.id, item.title)}
+            isSelected={selectedIds.has(item.id)}
+            onSelectToggle={() => toggleSelection(item.id)}
+          />
+        )}
+        renderSectionHeader={({ section }) => (
+          <View style={styles.sectionHeader}>
+            <View style={[styles.sectionDot, { backgroundColor: mono(section.color) }]} />
+            <Text style={styles.sectionTitle}>{section.title}</Text>
+            <Text style={styles.sectionCount}>{section.data.length}</Text>
+          </View>
+        )}
+        ListEmptyComponent={
+          <View style={styles.empty}>
+            <Ionicons name="checkmark-done-circle-outline" size={56} color={colors.textMuted} />
+            <Text style={styles.emptyTitle}>Keine Tasks</Text>
+            <Text style={styles.emptySubtitle}>Tippe auf + um einen neuen Task anzulegen</Text>
+          </View>
+        }
+        contentContainerStyle={[styles.list, hasSelection && styles.listWithBulkBar]}
+        stickySectionHeadersEnabled={false}
+      />
 
       {hasSelection ? (
         <View style={styles.bulkBar}>

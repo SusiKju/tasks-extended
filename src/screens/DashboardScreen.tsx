@@ -1466,7 +1466,15 @@ export function DashboardScreen() {
 
       {/* ── Geteilte Liste (TE-121): bewusst auffällig gestaltete Card, ── */}
       {/* damit z. B. eine gemeinsame Einkaufsliste mit dem Partner sofort ins Auge fällt. */}
-      {showBlock('sharedList') && <SharedNotepad colors={colors} isDark={isDark} />}
+      {/* TE-104: Dashboard zeigt die Liste nur noch an – gepflegt wird sie im Tasks-Tab. */}
+      {showBlock('sharedList') && (
+        <SharedNotepad
+          colors={colors}
+          isDark={isDark}
+          readOnly
+          onOpenInTasks={() => router.push('/(tabs)/tasks' as any)}
+        />
+      )}
 
       {/* ── Aufgaben der Kinder (TE-110/TE-115) ── */}
       {showBlock('kidsTasks') && (childrenWithTasks.length > 0 || groupTasks.length > 0) && (

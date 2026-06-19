@@ -33,7 +33,19 @@ import {
   SHARED_NOTE_REACTIONS,
 } from '../services/sharedNotes';
 
-export function SharedNotepad({ colors, isDark }: { colors: ThemeColors; isDark: boolean }) {
+export function SharedNotepad({
+  colors,
+  isDark,
+  readOnly = false,
+  onOpenInTasks,
+}: {
+  colors: ThemeColors;
+  isDark: boolean;
+  /** TE-104: Auf dem Dashboard nur Lesedarstellung – Pflege erfolgt im Tasks-Tab. */
+  readOnly?: boolean;
+  /** TE-104: Callback für die Verlinkung zum Tasks-Tab (nur im readOnly-Modus). */
+  onOpenInTasks?: () => void;
+}) {
   const { settings, updateSettings } = useStore();
   const familyId = useFamilyId();
   const [items, setItems] = useState<SharedNoteItem[] | null>(null);
@@ -160,6 +172,14 @@ export function SharedNotepad({ colors, isDark }: { colors: ThemeColors; isDark:
 
   return (
     <View style={[styles.wrap, { borderColor: accent, backgroundColor: colors.surface, shadowColor: accent }]}>
+      {/* TE-104: Im Lesemodus (Dashboard) Verlinkung zum Tasks-Tab, wo die Liste gepflegt wird. */}
+      {readOnly && onOpenInTasks && (
+        <Pressable onPress={onOpenInTasks} style={styles.openInTasksLink} hitSlop={6}>
+          <Ionicons name="open-outline" size={14} color={accent} />
+          <Text style={[styles.openInTasksText, { color: accent }]}>Im Tasks-Tab bearbeiten</Text>
+          <Ionicons name="chevron-forward" size={14} color={accent} />
+        </Pressable>
+      )}
       {/* Auffälliger Header mit Icon-Badge – hebt den Abschnitt bewusst hervor (TE-121) */}
       <View style={styles.header}>
         <View style={[styles.badge, { backgroundColor: accent }]}>
@@ -170,7 +190,7 @@ export function SharedNotepad({ colors, isDark }: { colors: ThemeColors; isDark:
           <Ionicons name="people-outline" size={12} color={accent} />
           <Text style={[styles.sharedTagText, { color: accent }]}>geteilt</Text>
         </View>
-        {deletedItems.length > 0 && (
+        {!readOnly && deletedItems.length > 0 && (
           <Pressable
             onPress={() => setHistoryOpen((v) => !v)}
             style={styles.historyBtn}
@@ -196,7 +216,7 @@ export function SharedNotepad({ colors, isDark }: { colors: ThemeColors; isDark:
         </Text>
       )}
 
-      {!myName ? (
+      {!readOnly && !myName ? (
         // Einmaliger Mini-Dialog: Name festlegen, damit Einträge zugeordnet werden können.
         <View style={styles.namePrompt}>
           <Text style={[styles.namePromptText, { color: colors.textSecondary }]}>
@@ -224,6 +244,7 @@ export function SharedNotepad({ colors, isDark }: { colors: ThemeColors; isDark:
       ) : (
         <>
           {/* Sticker-Auswahl – macht neue Einträge auf den ersten Blick persönlicher (TE-124) */}
+          {!readOnly && (
           <View style={styles.emojiRow}>
             {SHARED_NOTE_EMOJIS.map((e) => {
               const selected = draftEmoji === e;
@@ -242,8 +263,10 @@ export function SharedNotepad({ colors, isDark }: { colors: ThemeColors; isDark:
               );
             })}
           </View>
+          )}
 
           {/* Eingabezeile */}
+          {!readOnly && (
           <View style={styles.addRow}>
             <TextInput
               style={[styles.addInput, { color: colors.text, backgroundColor: colors.inputBackground, borderColor: colors.border }]}
@@ -262,6 +285,7 @@ export function SharedNotepad({ colors, isDark }: { colors: ThemeColors; isDark:
               <Ionicons name="add" size={20} color={isDark ? '#000' : '#fff'} />
             </Pressable>
           </View>
+          )}
 
           {loadError ? (
             <View style={styles.emptyRow}>
@@ -287,14 +311,22 @@ export function SharedNotepad({ colors, isDark }: { colors: ThemeColors; isDark:
                   <View
                     style={[styles.row, i < items.length - 1 && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}
                   >
-                    {/* Checkbox */}
-                    <Pressable onPress={() => handleToggle(item)} hitSlop={8} disabled={busyId === item.id}>
+                    {/* Checkbox – im Lesemodus nur Statusanzeige, nicht antippbar (TE-104) */}
+                    {readOnly ? (
                       <Ionicons
                         name={item.done ? 'checkbox' : 'square-outline'}
                         size={22}
                         color={item.done ? colors.success : colors.textMuted}
                       />
-                    </Pressable>
+                    ) : (
+                      <Pressable onPress={() => handleToggle(item)} hitSlop={8} disabled={busyId === item.id}>
+                        <Ionicons
+                          name={item.done ? 'checkbox' : 'square-outline'}
+                          size={22}
+                          color={item.done ? colors.success : colors.textMuted}
+                        />
+                      </Pressable>
+                    )}
 
                     {/* Text + Meta */}
                     <View style={{ flex: 1 }}>
@@ -328,7 +360,7 @@ export function SharedNotepad({ colors, isDark }: { colors: ThemeColors; isDark:
                     </View>
 
                     {/* Bearbeiten */}
-                    {editingId !== item.id && (
+                    {!readOnly && editingId !== item.id && (
                       <Pressable
                         onPress={() => handleStartEdit(item)}
                         hitSlop={8}
@@ -339,7 +371,7 @@ export function SharedNotepad({ colors, isDark }: { colors: ThemeColors; isDark:
                     )}
 
                     {/* Reaktion */}
-                    {editingId !== item.id && (
+                    {!readOnly && editingId !== item.id && (
                       <Pressable
                         onPress={() => myName && setReactionPickerFor(pickerOpen ? null : item.id)}
                         hitSlop={8}
@@ -355,7 +387,7 @@ export function SharedNotepad({ colors, isDark }: { colors: ThemeColors; isDark:
                     )}
 
                     {/* Löschen */}
-                    {editingId !== item.id && (
+                    {!readOnly && editingId !== item.id && (
                       <Pressable
                         onPress={() => handleDelete(item)}
                         hitSlop={8}
@@ -388,7 +420,7 @@ export function SharedNotepad({ colors, isDark }: { colors: ThemeColors; isDark:
               <Text style={[styles.footerText, { color: colors.textMuted }]}>
                 {openCount} offen · {doneCount} erledigt
               </Text>
-              {doneCount > 0 && (
+              {!readOnly && doneCount > 0 && (
                 <Pressable onPress={handleClearDone} hitSlop={8}>
                   <Text style={[styles.footerAction, { color: accent }]}>Erledigtes löschen</Text>
                 </Pressable>
@@ -406,8 +438,8 @@ export function SharedNotepad({ colors, isDark }: { colors: ThemeColors; isDark:
             </View>
           )}
 
-          {/* Papierkorb / History (TE-3) */}
-          {historyOpen && deletedItems.length > 0 && (
+          {/* Papierkorb / History (TE-3) – nur im Pflege-Modus (TE-104) */}
+          {!readOnly && historyOpen && deletedItems.length > 0 && (
             <View style={[styles.trashSection, { borderColor: colors.border ?? colors.textMuted }]}>
               <View style={styles.trashHeader}>
                 <Ionicons name="trash-outline" size={14} color={colors.textMuted} />
@@ -459,6 +491,9 @@ const styles = StyleSheet.create({
     shadowRadius: 14,
     elevation: 6,
   },
+  // Verlinkung zum Tasks-Tab im Lesemodus (TE-104)
+  openInTasksLink: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', paddingVertical: 2 },
+  openInTasksText: { fontSize: 12.5, fontWeight: '700' },
   header: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   badge: { width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
   title: { fontSize: 15, fontWeight: '800', flex: 1 },
