@@ -42,7 +42,7 @@ export function SearchInput({
 }: SearchInputProps) {
   const s = styles(colors);
 
-  const shouldShowClear = clearButtonMode === 'always' || (clearButtonMode === 'while-editing' && value);
+  const shouldShowClear = clearButtonMode === 'always' || (clearButtonMode === 'while-editing' && !!value);
 
   return (
     <View style={[s.container, style]}>
