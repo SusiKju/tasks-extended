@@ -33,6 +33,7 @@ import {
   saveBambini,
   migrateRosterToBambini,
 } from '../services/bambini';
+import { getJahrgangStatus, getBetreuungsZeitraum } from '../utils/bambiniSeason';
 
 /** ISO 'YYYY-MM-DD' → 'DD.MM.YYYY' (string-basiert, ohne Zeitzonen-Fallen). */
 function formatDE(iso: string): string {
@@ -270,9 +271,21 @@ export function BambiniScreen() {
             ) : groups.length === 0 ? (
               <Text style={s.empty}>Keine Treffer.</Text>
             ) : (
-              groups.map((g) => (
+              groups.map((g) => {
+                const status = g.year ? getJahrgangStatus(g.year) : null;
+                const gewechselt = status === 'gewechselt';
+                const zeitraum = g.year ? getBetreuungsZeitraum(g.year) : null;
+                return (
               <View key={g.year} style={s.group}>
-                <Text style={s.groupTitle}>{g.year ? `Jahrgang ${g.year}` : 'Ohne Jahrgang'}</Text>
+                <View style={s.groupTitleRow}>
+                  <Text style={[s.groupTitle, status === 'aktiv' && s.groupTitleActive, gewechselt && s.groupTitleMoved]}>
+                    {g.year ? `Jahrgang ${g.year}` : 'Ohne Jahrgang'}
+                    {gewechselt ? ' · F-Jugend' : ''}
+                  </Text>
+                  {zeitraum ? (
+                    <Text style={s.groupHint}>betreut {zeitraum.von}–{zeitraum.bis}</Text>
+                  ) : null}
+                </View>
                 {g.items.map((c) => (
                   <Pressable key={c.id} style={s.row} onPress={() => openEdit(c)}>
                     <View style={s.rowMain}>
@@ -289,7 +302,8 @@ export function BambiniScreen() {
                   </Pressable>
                   ))}
                 </View>
-              ))
+                );
+              })
             )}
           </ScrollView>
         </>
@@ -424,7 +438,11 @@ function makeStyles(c: ThemeColors) {
     filterChipTextActive: { color: c.accentFg },
 
     group: { marginBottom: 16 },
-    groupTitle: { color: c.textSecondary, fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 },
+    groupTitleRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 6 },
+    groupTitle: { color: c.textSecondary, fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+    groupTitleActive: { color: c.accent },
+    groupTitleMoved: { color: c.textMuted },
+    groupHint: { color: c.textMuted, fontSize: 11 },
     row: {
       flexDirection: 'row',
       alignItems: 'center',
