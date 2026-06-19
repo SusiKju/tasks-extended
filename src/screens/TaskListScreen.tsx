@@ -172,7 +172,9 @@ export function TaskListScreen() {
         </View>
 
         {/* ── Tasks-Bereich ── */}
-        <View style={styles.groupCard}>
+        {/* TE-117: card streckt sich über den restlichen Platz, statt Leerraum
+            unterhalb der Karte als nackten Hintergrund stehen zu lassen. */}
+        <View style={[styles.groupCard, styles.groupCardGrow]}>
           <View style={styles.groupHeader}>
             <Ionicons name="checkmark-circle-outline" size={18} color={colors.text} />
             <Text style={styles.groupTitle}>Tasks</Text>
@@ -185,7 +187,7 @@ export function TaskListScreen() {
             </TouchableOpacity>
           </View>
 
-          <View style={styles.groupBody}>
+          <View style={[styles.groupBody, styles.groupBodyGrow]}>
             {/* Kompakter Status-Filter (kein Gruppen-/Label-Filter mehr, TE-106) */}
             <View style={styles.filterRow}>
               {(['all', 'open', 'overdue', 'done'] as FilterMode[]).map((f) => {
@@ -278,7 +280,9 @@ export function TaskListScreen() {
 function makeStyles(c: ThemeColors, isDark: boolean) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: c.background },
-    scrollContent: { paddingTop: 4, paddingBottom: 32 },
+    // TE-117: flexGrow, damit die Tasks-Karte unten den Rest der Bildschirmhöhe
+    // füllen kann, statt nackten Leerraum unter den Karten zu lassen.
+    scrollContent: { paddingTop: 4, paddingBottom: 32, flexGrow: 1 },
     // TE-106: kompakter Status-Filter (kleinere Chips, kein H-Padding – sitzt in der Box).
     filterRow: {
       flexDirection: 'row',
@@ -341,6 +345,8 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
       backgroundColor: c.surfaceHigh,
     },
     groupBody: { padding: 12, gap: 8 },
+    groupCardGrow: { flex: 1 },
+    groupBodyGrow: { flex: 1 },
     groupTitle: { fontSize: 16, fontWeight: '700', color: c.text, flex: 1 },
     // TE-109: verschmolzene, gerahmte Liste (gleicher Look wie der Notizblock).
     mergedList: {
@@ -362,6 +368,7 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
     },
     // Leere Task-Liste innerhalb der Tasks-Box (TE-104/TE-106).
     emptyInline: {
+      flex: 1,
       alignItems: 'center',
       justifyContent: 'center',
       gap: 6,
