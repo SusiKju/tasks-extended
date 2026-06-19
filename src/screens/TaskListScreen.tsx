@@ -224,7 +224,7 @@ export function TaskListScreen() {
               })}
             </View>
 
-            {/* Flache Task-Liste innerhalb der Box – ohne Gruppen-Überschriften (TE-107) */}
+            {/* Verschmolzene, gerahmte Task-Liste – gleicher Look wie der Notizblock (TE-109) */}
             {filtered.length === 0 ? (
               <View style={styles.emptyInline}>
                 <Ionicons name="checkmark-done-circle-outline" size={44} color={colors.textMuted} />
@@ -232,17 +232,20 @@ export function TaskListScreen() {
                 <Text style={styles.emptySubtitle}>Tippe auf + um einen neuen Task anzulegen</Text>
               </View>
             ) : (
-              filtered.map((item) => (
-                <TaskCard
-                  key={item.id}
-                  task={item}
-                  onPress={() => router.push(`/task/${item.id}` as any)}
-                  onToggle={() => handleToggle(item)}
-                  onDelete={() => handleSingleDelete(item.id, item.title)}
-                  isSelected={selectedIds.has(item.id)}
-                  onSelectToggle={() => toggleSelection(item.id)}
-                />
-              ))
+              <View style={styles.mergedList}>
+                {filtered.map((item, i) => (
+                  <TaskCard
+                    key={item.id}
+                    task={item}
+                    onPress={() => router.push(`/task/${item.id}` as any)}
+                    onToggle={() => handleToggle(item)}
+                    onDelete={() => handleSingleDelete(item.id, item.title)}
+                    isSelected={selectedIds.has(item.id)}
+                    onSelectToggle={() => toggleSelection(item.id)}
+                    isLast={i === filtered.length - 1}
+                  />
+                ))}
+              </View>
             )}
           </View>
         </View>
@@ -343,6 +346,14 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
     },
     groupBody: { padding: 12, gap: 8 },
     groupTitle: { fontSize: 16, fontWeight: '700', color: c.text, flex: 1 },
+    // TE-109: verschmolzene, gerahmte Liste (gleicher Look wie der Notizblock).
+    mergedList: {
+      borderWidth: 1,
+      borderColor: c.border,
+      borderRadius: 10,
+      overflow: 'hidden',
+      backgroundColor: c.surface,
+    },
     // Großer, einheitlicher +-Button (ersetzt FAB + kleinen Notizblock-+).
     // Look identisch zum vorherigen FAB: Neon-Rahmen+Glow im Dark, gefüllt im Light.
     bigAddBtn: {

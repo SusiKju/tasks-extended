@@ -14,9 +14,11 @@ interface Props {
   onDelete: () => void;
   isSelected?: boolean;
   onSelectToggle?: () => void;
+  // TE-109: letzte Zeile in der verschmolzenen Liste bekommt keine Trennlinie.
+  isLast?: boolean;
 }
 
-export function TaskCard({ task, onPress, onToggle, onDelete, isSelected, onSelectToggle }: Props) {
+export function TaskCard({ task, onPress, onToggle, onDelete, isSelected, onSelectToggle, isLast }: Props) {
   const { groups, settings } = useStore();
   const { colors, isDark } = useTheme();
   const styles = useMemo(() => makeStyles(colors, isDark), [colors, isDark]);
@@ -41,6 +43,7 @@ export function TaskCard({ task, onPress, onToggle, onDelete, isSelected, onSele
     <TouchableOpacity
       style={[
         styles.card,
+        !isLast && styles.rowDivider,
         task.completed && !isSelected && styles.completed,
         // TE-108: flache Listenzeile – nur ein dünner Akzent-Balken links bei
         // überfällig/heute/ausgewählt, sonst keine eigene Umrandung.
@@ -122,14 +125,16 @@ export function TaskCard({ task, onPress, onToggle, onDelete, isSelected, onSele
 
 function makeStyles(c: ThemeColors, _isDark: boolean) {
   return StyleSheet.create({
-    // TE-108: flache Listenzeile statt eigener Card (kein Box-in-Box-Effekt).
-    // Trennung nur über eine dünne untere Linie; Abstand kommt vom Container.
+    // TE-108/TE-109: flache Listenzeile in der verschmolzenen, gerahmten Liste.
+    // Der Rahmen kommt vom Container; zwischen den Zeilen nur eine einfache Linie.
     card: {
       flexDirection: 'row',
       alignItems: 'center',
       paddingVertical: 9,
-      paddingHorizontal: 6,
+      paddingHorizontal: 10,
       gap: 10,
+    },
+    rowDivider: {
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: c.border,
     },
