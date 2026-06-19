@@ -131,12 +131,14 @@ function makeStyles(c: ThemeColors, _isDark: boolean) {
   return StyleSheet.create({
     card: {
       flexDirection: 'row',
-      alignItems: 'flex-start',
+      alignItems: 'center',
       backgroundColor: c.surface,
-      borderRadius: 12,
-      padding: 14,
-      marginHorizontal: 16,
-      marginVertical: 4,
+      borderRadius: 10,
+      // TE-107: keine horizontale Einrückung mehr – Abstand kommt vom Container.
+      // Schlanker in der Höhe (weniger Padding, kleinerer vertikaler Abstand).
+      paddingVertical: 8,
+      paddingHorizontal: 10,
+      marginVertical: 3,
       gap: 10,
       borderWidth: 1,
       borderColor: c.border,
@@ -153,12 +155,10 @@ function makeStyles(c: ThemeColors, _isDark: boolean) {
       backgroundColor: c.accent + '15',
       borderColor: c.accent + '55',
     },
-    toggleBtn: {
-      marginTop: 1,
-    },
+    toggleBtn: {},
     content: {
       flex: 1,
-      gap: 4,
+      gap: 2,
     },
     title: {
       fontSize: 15,
@@ -189,9 +189,9 @@ function makeStyles(c: ThemeColors, _isDark: boolean) {
       color: c.textSecondary,
     },
     actions: {
+      flexDirection: 'row',
       alignItems: 'center',
-      gap: 8,
-      paddingTop: 1,
+      gap: 4,
     },
     actionBtn: {
       padding: 2,

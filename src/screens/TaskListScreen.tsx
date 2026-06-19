@@ -36,12 +36,12 @@ type FilterMode = 'all' | 'open' | 'overdue' | 'done';
 
 export function TaskListScreen() {
   const router = useRouter();
-  const { tasks, groups, settings, toggleTask, deleteTask, deleteTasks } = useStore();
+  const { tasks, settings, toggleTask, deleteTask, deleteTasks } = useStore();
   const { syncTasks } = useGoogleTasksSync();
   const [filter, setFilter] = useState<FilterMode>('open');
   const [search, setSearch] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const { colors, isDark, mono } = useTheme();
+  const { colors, isDark } = useTheme();
   const styles = useMemo(() => makeStyles(colors, isDark), [colors, isDark]);
 
   // TE-104: persönlicher Notizblock – hier voll bearbeitbar (auf dem Dashboard nur Anzeige).
@@ -139,29 +139,6 @@ export function TaskListScreen() {
     }
   }, [selectedIds, deleteTasks, clearSelection, syncTasks]);
 
-  const sections = useMemo(() => {
-    const byGroup: Record<string, Task[]> = {};
-    const ungrouped: Task[] = [];
-
-    for (const task of filtered) {
-      if (task.groupId) {
-        (byGroup[task.groupId] ??= []).push(task);
-      } else {
-        ungrouped.push(task);
-      }
-    }
-
-    const result = groups
-      .filter((g) => byGroup[g.id]?.length > 0)
-      .map((g) => ({ title: g.name, data: byGroup[g.id], color: g.color }));
-
-    if (ungrouped.length > 0) {
-      result.push({ title: 'Ohne Gruppe', data: ungrouped, color: colors.textMuted });
-    }
-
-    return result;
-  }, [filtered, groups, colors]);
-
   const hasSelection = selectedIds.size > 0;
 
   return (
@@ -253,33 +230,24 @@ export function TaskListScreen() {
               })}
             </View>
 
-            {/* Gruppierte Task-Liste innerhalb der Box */}
-            {sections.length === 0 ? (
+            {/* Flache Task-Liste innerhalb der Box – ohne Gruppen-Überschriften (TE-107) */}
+            {filtered.length === 0 ? (
               <View style={styles.emptyInline}>
                 <Ionicons name="checkmark-done-circle-outline" size={44} color={colors.textMuted} />
                 <Text style={styles.emptyTitle}>Keine Tasks</Text>
                 <Text style={styles.emptySubtitle}>Tippe auf + um einen neuen Task anzulegen</Text>
               </View>
             ) : (
-              sections.map((section) => (
-                <View key={section.title}>
-                  <View style={styles.sectionHeader}>
-                    <View style={[styles.sectionDot, { backgroundColor: mono(section.color) }]} />
-                    <Text style={styles.sectionTitle}>{section.title}</Text>
-                    <Text style={styles.sectionCount}>{section.data.length}</Text>
-                  </View>
-                  {section.data.map((item) => (
-                    <TaskCard
-                      key={item.id}
-                      task={item}
-                      onPress={() => router.push(`/task/${item.id}` as any)}
-                      onToggle={() => handleToggle(item)}
-                      onDelete={() => handleSingleDelete(item.id, item.title)}
-                      isSelected={selectedIds.has(item.id)}
-                      onSelectToggle={() => toggleSelection(item.id)}
-                    />
-                  ))}
-                </View>
+              filtered.map((item) => (
+                <TaskCard
+                  key={item.id}
+                  task={item}
+                  onPress={() => router.push(`/task/${item.id}` as any)}
+                  onToggle={() => handleToggle(item)}
+                  onDelete={() => handleSingleDelete(item.id, item.title)}
+                  isSelected={selectedIds.has(item.id)}
+                  onSelectToggle={() => toggleSelection(item.id)}
+                />
               ))
             )}
           </View>
@@ -390,24 +358,6 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
       borderWidth: isDark ? 1.5 : 0,
       borderColor: c.accentNeon,
       ...(isDark ? neonGlow(c.accentNeon, 'hard') : {}),
-    },
-    sectionHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingHorizontal: 2,
-      paddingTop: 12,
-      paddingBottom: 6,
-      gap: 6,
-    },
-    sectionDot: { width: 8, height: 8, borderRadius: 4 },
-    sectionTitle: { fontSize: 13, fontWeight: '700', color: c.textSecondary, flex: 1 },
-    sectionCount: {
-      fontSize: 12,
-      color: c.textSecondary,
-      backgroundColor: c.surfaceHigh,
-      paddingHorizontal: 6,
-      paddingVertical: 1,
-      borderRadius: 8,
     },
     // Leere Task-Liste innerhalb der Tasks-Box (TE-104/TE-106).
     emptyInline: {
