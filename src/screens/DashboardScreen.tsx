@@ -1038,10 +1038,7 @@ export function DashboardScreen() {
         </View>
         )}
 
-        {/* Dünne Trennlinie zwischen Tasks und Notizen */}
-        {showBlock('tasks') && showBlock('scratchpad') && (
-          <View style={styles.taskScratchDivider} />
-        )}
+        {/* Trennlinie entfernt */}
 
         {/* Notizblock – TE-114: Notizen als gefloatete Pillen, einheitlich mit den
             Task-Chips links. Nur Anzeige; bearbeitet wird ausschließlich im
