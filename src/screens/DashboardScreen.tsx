@@ -1028,8 +1028,6 @@ export function DashboardScreen() {
                   : isTomorrow
                   ? colors.textSecondary
                   : colors.textMuted;
-                const chipScale: 'lg' | 'md' | 'sm' =
-                  isToday || isOverdue ? 'lg' : isTomorrow ? 'md' : 'sm';
                 return (
                   <View key={group.key}>
                     {!isToday && (
@@ -1042,7 +1040,7 @@ export function DashboardScreen() {
                         <TaskChip
                           key={task.id}
                           task={task}
-                          scale={chipScale}
+                          scale="lg"
                           blink={isToday && !!task.important}
                           overdue={isOverdue}
                           onPress={() => router.push(`/task/${task.id}` as any)}
@@ -1534,11 +1532,10 @@ function makeStyles(c: ThemeColors, isDark: boolean, calm: boolean) {
 
     section: {},
 
-    // Two-column top layout
+    // Top layout: Tasks und Notizblock übereinander
     topRow: {
-      flexDirection: 'row',
-      alignItems: 'flex-start',
-      paddingRight: 16,
+      flexDirection: 'column',
+      alignItems: 'stretch',
     },
     tasksCol: {
       flex: 1,
@@ -1547,7 +1544,6 @@ function makeStyles(c: ThemeColors, isDark: boolean, calm: boolean) {
     scratchCol: {
       flex: 1,
       minWidth: 0,
-      paddingLeft: 8,
     },
 
     card: {
