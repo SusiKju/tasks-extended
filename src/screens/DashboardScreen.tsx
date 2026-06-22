@@ -249,7 +249,11 @@ function TaskChip({
     : null;
 
   return (
-    <Animated.View style={{ opacity: blinkAnim, maxWidth: '47%' }}>
+    // TE-126: kein maxWidth-Cap mehr – chipText() begrenzt den Titel bereits auf
+    // ~11 Zeichen, ein zusätzliches %-Limit war schmäler als das und drückte den
+    // (fixbreiten) Text über den Pillen-Rand. chipWrap (flexWrap) schiebt eine
+    // Pille, die nicht mehr in die Zeile passt, von selbst in die nächste Zeile.
+    <Animated.View style={{ opacity: blinkAnim }}>
       <Pressable
         style={({ pressed }) => [
           chipStyles.chip,
@@ -283,10 +287,6 @@ const chipStyles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     gap: 3,
-    // Die ~47-%-Breitenkappung (TE-114) sitzt auf dem jeweils äußeren Flex-Kind
-    // (Animated.View bei TaskChip, Pressable bei NoteChip), nicht hier – sonst
-    // würde sie bei TaskChip relativ zur auto-breiten Hülle statt zur Spalte
-    // berechnet und der Text kollabiert auf 0.
     alignSelf: 'flex-start',
     maxWidth: '100%',
   },
@@ -328,7 +328,7 @@ function NoteChip({ entry, onPress }: { entry: ScratchEntry; onPress: () => void
         chipStyles.chip,
         { backgroundColor: bgColor, borderColor, borderWidth: isDark ? 1.5 : 1,
           opacity: pressed ? 0.7 : entry.done ? 0.55 : 1,
-          paddingVertical: 5, paddingHorizontal: 9, maxWidth: '47%' },
+          paddingVertical: 5, paddingHorizontal: 9 },
         glow,
       ]}
       onPress={onPress}
