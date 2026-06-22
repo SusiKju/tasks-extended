@@ -1,15 +1,29 @@
 /**
  * useImportantTasksSync.ts
  *
- * Hält das „Wichtig"-Label der Tasks mit Firestore synchron (TE-123):
- * - hydratisiert die Labels beim App-Start aus
- *   families/{fid}/importantTasksByUser/{uid}
- * - schreibt lokale Label-Änderungen zurück
+ * Hält das „Wichtig"-Label der Tasks mit Firestore synchron (TE-123).
  *
- * Notwendig, weil Google Tasks kein „important"-Feld kennt und das Label
- * beim normalen Task-Sync sonst verloren ginge. Zentral in app/_layout.tsx
- * eingehängt, damit der Sync unabhängig vom aktiven Screen läuft – analog
- * zu useMailPinsSync (TE-50).
+ * Google Tasks kennt kein „important"-Feld, deshalb läuft der normale
+ * Task-Sync (Richtung Google) ohne das Label. Damit es geräteübergreifend
+ * erhalten bleibt, gibt es einen zweiten, davon unabhängigen Sync Richtung
+ * Firestore: families/{fid}/importantTasksByUser/{uid}, als Menge der
+ * googleEventIds der wichtigen Tasks.
+ *
+ * Zwei Richtungen:
+ *
+ *  1. Firestore → Store (Pull): ein onSnapshot-Listener wendet die Remote-Menge
+ *     auf die lokalen Tasks an (Remote gewinnt bei Remote-Änderung). Wichtig:
+ *     Beim Kaltstart feuert onSnapshot sofort, bevor die Tasks aus Google
+ *     importiert sind. Deshalb wird die zuletzt bekannte Remote-Menge gemerkt
+ *     und erneut angewendet, sobald neue (noch nicht abgeglichene) Tasks im
+ *     Store auftauchen – sonst ginge das Label auf dem empfangenden Gerät
+ *     verloren (genau der Bug, der „synct nicht" verursacht hat).
+ *
+ *  2. Store → Firestore (Push): wird das Label lokal gesetzt/entfernt, wird die
+ *     neue Menge nach Firestore geschrieben.
+ *
+ * Zentral in app/_layout.tsx eingehängt, damit der Sync unabhängig vom
+ * aktiven Screen läuft – analog zu useSettingsSync (TE-49) / useMailPinsSync (TE-50).
  */
 
 import { useEffect, useRef } from 'react';
@@ -35,31 +49,74 @@ export function useImportantTasksSync(): void {
   const uid = user?.uid ?? '';
 
   // Verhindert die Remote→Local→Save→Remote-Schleife: solange wir einen
-  // Firestore-Snapshot in den Store schreiben, ignoriert der Save-Listener.
+  // Firestore-Stand in den Store schreiben, ignoriert der Push-Listener.
   const applyingRemote = useRef(false);
+  // Zuletzt bekannte Remote-Menge (null = noch kein Firestore-Dokument gesehen).
+  const remoteIds = useRef<Set<string> | null>(null);
+  // Tasks (googleEventId), die bereits gegen den Remote-Stand abgeglichen wurden.
+  // Neu auftauchende Tasks bekommen den Remote-Stand nachträglich angewendet,
+  // bereits abgeglichene Tasks dürfen vom User frei umgeschaltet werden.
+  const reconciledIds = useRef<Set<string>>(new Set());
   // Letzter nach Firestore geschriebener/aus Firestore gelesener Stand,
   // damit unbeteiligte Task-Änderungen (Titel, Datum) keinen Write auslösen.
   const lastSyncedKey = useRef<string | null>(null);
 
-  // Firestore → Store (Echtzeit-Hydration)
+  // Beim Wechsel von Familie/User die Caches zurücksetzen.
+  useEffect(() => {
+    remoteIds.current = null;
+    reconciledIds.current = new Set();
+    lastSyncedKey.current = null;
+  }, [fid, uid]);
+
+  // ── 1. Firestore → Store (Echtzeit + Kaltstart) ────────────────────────────
   useEffect(() => {
     if (!fid || !uid) return;
     const unsub = subscribeToImportantTasks(fid, uid, (ids) => {
+      const set = new Set(ids);
+      remoteIds.current = set;
       applyingRemote.current = true;
-      useStore.getState().applyImportantTaskGoogleIds(ids);
-      lastSyncedKey.current = [...ids].sort().join(',');
+      useStore.getState().applyImportantTaskGoogleIds([...set]);
       applyingRemote.current = false;
+      // Alle aktuell vorhandenen Tasks gelten jetzt als abgeglichen.
+      for (const t of useStore.getState().tasks) {
+        if (t.googleEventId) reconciledIds.current.add(t.googleEventId);
+      }
+      lastSyncedKey.current = [...set].sort().join(',');
     });
     return unsub;
   }, [fid, uid]);
 
-  // Store → Firestore (beim Setzen/Entfernen des Wichtig-Labels)
+  // ── 2. Store → Firestore + Nach-Anwendung auf neu importierte Tasks ─────────
   useEffect(() => {
     if (!fid || !uid) return;
     const unsub = useStore.subscribe((state, prev) => {
       if (applyingRemote.current) return;
       if (state.tasks === prev.tasks) return;
-      const ids = importantGoogleIds(state.tasks);
+
+      // (a) Pull-Nachzügler: Tasks, die seit dem letzten Remote-Stand neu im
+      //     Store sind (z. B. frisch aus Google importiert) und noch nicht
+      //     abgeglichen wurden, bekommen die Remote-Menge nachträglich.
+      const remote = remoteIds.current;
+      if (remote) {
+        const fresh = state.tasks.filter(
+          (t) => t.googleEventId && !reconciledIds.current.has(t.googleEventId),
+        );
+        const needsApply = fresh.some(
+          (t) => (t.important ?? false) !== remote.has(t.googleEventId as string),
+        );
+        if (needsApply) {
+          applyingRemote.current = true;
+          useStore.getState().applyImportantTaskGoogleIds([...remote]);
+          applyingRemote.current = false;
+        }
+      }
+      // Alle aktuell vorhandenen Tasks als abgeglichen vormerken.
+      for (const t of state.tasks) {
+        if (t.googleEventId) reconciledIds.current.add(t.googleEventId);
+      }
+
+      // (b) Push: aktuellen lokalen Stand (nach evtl. Nach-Anwendung) schreiben.
+      const ids = importantGoogleIds(useStore.getState().tasks);
       const key = ids.join(',');
       if (key === lastSyncedKey.current) return;
       lastSyncedKey.current = key;
