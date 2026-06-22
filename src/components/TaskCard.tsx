@@ -73,6 +73,14 @@ export function TaskCard({ task, onPress, onToggle, onDelete, isSelected, onSele
         ) : null}
 
         <View style={styles.meta}>
+          {/* TE-120: Wichtig-Label für manuell als wichtig markierte Tasks. */}
+          {task.important ? (
+            <View style={styles.importantBadge}>
+              <Ionicons name="flag" size={10} color={colors.dangerFg} />
+              <Text style={styles.importantBadgeText}>Wichtig</Text>
+            </View>
+          ) : null}
+
           {group ? <GroupBadge group={group} small /> : null}
 
           {task.dueDate ? (
@@ -173,6 +181,21 @@ function makeStyles(c: ThemeColors, _isDark: boolean) {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 3,
+    },
+    importantBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 3,
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+      borderRadius: 8,
+      backgroundColor: c.danger,
+      alignSelf: 'flex-start',
+    },
+    importantBadgeText: {
+      fontSize: 10,
+      fontWeight: '700',
+      color: c.dangerFg,
     },
     date: {
       fontSize: 11,
