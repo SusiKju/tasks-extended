@@ -1534,12 +1534,14 @@ function makeStyles(c: ThemeColors, isDark: boolean, calm: boolean) {
     scratchCol: {
       flex: 1,
       minWidth: 0,
+      marginBottom: 12,
     },
 
     taskScratchDivider: {
       height: 1,
       backgroundColor: c.border,
-      marginVertical: 12,
+      marginHorizontal: 16,
+      marginVertical: 8,
     },
 
     card: {
