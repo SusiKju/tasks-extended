@@ -293,7 +293,12 @@ const chipStyles = StyleSheet.create({
   title: {
     fontSize: 12,
     fontWeight: '600',
-    flexShrink: 1,
+    // TE-126: Text ist bereits per chipText() auf max. 10 Zeichen + „…" gekappt –
+    // flexShrink:1 hätte die Box trotzdem im Flex-Row mit dem Datums-Label um
+    // Platz konkurrieren lassen und sie unter die nötige Breite gedrückt, sodass
+    // numberOfLines={1} schon nach ~4 Zeichen kappte. flexShrink:0 erzwingt die
+    // volle Breite für den vorab gekappten Text; das Label weicht stattdessen.
+    flexShrink: 0,
   },
   label: {
     fontSize: 11,
