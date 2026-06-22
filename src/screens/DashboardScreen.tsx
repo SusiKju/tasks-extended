@@ -1537,7 +1537,7 @@ function makeStyles(c: ThemeColors, isDark: boolean, calm: boolean) {
     scratchCol: {
       flex: 1,
       minWidth: 0,
-      marginBottom: 12,
+      marginBottom: 20,
     },
 
     taskScratchDivider: {
