@@ -219,11 +219,11 @@ function TaskChip({
   const chipColor   = isMono
     ? (blinkActive ? C.important : '#FFFFFF')
     : (isImportant ? C.important : C.tasks);
-  // TE-119: überfällige, nicht-wichtige Pillen bekommen einen roten Rahmen als
-  // eigenständigen Marker, behalten aber ihre normale Füllfarbe. Im Mono-/Calm-
-  // Theme gilt weiter die bestehende Regel "einzige rote Ausnahme = wichtig +
-  // heute" – dort also keine zusätzliche Overdue-Ausnahme.
-  const borderColor = (!isMono && overdue && !isImportant) ? C.overdue : chipColor;
+  // TE-119/TE-125: überfällige, nicht-wichtige Pillen bekommen einen roten Rahmen
+  // als eigenständigen Marker, behalten aber ihre normale Füllfarbe. Beide Themes
+  // im Projekt sind Mono (isMono ist immer true), die alte "!isMono"-Bedingung
+  // war daher totes Code – der rote Rahmen kam nie zustande.
+  const borderColor = (overdue && !isImportant) ? C.overdue : chipColor;
   const bgColor     = isDark ? chipColor + '18' : chipColor;
   const textColor   = isMono && (blinkActive || isImportant)
     ? '#FFFFFF'
