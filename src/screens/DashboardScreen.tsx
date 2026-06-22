@@ -175,6 +175,13 @@ const labelStyles = StyleSheet.create({
   },
 });
 
+// TE-126: Pillen-Text wird nach 10 Zeichen hart gekappt (statt per numberOfLines
+// von der Schrift abhängig umzubrechen) – bleibt dadurch unabhängig von Font-
+// Skalierung zuverlässig einzeilig.
+function chipText(text: string, max = 10): string {
+  return text.length > max ? `${text.slice(0, max)}…` : text;
+}
+
 // ─── Task Chip ────────────────────────────────────────────────────────────────
 
 function TaskChip({
@@ -257,7 +264,7 @@ function TaskChip({
           <Ionicons name="flag" size={scale === 'lg' ? 11 : 9} color={textColor} style={{ marginRight: 2 }} />
         )}
         <Text style={[chipStyles.title, { color: textColor, fontSize }]} numberOfLines={1}>
-          {task.title}
+          {chipText(task.title)}
         </Text>
         {label ? (
           <Text style={[chipStyles.label, { color: textColor + 'BB', fontSize: fontSize - 1 }]}>{label}</Text>
@@ -329,7 +336,7 @@ function NoteChip({ entry, onPress }: { entry: ScratchEntry; onPress: () => void
         ]}
         numberOfLines={1}
       >
-        {entry.text}
+        {chipText(entry.text)}
       </Text>
     </Pressable>
   );
