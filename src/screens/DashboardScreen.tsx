@@ -1005,7 +1005,7 @@ export function DashboardScreen() {
         {/* Tasks */}
         {showBlock('tasks') && (
         <View style={styles.tasksCol}>
-          {taskGroups.length > 0 && (
+          {false && taskGroups.length > 0 && (
             <SectionLabel
               title="Heutige Tasks"
               onMore={() => router.push('/(tabs)/tasks' as any)}
@@ -1030,7 +1030,7 @@ export function DashboardScreen() {
                   : colors.textMuted;
                 return (
                   <View key={group.key}>
-                    {!isToday && (
+                    {false && !isToday && (
                       <Text style={[styles.dayLabel, { color: labelColor }]}>
                         {group.label}
                       </Text>
@@ -1055,6 +1055,11 @@ export function DashboardScreen() {
         </View>
         )}
 
+        {/* Dünne Trennlinie zwischen Tasks und Notizen */}
+        {showBlock('tasks') && showBlock('scratchpad') && (
+          <View style={styles.taskScratchDivider} />
+        )}
+
         {/* Notizblock – TE-114: Notizen als gefloatete Pillen, einheitlich mit den
             Task-Chips links. Nur Anzeige; bearbeitet wird ausschließlich im
             Tasks-Tab (Klick auf eine Pille bzw. „Alle →" führt dorthin). */}
@@ -1062,11 +1067,13 @@ export function DashboardScreen() {
           const notes = parseScratchpad(scratchpad).filter((e) => e.text.trim() !== '');
           return (
             <View style={styles.scratchCol}>
+              {false && (
               <SectionLabel
                 title="Notizblock"
                 colors={colors}
                 onMore={() => router.push('/(tabs)/tasks' as any)}
               />
+              )}
               {notes.length === 0 ? (
                 <View style={styles.emptyChips}>
                   <Ionicons name="document-text-outline" size={16} color={colors.textMuted} />
@@ -1532,12 +1539,10 @@ function makeStyles(c: ThemeColors, isDark: boolean, calm: boolean) {
 
     section: {},
 
-    // Two-column layout: Tasks (left) und Notizblock (right)
+    // Vertical layout: Tasks oben, Notizen unten
     topRow: {
-      flexDirection: 'row',
-      alignItems: 'flex-start',
-      gap: 16,
-      paddingRight: 16,
+      flexDirection: 'column',
+      alignItems: 'stretch',
     },
     tasksCol: {
       flex: 1,
@@ -1546,6 +1551,12 @@ function makeStyles(c: ThemeColors, isDark: boolean, calm: boolean) {
     scratchCol: {
       flex: 1,
       minWidth: 0,
+    },
+
+    taskScratchDivider: {
+      height: 1,
+      backgroundColor: c.border,
+      marginVertical: 12,
     },
 
     card: {
