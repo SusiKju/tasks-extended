@@ -1040,7 +1040,7 @@ export function DashboardScreen() {
                         <TaskChip
                           key={task.id}
                           task={task}
-                          scale="lg"
+                          scale="md"
                           blink={isToday && !!task.important}
                           overdue={isOverdue}
                           onPress={() => router.push(`/task/${task.id}` as any)}
@@ -1532,10 +1532,12 @@ function makeStyles(c: ThemeColors, isDark: boolean, calm: boolean) {
 
     section: {},
 
-    // Top layout: Tasks und Notizblock übereinander
+    // Two-column layout: Tasks (left) und Notizblock (right)
     topRow: {
-      flexDirection: 'column',
-      alignItems: 'stretch',
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 16,
+      paddingRight: 16,
     },
     tasksCol: {
       flex: 1,
