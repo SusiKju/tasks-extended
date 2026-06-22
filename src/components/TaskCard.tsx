@@ -31,7 +31,8 @@ export function TaskCard({ task, onPress, onToggle, onDelete, isSelected, onSele
     ? colors.accent
     : task.completed
     ? 'transparent'
-    : overdue
+    // TE-124: wichtige Tasks bekommen denselben roten Akzent-Balken wie überfällige.
+    : task.important || overdue
     ? colors.danger
     : dueToday
     ? colors.warning
