@@ -1018,37 +1018,20 @@ export function DashboardScreen() {
               <Text style={[styles.emptyText, { color: colors.textMuted }]}>Alle erledigt 🎉</Text>
             </View>
           ) : (
-            <View style={{ gap: 8 }}>
-              {taskGroups.map((group) => {
-                const isToday    = group.key === 'today';
-                const isOverdue  = group.key === 'overdue';
-                const isTomorrow = group.key === 'tomorrow';
-                const labelColor = isOverdue || isToday
-                  ? colors.danger
-                  : isTomorrow
-                  ? colors.textSecondary
-                  : colors.textMuted;
-                return (
-                  <View key={group.key}>
-                    {false && !isToday && (
-                      <Text style={[styles.dayLabel, { color: labelColor }]}>
-                        {group.label}
-                      </Text>
-                    )}
-                    <View style={styles.chipWrap}>
-                      {group.tasks.map((task) => (
-                        <TaskChip
-                          key={task.id}
-                          task={task}
-                          scale="md"
-                          blink={isToday && !!task.important}
-                          overdue={isOverdue}
-                          onPress={() => router.push(`/task/${task.id}` as any)}
-                        />
-                      ))}
-                    </View>
-                  </View>
-                );
+            <View style={styles.chipWrap}>
+              {taskGroups.flatMap((group) => {
+                const isToday   = group.key === 'today';
+                const isOverdue = group.key === 'overdue';
+                return group.tasks.map((task) => (
+                  <TaskChip
+                    key={task.id}
+                    task={task}
+                    scale="md"
+                    blink={isToday && !!task.important}
+                    overdue={isOverdue}
+                    onPress={() => router.push(`/task/${task.id}` as any)}
+                  />
+                ));
               })}
             </View>
           )}
