@@ -307,7 +307,7 @@ function NoteChip({ entry, onPress }: { entry: ScratchEntry; onPress: () => void
   const chipColor   = entry.color;
   const borderColor = chipColor;
   const bgColor     = isDark ? chipColor + '18' : chipColor;
-  const textColor   = isDark ? chipColor : readableTextOn(chipColor);
+  const textColor   = isDark ? '#fff' : readableTextOn(chipColor);
   const glow        = isDark ? neonGlow(borderColor, 'soft') : null;
 
   return (
