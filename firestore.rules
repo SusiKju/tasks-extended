@@ -108,6 +108,11 @@ service cloud.firestore {
         allow read, write: if isFamilyMember(familyId) && request.auth.uid == uid;
       }
 
+      // Wichtig-Label der Tasks pro User (TE-123)
+      match /importantTasksByUser/{uid} {
+        allow read, write: if isFamilyMember(familyId) && request.auth.uid == uid;
+      }
+
       // Persönliche Notizen pro User
       match /personalNotesByUser/{uid}/notes/{noteId} {
         allow read, write: if isFamilyMember(familyId) && request.auth.uid == uid;

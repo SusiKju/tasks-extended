@@ -64,6 +64,9 @@ interface TaskState {
   unpinMail: (id: string) => void;
   /** TE-50: ganze Pin-Liste setzen (Hydration aus Firestore). */
   setPinnedMailIds: (ids: string[]) => void;
+
+  /** TE-123: Wichtig-Label aus Firestore anwenden (Menge der googleEventIds). */
+  applyImportantTaskGoogleIds: (ids: string[]) => void;
 }
 
 const DEFAULT_GROUPS: Group[] = [
@@ -263,6 +266,22 @@ export const useStore = create<TaskState>()(
         })),
 
       setPinnedMailIds: (ids) => set({ pinnedMailIds: ids }),
+
+      applyImportantTaskGoogleIds: (ids) =>
+        set((state) => {
+          const idSet = new Set(ids);
+          let changed = false;
+          const tasks = state.tasks.map((t) => {
+            // Rein lokale Tasks ohne googleEventId behalten ihr lokales Label –
+            // sie werden nicht geräteübergreifend abgeglichen (TE-123).
+            if (!t.googleEventId) return t;
+            const shouldBeImportant = idSet.has(t.googleEventId);
+            if ((t.important ?? false) === shouldBeImportant) return t;
+            changed = true;
+            return { ...t, important: shouldBeImportant };
+          });
+          return changed ? { tasks } : {};
+        }),
     }),
     {
       name: 'tasks-extended-store',
