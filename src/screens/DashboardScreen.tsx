@@ -1018,21 +1018,24 @@ export function DashboardScreen() {
               <Text style={[styles.emptyText, { color: colors.textMuted }]}>Alle erledigt 🎉</Text>
             </View>
           ) : (
-            <View style={styles.chipWrap}>
-              {taskGroups.flatMap((group) => {
-                const isToday   = group.key === 'today';
-                const isOverdue = group.key === 'overdue';
-                return group.tasks.map((task) => (
-                  <TaskChip
-                    key={task.id}
-                    task={task}
-                    scale="md"
-                    blink={isToday && !!task.important}
-                    overdue={isOverdue}
-                    onPress={() => router.push(`/task/${task.id}` as any)}
-                  />
-                ));
-              })}
+            <View style={styles.chipRow}>
+              <Ionicons name="checkmark-circle-outline" size={18} color={colors.textSecondary} style={{ marginTop: 2 }} />
+              <View style={styles.chipWrap}>
+                {taskGroups.flatMap((group) => {
+                  const isToday   = group.key === 'today';
+                  const isOverdue = group.key === 'overdue';
+                  return group.tasks.map((task) => (
+                    <TaskChip
+                      key={task.id}
+                      task={task}
+                      scale="md"
+                      blink={isToday && !!task.important}
+                      overdue={isOverdue}
+                      onPress={() => router.push(`/task/${task.id}` as any)}
+                    />
+                  ));
+                })}
+              </View>
             </View>
           )}
         </View>
@@ -1060,14 +1063,17 @@ export function DashboardScreen() {
                   <Text style={[styles.emptyText, { color: colors.textMuted }]}>Keine Notizen</Text>
                 </View>
               ) : (
-                <View style={styles.chipWrap}>
-                  {notes.map((entry, idx) => (
-                    <NoteChip
-                      key={entry.id ?? idx}
-                      entry={entry}
-                      onPress={() => router.push('/(tabs)/tasks' as any)}
-                    />
-                  ))}
+                <View style={styles.chipRow}>
+                  <Ionicons name="document-text-outline" size={18} color={colors.textSecondary} style={{ marginTop: 2 }} />
+                  <View style={styles.chipWrap}>
+                    {notes.map((entry, idx) => (
+                      <NoteChip
+                        key={entry.id ?? idx}
+                        entry={entry}
+                        onPress={() => router.push('/(tabs)/tasks' as any)}
+                      />
+                    ))}
+                  </View>
                 </View>
               )}
             </View>
@@ -1572,11 +1578,17 @@ function makeStyles(c: ThemeColors, isDark: boolean, calm: boolean) {
     },
 
     // Task chips
+    chipRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      paddingHorizontal: 16,
+      gap: 8,
+    },
     chipWrap: {
       flexDirection: 'row',
       flexWrap: 'wrap',
-      paddingHorizontal: 16,
       gap: 8,
+      flex: 1,
     },
     emptyChips: {
       flexDirection: 'row',
