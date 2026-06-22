@@ -256,7 +256,7 @@ function TaskChip({
         {isImportant && (
           <Ionicons name="flag" size={scale === 'lg' ? 11 : 9} color={textColor} style={{ marginRight: 2 }} />
         )}
-        <Text style={[chipStyles.title, { color: textColor, fontSize }]} numberOfLines={2}>
+        <Text style={[chipStyles.title, { color: textColor, fontSize }]} numberOfLines={1}>
           {task.title}
         </Text>
         {label ? (
@@ -327,7 +327,7 @@ function NoteChip({ entry, onPress }: { entry: ScratchEntry; onPress: () => void
           { color: textColor, fontSize: 11 },
           entry.done && { textDecorationLine: 'line-through' },
         ]}
-        numberOfLines={2}
+        numberOfLines={1}
       >
         {entry.text}
       </Text>
