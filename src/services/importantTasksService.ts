@@ -20,22 +20,27 @@ import { doc, setDoc, onSnapshot } from 'firebase/firestore';
 
 /**
  * Abonniert die als wichtig markierten Task-IDs (googleEventId) des Users in
- * Echtzeit. Existiert noch kein Dokument, wird der Callback nicht aufgerufen,
- * sodass lokale Labels nicht von einem leeren Remote-Stand überschrieben werden.
+ * Echtzeit. Der Callback bekommt zusätzlich `exists`:
+ *  - `exists === false`: es gibt noch KEIN Dokument. Der Aufrufer darf den
+ *    lokalen Stand NICHT mit einem leeren Remote-Stand überschreiben, sondern
+ *    soll seinen lokalen Stand hochladen (Seeding).
+ *  - `exists === true`: das Dokument existiert (ids ggf. leer) und ist die
+ *    geräteübergreifende Wahrheit.
  */
 export function subscribeToImportantTasks(
   familyId: string,
   uid: string,
-  callback: (ids: string[]) => void,
+  callback: (ids: string[], exists: boolean) => void,
 ): () => void {
   const ref = doc(db, 'families', familyId, 'importantTasksByUser', uid);
   return onSnapshot(
     ref,
     (snap) => {
       const data = snap.data();
-      if (data && Array.isArray(data.importantTaskIds)) {
-        callback(data.importantTaskIds as string[]);
-      }
+      const ids = data && Array.isArray(data.importantTaskIds)
+        ? (data.importantTaskIds as string[])
+        : [];
+      callback(ids, snap.exists());
     },
     () => {}, // Fehler stillschweigend ignorieren – lokale Labels bleiben gültig
   );

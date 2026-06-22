@@ -89,7 +89,11 @@ export function TaskDetailScreen() {
     }
 
     setEditing(false);
-  }, [title, description, groupId, dueDate, id, task, settings, updateTask]);
+    // important & dueTime MÜSSEN in den Deps stehen: ohne sie liefert useCallback
+    // beim Umschalten des Wichtig-Toggles (ändert nur important/dueTime, nicht
+    // title etc.) den zwischengespeicherten Callback mit dem ALTEN important-Wert
+    // zurück → das Label wurde nie gespeichert (TE-123).
+  }, [title, description, groupId, dueDate, dueTime, important, id, task, settings, updateTask]);
 
   const handleToggle = useCallback(async () => {
     if (!task) return;

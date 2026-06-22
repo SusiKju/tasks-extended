@@ -178,7 +178,9 @@ export function CreateTaskScreen() {
 
     setSaving(false);
     router.back();
-  }, [title, description, selectedGroupId, suggestedGroup, dueDate, attachments, settings, addTask, syncTasks, router]);
+    // important & dueTime MÜSSEN in den Deps stehen, sonst speichert der
+    // zwischengespeicherte Callback den alten Wert (stale closure, TE-123).
+  }, [title, description, selectedGroupId, suggestedGroup, dueDate, dueTime, important, attachments, settings, addTask, syncTasks, router]);
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">

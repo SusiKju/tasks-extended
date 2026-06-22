@@ -51,8 +51,12 @@ export function useImportantTasksSync(): void {
   // Verhindert die Remote→Local→Save→Remote-Schleife: solange wir einen
   // Firestore-Stand in den Store schreiben, ignoriert der Push-Listener.
   const applyingRemote = useRef(false);
-  // Zuletzt bekannte Remote-Menge (null = noch kein Firestore-Dokument gesehen).
+  // Zuletzt bekannte Remote-Menge (null = noch keinen Firestore-Stand gesehen).
   const remoteIds = useRef<Set<string> | null>(null);
+  // Erst nach dem ersten Firestore-Snapshot darf gepusht werden – sonst würde
+  // ein kalt startendes Gerät seinen (noch leeren) lokalen Stand hochladen und
+  // damit die wichtigen Tasks eines anderen Geräts überschreiben (Clobber).
+  const initialized = useRef(false);
   // Tasks (googleEventId), die bereits gegen den Remote-Stand abgeglichen wurden.
   // Neu auftauchende Tasks bekommen den Remote-Stand nachträglich angewendet,
   // bereits abgeglichene Tasks dürfen vom User frei umgeschaltet werden.
@@ -64,14 +68,28 @@ export function useImportantTasksSync(): void {
   // Beim Wechsel von Familie/User die Caches zurücksetzen.
   useEffect(() => {
     remoteIds.current = null;
+    initialized.current = false;
     reconciledIds.current = new Set();
     lastSyncedKey.current = null;
   }, [fid, uid]);
 
-  // ── 1. Firestore → Store (Echtzeit + Kaltstart) ────────────────────────────
+  // ── 1. Firestore → Store (Echtzeit + Kaltstart + Seeding) ──────────────────
   useEffect(() => {
     if (!fid || !uid) return;
-    const unsub = subscribeToImportantTasks(fid, uid, (ids) => {
+    const unsub = subscribeToImportantTasks(fid, uid, (ids, exists) => {
+      if (!exists) {
+        // Noch kein Dokument: lokalen Stand NICHT überschreiben, sondern als
+        // Basis übernehmen und (falls nicht leer) nach Firestore seeden.
+        const localIds = importantGoogleIds(useStore.getState().tasks);
+        remoteIds.current = new Set(localIds);
+        lastSyncedKey.current = localIds.join(',');
+        for (const t of useStore.getState().tasks) {
+          if (t.googleEventId) reconciledIds.current.add(t.googleEventId);
+        }
+        initialized.current = true;
+        if (localIds.length) saveImportantTasks(fid, uid, localIds).catch(() => {});
+        return;
+      }
       const set = new Set(ids);
       remoteIds.current = set;
       applyingRemote.current = true;
@@ -82,6 +100,7 @@ export function useImportantTasksSync(): void {
         if (t.googleEventId) reconciledIds.current.add(t.googleEventId);
       }
       lastSyncedKey.current = [...set].sort().join(',');
+      initialized.current = true;
     });
     return unsub;
   }, [fid, uid]);
@@ -91,6 +110,7 @@ export function useImportantTasksSync(): void {
     if (!fid || !uid) return;
     const unsub = useStore.subscribe((state, prev) => {
       if (applyingRemote.current) return;
+      if (!initialized.current) return;
       if (state.tasks === prev.tasks) return;
 
       // (a) Pull-Nachzügler: Tasks, die seit dem letzten Remote-Stand neu im
