@@ -22,7 +22,7 @@ import { parseScratchpad, ScratchEntry } from '../components/Scratchpad';
 import { useFirebaseAuth } from '../hooks/useFirebaseAuth';
 import { useGoogleTasksSync } from '../hooks/useGoogleTasksSync';
 import { useGoogleContactsBirthdaysSync } from '../hooks/useGoogleContactsBirthdaysSync';
-import { isOverdue } from '../utils/dateFormat';
+import { isOverdue, isDueToday } from '../utils/dateFormat';
 import { fetchRecentMails, fetchMailsByIds, MailMessage } from '../services/googleMail';
 import { listUpcomingEvents, CalendarEvent } from '../services/googleCalendar';
 import {
@@ -198,42 +198,64 @@ const chipStyles = StyleSheet.create({
 });
 
 // ─── Note Chip (TE-114) ─────────────────────────────────────────────────────────
-// Persönliche Notizen aus dem Notizblock als gefloatete Pillen – gleiche Optik wie
-// die Task-Chips, damit Tasks (links) und Notizen (rechts) auf dem Dashboard
-// einheitlich aussehen. Klick führt in den Tasks-Tab, wo der Notizblock liegt.
+// Personal-Tasks-Einträge als gefloatete Pillen auf dem Dashboard. Klick führt in
+// den Tasks-Tab, wo die Personal Tasks bearbeitet werden.
+// TE-142: kein Farbschema mehr – neutraler Look. Ist der Eintrag als „wichtig"
+// markiert, bekommt die Pille einen roten Rand; der Rand blinkt, wenn das
+// Fälligkeitsdatum heute oder schon überfällig ist.
 function NoteChip({ entry, onPress }: { entry: ScratchEntry; onPress: () => void }) {
-  const { isDark } = useTheme();
-  // Die vom Nutzer gewählte Notiz-Farbe gewinnt immer – auch im Mono-Theme,
-  // analog zum „Mein Tag"-Feed (TE-85). Dark: nur Rahmen + farbige Schrift + Glow,
-  // Light: solide Füllung mit lesbarem Text – exakt wie TaskChip.
-  const chipColor   = entry.color;
-  const borderColor = chipColor;
-  const bgColor     = isDark ? chipColor + '18' : chipColor;
-  const textColor   = isDark ? '#fff' : readableTextOn(chipColor);
-  const glow        = isDark ? neonGlow(borderColor, 'soft') : null;
+  const { isDark, colors, reduceMotion } = useTheme();
+  const important = !!entry.important;
+  const due = entry.dueDate ?? null;
+  const blink = important && !!due && (isOverdue(due) || isDueToday(due)) && !reduceMotion;
+
+  // Rahmen-Blinken über interpolierte Farbe (rot ↔ blass-rot). Color-Props sind
+  // nicht native-driver-fähig → useNativeDriver:false.
+  const blinkAnim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (!blink) { blinkAnim.setValue(0); return; }
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(blinkAnim, { toValue: 1, duration: 600, useNativeDriver: false }),
+        Animated.timing(blinkAnim, { toValue: 0, duration: 600, useNativeDriver: false }),
+      ])
+    );
+    loop.start();
+    return () => { loop.stop(); blinkAnim.setValue(0); };
+  }, [blink, blinkAnim]);
+
+  const borderColor = blink
+    ? blinkAnim.interpolate({ inputRange: [0, 1], outputRange: [C.important, 'rgba(255,59,48,0.15)'] })
+    : (important ? C.important : colors.border);
+  const bgColor   = important && !isDark ? '#FFECEC' : (isDark ? 'transparent' : colors.surface);
 
   return (
-    <Pressable
-      style={({ pressed }) => [
+    <Animated.View
+      style={[
         chipStyles.chip,
-        { backgroundColor: bgColor, borderColor, borderWidth: isDark ? 1.5 : 1,
-          opacity: pressed ? 0.7 : entry.done ? 0.55 : 1,
-          paddingVertical: 5, paddingHorizontal: 9 },
-        glow,
+        { backgroundColor: bgColor, borderColor, borderWidth: important ? 1.5 : 1,
+          paddingVertical: 0, paddingHorizontal: 0, overflow: 'hidden' },
       ]}
-      onPress={onPress}
     >
-      <Text
-        style={[
-          chipStyles.title,
-          { color: textColor, fontSize: 11 },
-          entry.done && { textDecorationLine: 'line-through' },
+      <Pressable
+        onPress={onPress}
+        style={({ pressed }) => [
+          { paddingVertical: 5, paddingHorizontal: 9,
+            opacity: pressed ? 0.7 : entry.done ? 0.55 : 1 },
         ]}
-        numberOfLines={1}
       >
-        {chipText(entry.text)}
-      </Text>
-    </Pressable>
+        <Text
+          style={[
+            chipStyles.title,
+            { color: colors.text, fontSize: 11 },
+            entry.done && { textDecorationLine: 'line-through' },
+          ]}
+          numberOfLines={1}
+        >
+          {chipText(entry.text)}
+        </Text>
+      </Pressable>
+    </Animated.View>
   );
 }
 

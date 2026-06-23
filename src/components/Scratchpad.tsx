@@ -63,28 +63,10 @@ export function makeNoteId(): string {
   return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 }
 
-// TE-85: feste, vom Nutzer wählbare Notiz-Farben. Default ist Dunkles Pink.
-// Die gewählte Farbe (entry.color) gewinnt ab jetzt über die Theme-Automatik.
-const NOTE_COLOR_OPTIONS: { key: string; label: string; color: string }[] = [
-  { key: 'pink',   label: 'Dunkles Pink', color: '#C2185B' },
-  { key: 'blue',   label: 'Neonblau',     color: '#2299FF' },
-  { key: 'green',  label: 'Neongrün',     color: '#00FF88' },
-  { key: 'yellow', label: 'Neongelb',     color: '#FFE600' },
-  { key: 'gray',   label: 'Grau',         color: '#9E9E9E' },
-];
-const NOTE_DEFAULT_COLOR = NOTE_COLOR_OPTIONS[0].color; // Dunkles Pink
-
-// Lesbare Textfarbe für eine solide Bubble: helle Hintergründe (Gelb/Grün/Grau)
-// brauchen dunklen Text, dunkle (Pink/Blau) weißen. Luminanz nach Rec. 601.
-function readableText(bg: string): string {
-  const hex = bg.replace('#', '');
-  if (hex.length < 6) return '#FFFFFF';
-  const r = parseInt(hex.slice(0, 2), 16);
-  const g = parseInt(hex.slice(2, 4), 16);
-  const b = parseInt(hex.slice(4, 6), 16);
-  const lum = 0.299 * r + 0.587 * g + 0.114 * b;
-  return lum > 150 ? '#1A1A1A' : '#FFFFFF';
-}
+// TE-142: Das wählbare Farbschema wurde entfernt – Wichtig-Label + Fälligkeit
+// steuern jetzt die Darstellung. Für Altdaten und das Datenmodell bleibt ein
+// neutraler Default erhalten.
+const NOTE_DEFAULT_COLOR = '#9E9E9E';
 
 // TE-112: kurze, deutsche Relativzeit für den Verlauf ("gerade", "vor 3 Min.",
 // "vor 2 Std.", "gestern", sonst Datum).
@@ -141,8 +123,6 @@ export function Scratchpad({
   const entries = useMemo(() => parseScratchpad(value), [value]);
   const inputRefs = useRef<(any)[]>([]);
   const dateFormat = useStore((s) => s.settings.dateFormat);
-  // TE-85: welche Notiz hat gerade die Farbauswahl offen (null = keine).
-  const [pickerIdx, setPickerIdx] = useState<number | null>(null);
   // TE-141: welcher Eintrag hat gerade die Fälligkeits-Auswahl offen (null = keiner)
   // bzw. den vollen Kalender geöffnet.
   const [dueIdx, setDueIdx] = useState<number | null>(null);
@@ -154,12 +134,6 @@ export function Scratchpad({
 
   const updateEntry = useCallback((idx: number, text: string) => {
     const next = entries.map((e, i) => i === idx ? { ...e, text } : e);
-    emit(serializeScratchpad(next));
-  }, [entries, emit]);
-
-  // TE-85: gewählte Farbe einer Notiz setzen.
-  const updateColor = useCallback((idx: number, color: string) => {
-    const next = entries.map((e, i) => i === idx ? { ...e, color } : e);
     emit(serializeScratchpad(next));
   }, [entries, emit]);
 
@@ -333,10 +307,6 @@ export function Scratchpad({
                 color={entry.dueDate ? colors.text : colors.textMuted}
               />
             </Pressable>
-            {/* Farbpunkt = Farb-Picker-Auslöser (TE-85/TE-109). */}
-            <Pressable onPress={() => setPickerIdx((cur) => (cur === idx ? null : idx))} hitSlop={8}>
-              <View style={[padStyles.colorDot, { backgroundColor: entry.color, borderColor: colors.border }]} />
-            </Pressable>
             <Pressable onPress={() => removeEntry(idx)} hitSlop={8} style={padStyles.trashBtn}>
               <Ionicons name="trash-outline" size={18} color={colors.textMuted} />
             </Pressable>
@@ -382,28 +352,6 @@ export function Scratchpad({
             </View>
           )}
 
-          {/* Farbauswahl: fünf feste Optionen, unterhalb der Zeile. */}
-          {pickerIdx === idx && (
-            <View style={[padStyles.palette, { backgroundColor: colors.surfaceHigh, borderColor: colors.border }]}>
-              {NOTE_COLOR_OPTIONS.map((opt) => {
-                const selected = entry.color === opt.color;
-                return (
-                  <Pressable
-                    key={opt.key}
-                    onPress={() => { updateColor(idx, opt.color); setPickerIdx(null); }}
-                    hitSlop={6}
-                    style={[
-                      padStyles.swatch,
-                      { backgroundColor: opt.color },
-                      selected && { borderWidth: 2, borderColor: colors.text },
-                    ]}
-                  >
-                    {selected && <Ionicons name="checkmark" size={12} color={readableText(opt.color)} />}
-                  </Pressable>
-                );
-              })}
-            </View>
-          )}
         </View>
       ))}
       </View>
@@ -580,25 +528,6 @@ const padStyles = StyleSheet.create({
   trashBtn: {
     padding: 2,
     flexShrink: 0,
-  },
-  // TE-85: Farbauswahl-Reihe unter der Notiz.
-  palette: {
-    flexDirection: 'row',
-    gap: 8,
-    marginHorizontal: 10,
-    marginBottom: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    borderWidth: 1,
-    alignSelf: 'flex-start',
-  },
-  swatch: {
-    width: 20,
-    height: 20,
-    borderRadius: 999,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   // Hinweiszeile im Lesemodus, wenn der Block leer ist.
   emptyRow: {
