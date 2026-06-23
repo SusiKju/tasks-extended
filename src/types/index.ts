@@ -109,7 +109,6 @@ export type DashboardBlockKey =
   | 'birthdays'
   | 'weather'
   | 'feed'
-  | 'tasks'
   | 'scratchpad'
   | 'links'
   | 'geistesblitze'
@@ -124,7 +123,6 @@ export const DASHBOARD_BLOCKS: { key: DashboardBlockKey; label: string; descript
   { key: 'birthdays',     label: 'Geburtstage',         description: 'Heutige Geburtstage ganz oben.' },
   { key: 'weather',       label: 'Wetter',              description: 'Wettervorhersage neben dem Sync-Button.' },
   { key: 'feed',          label: 'Mein Tag',            description: 'Alle anstehenden Dinge als eine Liste, mit dezentem Icon je Kategorie.' },
-  { key: 'tasks',         label: 'Heutige Tasks',       description: 'Überfällige und heute fällige Aufgaben.' },
   { key: 'scratchpad',    label: 'Notizblock',          description: 'Persönlicher Notizblock.' },
   { key: 'links',         label: 'Links',               description: 'Schnellleiste mit deinen Links.' },
   { key: 'geistesblitze', label: 'Geistesblitze',       description: 'Persönliche Gedanken-Kacheln.' },
@@ -162,6 +160,10 @@ export interface Note {
   color: string;
   groupId: string | null;
   pinned?: boolean;
+  /** TE-139: Wichtig-Label – roter Punkt in der Pille, wird in der Liste oben sortiert. */
+  important?: boolean;
+  /** TE-140: Fälligkeitsdatum (lokaler Mittag als ISO-String) – steuert die Sortierung. */
+  dueDate?: string | null;
   labels?: string[];
   imageUris?: string[];
   createdAt: string;

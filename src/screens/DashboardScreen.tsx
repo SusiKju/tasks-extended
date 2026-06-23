@@ -41,7 +41,7 @@ import { subscribeToFeedOrder, saveFeedOrder, FeedOrder } from '../services/feed
 import { subscribeToFeedHighlight, saveFeedHighlight } from '../services/feedHighlightService';
 import { SharedNoteItem, subscribeToSharedNotes } from '../services/sharedNotes';
 import { GeistesKachel, subscribeToGeistesKacheln } from '../services/geistesKacheln';
-import { Task, DashboardBlockKey } from '../types';
+import { DashboardBlockKey } from '../types';
 
 // Fallback-Farbe falls Kind keine Farbe gesetzt hat
 const CHILD_COLOR_FALLBACK = '#4f86f7';
@@ -118,24 +118,6 @@ function dayLabel(d: Date): string {
   return d.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' });
 }
 
-function chipDueLabel(task: Task): string {
-  const parts: string[] = [];
-  if (task.dueDate) {
-    try {
-      const d = new Date(task.dueDate);
-      const today = new Date(); today.setHours(0, 0, 0, 0);
-      const due = new Date(d); due.setHours(0, 0, 0, 0);
-      const diff = Math.round((due.getTime() - today.getTime()) / 86400000);
-      if (diff < 0) parts.push('!');          // kurz: überfällig
-      else if (diff === 0) { /* TE-114: kein „Heute"-Label auf der Pille */ }
-      else if (diff === 1) parts.push('Mo.');  // Morgen → Mo.
-      else parts.push(d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' }));
-    } catch {}
-  }
-  if (task.dueTime) parts.push(task.dueTime);
-  return parts.join(' ');
-}
-
 // ─── Section Label ────────────────────────────────────────────────────────────
 
 function SectionLabel({
@@ -182,101 +164,9 @@ function chipText(text: string, max = 10): string {
   return text.length > max ? `${text.slice(0, max)}…` : text;
 }
 
-// ─── Task Chip ────────────────────────────────────────────────────────────────
-
-function TaskChip({
-  task,
-  onPress,
-  scale = 'lg',
-  blink = false,
-  overdue = false,
-}: {
-  task: Task;
-  onPress: () => void;
-  scale?: 'lg' | 'md' | 'sm';
-  blink?: boolean;
-  overdue?: boolean;
-}) {
-  const { isDark, isMono, reduceMotion } = useTheme();
-  const label = chipDueLabel(task);
-  const isImportant = task.important;
-  // Calm-Theme: kein Blinken und keine rote Ausnahme – alles ruhig in Weiß.
-  const blinkActive = blink && !reduceMotion;
-
-  // Blink-Animation: nur wenn die Task heute fällig UND wichtig ist (siehe Aufruf).
-  const blinkAnim = useRef(new Animated.Value(1)).current;
-  useEffect(() => {
-    if (!blinkActive) { blinkAnim.setValue(1); return; }
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(blinkAnim, { toValue: 0.3, duration: 600, useNativeDriver: true }),
-        Animated.timing(blinkAnim, { toValue: 1,   duration: 600, useNativeDriver: true }),
-      ])
-    );
-    loop.start();
-    return () => { loop.stop(); blinkAnim.setValue(1); };
-  }, [blinkActive, blinkAnim]);
-
-  // Farbe rein nach Priorität: wichtige Tasks rot, normale blau.
-  // Dark-Themes: Tasks-Tab-Stil – keine Füllung, nur Rahmen + Schrift in der
-  // Chip-Farbe (+ Glow). Light: solide Füllung mit lesbarem Text wie bisher.
-  // Schwarz-Weiß-Theme: alles monochrom (weiß) – einzige Ausnahme bleibt Rot
-  // für wichtige Tasks, die heute fällig sind (= blink). Im Calm-Theme entfällt
-  // auch diese Ausnahme: alles bleibt weiß.
-  const chipColor   = isMono
-    ? (blinkActive ? C.important : '#FFFFFF')
-    : (isImportant ? C.important : C.tasks);
-  // TE-119/TE-125: überfällige, nicht-wichtige Pillen bekommen einen roten Rahmen
-  // als eigenständigen Marker, behalten aber ihre normale Füllfarbe. Beide Themes
-  // im Projekt sind Mono (isMono ist immer true), die alte "!isMono"-Bedingung
-  // war daher totes Code – der rote Rahmen kam nie zustande.
-  const borderColor = (overdue && !isImportant) ? C.overdue : chipColor;
-  const bgColor     = isDark ? chipColor + '18' : chipColor;
-  const textColor   = isMono && (blinkActive || isImportant)
-    ? '#FFFFFF'
-    : (isDark ? chipColor : readableTextOn(chipColor));
-
-  const fontSize   = scale === 'lg' ? 13 : scale === 'md' ? 11 : 10;
-  const padV       = scale === 'lg' ? 7  : scale === 'md' ? 5  : 4;
-  const padH       = scale === 'lg' ? 11 : scale === 'md' ? 9  : 8;
-  const chipOpacity= scale === 'sm' ? 0.65 : 1;
-
-  // Neon-Glow wie die aktiven Filter-Chips im Tasks-Tab: Schatten in der
-  // Chip-Farbe, Intensität nach Wichtigkeit (Heute/Überfällig kräftig, Später ohne).
-  // Nur in den Dark-Themes – Light bleibt flach.
-  const glow = isDark
-    ? neonGlow(borderColor, scale === 'lg' ? 'medium' : scale === 'md' ? 'soft' : 'soft')
-    : null;
-
-  return (
-    // TE-126: kein maxWidth-Cap mehr – chipText() begrenzt den Titel bereits auf
-    // ~11 Zeichen, ein zusätzliches %-Limit war schmäler als das und drückte den
-    // (fixbreiten) Text über den Pillen-Rand. chipWrap (flexWrap) schiebt eine
-    // Pille, die nicht mehr in die Zeile passt, von selbst in die nächste Zeile.
-    <Animated.View style={{ opacity: blinkAnim }}>
-      <Pressable
-        style={({ pressed }) => [
-          chipStyles.chip,
-          { backgroundColor: bgColor, borderColor, borderWidth: isDark ? 1.5 : 1,
-            opacity: pressed ? 0.7 : chipOpacity,
-            paddingVertical: padV, paddingHorizontal: padH },
-          scale !== 'sm' && glow,
-        ]}
-        onPress={onPress}
-      >
-        {isImportant && (
-          <Ionicons name="flag" size={scale === 'lg' ? 11 : 9} color={textColor} style={{ marginRight: 2 }} />
-        )}
-        <Text style={[chipStyles.title, { color: textColor, fontSize }]} numberOfLines={1}>
-          {chipText(task.title)}
-        </Text>
-        {label ? (
-          <Text style={[chipStyles.label, { color: textColor + 'BB', fontSize: fontSize - 1 }]}>{label}</Text>
-        ) : null}
-      </Pressable>
-    </Animated.View>
-  );
-}
+// ─── Chip-Styles (NoteChip) ───────────────────────────────────────────────────
+// TE-138: TaskChip entfernt (keine Tasks mehr auf dem Dashboard). Die Styles
+// werden weiterhin von NoteChip genutzt.
 
 const chipStyles = StyleSheet.create({
   chip: {
@@ -357,7 +247,7 @@ export function DashboardScreen() {
   const childName = (id: string) => familyChildren.find((c) => c.id === id)?.name ?? id;
   const childColor = (id: string) => familyChildren.find((c) => c.id === id)?.color ?? CHILD_COLOR_FALLBACK;
   const childEmoji = (id: string) => familyChildren.find((c) => c.id === id)?.emoji ?? null;
-  const { tasks, settings, birthdays: storeBirthdays, pinnedMailIds } = useStore();
+  const { settings, birthdays: storeBirthdays, pinnedMailIds } = useStore();
   // TE-104: Notizblock-Wert + Firestore-Abo zentral aus dem Hook. Das Dashboard
   // zeigt ihn nur an (readOnly); bearbeitet wird er im Tasks-Tab.
   const { scratchpad } = useScratchpad();
@@ -602,36 +492,8 @@ export function DashboardScreen() {
     [individualByChild, familyChildren]
   );
 
-  // Tasks nach Fälligkeit gruppieren
-  const taskGroups = useMemo(() => {
-    const open = tasks.filter((t) => !t.completed);
-    const today = new Date(); today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
-    const dayAfter  = new Date(today); dayAfter.setDate(today.getDate() + 2);
-
-    const byGroup = { overdue: [] as Task[], today: [] as Task[], tomorrow: [] as Task[], later: [] as Task[] };
-
-    for (const t of open) {
-      if (!t.dueDate) { byGroup.later.push(t); continue; }
-      const d = new Date(t.dueDate); d.setHours(0, 0, 0, 0);
-      if (d < today)           byGroup.overdue.push(t);
-      else if (d.getTime() === today.getTime())    byGroup.today.push(t);
-      else if (d.getTime() === tomorrow.getTime()) byGroup.tomorrow.push(t);
-      else                     byGroup.later.push(t);
-    }
-
-    // Innerhalb jeder Gruppe: Wichtig zuerst
-    const sort = (arr: Task[]) => arr.sort((a, b) => {
-      if (a.important && !b.important) return -1;
-      if (!a.important && b.important) return 1;
-      return 0;
-    });
-
-    return [
-      { key: 'overdue',  label: 'Überfällig', tasks: sort(byGroup.overdue) },
-      { key: 'today',    label: 'Heute',       tasks: sort(byGroup.today) },
-    ].filter((g) => g.tasks.length > 0);
-  }, [tasks]);
+  // TE-138: Tasks-Gruppierung fürs Dashboard entfernt – Tasks erscheinen nur
+  // noch im Tasks-Tab, nicht mehr auf dem Dashboard.
 
   // Bunter Geburtstags-Stil (rotierender Regenbogen-Rand im AI-Komponenten-Stil):
   // im Neon-Theme und im Schwarz-Weiß-Theme – dort bleibt die Geburtstags-Card
@@ -671,23 +533,8 @@ export function DashboardScreen() {
   const feedItems = useMemo<FeedItem[]>(() => {
     const items: FeedItem[] = [];
 
-    // Eigene Tasks (alle offenen, über alle Zeitgruppen).
-    // Key: bei Google-Tasks-Sync die googleEventId verwenden statt der lokalen
-    // Firestore-/Store-ID – die lokale ID kann je Gerät unterschiedlich entstehen
-    // (z.B. lokal angelegt vs. von Google importiert), die googleEventId ist
-    // geräteübergreifend stabil und damit für die manuelle Sortierung nötig.
-    for (const t of tasks) {
-      if (t.completed) continue;
-      items.push({
-        key: `task:${t.googleEventId ?? t.id}`,
-        category: 'task',
-        group: feedDateGroup(t.dueDate),
-        title: t.title,
-        important: !!t.important,
-        overdue: !t.completed && !!t.dueDate && t.dueDate < TODAY,
-        onPress: () => router.push(`/task/${t.id}` as any),
-      });
-    }
+    // TE-138: Eigene Tasks erscheinen nicht mehr im „Mein Tag"-Feed – das
+    // Dashboard ist tasks-frei, der Tasks-Tab bleibt die einzige Quelle dafür.
 
     // Kinder-Aufgaben (alle offenen je Kind, inkl. Gruppenaufgaben einzeln je Kind).
     for (const child of familyChildren) {
@@ -798,7 +645,7 @@ export function DashboardScreen() {
 
     return items;
   }, [
-    tasks, familyChildren, childTasks, feedPinnedMails, pinnedSet,
+    familyChildren, childTasks, feedPinnedMails, pinnedSet,
     todayEvents, todayBirthdays, feedSharedNotes,
     feedGeistesKacheln, openAllowanceChildren, currentAllowanceMonth, router,
     scratchpad, isMono, isDark, colors,
@@ -998,54 +845,13 @@ export function DashboardScreen() {
         </Modal>
       )}
 
-      {/* ── Tasks + Scratchpad ── */}
-      {(showBlock('tasks') || showBlock('scratchpad')) && (
+      {/* ── Notizblock (TE-138: Tasks-Spalte entfernt, Dashboard ist tasks-frei) ── */}
+      {showBlock('scratchpad') && (
       <View style={styles.topRow}>
 
-        {/* Tasks */}
-        {showBlock('tasks') && (
-        <View style={styles.tasksCol}>
-          {false && taskGroups.length > 0 && (
-            <SectionLabel
-              title="Heutige Tasks"
-              onMore={() => router.push('/(tabs)/tasks' as any)}
-              colors={colors}
-            />
-          )}
-          {taskGroups.length === 0 ? (
-            <View style={styles.emptyChips}>
-              <Ionicons name="checkmark-circle-outline" size={16} color={colors.success} />
-              <Text style={[styles.emptyText, { color: colors.textMuted }]}>Alle erledigt 🎉</Text>
-            </View>
-          ) : (
-            <View style={styles.chipRow}>
-              <Ionicons name="checkmark-circle-outline" size={18} color={colors.textSecondary} style={{ marginTop: 2 }} />
-              <View style={styles.chipWrap}>
-                {taskGroups.flatMap((group) => {
-                  const isToday   = group.key === 'today';
-                  const isOverdue = group.key === 'overdue';
-                  return group.tasks.map((task) => (
-                    <TaskChip
-                      key={task.id}
-                      task={task}
-                      scale="md"
-                      blink={isToday && !!task.important}
-                      overdue={isOverdue}
-                      onPress={() => router.push(`/task/${task.id}` as any)}
-                    />
-                  ));
-                })}
-              </View>
-            </View>
-          )}
-        </View>
-        )}
-
-        {/* Trennlinie entfernt */}
-
-        {/* Notizblock – TE-114: Notizen als gefloatete Pillen, einheitlich mit den
-            Task-Chips links. Nur Anzeige; bearbeitet wird ausschließlich im
-            Tasks-Tab (Klick auf eine Pille bzw. „Alle →" führt dorthin). */}
+        {/* Notizblock – TE-114: Notizen als gefloatete Pillen. Nur Anzeige;
+            bearbeitet wird ausschließlich im Tasks-Tab (Klick auf eine Pille
+            bzw. „Alle →" führt dorthin). */}
         {showBlock('scratchpad') && (() => {
           const notes = parseScratchpad(scratchpad).filter((e) => e.text.trim() !== '');
           return (
@@ -1529,10 +1335,6 @@ function makeStyles(c: ThemeColors, isDark: boolean, calm: boolean) {
     topRow: {
       flexDirection: 'column',
       alignItems: 'stretch',
-    },
-    tasksCol: {
-      flex: 1,
-      minWidth: 0,
     },
     scratchCol: {
       flex: 1,

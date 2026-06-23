@@ -16,6 +16,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useStore } from '../store';
 import { Note, NoteChecklistItem } from '../types';
+import { DatePickerModal } from '../components/DatePickerModal';
+import { formatDate, isOverdue, isDueToday } from '../utils/dateFormat';
 import { useTheme, ThemeColors, neonGlow, readableTextOn } from '../utils/theme';
 import { useFirebaseAuth } from '../hooks/useFirebaseAuth';
 import { useFamily } from '../hooks/useFamily';
@@ -35,6 +37,9 @@ const NOTE_COLORS = [
   { value: '#E87C3E', label: 'Kupfer' },
 ];
 
+// TE-139: Rot des Wichtig-Labels (Toggle-Icon + Punkt in der Pille).
+const IMPORTANT_RED = '#EF4444';
+
 const COLUMNS = 3;
 const GRID_PADDING = 12;
 const GRID_GAP = 6;
@@ -42,6 +47,15 @@ const SCREEN_WIDTH = Dimensions.get('window').width;
 const NOTE_WIDTH = (SCREEN_WIDTH - GRID_PADDING * 2 - GRID_GAP * (COLUMNS - 1)) / COLUMNS;
 
 type SortOrder = 'newest' | 'oldest';
+
+// TE-140: Fälligkeits-Gruppe für die Sortierung – überfällig (0) → heute (1) →
+// später (2) → ohne Datum (3).
+function dueRank(note: Note): number {
+  if (!note.dueDate) return 3;
+  if (isOverdue(note.dueDate)) return 0;
+  if (isDueToday(note.dueDate)) return 1;
+  return 2;
+}
 
 // ─── Note Modal ───────────────────────────────────────────────────────────────
 
@@ -54,6 +68,8 @@ interface NoteModalProps {
     color: string,
     groupId: string | null,
     pinned: boolean,
+    important: boolean,
+    dueDate: string | null,
     checklist?: NoteChecklistItem[],
   ) => void;
   onClose: () => void;
@@ -65,11 +81,15 @@ interface NoteModalProps {
 function NoteModal({ visible, note, onSave, onClose, onDelete, colors, styles }: NoteModalProps) {
   const { mono } = useTheme();
   const groups = useStore((s) => s.groups);
+  const settings = useStore((s) => s.settings);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [selectedColor, setSelectedColor] = useState(NOTE_COLORS[0].value);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [pinned, setPinned] = useState(false);
+  const [important, setImportant] = useState(false);
+  const [dueDate, setDueDate] = useState<string | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [isChecklist, setIsChecklist] = useState(false);
   const [checklistItems, setChecklistItems] = useState<NoteChecklistItem[]>([]);
 
@@ -80,6 +100,8 @@ function NoteModal({ visible, note, onSave, onClose, onDelete, colors, styles }:
       setSelectedColor(note?.color ?? NOTE_COLORS[0].value);
       setSelectedGroupId(note?.groupId ?? null);
       setPinned(note?.pinned ?? false);
+      setImportant(note?.important ?? false);
+      setDueDate(note?.dueDate ?? null);
       const hasList = (note?.checklist?.length ?? 0) > 0;
       setIsChecklist(hasList);
       setChecklistItems(note?.checklist ? [...note.checklist] : [{ text: '', checked: false }]);
@@ -94,16 +116,16 @@ function NoteModal({ visible, note, onSave, onClose, onDelete, colors, styles }:
         return;
       }
       const c = validItems.map((i) => `${i.checked ? '☑' : '☐'} ${i.text}`).join('\n');
-      onSave(title.trim(), c, selectedColor, selectedGroupId, pinned, validItems);
+      onSave(title.trim(), c, selectedColor, selectedGroupId, pinned, important, dueDate, validItems);
     } else {
       const trimmed = content.trim();
       if (!trimmed) {
         Alert.alert('Inhalt fehlt', 'Bitte einen Text eingeben.');
         return;
       }
-      onSave(title.trim(), trimmed, selectedColor, selectedGroupId, pinned, undefined);
+      onSave(title.trim(), trimmed, selectedColor, selectedGroupId, pinned, important, dueDate, undefined);
     }
-  }, [title, content, selectedColor, selectedGroupId, pinned, isChecklist, checklistItems, onSave]);
+  }, [title, content, selectedColor, selectedGroupId, pinned, important, dueDate, isChecklist, checklistItems, onSave]);
 
   const addChecklistItem = useCallback(() => {
     setChecklistItems((prev) => [...prev, { text: '', checked: false }]);
@@ -145,6 +167,13 @@ function NoteModal({ visible, note, onSave, onClose, onDelete, colors, styles }:
                 name={isChecklist ? 'checkbox' : 'checkbox-outline'}
                 size={22}
                 color={isChecklist ? colors.accent : colors.textSecondary}
+              />
+            </Pressable>
+            <Pressable onPress={() => setImportant((v) => !v)} style={styles.pinBtn} hitSlop={8}>
+              <Ionicons
+                name={important ? 'alert-circle' : 'alert-circle-outline'}
+                size={22}
+                color={important ? IMPORTANT_RED : colors.textSecondary}
               />
             </Pressable>
             <Pressable onPress={() => setPinned((p) => !p)} style={styles.pinBtn} hitSlop={8}>
@@ -250,7 +279,38 @@ function NoteModal({ visible, note, onSave, onClose, onDelete, colors, styles }:
             ))}
           </ScrollView>
         </View>
+
+        {/* TE-140: Fälligkeitsdatum */}
+        <View style={styles.modalSection}>
+          <Text style={[styles.modalSectionLabel, { color: colors.textSecondary }]}>Fällig am</Text>
+          <Pressable
+            style={[styles.dueBtn, { borderColor: colors.border, backgroundColor: colors.surface }]}
+            onPress={() => setShowDatePicker(true)}
+          >
+            <Ionicons name="calendar-outline" size={16} color={dueDate ? colors.text : colors.textSecondary} />
+            <Text style={[styles.dueBtnText, { color: dueDate ? colors.text : colors.textSecondary }]}>
+              {dueDate ? formatDate(dueDate, settings.dateFormat) : 'Datum wählen…'}
+            </Text>
+            {dueDate ? (
+              <Pressable onPress={(e) => { e.stopPropagation?.(); setDueDate(null); }} hitSlop={8}>
+                <Ionicons name="close-circle" size={18} color={colors.textSecondary} />
+              </Pressable>
+            ) : null}
+          </Pressable>
+        </View>
       </KeyboardAvoidingView>
+
+      <DatePickerModal
+        visible={showDatePicker}
+        value={dueDate ? new Date(dueDate) : null}
+        onConfirm={(d) => {
+          // Lokaler Mittag verhindert Tagesverschiebung durch Zeitzonen.
+          setDueDate(new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0).toISOString());
+          setShowDatePicker(false);
+        }}
+        onCancel={() => setShowDatePicker(false)}
+        colors={colors}
+      />
     </Modal>
   );
 }
@@ -268,7 +328,9 @@ interface NoteCardProps {
 
 function NoteCard({ note, onPress, onToggleItem, groupName, groupColor, styles }: NoteCardProps) {
   const { mono, colors } = useTheme();
+  const settings = useStore((s) => s.settings);
   const maxItems = note.title ? 3 : 4;
+  const dueOverdue = isOverdue(note.dueDate ?? null);
 
   const sortedChecklist = note.checklist
     ? [...note.checklist.map((item, originalIndex) => ({ ...item, originalIndex }))]
@@ -283,6 +345,7 @@ function NoteCard({ note, onPress, onToggleItem, groupName, groupColor, styles }
     >
       {/* Badges */}
       <View style={styles.cardBadgeRow}>
+        {note.important ? <View style={styles.importantDot} /> : null}
         {note.pinned ? <Ionicons name="pin" size={11} color="rgba(0,0,0,0.5)" /> : null}
       </View>
 
@@ -321,6 +384,19 @@ function NoteCard({ note, onPress, onToggleItem, groupName, groupColor, styles }
           {note.content}
         </Text>
       )}
+
+      {note.dueDate ? (
+        <View style={styles.cardDueBadge}>
+          <Ionicons
+            name="calendar-outline"
+            size={11}
+            color={dueOverdue ? IMPORTANT_RED : 'rgba(0,0,0,0.6)'}
+          />
+          <Text style={[styles.cardDueText, dueOverdue && { color: IMPORTANT_RED }]} numberOfLines={1}>
+            {formatDate(note.dueDate, settings.dateFormat)}
+          </Text>
+        </View>
+      ) : null}
 
       {groupName ? (
         <View style={[styles.noteGroupBadge, { backgroundColor: mono(groupColor ?? '#888') }]}>
@@ -383,6 +459,18 @@ export function NotesScreen() {
     if (filterColor) list = list.filter((n) => n.color === filterColor);
     if (filterGroupId) list = list.filter((n) => n.groupId === filterGroupId);
     list.sort((a, b) => {
+      // TE-139: wichtige Notizen zuerst.
+      if (!!a.important !== !!b.important) return a.important ? -1 : 1;
+      // TE-140: dann nach Fälligkeits-Gruppe (überfällig → heute → später → ohne Datum).
+      const ra = dueRank(a), rb = dueRank(b);
+      if (ra !== rb) return ra - rb;
+      // Innerhalb einer Gruppe mit Datum: früheres Datum zuerst.
+      if (a.dueDate && b.dueDate) {
+        const da = new Date(a.dueDate).getTime();
+        const db = new Date(b.dueDate).getTime();
+        if (da !== db) return da - db;
+      }
+      // Sonst nach Erstelldatum (gewählte Sortierrichtung).
       const ta = new Date(a.createdAt).getTime();
       const tb = new Date(b.createdAt).getTime();
       return sortOrder === 'newest' ? tb - ta : ta - tb;
@@ -451,6 +539,8 @@ export function NotesScreen() {
       color: string,
       groupId: string | null,
       pinned: boolean,
+      important: boolean,
+      dueDate: string | null,
       checklist?: NoteChecklistItem[],
     ) => {
       if (!familyId || !user?.uid) return;
@@ -462,6 +552,8 @@ export function NotesScreen() {
           color,
           groupId,
           pinned,
+          important,
+          dueDate,
           checklist: checklist && checklist.length > 0 ? checklist : undefined,
         }).catch((err) => Alert.alert('Fehler beim Speichern', err?.message ?? String(err)));
       } else {
@@ -471,6 +563,8 @@ export function NotesScreen() {
           color,
           groupId: groupId ?? null,
           pinned,
+          important,
+          dueDate,
           checklist: checklist && checklist.length > 0 ? checklist : undefined,
           createdAt: now,
           updatedAt: now,
@@ -666,6 +760,12 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
       marginBottom: 4,
       minHeight: 14,
     },
+    importantDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      backgroundColor: IMPORTANT_RED,
+    },
     noteCardTitle: {
       fontSize: 11, fontWeight: '700',
       color: 'rgba(0,0,0,0.85)', marginBottom: 3,
@@ -776,5 +876,24 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
       borderRadius: 16, borderWidth: 1,
     },
     groupChipText: { fontSize: 14, fontWeight: '500' },
+    dueBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      alignSelf: 'flex-start',
+      paddingHorizontal: 14,
+      paddingVertical: 9,
+      borderRadius: 12,
+      borderWidth: 1,
+    },
+    dueBtnText: { fontSize: 14, fontWeight: '500' },
+    cardDueBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 3,
+      marginTop: 4,
+      alignSelf: 'flex-start',
+    },
+    cardDueText: { fontSize: 10, fontWeight: '600', color: 'rgba(0,0,0,0.6)' },
   });
 }
