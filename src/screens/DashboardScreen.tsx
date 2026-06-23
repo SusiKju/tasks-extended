@@ -207,11 +207,12 @@ function NoteChip({ entry, onPress }: { entry: ScratchEntry; onPress: () => void
   const { isDark, colors, reduceMotion } = useTheme();
   const important = !!entry.important;
   const due = entry.dueDate ?? null;
-  // TE-142: Heute fällige oder überfällige Einträge blinken. Die Blink-Farbe ist
-  // der Default-Rahmen – rot nur, wenn der Eintrag zusätzlich „wichtig" ist.
+  // TE-142/TE-143: Wichtige Einträge haben immer einen roten Rand. Heute fällige
+  // oder überfällige Einträge blinken – rot, wenn zusätzlich wichtig, sonst im
+  // Default-Rahmen.
   const dueUrgent = !!due && (isOverdue(due) || isDueToday(due));
   const blink = dueUrgent && !reduceMotion;
-  const blinkColor = important && dueUrgent ? C.important : colors.border;
+  const blinkColor = important ? C.important : colors.border;
 
   // Rahmen-Blinken über interpolierte Farbe (Vollton ↔ transparent). Color-Props
   // sind nicht native-driver-fähig → useNativeDriver:false.
@@ -230,14 +231,14 @@ function NoteChip({ entry, onPress }: { entry: ScratchEntry; onPress: () => void
 
   const borderColor = blink
     ? blinkAnim.interpolate({ inputRange: [0, 1], outputRange: [blinkColor, 'transparent'] })
-    : colors.border;
+    : (important ? C.important : colors.border);
   const bgColor   = isDark ? 'transparent' : colors.surface;
 
   return (
     <Animated.View
       style={[
         chipStyles.chip,
-        { backgroundColor: bgColor, borderColor, borderWidth: blink ? 1.5 : 1,
+        { backgroundColor: bgColor, borderColor, borderWidth: important || blink ? 1.5 : 1,
           paddingVertical: 0, paddingHorizontal: 0, overflow: 'hidden' },
       ]}
     >
