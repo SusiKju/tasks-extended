@@ -147,7 +147,7 @@ export function TaskListScreen() {
         <View style={styles.groupCard}>
           <View style={styles.groupHeader}>
             <Ionicons name="document-text-outline" size={18} color={colors.text} />
-            <Text style={styles.groupTitle}>Notizblock</Text>
+            <Text style={styles.groupTitle}>Personal Tasks</Text>
             <TouchableOpacity
               onPress={() => scratchAddRef.current?.()}
               style={styles.bigAddBtn}

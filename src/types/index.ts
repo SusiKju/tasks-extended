@@ -123,7 +123,7 @@ export const DASHBOARD_BLOCKS: { key: DashboardBlockKey; label: string; descript
   { key: 'birthdays',     label: 'Geburtstage',         description: 'Heutige Geburtstage ganz oben.' },
   { key: 'weather',       label: 'Wetter',              description: 'Wettervorhersage neben dem Sync-Button.' },
   { key: 'feed',          label: 'Mein Tag',            description: 'Alle anstehenden Dinge als eine Liste, mit dezentem Icon je Kategorie.' },
-  { key: 'scratchpad',    label: 'Notizblock',          description: 'Persönlicher Notizblock.' },
+  { key: 'scratchpad',    label: 'Personal Tasks',      description: 'Persönliche Tasks mit Wichtig-Label und Fälligkeitsdatum.' },
   { key: 'links',         label: 'Links',               description: 'Schnellleiste mit deinen Links.' },
   { key: 'geistesblitze', label: 'Geistesblitze',       description: 'Persönliche Gedanken-Kacheln.' },
   { key: 'countdowns',    label: 'Countdowns',          description: 'Countdowns bis zu Ereignissen.' },

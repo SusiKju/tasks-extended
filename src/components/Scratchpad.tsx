@@ -15,8 +15,29 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { View, Text, TextInput, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ThemeColors } from '../utils/theme';
+import { DatePickerModal } from './DatePickerModal';
+import { formatDate, isOverdue } from '../utils/dateFormat';
+import { useStore } from '../store';
 
-export interface ScratchEntry { id?: string; text: string; color: string; done?: boolean; }
+// TE-141: Personal Tasks – pro Eintrag optional ein Wichtig-Label und ein
+// Fälligkeitsdatum (lokaler Mittag als ISO-String, wie bei den normalen Tasks).
+export interface ScratchEntry {
+  id?: string;
+  text: string;
+  color: string;
+  done?: boolean;
+  important?: boolean;
+  dueDate?: string | null;
+}
+
+// TE-141: Rot des Wichtig-Labels (Toggle + Punkt), identisch zum NotesScreen.
+const IMPORTANT_RED = '#EF4444';
+
+// TE-141: ein Date auf lokalen Mittag normalisieren, damit Zeitzonen das Datum
+// nicht um einen Tag verschieben (gleiche Logik wie utils/dateFormat).
+function localNoonISO(d: Date): string {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0).toISOString();
+}
 
 // TE-112: ein im Verlauf archivierter (gelöschter) Notiz-Eintrag.
 export interface ScratchHistoryEntry { id: string; text: string; color: string; archivedAt: string; }
@@ -119,8 +140,13 @@ export function Scratchpad({
 }) {
   const entries = useMemo(() => parseScratchpad(value), [value]);
   const inputRefs = useRef<(any)[]>([]);
+  const dateFormat = useStore((s) => s.settings.dateFormat);
   // TE-85: welche Notiz hat gerade die Farbauswahl offen (null = keine).
   const [pickerIdx, setPickerIdx] = useState<number | null>(null);
+  // TE-141: welcher Eintrag hat gerade die Fälligkeits-Auswahl offen (null = keiner)
+  // bzw. den vollen Kalender geöffnet.
+  const [dueIdx, setDueIdx] = useState<number | null>(null);
+  const [datePickerIdx, setDatePickerIdx] = useState<number | null>(null);
   // TE-112: ist der Verlaufs-Bereich aufgeklappt?
   const [historyOpen, setHistoryOpen] = useState(false);
 
@@ -140,6 +166,18 @@ export function Scratchpad({
   // TE-109: erledigt-Status einer Notiz umschalten (runde Checkbox, wie bei Tasks).
   const toggleDone = useCallback((idx: number) => {
     const next = entries.map((e, i) => i === idx ? { ...e, done: !e.done } : e);
+    emit(serializeScratchpad(next));
+  }, [entries, emit]);
+
+  // TE-141: Wichtig-Label eines Eintrags umschalten.
+  const toggleImportant = useCallback((idx: number) => {
+    const next = entries.map((e, i) => i === idx ? { ...e, important: !e.important } : e);
+    emit(serializeScratchpad(next));
+  }, [entries, emit]);
+
+  // TE-141: Fälligkeitsdatum eines Eintrags setzen (null = entfernen).
+  const setDue = useCallback((idx: number, dueDate: string | null) => {
+    const next = entries.map((e, i) => i === idx ? { ...e, dueDate } : e);
     emit(serializeScratchpad(next));
   }, [entries, emit]);
 
@@ -231,6 +269,8 @@ export function Scratchpad({
             >
               {entry.text}
             </Text>
+            {/* TE-141: Wichtig-Punkt auch im Dashboard-Lesemodus. */}
+            {entry.important ? <View style={padStyles.importantDotCompact} /> : null}
             <View style={[padStyles.colorDotCompact, { backgroundColor: entry.color }]} />
           </View>
         ))}
@@ -246,7 +286,7 @@ export function Scratchpad({
           key={entry.id ?? idx}
           style={idx < entries.length - 1 ? { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border } : undefined}
         >
-          {/* Zeile im Task-Stil: runde Checkbox + Text + Farbpunkt + Trash (TE-109) */}
+          {/* Zeile im Task-Stil: runde Checkbox + Text + Wichtig/Datum/Farbe/Trash. */}
           <View style={padStyles.row}>
             <Pressable onPress={() => toggleDone(idx)} hitSlop={8}>
               <Ionicons
@@ -261,11 +301,38 @@ export function Scratchpad({
               value={entry.text}
               onChangeText={(t) => updateEntry(idx, t)}
               onKeyPress={(e) => handleKeyPress(idx, e)}
-              placeholder={idx === 0 && entries.length === 1 ? 'Notiz…' : ''}
+              placeholder={idx === 0 && entries.length === 1 ? 'Personal Task…' : ''}
               placeholderTextColor={colors.placeholder}
               returnKeyType="done"
               blurOnSubmit
             />
+            {/* TE-141: gesetztes Fälligkeitsdatum inline, rot wenn überfällig. */}
+            {entry.dueDate ? (
+              <Pressable onPress={() => setDueIdx((cur) => (cur === idx ? null : idx))} hitSlop={6}>
+                <Text
+                  style={[padStyles.dueText, { color: isOverdue(entry.dueDate) ? IMPORTANT_RED : colors.textMuted }]}
+                  numberOfLines={1}
+                >
+                  {formatDate(entry.dueDate, dateFormat)}
+                </Text>
+              </Pressable>
+            ) : null}
+            {/* TE-141: Wichtig-Label umschalten. */}
+            <Pressable onPress={() => toggleImportant(idx)} hitSlop={8} style={padStyles.iconBtn}>
+              <Ionicons
+                name={entry.important ? 'flag' : 'flag-outline'}
+                size={18}
+                color={entry.important ? IMPORTANT_RED : colors.textMuted}
+              />
+            </Pressable>
+            {/* TE-141: Fälligkeits-Auswahl auf-/zuklappen. */}
+            <Pressable onPress={() => setDueIdx((cur) => (cur === idx ? null : idx))} hitSlop={8} style={padStyles.iconBtn}>
+              <Ionicons
+                name="calendar-outline"
+                size={18}
+                color={entry.dueDate ? colors.text : colors.textMuted}
+              />
+            </Pressable>
             {/* Farbpunkt = Farb-Picker-Auslöser (TE-85/TE-109). */}
             <Pressable onPress={() => setPickerIdx((cur) => (cur === idx ? null : idx))} hitSlop={8}>
               <View style={[padStyles.colorDot, { backgroundColor: entry.color, borderColor: colors.border }]} />
@@ -274,6 +341,46 @@ export function Scratchpad({
               <Ionicons name="trash-outline" size={18} color={colors.textMuted} />
             </Pressable>
           </View>
+
+          {/* TE-141: Fälligkeits-Auswahl – Quick-Buttons wie bei den normalen Tasks. */}
+          {dueIdx === idx && (
+            <View style={[padStyles.duePickerRow, { backgroundColor: colors.surfaceHigh, borderColor: colors.border }]}>
+              {[
+                { label: 'Heute', days: 0 },
+                { label: 'Morgen', days: 1 },
+                { label: 'Übermorgen', days: 2 },
+              ].map((q) => (
+                <Pressable
+                  key={q.label}
+                  onPress={() => {
+                    const d = new Date();
+                    d.setDate(d.getDate() + q.days);
+                    setDue(idx, localNoonISO(d));
+                    setDueIdx(null);
+                  }}
+                  style={[padStyles.quickBtn, { borderColor: colors.border, backgroundColor: colors.surface }]}
+                >
+                  <Text style={[padStyles.quickBtnText, { color: colors.text }]}>{q.label}</Text>
+                </Pressable>
+              ))}
+              <Pressable
+                onPress={() => setDatePickerIdx(idx)}
+                style={[padStyles.quickBtn, { borderColor: colors.border, backgroundColor: colors.surface }]}
+              >
+                <Ionicons name="calendar-outline" size={14} color={colors.text} />
+                <Text style={[padStyles.quickBtnText, { color: colors.text }]}>Datum…</Text>
+              </Pressable>
+              {entry.dueDate ? (
+                <Pressable
+                  onPress={() => { setDue(idx, null); setDueIdx(null); }}
+                  style={[padStyles.quickBtn, { borderColor: colors.border, backgroundColor: colors.surface }]}
+                >
+                  <Ionicons name="close-circle" size={14} color={colors.textMuted} />
+                  <Text style={[padStyles.quickBtnText, { color: colors.textMuted }]}>Entfernen</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          )}
 
           {/* Farbauswahl: fünf feste Optionen, unterhalb der Zeile. */}
           {pickerIdx === idx && (
@@ -354,6 +461,23 @@ export function Scratchpad({
           )}
         </View>
       )}
+
+      {/* TE-141: voller Kalender für einen Eintrag (über „Datum…"). */}
+      <DatePickerModal
+        visible={datePickerIdx !== null}
+        value={
+          datePickerIdx !== null && entries[datePickerIdx]?.dueDate
+            ? new Date(entries[datePickerIdx].dueDate as string)
+            : null
+        }
+        onConfirm={(d) => {
+          if (datePickerIdx !== null) setDue(datePickerIdx, localNoonISO(d));
+          setDatePickerIdx(null);
+          setDueIdx(null);
+        }}
+        onCancel={() => setDatePickerIdx(null)}
+        colors={colors}
+      />
     </View>
   );
 }
@@ -400,6 +524,51 @@ const padStyles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
     flexShrink: 0,
+  },
+  // TE-141: roter Wichtig-Punkt im kompakten Lesemodus (Dashboard).
+  importantDotCompact: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: IMPORTANT_RED,
+    flexShrink: 0,
+  },
+  // TE-141: Icon-Button (Wichtig/Datum) im bearbeitbaren Block.
+  iconBtn: {
+    padding: 2,
+    flexShrink: 0,
+  },
+  // TE-141: inline angezeigtes Fälligkeitsdatum in der Zeile.
+  dueText: {
+    fontSize: 11,
+    fontWeight: '600',
+    flexShrink: 0,
+    maxWidth: 84,
+  },
+  // TE-141: aufklappbare Fälligkeits-Auswahl unter der Zeile.
+  duePickerRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginHorizontal: 10,
+    marginBottom: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  quickBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  quickBtnText: {
+    fontSize: 12,
+    fontWeight: '500',
   },
   colorDot: {
     width: 12,
