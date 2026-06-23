@@ -18,7 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useStore } from '../store';
 import { useTheme, ThemeColors, readableTextOn, neonGlow } from '../utils/theme';
 import { useScratchpad } from '../hooks/useScratchpad';
-import { parseScratchpad, ScratchEntry } from '../components/Scratchpad';
+import { parseScratchpad, sortScratch, ScratchEntry } from '../components/Scratchpad';
 import { useFirebaseAuth } from '../hooks/useFirebaseAuth';
 import { useGoogleTasksSync } from '../hooks/useGoogleTasksSync';
 import { useGoogleContactsBirthdaysSync } from '../hooks/useGoogleContactsBirthdaysSync';
@@ -880,7 +880,10 @@ export function DashboardScreen() {
             bearbeitet wird ausschließlich im Tasks-Tab (Klick auf eine Pille
             bzw. „Alle →" führt dorthin). */}
         {showBlock('scratchpad') && (() => {
-          const notes = parseScratchpad(scratchpad).filter((e) => e.text.trim() !== '');
+          // TE-144: intelligente Sortierung (wichtig/Fälligkeit); erledigte raus.
+          const notes = sortScratch(
+            parseScratchpad(scratchpad).filter((e) => e.text.trim() !== '' && !e.done)
+          );
           return (
             <View style={styles.scratchCol}>
               {false && (

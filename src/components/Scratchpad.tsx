@@ -16,7 +16,7 @@ import { View, Text, TextInput, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ThemeColors } from '../utils/theme';
 import { DatePickerModal } from './DatePickerModal';
-import { formatDate, isOverdue } from '../utils/dateFormat';
+import { formatDate, isOverdue, isDueToday } from '../utils/dateFormat';
 import { useStore } from '../store';
 
 // TE-141: Personal Tasks – pro Eintrag optional ein Wichtig-Label und ein
@@ -39,8 +39,53 @@ function localNoonISO(d: Date): string {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0).toISOString();
 }
 
-// TE-112: ein im Verlauf archivierter (gelöschter) Notiz-Eintrag.
-export interface ScratchHistoryEntry { id: string; text: string; color: string; archivedAt: string; }
+// TE-144: Fälligkeits-Gruppe für die Sortierung – überfällig (0) → heute (1) →
+// später/mit Datum (2) → ohne Datum (3).
+function dueRank(entry: ScratchEntry): number {
+  if (!entry.dueDate) return 3;
+  if (isOverdue(entry.dueDate)) return 0;
+  if (isDueToday(entry.dueDate)) return 1;
+  return 2;
+}
+
+// TE-144: intelligente Sortierung – wichtig zuerst, dann nach Fälligkeits-Gruppe,
+// innerhalb einer Gruppe früheres Datum zuerst. Stabil (gleichwertige behalten
+// ihre Reihenfolge). Erledigte Einträge existieren in der Liste nicht mehr
+// (Häkchen archiviert sie in die History).
+export function sortScratch(entries: ScratchEntry[]): ScratchEntry[] {
+  return [...entries].sort((a, b) => {
+    if (!!a.important !== !!b.important) return a.important ? -1 : 1;
+    const ra = dueRank(a), rb = dueRank(b);
+    if (ra !== rb) return ra - rb;
+    if (a.dueDate && b.dueDate) {
+      const da = new Date(a.dueDate).getTime();
+      const db = new Date(b.dueDate).getTime();
+      if (da !== db) return da - db;
+    }
+    return 0;
+  });
+}
+
+// Zwei Eintragslisten haben dieselbe Reihenfolge? (Vergleich per id, fällt auf
+// Text zurück.) Verhindert überflüssige Speicher-Schreibvorgänge beim Sortieren.
+function sameOrder(a: ScratchEntry[], b: ScratchEntry[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if ((a[i].id ?? a[i].text) !== (b[i].id ?? b[i].text)) return false;
+  }
+  return true;
+}
+
+// TE-112/TE-144: ein im Verlauf archivierter Eintrag (gelöscht ODER erledigt).
+// important/dueDate werden mitgeführt, damit „wieder aktivieren" alles zurückholt.
+export interface ScratchHistoryEntry {
+  id: string;
+  text: string;
+  color: string;
+  archivedAt: string;
+  important?: boolean;
+  dueDate?: string | null;
+}
 
 /** Maximale Anzahl Verlaufseinträge – ältere fallen hinten raus. */
 export const SCRATCH_HISTORY_MAX = 50;
@@ -137,23 +182,38 @@ export function Scratchpad({
     emit(serializeScratchpad(next));
   }, [entries, emit]);
 
-  // TE-109: erledigt-Status einer Notiz umschalten (runde Checkbox, wie bei Tasks).
-  const toggleDone = useCallback((idx: number) => {
-    const next = entries.map((e, i) => i === idx ? { ...e, done: !e.done } : e);
-    emit(serializeScratchpad(next));
-  }, [entries, emit]);
+  // TE-144: Häkchen = erledigt → Eintrag wandert in die History (dort
+  // reaktivierbar) und verschwindet aus der Liste. Ersetzt das frühere
+  // „durchgestrichen anzeigen".
+  const completeEntry = useCallback((idx: number) => {
+    const entry = entries[idx];
+    if (entry && entry.text.trim() !== '') onArchive?.(entry);
+    if (entries.length <= 1) {
+      emit(serializeScratchpad([{ id: makeNoteId(), text: '', color: NOTE_DEFAULT_COLOR }]));
+      return;
+    }
+    emit(serializeScratchpad(entries.filter((_, i) => i !== idx)));
+  }, [entries, emit, onArchive]);
 
-  // TE-141: Wichtig-Label eines Eintrags umschalten.
+  // TE-141/TE-144: Wichtig-Label umschalten – danach neu sortieren (diskrete Aktion).
   const toggleImportant = useCallback((idx: number) => {
     const next = entries.map((e, i) => i === idx ? { ...e, important: !e.important } : e);
-    emit(serializeScratchpad(next));
+    emit(serializeScratchpad(sortScratch(next)));
   }, [entries, emit]);
 
-  // TE-141: Fälligkeitsdatum eines Eintrags setzen (null = entfernen).
+  // TE-141/TE-144: Fälligkeitsdatum setzen (null = entfernen) – danach neu sortieren.
   const setDue = useCallback((idx: number, dueDate: string | null) => {
     const next = entries.map((e, i) => i === idx ? { ...e, dueDate } : e);
-    emit(serializeScratchpad(next));
+    emit(serializeScratchpad(sortScratch(next)));
   }, [entries, emit]);
+
+  // TE-144: Liste neu sortieren, ohne beim Tippen zu springen – wird beim
+  // Verlassen eines Textfelds (onBlur) aufgerufen, nicht bei jeder Eingabe.
+  const sortNow = useCallback(() => {
+    if (readOnly) return;
+    const sorted = sortScratch(entries);
+    if (!sameOrder(sorted, entries)) emit(serializeScratchpad(sorted));
+  }, [readOnly, entries, emit]);
 
   // TE-85: neue Notiz mit höchster Priorität (Position 0) + Default-Pink.
   // Ist die einzige vorhandene Notiz noch leer, wird sie wiederverwendet statt
@@ -183,6 +243,24 @@ export function Scratchpad({
     }
   }, [entries, emit, readOnly]);
 
+  // TE-144: einmalige Sortierung, sobald echte Daten geladen sind ("beim Öffnen"),
+  // inklusive Migration alter erledigter Einträge in die History. Danach halten
+  // die diskreten Sortierungen (Toggle/Datum/Blur) die Reihenfolge aktuell –
+  // ohne beim Tippen zu springen.
+  const didInitialSort = useRef(false);
+  useEffect(() => {
+    if (readOnly || didInitialSort.current) return;
+    if (!entries.some((e) => e.text.trim() !== '')) return; // auf Daten warten
+    didInitialSort.current = true;
+    const doneEntries = entries.filter((e) => e.done && e.text.trim() !== '');
+    doneEntries.forEach((e) => onArchive?.(e));
+    const remaining = entries.filter((e) => !e.done);
+    const sorted = sortScratch(remaining.length > 0 ? remaining : entries);
+    if (doneEntries.length > 0 || !sameOrder(sorted, entries)) {
+      emit(serializeScratchpad(sorted));
+    }
+  }, [readOnly, entries, emit, onArchive]);
+
   const removeEntry = useCallback((idx: number) => {
     // TE-112: Notiz mit Inhalt vor dem Entfernen in den Verlauf legen.
     const removed = entries[idx];
@@ -193,12 +271,17 @@ export function Scratchpad({
     setTimeout(() => inputRefs.current[Math.max(0, idx - 1)]?.focus(), 40);
   }, [entries, emit, updateEntry, onArchive]);
 
-  // TE-112: archivierte Notiz wieder oben in die Liste holen.
+  // TE-112/TE-144: archivierten Eintrag wieder aktivieren – inkl. Wichtig-Label
+  // und Fälligkeitsdatum. Danach neu sortieren, damit er an die richtige Stelle
+  // rutscht (nicht stur oben).
   const restoreFromHistory = useCallback((h: ScratchHistoryEntry) => {
-    const note: ScratchEntry = { id: makeNoteId(), text: h.text, color: h.color };
+    const note: ScratchEntry = {
+      id: makeNoteId(), text: h.text, color: h.color,
+      important: h.important, dueDate: h.dueDate ?? null,
+    };
     // Eine einzelne leere Platzhalter-Notiz dabei ersetzen statt davor stapeln.
     const base = entries.length === 1 && entries[0].text === '' ? [] : entries;
-    emit(serializeScratchpad([note, ...base]));
+    emit(serializeScratchpad(sortScratch([note, ...base])));
     onRemoveHistory?.(h.id);
   }, [entries, emit, onRemoveHistory]);
 
@@ -262,19 +345,21 @@ export function Scratchpad({
         >
           {/* Zeile im Task-Stil: runde Checkbox + Text + Wichtig/Datum/Farbe/Trash. */}
           <View style={padStyles.row}>
-            <Pressable onPress={() => toggleDone(idx)} hitSlop={8}>
+            {/* TE-144: Häkchen erledigt den Eintrag → ab in die History. */}
+            <Pressable onPress={() => completeEntry(idx)} hitSlop={8}>
               <Ionicons
-                name={entry.done ? 'checkmark-circle' : 'ellipse-outline'}
+                name="ellipse-outline"
                 size={22}
-                color={entry.done ? colors.success : colors.textMuted}
+                color={colors.textMuted}
               />
             </Pressable>
             <TextInput
               ref={(r) => { inputRefs.current[idx] = r; }}
-              style={[padStyles.rowText, { color: colors.text }, entry.done && { textDecorationLine: 'line-through', color: colors.textMuted }]}
+              style={[padStyles.rowText, { color: colors.text }]}
               value={entry.text}
               onChangeText={(t) => updateEntry(idx, t)}
               onKeyPress={(e) => handleKeyPress(idx, e)}
+              onBlur={sortNow}
               placeholder={idx === 0 && entries.length === 1 ? 'Personal Task…' : ''}
               placeholderTextColor={colors.placeholder}
               returnKeyType="done"
