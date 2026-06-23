@@ -204,14 +204,15 @@ const chipStyles = StyleSheet.create({
 // markiert, bekommt die Pille einen roten Rand; der Rand blinkt, wenn das
 // Fälligkeitsdatum heute oder schon überfällig ist.
 function NoteChip({ entry, onPress }: { entry: ScratchEntry; onPress: () => void }) {
-  const { isDark, colors, reduceMotion } = useTheme();
+  const { isDark, colors } = useTheme();
   const important = !!entry.important;
   const due = entry.dueDate ?? null;
   // TE-142/TE-143: Wichtige Einträge haben immer einen roten Rand. Heute fällige
   // oder überfällige Einträge blinken – rot, wenn zusätzlich wichtig, sonst im
-  // Default-Rahmen.
+  // Default-Rahmen. TE-145: Blinken in BEIDEN Themes (kein reduceMotion-Gate) –
+  // der Fälligkeits-Hinweis ist bewusst auch im Calm-Theme aktiv.
   const dueUrgent = !!due && (isOverdue(due) || isDueToday(due));
-  const blink = dueUrgent && !reduceMotion;
+  const blink = dueUrgent;
   const blinkColor = important ? C.important : colors.border;
 
   // Rahmen-Blinken über interpolierte Farbe (Vollton ↔ transparent). Color-Props

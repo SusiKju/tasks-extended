@@ -48,32 +48,26 @@ function dueRank(entry: ScratchEntry): number {
   return 2;
 }
 
-// TE-144: intelligente Sortierung – wichtig zuerst, dann nach Fälligkeits-Gruppe,
-// innerhalb einer Gruppe früheres Datum zuerst. Stabil (gleichwertige behalten
-// ihre Reihenfolge). Erledigte Einträge existieren in der Liste nicht mehr
-// (Häkchen archiviert sie in die History).
-export function sortScratch(entries: ScratchEntry[]): ScratchEntry[] {
-  return [...entries].sort((a, b) => {
-    if (!!a.important !== !!b.important) return a.important ? -1 : 1;
-    const ra = dueRank(a), rb = dueRank(b);
-    if (ra !== rb) return ra - rb;
-    if (a.dueDate && b.dueDate) {
-      const da = new Date(a.dueDate).getTime();
-      const db = new Date(b.dueDate).getTime();
-      if (da !== db) return da - db;
-    }
-    return 0;
-  });
+// TE-144: Vergleichsfunktion – wichtig zuerst, dann nach Fälligkeits-Gruppe,
+// innerhalb einer Gruppe früheres Datum zuerst. Bewusst NICHT nach Text – Tippen
+// ändert die Sortierposition damit nie.
+export function scratchCompare(a: ScratchEntry, b: ScratchEntry): number {
+  if (!!a.important !== !!b.important) return a.important ? -1 : 1;
+  const ra = dueRank(a), rb = dueRank(b);
+  if (ra !== rb) return ra - rb;
+  if (a.dueDate && b.dueDate) {
+    const da = new Date(a.dueDate).getTime();
+    const db = new Date(b.dueDate).getTime();
+    if (da !== db) return da - db;
+  }
+  return 0;
 }
 
-// Zwei Eintragslisten haben dieselbe Reihenfolge? (Vergleich per id, fällt auf
-// Text zurück.) Verhindert überflüssige Speicher-Schreibvorgänge beim Sortieren.
-function sameOrder(a: ScratchEntry[], b: ScratchEntry[]): boolean {
-  if (a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i++) {
-    if ((a[i].id ?? a[i].text) !== (b[i].id ?? b[i].text)) return false;
-  }
-  return true;
+// TE-144: intelligente Sortierung (stabil – gleichwertige behalten ihre
+// Reihenfolge). Erledigte Einträge tauchen hier nicht mehr auf (Häkchen
+// archiviert sie in die History).
+export function sortScratch(entries: ScratchEntry[]): ScratchEntry[] {
+  return [...entries].sort(scratchCompare);
 }
 
 // TE-112/TE-144: ein im Verlauf archivierter Eintrag (gelöscht ODER erledigt).
@@ -172,6 +166,9 @@ export function Scratchpad({
   // bzw. den vollen Kalender geöffnet.
   const [dueIdx, setDueIdx] = useState<number | null>(null);
   const [datePickerIdx, setDatePickerIdx] = useState<number | null>(null);
+  // TE-144: id des gerade neu angelegten Eintrags – wird in der sortierten
+  // Anzeige oben festgehalten, damit er beim Tippen nicht wegspringt.
+  const [draftId, setDraftId] = useState<string | null>(null);
   // TE-112: ist der Verlaufs-Bereich aufgeklappt?
   const [historyOpen, setHistoryOpen] = useState(false);
 
@@ -195,34 +192,31 @@ export function Scratchpad({
     emit(serializeScratchpad(entries.filter((_, i) => i !== idx)));
   }, [entries, emit, onArchive]);
 
-  // TE-141/TE-144: Wichtig-Label umschalten – danach neu sortieren (diskrete Aktion).
+  // TE-141: Wichtig-Label umschalten. Die Anzeige sortiert sich selbst (siehe
+  // displayRows), daher hier nur das Feld setzen.
   const toggleImportant = useCallback((idx: number) => {
     const next = entries.map((e, i) => i === idx ? { ...e, important: !e.important } : e);
-    emit(serializeScratchpad(sortScratch(next)));
+    emit(serializeScratchpad(next));
   }, [entries, emit]);
 
-  // TE-141/TE-144: Fälligkeitsdatum setzen (null = entfernen) – danach neu sortieren.
+  // TE-141: Fälligkeitsdatum setzen (null = entfernen).
   const setDue = useCallback((idx: number, dueDate: string | null) => {
     const next = entries.map((e, i) => i === idx ? { ...e, dueDate } : e);
-    emit(serializeScratchpad(sortScratch(next)));
+    emit(serializeScratchpad(next));
   }, [entries, emit]);
-
-  // TE-144: Liste neu sortieren, ohne beim Tippen zu springen – wird beim
-  // Verlassen eines Textfelds (onBlur) aufgerufen, nicht bei jeder Eingabe.
-  const sortNow = useCallback(() => {
-    if (readOnly) return;
-    const sorted = sortScratch(entries);
-    if (!sameOrder(sorted, entries)) emit(serializeScratchpad(sorted));
-  }, [readOnly, entries, emit]);
 
   // TE-85: neue Notiz mit höchster Priorität (Position 0) + Default-Pink.
   // Ist die einzige vorhandene Notiz noch leer, wird sie wiederverwendet statt
   // eine zweite leere Bubble zu erzeugen.
   const addEntryAtTop = useCallback(() => {
+    const newId = makeNoteId();
     if (entries.length === 1 && entries[0].text === '') {
-      emit(serializeScratchpad([{ id: entries[0].id ?? makeNoteId(), text: '', color: NOTE_DEFAULT_COLOR }]));
+      const id = entries[0].id ?? newId;
+      emit(serializeScratchpad([{ id, text: '', color: NOTE_DEFAULT_COLOR }]));
+      setDraftId(id);
     } else {
-      emit(serializeScratchpad([{ id: makeNoteId(), text: '', color: NOTE_DEFAULT_COLOR }, ...entries]));
+      emit(serializeScratchpad([{ id: newId, text: '', color: NOTE_DEFAULT_COLOR }, ...entries]));
+      setDraftId(newId);
     }
     setTimeout(() => inputRefs.current[0]?.focus(), 40);
   }, [entries, emit]);
@@ -243,23 +237,39 @@ export function Scratchpad({
     }
   }, [entries, emit, readOnly]);
 
-  // TE-144: einmalige Sortierung, sobald echte Daten geladen sind ("beim Öffnen"),
-  // inklusive Migration alter erledigter Einträge in die History. Danach halten
-  // die diskreten Sortierungen (Toggle/Datum/Blur) die Reihenfolge aktuell –
-  // ohne beim Tippen zu springen.
-  const didInitialSort = useRef(false);
+  // TE-144: Einmalige Migration alter erledigter Einträge in die History (Daten
+  // aus der Zeit vor TE-144, als „done" nur durchgestrichen angezeigt wurde).
+  // Die Sortierung selbst passiert rein in der Anzeige (displayRows) – sie wird
+  // nicht in den Store geschrieben, damit beim Tippen nichts springt.
+  const didMigrateDone = useRef(false);
   useEffect(() => {
-    if (readOnly || didInitialSort.current) return;
+    if (readOnly || didMigrateDone.current) return;
     if (!entries.some((e) => e.text.trim() !== '')) return; // auf Daten warten
-    didInitialSort.current = true;
+    didMigrateDone.current = true;
     const doneEntries = entries.filter((e) => e.done && e.text.trim() !== '');
+    if (doneEntries.length === 0) return;
     doneEntries.forEach((e) => onArchive?.(e));
     const remaining = entries.filter((e) => !e.done);
-    const sorted = sortScratch(remaining.length > 0 ? remaining : entries);
-    if (doneEntries.length > 0 || !sameOrder(sorted, entries)) {
-      emit(serializeScratchpad(sorted));
-    }
+    emit(serializeScratchpad(
+      remaining.length > 0 ? remaining : [{ id: makeNoteId(), text: '', color: NOTE_DEFAULT_COLOR }]
+    ));
   }, [readOnly, entries, emit, onArchive]);
+
+  // TE-144: sortierte Anzeige (wie auf dem Dashboard). Erledigte raus. Der gerade
+  // neu angelegte Eintrag (draftId) sowie leere Einträge bleiben oben, damit der
+  // Fokus beim Anlegen/Tippen nicht wegspringt; alles andere ist sortiert.
+  const displayRows = useMemo(() => {
+    const rows = entries
+      .map((entry, storedIdx) => ({ entry, storedIdx }))
+      .filter((r) => !r.entry.done);
+    const pinned = (e: ScratchEntry) => e.text.trim() === '' || e.id === draftId;
+    return rows.sort((x, y) => {
+      const px = pinned(x.entry), py = pinned(y.entry);
+      if (px !== py) return px ? -1 : 1;
+      if (px && py) return 0;
+      return scratchCompare(x.entry, y.entry);
+    });
+  }, [entries, draftId]);
 
   const removeEntry = useCallback((idx: number) => {
     // TE-112: Notiz mit Inhalt vor dem Entfernen in den Verlauf legen.
@@ -338,15 +348,15 @@ export function Scratchpad({
   return (
     <View>
       <View style={[padStyles.mergedList, { borderColor: colors.border, backgroundColor: colors.surface }]}>
-      {entries.map((entry, idx) => (
+      {displayRows.map(({ entry, storedIdx }, pos) => (
         <View
-          key={entry.id ?? idx}
-          style={idx < entries.length - 1 ? { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border } : undefined}
+          key={entry.id ?? storedIdx}
+          style={pos < displayRows.length - 1 ? { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border } : undefined}
         >
           {/* Zeile im Task-Stil: runde Checkbox + Text + Wichtig/Datum/Farbe/Trash. */}
           <View style={padStyles.row}>
             {/* TE-144: Häkchen erledigt den Eintrag → ab in die History. */}
-            <Pressable onPress={() => completeEntry(idx)} hitSlop={8}>
+            <Pressable onPress={() => completeEntry(storedIdx)} hitSlop={8}>
               <Ionicons
                 name="ellipse-outline"
                 size={22}
@@ -354,20 +364,20 @@ export function Scratchpad({
               />
             </Pressable>
             <TextInput
-              ref={(r) => { inputRefs.current[idx] = r; }}
+              ref={(r) => { inputRefs.current[storedIdx] = r; }}
               style={[padStyles.rowText, { color: colors.text }]}
               value={entry.text}
-              onChangeText={(t) => updateEntry(idx, t)}
-              onKeyPress={(e) => handleKeyPress(idx, e)}
-              onBlur={sortNow}
-              placeholder={idx === 0 && entries.length === 1 ? 'Personal Task…' : ''}
+              onChangeText={(t) => updateEntry(storedIdx, t)}
+              onKeyPress={(e) => handleKeyPress(storedIdx, e)}
+              onBlur={() => setDraftId((cur) => (cur === entry.id ? null : cur))}
+              placeholder={displayRows.length === 1 ? 'Personal Task…' : ''}
               placeholderTextColor={colors.placeholder}
               returnKeyType="done"
               blurOnSubmit
             />
             {/* TE-141: gesetztes Fälligkeitsdatum inline, rot wenn überfällig. */}
             {entry.dueDate ? (
-              <Pressable onPress={() => setDueIdx((cur) => (cur === idx ? null : idx))} hitSlop={6}>
+              <Pressable onPress={() => setDueIdx((cur) => (cur === storedIdx ? null : storedIdx))} hitSlop={6}>
                 <Text
                   style={[padStyles.dueText, { color: isOverdue(entry.dueDate) ? IMPORTANT_RED : colors.textMuted }]}
                   numberOfLines={1}
@@ -377,7 +387,7 @@ export function Scratchpad({
               </Pressable>
             ) : null}
             {/* TE-141: Wichtig-Label umschalten. */}
-            <Pressable onPress={() => toggleImportant(idx)} hitSlop={8} style={padStyles.iconBtn}>
+            <Pressable onPress={() => toggleImportant(storedIdx)} hitSlop={8} style={padStyles.iconBtn}>
               <Ionicons
                 name={entry.important ? 'flag' : 'flag-outline'}
                 size={18}
@@ -385,20 +395,20 @@ export function Scratchpad({
               />
             </Pressable>
             {/* TE-141: Fälligkeits-Auswahl auf-/zuklappen. */}
-            <Pressable onPress={() => setDueIdx((cur) => (cur === idx ? null : idx))} hitSlop={8} style={padStyles.iconBtn}>
+            <Pressable onPress={() => setDueIdx((cur) => (cur === storedIdx ? null : storedIdx))} hitSlop={8} style={padStyles.iconBtn}>
               <Ionicons
                 name="calendar-outline"
                 size={18}
                 color={entry.dueDate ? colors.text : colors.textMuted}
               />
             </Pressable>
-            <Pressable onPress={() => removeEntry(idx)} hitSlop={8} style={padStyles.trashBtn}>
+            <Pressable onPress={() => removeEntry(storedIdx)} hitSlop={8} style={padStyles.trashBtn}>
               <Ionicons name="trash-outline" size={18} color={colors.textMuted} />
             </Pressable>
           </View>
 
           {/* TE-141: Fälligkeits-Auswahl – Quick-Buttons wie bei den normalen Tasks. */}
-          {dueIdx === idx && (
+          {dueIdx === storedIdx && (
             <View style={[padStyles.duePickerRow, { backgroundColor: colors.surfaceHigh, borderColor: colors.border }]}>
               {[
                 { label: 'Heute', days: 0 },
@@ -410,7 +420,7 @@ export function Scratchpad({
                   onPress={() => {
                     const d = new Date();
                     d.setDate(d.getDate() + q.days);
-                    setDue(idx, localNoonISO(d));
+                    setDue(storedIdx, localNoonISO(d));
                     setDueIdx(null);
                   }}
                   style={[padStyles.quickBtn, { borderColor: colors.border, backgroundColor: colors.surface }]}
@@ -419,7 +429,7 @@ export function Scratchpad({
                 </Pressable>
               ))}
               <Pressable
-                onPress={() => setDatePickerIdx(idx)}
+                onPress={() => setDatePickerIdx(storedIdx)}
                 style={[padStyles.quickBtn, { borderColor: colors.border, backgroundColor: colors.surface }]}
               >
                 <Ionicons name="calendar-outline" size={14} color={colors.text} />
@@ -427,7 +437,7 @@ export function Scratchpad({
               </Pressable>
               {entry.dueDate ? (
                 <Pressable
-                  onPress={() => { setDue(idx, null); setDueIdx(null); }}
+                  onPress={() => { setDue(storedIdx, null); setDueIdx(null); }}
                   style={[padStyles.quickBtn, { borderColor: colors.border, backgroundColor: colors.surface }]}
                 >
                   <Ionicons name="close-circle" size={14} color={colors.textMuted} />
