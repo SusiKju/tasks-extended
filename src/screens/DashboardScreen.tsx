@@ -207,10 +207,14 @@ function NoteChip({ entry, onPress }: { entry: ScratchEntry; onPress: () => void
   const { isDark, colors, reduceMotion } = useTheme();
   const important = !!entry.important;
   const due = entry.dueDate ?? null;
-  const blink = important && !!due && (isOverdue(due) || isDueToday(due)) && !reduceMotion;
+  // TE-142: Heute fällige oder überfällige Einträge blinken. Die Blink-Farbe ist
+  // der Default-Rahmen – rot nur, wenn der Eintrag zusätzlich „wichtig" ist.
+  const dueUrgent = !!due && (isOverdue(due) || isDueToday(due));
+  const blink = dueUrgent && !reduceMotion;
+  const blinkColor = important && dueUrgent ? C.important : colors.border;
 
-  // Rahmen-Blinken über interpolierte Farbe (rot ↔ blass-rot). Color-Props sind
-  // nicht native-driver-fähig → useNativeDriver:false.
+  // Rahmen-Blinken über interpolierte Farbe (Vollton ↔ transparent). Color-Props
+  // sind nicht native-driver-fähig → useNativeDriver:false.
   const blinkAnim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     if (!blink) { blinkAnim.setValue(0); return; }
@@ -225,15 +229,15 @@ function NoteChip({ entry, onPress }: { entry: ScratchEntry; onPress: () => void
   }, [blink, blinkAnim]);
 
   const borderColor = blink
-    ? blinkAnim.interpolate({ inputRange: [0, 1], outputRange: [C.important, 'rgba(255,59,48,0.15)'] })
-    : (important ? C.important : colors.border);
-  const bgColor   = important && !isDark ? '#FFECEC' : (isDark ? 'transparent' : colors.surface);
+    ? blinkAnim.interpolate({ inputRange: [0, 1], outputRange: [blinkColor, 'transparent'] })
+    : colors.border;
+  const bgColor   = isDark ? 'transparent' : colors.surface;
 
   return (
     <Animated.View
       style={[
         chipStyles.chip,
-        { backgroundColor: bgColor, borderColor, borderWidth: important ? 1.5 : 1,
+        { backgroundColor: bgColor, borderColor, borderWidth: blink ? 1.5 : 1,
           paddingVertical: 0, paddingHorizontal: 0, overflow: 'hidden' },
       ]}
     >
