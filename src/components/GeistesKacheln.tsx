@@ -253,7 +253,7 @@ function KachelCard({ kachel, onPress, size }: {
 
 // ─── Hauptkomponente ──────────────────────────────────────────────────────────
 
-export function GeistesKacheln({ colors, isDark, areaWidth, columns }: { colors: ThemeColors; isDark: boolean; areaWidth?: number; columns?: number }) {
+export function GeistesKacheln({ colors, isDark, areaWidth, columns, compact = false }: { colors: ThemeColors; isDark: boolean; areaWidth?: number; columns?: number; compact?: boolean }) {
   const { user } = useFirebaseAuth();
   const { familyId } = useFamily();
   const [tiles, setTiles] = useState<GeistesKachel[]>([]);
@@ -293,17 +293,19 @@ export function GeistesKacheln({ colors, isDark, areaWidth, columns }: { colors:
     <View style={s.section}>
       <View style={s.header}>
         <Text style={[s.headerTitle, { color: colors.textSecondary }]}>GEISTESBLITZE</Text>
-        {/* TE-14: Fokus-Kachel-Icons rechtsbündig in derselben Zeile (nicht sticky) */}
-        <FussballKachel />
+        {/* TE-14: Fokus-Kachel-Icons rechtsbündig in derselben Zeile (nicht sticky).
+            TE-153: in der schmalen Dashboard-Spalte deutlich kleiner, damit sie
+            nicht mit der Überschrift kollidiert. */}
+        <FussballKachel iconSize={compact ? 13 : 18} iconStyle={compact ? s.funTileCompact : undefined} />
       </View>
 
       {tiles.length === 0 ? (
         <Pressable
-          style={({ pressed }) => [s.empty, { borderColor: colors.accentNeon + '20', opacity: pressed ? 0.7 : 1 }]}
+          style={({ pressed }) => [s.empty, compact && s.emptyCompact, { borderColor: colors.accentNeon + '20', opacity: pressed ? 0.7 : 1 }]}
           onPress={openNew}
         >
-          <Ionicons name="bulb-outline" size={20} color={colors.textMuted} />
-          <Text style={[s.emptyText, { color: colors.textMuted }]}>Ersten Geistesblitz festhalten</Text>
+          <Ionicons name="bulb-outline" size={compact ? 16 : 20} color={colors.textMuted} />
+          <Text style={[s.emptyText, compact && s.emptyTextCompact, { color: colors.textMuted }]}>Ersten Geistesblitz festhalten</Text>
         </Pressable>
       ) : (
         <View style={s.grid}>
@@ -350,6 +352,10 @@ const s = StyleSheet.create({
 
   empty: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1.5, borderStyle: 'dashed', borderRadius: 12, padding: 16 },
   emptyText: { fontSize: 13 },
+  // TE-153: kompakte Varianten für die schmale Dashboard-Spalte.
+  funTileCompact: { width: 22, height: 22, borderRadius: 6 },
+  emptyCompact: { padding: 10, gap: 8 },
+  emptyTextCompact: { fontSize: 11, flex: 1 },
 
   // Modal
   overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: '#00000099' },

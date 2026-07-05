@@ -1066,10 +1066,10 @@ export function DashboardScreen() {
       <View style={[styles.dashColRight, { width: rightColW }]}>
 
       {/* ── Links-Schnellleiste (TE-32): nur aktive Links, oberhalb der Geistesblitze ── */}
-      {showBlock('links') && <LinkCardBar colors={colors} isDark={isDark} />}
+      {showBlock('links') && <LinkCardBar colors={colors} isDark={isDark} compact />}
 
       {/* ── Geistesblitze: persönliche Gedanken-Kacheln – Kachelgröße aus Spaltenbreite (TE-153) ── */}
-      {showBlock('geistesblitze') && <GeistesKacheln colors={colors} isDark={isDark} areaWidth={rightColW} columns={4} />}
+      {showBlock('geistesblitze') && <GeistesKacheln colors={colors} isDark={isDark} areaWidth={rightColW} columns={4} compact />}
 
       {/* ── Countdowns (TE-128): filigrane Karten, in der Spalte deutlich verkleinert (TE-153) ── */}
       {showBlock('countdowns') && <CountdownStrip colors={colors} compact />}

@@ -14,7 +14,7 @@ import { useFamily } from '../hooks/useFamily';
 import { LinkItem, subscribeToLinks, openLink } from '../services/links';
 import { LinkAvatar } from './LinkAvatar';
 
-export function LinkCardBar({ colors }: { colors: ThemeColors; isDark?: boolean }) {
+export function LinkCardBar({ colors, compact = false }: { colors: ThemeColors; isDark?: boolean; compact?: boolean }) {
   const { user } = useFirebaseAuth();
   const { familyId } = useFamily();
   const [links, setLinks] = useState<LinkItem[]>([]);
@@ -34,15 +34,15 @@ export function LinkCardBar({ colors }: { colors: ThemeColors; isDark?: boolean 
   return (
     <View style={s.section}>
       <Text style={[s.headerTitle, { color: colors.textSecondary }]}>LINKS</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.row}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[s.row, compact && s.rowCompact]}>
         {active.map((l) => (
           <Pressable
             key={l.id}
-            style={({ pressed }) => [s.card, { opacity: pressed ? 0.7 : 1 }]}
+            style={({ pressed }) => [s.card, compact && s.cardCompact, { opacity: pressed ? 0.7 : 1 }]}
             onPress={() => openLink(l.url)}
           >
-            <LinkAvatar link={l} size={30} />
-            <Text style={[s.label, { color: colors.textSecondary }]} numberOfLines={1}>{l.title}</Text>
+            <LinkAvatar link={l} size={compact ? 20 : 30} />
+            <Text style={[s.label, compact && s.labelCompact, { color: colors.textSecondary }]} numberOfLines={1}>{l.title}</Text>
           </Pressable>
         ))}
       </ScrollView>
@@ -56,4 +56,9 @@ const s = StyleSheet.create({
   row: { gap: 12, paddingVertical: 2, paddingRight: 8 },
   card: { alignItems: 'center', gap: 3, width: 46 },
   label: { fontSize: 9, fontWeight: '600', textAlign: 'center' },
+  // TE-153: kompakte Variante für die schmale Dashboard-Spalte – kleinere Icons,
+  // schmalere Karten, damit mehr Links ohne Abschneiden hineinpassen.
+  rowCompact: { gap: 8 },
+  cardCompact: { width: 34 },
+  labelCompact: { fontSize: 8 },
 });
