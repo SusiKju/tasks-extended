@@ -753,19 +753,26 @@ export function DashboardScreen() {
   const flameScale = flameAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, 1.05, 1] });
 
   // TE-153: Zwei-Spalten-Layout – links die Kurzübersicht (Google/Personal Tasks,
-  // Notizen), rechts eine neue Spalte mit Links, Geistesblitzen und Countdowns.
-  // Die rechte Spalte hat eine aus der Fensterbreite abgeleitete, geklammerte
-  // Breite; auf schmalen Screens bricht die rechte Spalte unter die linke um
-  // (flexWrap). Diese Breite dient zugleich als Bezugsgröße für die Kachelgrößen
-  // (Geistesblitze) – die Countdowns werden per `compact` deutlich verkleinert.
+  // Notizen), rechts eine feste Spalte mit Links, Geistesblitzen und Countdowns.
+  // WICHTIG: Die Breite wird aus der *tatsächlichen Container-Breite* abgeleitet
+  // (onLayout), nicht aus der Fensterbreite – das Dashboard rendert oft in einem
+  // schmalen Panel, das viel kleiner als das Fenster ist. Mit der Fensterbreite
+  // wurde die rechte Spalte zu breit berechnet und brach unter die linke um.
+  // Die linke Spalte nimmt den Rest (flex:1), die rechte einen geklammerten
+  // Bruchteil – dadurch stehen sie immer nebeneinander. Die rechte Breite dient
+  // zugleich als Bezugsgröße für die Kachelgrößen (Geistesblitze); die Countdowns
+  // werden per `compact` deutlich verkleinert.
   const { width: winW } = useWindowDimensions();
-  const rightColW = Math.round(Math.min(340, Math.max(220, winW * 0.36)));
+  const [dashW, setDashW] = useState(0);
+  const effW = dashW || winW;
+  const rightColW = Math.round(Math.min(300, Math.max(150, effW * 0.36)));
 
   return (
     <ScrollView
       style={styles.container}
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
+      onLayout={(e) => setDashW(e.nativeEvent.layout.width)}
     >
 
       {/* ── Geburtstage: ganz oben ── */}
@@ -1062,7 +1069,7 @@ export function DashboardScreen() {
       {showBlock('links') && <LinkCardBar colors={colors} isDark={isDark} />}
 
       {/* ── Geistesblitze: persönliche Gedanken-Kacheln – Kachelgröße aus Spaltenbreite (TE-153) ── */}
-      {showBlock('geistesblitze') && <GeistesKacheln colors={colors} isDark={isDark} areaWidth={rightColW} columns={5} />}
+      {showBlock('geistesblitze') && <GeistesKacheln colors={colors} isDark={isDark} areaWidth={rightColW} columns={4} />}
 
       {/* ── Countdowns (TE-128): filigrane Karten, in der Spalte deutlich verkleinert (TE-153) ── */}
       {showBlock('countdowns') && <CountdownStrip colors={colors} compact />}
@@ -1636,8 +1643,11 @@ function makeStyles(c: ThemeColors, isDark: boolean, calm: boolean) {
     // linke Spalte (Kurzübersicht) und rechte Spalte (Links/Geistesblitze/
     // Countdowns) nebeneinander; auf schmalen Screens bricht die rechte Spalte
     // per flexWrap unter die linke um.
-    dashCols: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-start', columnGap: 8, rowGap: 20 },
-    dashColLeft: { flexGrow: 1, flexShrink: 1, flexBasis: 320, minWidth: 260, gap: 16 },
+    // TE-153: strikte Zeile ohne Umbruch – linke Spalte nimmt den Rest, rechte
+    // Spalte hat eine feste (aus der Container-Breite abgeleitete) Breite. So
+    // stehen die beiden Spalten immer nebeneinander, egal wie schmal das Panel ist.
+    dashCols: { flexDirection: 'row', alignItems: 'flex-start', columnGap: 8 },
+    dashColLeft: { flex: 1, minWidth: 0, gap: 16 },
     dashColRight: { gap: 16 },
 
     // Birthday – ganz oben, neon-gelb, schnell blinkend
