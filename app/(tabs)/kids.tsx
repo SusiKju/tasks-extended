@@ -340,15 +340,40 @@ export default function KinderScreen() {
     }
   }, [familyChildren, sendTaskMailToChild]);
 
-  const handleDeleteTask = useCallback((taskId: string, title: string) => {
-    crossAlert('Aufgabe löschen?', '', async () => {
+  // Gruppenaufgabe bei allen Teilnehmern löschen (TE-56).
+  const handleDeleteGroupTask = useCallback((entry: { title: string; members: { childId: string; taskId: string }[] }) => {
+    crossAlert('Gruppenaufgabe löschen?', 'Wird bei allen beteiligten Kindern entfernt.', async () => {
       try {
-        await deleteTask(fid, selectedChild, taskId, { actor: 'parent', title });
+        await Promise.all(
+          entry.members.map((m) => deleteTask(fid, m.childId, m.taskId, { actor: 'parent', title: entry.title }))
+        );
       } catch (e: any) {
         crossInfo('Fehler beim Löschen', e?.message ?? String(e));
       }
     }, true);
-  }, [fid, selectedChild]);
+  }, [fid]);
+
+  const handleDeleteTask = useCallback((task: ChildTask) => {
+    // Gruppenaufgabe (TE-146): in einem Rutsch bei allen beteiligten Kindern
+    // löschen – kein Einzellöschen einer Kopie pro Kind mehr.
+    if (task.groupId) {
+      const members: { childId: string; taskId: string }[] = [];
+      for (const child of familyChildren) {
+        for (const t of tasksByChild[child.id] ?? []) {
+          if (t.groupId === task.groupId) members.push({ childId: child.id, taskId: t.id });
+        }
+      }
+      handleDeleteGroupTask({ title: task.title, members });
+      return;
+    }
+    crossAlert('Aufgabe löschen?', '', async () => {
+      try {
+        await deleteTask(fid, selectedChild, task.id, { actor: 'parent', title: task.title });
+      } catch (e: any) {
+        crossInfo('Fehler beim Löschen', e?.message ?? String(e));
+      }
+    }, true);
+  }, [fid, selectedChild, familyChildren, tasksByChild, handleDeleteGroupTask]);
 
   const handleRejectTask = useCallback((taskId: string, title: string) => {
     crossAlert(
@@ -527,19 +552,6 @@ export default function KinderScreen() {
     }
     return [...map.values()];
   }, [familyChildren, tasksByChild]);
-
-  // Gruppenaufgabe bei allen Teilnehmern löschen (TE-56).
-  const handleDeleteGroupTask = useCallback((entry: { title: string; members: { childId: string; taskId: string }[] }) => {
-    crossAlert('Gruppenaufgabe löschen?', 'Wird bei allen beteiligten Kindern entfernt.', async () => {
-      try {
-        await Promise.all(
-          entry.members.map((m) => deleteTask(fid, m.childId, m.taskId, { actor: 'parent', title: entry.title }))
-        );
-      } catch (e: any) {
-        crossInfo('Fehler beim Löschen', e?.message ?? String(e));
-      }
-    }, true);
-  }, [fid]);
 
   return (
     <ScrollView
@@ -825,7 +837,7 @@ export default function KinderScreen() {
               })}>
                 <Ionicons name="pencil-outline" size={18} color={colors.accentNeon} />
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => handleDeleteTask(task.id, task.title)}>
+              <TouchableOpacity onPress={() => handleDeleteTask(task)}>
                 <Ionicons name="trash-outline" size={18} color={colors.danger} />
               </TouchableOpacity>
             </View>
