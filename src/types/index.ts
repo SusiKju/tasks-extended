@@ -109,8 +109,9 @@ export type DashboardBlockKey =
   | 'birthdays'
   | 'weather'
   | 'feed'
-  | 'quickNotes'
+  | 'googleTasks'
   | 'scratchpad'
+  | 'quickNotes'
   | 'links'
   | 'geistesblitze'
   | 'countdowns'
@@ -124,8 +125,9 @@ export const DASHBOARD_BLOCKS: { key: DashboardBlockKey; label: string; descript
   { key: 'birthdays',     label: 'Geburtstage',         description: 'Heutige Geburtstage ganz oben.' },
   { key: 'weather',       label: 'Wetter',              description: 'Wettervorhersage neben dem Sync-Button.' },
   { key: 'feed',          label: 'Mein Tag',            description: 'Alle anstehenden Dinge als eine Liste, mit dezentem Icon je Kategorie.' },
-  { key: 'quickNotes',    label: 'Schnelle Notizen',    description: 'Kurze Notizen ohne Datum aus dem Notizen-Tab.' },
+  { key: 'googleTasks',   label: 'Google Tasks',        description: 'Offene Google Tasks, zeilenweise über den Links.' },
   { key: 'scratchpad',    label: 'Personal Tasks',      description: 'Persönliche Tasks mit Wichtig-Label und Fälligkeitsdatum.' },
+  { key: 'quickNotes',    label: 'Schnelle Notizen',    description: 'Kurze Notizen ohne Datum aus dem Notizen-Tab.' },
   { key: 'links',         label: 'Links',               description: 'Schnellleiste mit deinen Links.' },
   { key: 'geistesblitze', label: 'Geistesblitze',       description: 'Persönliche Gedanken-Kacheln.' },
   { key: 'countdowns',    label: 'Countdowns',          description: 'Countdowns bis zu Ereignissen.' },

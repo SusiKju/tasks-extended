@@ -18,7 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useStore } from '../store';
 import { useTheme, ThemeColors, readableTextOn, neonGlow } from '../utils/theme';
 import { useScratchpad } from '../hooks/useScratchpad';
-import { parseScratchpad, sortScratch, ScratchEntry } from '../components/Scratchpad';
+import { parseScratchpad, sortScratch } from '../components/Scratchpad';
 import { useFirebaseAuth } from '../hooks/useFirebaseAuth';
 import { useGoogleTasksSync } from '../hooks/useGoogleTasksSync';
 import { useGoogleContactsBirthdaysSync } from '../hooks/useGoogleContactsBirthdaysSync';
@@ -42,7 +42,7 @@ import { subscribeToFeedHighlight, saveFeedHighlight } from '../services/feedHig
 import { SharedNoteItem, subscribeToSharedNotes } from '../services/sharedNotes';
 import { subscribeToQuickNotes } from '../services/quickNotesService';
 import { GeistesKachel, subscribeToGeistesKacheln } from '../services/geistesKacheln';
-import { DashboardBlockKey, QuickNote } from '../types';
+import { DashboardBlockKey, QuickNote, Task } from '../types';
 
 // Fallback-Farbe falls Kind keine Farbe gesetzt hat
 const CHILD_COLOR_FALLBACK = '#4f86f7';
@@ -56,6 +56,16 @@ function dueInfo(task?: ChildTask): { label: string; overdue: boolean } | null {
   const overdue = !task.done && task.date < TODAY;
   if (task.date === TODAY) return { label: 'heute', overdue: false };
   const [, m, d] = task.date.split('-');
+  return { label: `${d}.${m}.`, overdue };
+}
+
+/** TE-150: Fälligkeit für Google/Personal Tasks (ISO "YYYY-MM-DD"): "heute" /
+ * "TT.MM." mit Overdue-Markierung – analog zu dueInfo() für Kinder-Aufgaben. */
+function taskDue(dateStr?: string | null): { label: string; overdue: boolean } | null {
+  if (!dateStr) return null;
+  if (isDueToday(dateStr)) return { label: 'heute', overdue: false };
+  const overdue = isOverdue(dateStr);
+  const [, m, d] = dateStr.split('-');
   return { label: `${d}.${m}.`, overdue };
 }
 
@@ -158,113 +168,9 @@ const labelStyles = StyleSheet.create({
   },
 });
 
-// TE-126: Pillen-Text wird nach 10 Zeichen hart gekappt (statt per numberOfLines
-// von der Schrift abhängig umzubrechen) – bleibt dadurch unabhängig von Font-
-// Skalierung zuverlässig einzeilig.
-function chipText(text: string, max = 10): string {
-  return text.length > max ? `${text.slice(0, max)}…` : text;
-}
-
-// ─── Chip-Styles (NoteChip) ───────────────────────────────────────────────────
-// TE-138: TaskChip entfernt (keine Tasks mehr auf dem Dashboard). Die Styles
-// werden weiterhin von NoteChip genutzt.
-
-const chipStyles = StyleSheet.create({
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderRadius: 20,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    gap: 3,
-    alignSelf: 'flex-start',
-    maxWidth: '100%',
-  },
-  title: {
-    fontSize: 12,
-    fontWeight: '600',
-    // TE-126: Text ist bereits per chipText() auf max. 10 Zeichen + „…" gekappt –
-    // flexShrink:1 hätte die Box trotzdem im Flex-Row mit dem Datums-Label um
-    // Platz konkurrieren lassen und sie unter die nötige Breite gedrückt, sodass
-    // numberOfLines={1} schon nach ~4 Zeichen kappte. flexShrink:0 erzwingt die
-    // volle Breite für den vorab gekappten Text; das Label weicht stattdessen.
-    flexShrink: 0,
-  },
-  label: {
-    fontSize: 11,
-    fontWeight: '500',
-    flexShrink: 1,
-  },
-});
-
-// ─── Note Chip (TE-114) ─────────────────────────────────────────────────────────
-// Personal-Tasks-Einträge als gefloatete Pillen auf dem Dashboard. Klick führt in
-// den Tasks-Tab, wo die Personal Tasks bearbeitet werden.
-// TE-142: kein Farbschema mehr – neutraler Look. Ist der Eintrag als „wichtig"
-// markiert, bekommt die Pille einen roten Rand; der Rand blinkt, wenn das
-// Fälligkeitsdatum heute oder schon überfällig ist.
-function NoteChip({ entry, onPress }: { entry: ScratchEntry; onPress: () => void }) {
-  const { isDark, colors } = useTheme();
-  const important = !!entry.important;
-  const due = entry.dueDate ?? null;
-  // TE-142/TE-143: Wichtige Einträge haben immer einen roten Rand. Heute fällige
-  // oder überfällige Einträge blinken – rot, wenn zusätzlich wichtig, sonst im
-  // Default-Rahmen. TE-145: Blinken in BEIDEN Themes (kein reduceMotion-Gate) –
-  // der Fälligkeits-Hinweis ist bewusst auch im Calm-Theme aktiv.
-  const dueUrgent = !!due && (isOverdue(due) || isDueToday(due));
-  const blink = dueUrgent;
-  const blinkColor = important ? C.important : colors.border;
-
-  // Rahmen-Blinken über interpolierte Farbe (Vollton ↔ transparent). Color-Props
-  // sind nicht native-driver-fähig → useNativeDriver:false.
-  const blinkAnim = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    if (!blink) { blinkAnim.setValue(0); return; }
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(blinkAnim, { toValue: 1, duration: 600, useNativeDriver: false }),
-        Animated.timing(blinkAnim, { toValue: 0, duration: 600, useNativeDriver: false }),
-      ])
-    );
-    loop.start();
-    return () => { loop.stop(); blinkAnim.setValue(0); };
-  }, [blink, blinkAnim]);
-
-  const borderColor = blink
-    ? blinkAnim.interpolate({ inputRange: [0, 1], outputRange: [blinkColor, 'transparent'] })
-    : (important ? C.important : colors.border);
-  const bgColor   = isDark ? 'transparent' : colors.surface;
-
-  return (
-    <Animated.View
-      style={[
-        chipStyles.chip,
-        { backgroundColor: bgColor, borderColor, borderWidth: important || blink ? 1.5 : 1,
-          paddingVertical: 0, paddingHorizontal: 0, overflow: 'hidden' },
-      ]}
-    >
-      <Pressable
-        onPress={onPress}
-        style={({ pressed }) => [
-          { paddingVertical: 5, paddingHorizontal: 9,
-            opacity: pressed ? 0.7 : entry.done ? 0.55 : 1 },
-        ]}
-      >
-        <Text
-          style={[
-            chipStyles.title,
-            { color: colors.text, fontSize: 11 },
-            entry.done && { textDecorationLine: 'line-through' },
-          ]}
-          numberOfLines={1}
-        >
-          {chipText(entry.text)}
-        </Text>
-      </Pressable>
-    </Animated.View>
-  );
-}
+// TE-150: NoteChip/chipStyles/chipText entfernt – Personal Tasks erscheinen nicht
+// mehr als gefloatete Pillen, sondern zeilenweise in der dezenten Kurzübersicht
+// (siehe „dezentRow"-Styles + Kurzübersicht-Block im Render).
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
@@ -276,7 +182,7 @@ export function DashboardScreen() {
   const childName = (id: string) => familyChildren.find((c) => c.id === id)?.name ?? id;
   const childColor = (id: string) => familyChildren.find((c) => c.id === id)?.color ?? CHILD_COLOR_FALLBACK;
   const childEmoji = (id: string) => familyChildren.find((c) => c.id === id)?.emoji ?? null;
-  const { settings, birthdays: storeBirthdays, pinnedMailIds } = useStore();
+  const { settings, birthdays: storeBirthdays, pinnedMailIds, tasks } = useStore();
   // TE-104: Notizblock-Wert + Firestore-Abo zentral aus dem Hook. Das Dashboard
   // zeigt ihn nur an (readOnly); bearbeitet wird er im Tasks-Tab.
   const { scratchpad } = useScratchpad();
@@ -441,6 +347,28 @@ export function DashboardScreen() {
     const unsub = subscribeToQuickNotes(fid, user.uid, setQuickNotes, () => setQuickNotes([]));
     return unsub;
   }, [fid, user?.uid]);
+
+  // TE-150: Google Tasks fürs Dashboard – offene Tasks, wichtig zuerst, dann nach
+  // Fälligkeit. Zeilenweise & dezent über den Links dargestellt (Klick → Tasks-Tab).
+  const dashboardTasks = useMemo<Task[]>(
+    () =>
+      tasks
+        .filter((t) => !t.completed)
+        .sort((a, b) => {
+          if (!!a.important !== !!b.important) return a.important ? -1 : 1;
+          const da = a.dueDate ? new Date(a.dueDate).getTime() : Infinity;
+          const db = b.dueDate ? new Date(b.dueDate).getTime() : Infinity;
+          return da - db;
+        }),
+    [tasks],
+  );
+
+  // TE-150: Personal Tasks (Notizblock/Scratchpad) – offene Einträge, intelligent
+  // sortiert (wichtig/Fälligkeit), erledigte raus. Zeilenweise statt Pillen.
+  const personalNotes = useMemo(
+    () => sortScratch(parseScratchpad(scratchpad).filter((e) => e.text.trim() !== '' && !e.done)),
+    [scratchpad],
+  );
 
   const [feedGeistesKacheln, setFeedGeistesKacheln] = useState<GeistesKachel[]>([]);
   useEffect(() => {
@@ -883,82 +811,104 @@ export function DashboardScreen() {
         </Modal>
       )}
 
-      {/* ── Notizblock (TE-138: Tasks-Spalte entfernt, Dashboard ist tasks-frei) ── */}
-      {showBlock('scratchpad') && (
-      <View style={styles.topRow}>
+      {/* ── Kurzübersicht (TE-150): Google Tasks, Personal Tasks, Notizen ──
+          Zeilenweise & extrem dezent (schlichte Textzeilen, kein Karten-Chrome),
+          die drei Abschnitte durch eigene Überschrift + Abstand klar getrennt.
+          Reihenfolge: 1. Google Tasks, 2. Personal Tasks, 3. Notizen. */}
 
-        {/* Notizblock – TE-114: Notizen als gefloatete Pillen. Nur Anzeige;
-            bearbeitet wird ausschließlich im Tasks-Tab (Klick auf eine Pille
-            bzw. „Alle →" führt dorthin). */}
-        {showBlock('scratchpad') && (() => {
-          // TE-144: intelligente Sortierung (wichtig/Fälligkeit); erledigte raus.
-          const notes = sortScratch(
-            parseScratchpad(scratchpad).filter((e) => e.text.trim() !== '' && !e.done)
-          );
-          return (
-            <View style={styles.scratchCol}>
-              {false && (
-              <SectionLabel
-                title="Notizblock"
-                colors={colors}
-                onMore={() => router.push('/(tabs)/tasks' as any)}
-              />
-              )}
-              {notes.length === 0 ? (
-                <View style={styles.emptyChips}>
-                  <Ionicons name="document-text-outline" size={16} color={colors.textMuted} />
-                  <Text style={[styles.emptyText, { color: colors.textMuted }]}>Keine Notizen</Text>
-                </View>
-              ) : (
-                <View style={styles.chipRow}>
-                  <Ionicons name="document-text-outline" size={18} color={colors.textSecondary} style={{ marginTop: 2 }} />
-                  <View style={styles.chipWrap}>
-                    {notes.map((entry, idx) => (
-                      <NoteChip
-                        key={entry.id ?? idx}
-                        entry={entry}
-                        onPress={() => router.push('/(tabs)/tasks' as any)}
-                      />
-                    ))}
-                  </View>
-                </View>
-              )}
-            </View>
-          );
-        })()}
-
-      </View>
+      {/* 1. Google Tasks – offene Tasks aus dem Google-Tasks-Store (Klick → Tasks-Tab). */}
+      {showBlock('googleTasks') && dashboardTasks.length > 0 && (
+        <View style={styles.section}>
+          <SectionLabel
+            title="Google Tasks"
+            onMore={() => router.push('/(tabs)/tasks' as any)}
+            colors={colors}
+          />
+          <View>
+            {dashboardTasks.slice(0, 6).map((t) => {
+              const due = taskDue(t.dueDate);
+              return (
+                <Pressable
+                  key={t.id}
+                  onPress={() => router.push('/(tabs)/tasks' as any)}
+                  style={({ pressed }) => [styles.dezentRow, { opacity: pressed ? 0.6 : 1 }]}
+                >
+                  <View style={[styles.dezentBullet, t.important && { backgroundColor: C.important }]} />
+                  <Text style={styles.dezentText} numberOfLines={1}>{t.title}</Text>
+                  {due && (
+                    <Text style={[styles.dueBadge, due.overdue && styles.dueBadgeOverdue]}>{due.label}</Text>
+                  )}
+                </Pressable>
+              );
+            })}
+            {dashboardTasks.length > 6 && (
+              <Text style={[styles.dezentMore, { color: colors.textMuted }]}>
+                +{dashboardTasks.length - 6} weitere
+              </Text>
+            )}
+          </View>
+        </View>
       )}
 
-      {/* ── Schnelle Notizen (TE-148): kurze Notizen ohne Datum aus dem Notizen-Tab ── */}
+      {/* 2. Personal Tasks – persönlicher Notizblock (Scratchpad), Klick → Tasks-Tab. */}
+      {showBlock('scratchpad') && personalNotes.length > 0 && (
+        <View style={styles.section}>
+          <SectionLabel
+            title="Personal Tasks"
+            onMore={() => router.push('/(tabs)/tasks' as any)}
+            colors={colors}
+          />
+          <View>
+            {personalNotes.slice(0, 6).map((entry, idx) => {
+              const due = taskDue(entry.dueDate);
+              return (
+                <Pressable
+                  key={entry.id ?? idx}
+                  onPress={() => router.push('/(tabs)/tasks' as any)}
+                  style={({ pressed }) => [styles.dezentRow, { opacity: pressed ? 0.6 : 1 }]}
+                >
+                  <View style={[styles.dezentBullet, entry.important && { backgroundColor: C.important }]} />
+                  <Text style={styles.dezentText} numberOfLines={1}>{entry.text}</Text>
+                  {due && (
+                    <Text style={[styles.dueBadge, due.overdue && styles.dueBadgeOverdue]}>{due.label}</Text>
+                  )}
+                </Pressable>
+              );
+            })}
+            {personalNotes.length > 6 && (
+              <Text style={[styles.dezentMore, { color: colors.textMuted }]}>
+                +{personalNotes.length - 6} weitere
+              </Text>
+            )}
+          </View>
+        </View>
+      )}
+
+      {/* 3. Notizen – kurze Notizen ohne Datum aus dem Notizen-Tab (TE-148). */}
       {showBlock('quickNotes') && quickNotes.length > 0 && (
         <View style={styles.section}>
           <SectionLabel
-            title="Schnelle Notizen"
+            title="Notizen"
             onMore={() => router.push('/(tabs)/notes' as any)}
             colors={colors}
           />
-          <Pressable
-            style={[styles.card, styles.kidCard]}
-            onPress={() => router.push('/(tabs)/notes' as any)}
-          >
-            {quickNotes.slice(0, 6).map((n, i, arr) => (
-              <View
+          <View>
+            {quickNotes.slice(0, 6).map((n) => (
+              <Pressable
                 key={n.id}
-                style={[styles.kidRow, i < arr.length - 1 && styles.rowDivider]}
+                onPress={() => router.push('/(tabs)/notes' as any)}
+                style={({ pressed }) => [styles.dezentRow, { opacity: pressed ? 0.6 : 1 }]}
               >
-                <View style={styles.quickNoteBullet} />
-                <Text style={[styles.kidTaskText, { color: colors.text }]} numberOfLines={2}>
-                  {n.text}
-                </Text>
-              </View>
+                <View style={styles.dezentBullet} />
+                <Text style={styles.dezentText} numberOfLines={1}>{n.text}</Text>
+              </Pressable>
             ))}
             {quickNotes.length > 6 && (
-              <Text style={[styles.emptyText, { paddingTop: 6 }]}>
+              <Text style={[styles.dezentMore, { color: colors.textMuted }]}>
                 +{quickNotes.length - 6} weitere
               </Text>
             )}
-          </Pressable>
+          </View>
         </View>
       )}
 
@@ -1404,25 +1354,6 @@ function makeStyles(c: ThemeColors, isDark: boolean, calm: boolean) {
 
     section: {},
 
-    // Vertical layout: Tasks oben, Notizen unten
-    topRow: {
-      flexDirection: 'column',
-      alignItems: 'stretch',
-    },
-    scratchCol: {
-      flex: 1,
-      minWidth: 0,
-      marginTop: 16,
-      marginBottom: 8,
-    },
-
-    taskScratchDivider: {
-      height: 1,
-      backgroundColor: c.border,
-      marginHorizontal: 16,
-      marginVertical: 8,
-    },
-
     card: {
       marginHorizontal: 16,
       backgroundColor: c.surface,
@@ -1453,25 +1384,23 @@ function makeStyles(c: ThemeColors, isDark: boolean, calm: boolean) {
       marginBottom: 4,
     },
 
-    // Task chips
-    chipRow: {
-      flexDirection: 'row',
-      alignItems: 'flex-start',
-      paddingHorizontal: 16,
-      gap: 8,
-    },
-    chipWrap: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: 8,
-      flex: 1,
-    },
-    emptyChips: {
+    // Kurzübersicht (TE-150): extrem dezente Textzeile – kein Karten-Hintergrund,
+    // kein Rahmen, kein Glow. Nur ein kleiner Punkt + gedämpfter Text (+ Fälligkeit).
+    dezentRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 6,
+      gap: 8,
       paddingHorizontal: 16,
+      paddingVertical: 5,
     },
+    dezentBullet: {
+      width: 5,
+      height: 5,
+      borderRadius: 2.5,
+      backgroundColor: c.textMuted,
+    },
+    dezentText: { flex: 1, fontSize: 13, color: c.textSecondary },
+    dezentMore: { fontSize: 12, paddingHorizontal: 16, paddingTop: 2 },
 
     // Birthday – ganz oben, neon-gelb, schnell blinkend
     birthdayCard: {
@@ -1597,8 +1526,6 @@ function makeStyles(c: ThemeColors, isDark: boolean, calm: boolean) {
     },
     kidTaskText: { flex: 1, fontSize: 13, fontWeight: '500' },
     kidTaskDone: { textDecorationLine: 'line-through', color: c.textMuted },
-    // TE-148: Aufzählungspunkt vor einer schnellen Notiz auf dem Dashboard.
-    quickNoteBullet: { width: 6, height: 6, borderRadius: 3, backgroundColor: c.textMuted },
     // Fälligkeitsdatum je Aufgabe (TE-119): rot, wenn der Termin überschritten ist.
     dueBadge: {
       fontSize: 11, fontWeight: '700', color: c.textMuted,
