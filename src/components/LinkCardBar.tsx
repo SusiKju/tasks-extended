@@ -41,8 +41,12 @@ export function LinkCardBar({ colors, compact = false }: { colors: ThemeColors; 
             style={({ pressed }) => [s.card, compact && s.cardCompact, { opacity: pressed ? 0.7 : 1 }]}
             onPress={() => openLink(l.url)}
           >
-            <LinkAvatar link={l} size={compact ? 20 : 30} />
-            <Text style={[s.label, compact && s.labelCompact, { color: colors.textSecondary }]} numberOfLines={1}>{l.title}</Text>
+            <LinkAvatar link={l} size={compact ? 24 : 30} />
+            {/* TE-153: im kompakten Modus (schmale Dashboard-Spalte) nur das Icon –
+                das Label entfällt, da das Icon den Link bereits eindeutig zeigt. */}
+            {!compact && (
+              <Text style={[s.label, { color: colors.textSecondary }]} numberOfLines={1}>{l.title}</Text>
+            )}
           </Pressable>
         ))}
       </ScrollView>
@@ -58,7 +62,6 @@ const s = StyleSheet.create({
   label: { fontSize: 9, fontWeight: '600', textAlign: 'center' },
   // TE-153: kompakte Variante für die schmale Dashboard-Spalte – kleinere Icons,
   // schmalere Karten, damit mehr Links ohne Abschneiden hineinpassen.
-  rowCompact: { gap: 8 },
+  rowCompact: { gap: 10 },
   cardCompact: { width: 34 },
-  labelCompact: { fontSize: 8 },
 });
