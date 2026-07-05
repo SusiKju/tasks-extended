@@ -964,11 +964,33 @@ export default function KinderScreen() {
         </View>
 
         {allowanceAmount > 0 ? (
-          <Text style={s.allowanceNext}>
-            {nextAllowanceReceived
-              ? `${formatMonthLabel(nextAllowance)} steht aus · ${formatEuro(allowanceAmount)}`
-              : `Nächstes Taschengeld: ${formatMonthLabel(nextAllowance)} · ${formatEuro(allowanceAmount)}`}
-          </Text>
+          // Noch kein Eintrag für den fälligen Monat (TE-155): ohne diese Zeile
+          // gäbe es hier nur den Info-Text unten und keinen Weg für Eltern, das
+          // Taschengeld eines Kindes anzuhaken, das den Erhalt nie selbst im
+          // Kind-Screen bestätigt (z. B. weil es die App nicht selbst nutzt) —
+          // die History-Liste zeigt erst ab dem ersten Eintrag einen Haken an.
+          allowanceMonths[nextAllowance] === undefined ? (
+            <View style={s.allowanceRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={s.allowanceMonth}>{formatMonthLabel(nextAllowance)}</Text>
+                <Text style={s.allowanceConfirmed}>Noch nicht bestätigt</Text>
+              </View>
+              <Text style={s.allowanceAmount}>{formatEuro(allowanceAmount)}</Text>
+              <TouchableOpacity
+                style={s.allowanceStatus}
+                onPress={() => handleToggleAllowanceReceived(nextAllowance, false, allowanceAmount)}
+              >
+                <Ionicons name="ellipse-outline" size={13} color={colors.textMuted} />
+                <Text style={[s.allowanceStatusText, { color: colors.textMuted }]}>übergeben?</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <Text style={s.allowanceNext}>
+              {nextAllowanceReceived
+                ? `${formatMonthLabel(nextAllowance)} steht aus · ${formatEuro(allowanceAmount)}`
+                : `Nächstes Taschengeld: ${formatMonthLabel(nextAllowance)} · ${formatEuro(allowanceAmount)}`}
+            </Text>
+          )
         ) : (
           <Text style={s.hint}>Kein Taschengeld konfiguriert. In den Einstellungen pro Kind festlegen.</Text>
         )}
