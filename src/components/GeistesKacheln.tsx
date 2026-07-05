@@ -253,7 +253,7 @@ function KachelCard({ kachel, onPress, size }: {
 
 // ─── Hauptkomponente ──────────────────────────────────────────────────────────
 
-export function GeistesKacheln({ colors, isDark }: { colors: ThemeColors; isDark: boolean }) {
+export function GeistesKacheln({ colors, isDark, areaWidth, columns }: { colors: ThemeColors; isDark: boolean; areaWidth?: number; columns?: number }) {
   const { user } = useFirebaseAuth();
   const { familyId } = useFamily();
   const [tiles, setTiles] = useState<GeistesKachel[]>([]);
@@ -282,7 +282,12 @@ export function GeistesKacheln({ colors, isDark }: { colors: ThemeColors; isDark
     await deleteGeistesKachel(fid, uid, editing.id);
   }, [fid, uid, editing]);
 
-  const tileSize = Math.floor((Dimensions.get('window').width - 32 - 7 * 6) / 8);
+  // TE-153: Kachelgröße aus der verfügbaren Fläche + Spaltenzahl ableiten, damit
+  // die Kacheln auch in der schmalen Dashboard-Spalte passen. Ohne Props gilt der
+  // bisherige Vollbild-Fall (8 Spalten über die Fensterbreite).
+  const cols = columns ?? 8;
+  const aw = areaWidth ?? Dimensions.get('window').width;
+  const tileSize = Math.floor((aw - 32 - (cols - 1) * 6) / cols);
 
   return (
     <View style={s.section}>

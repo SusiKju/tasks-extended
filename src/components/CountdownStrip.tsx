@@ -106,7 +106,7 @@ function NeonSweep({ accent }: { accent: string }) {
   );
 }
 
-function CountdownCard({ countdown, colors, onPress }: { countdown: SharedCountdown; colors: ThemeColors; onPress: () => void }) {
+function CountdownCard({ countdown, colors, onPress, compact = false }: { countdown: SharedCountdown; colors: ThemeColors; onPress: () => void; compact?: boolean }) {
   const days = daysUntil(countdown.targetDate);
   const isPast = days < 0;
   const isToday = days === 0;
@@ -117,6 +117,7 @@ function CountdownCard({ countdown, colors, onPress }: { countdown: SharedCountd
       onPress={onPress}
       style={({ pressed }) => [
         styles.card,
+        compact && styles.cardCompact,
         {
           borderColor: isToday ? accent : colors.border,
           backgroundColor: isToday ? accent + '14' : colors.surface,
@@ -125,48 +126,52 @@ function CountdownCard({ countdown, colors, onPress }: { countdown: SharedCountd
       ]}
     >
       <NeonSweep accent={accent} />
-      <View style={[styles.cardEmojiWrap, { backgroundColor: accent + '22' }]}>
-        <Text style={styles.cardEmojiBig}>{countdown.emoji ?? '💛'}</Text>
+      <View style={[styles.cardEmojiWrap, compact && styles.cardEmojiWrapCompact, { backgroundColor: accent + '22' }]}>
+        <Text style={[styles.cardEmojiBig, compact && styles.cardEmojiBigCompact]}>{countdown.emoji ?? '💛'}</Text>
       </View>
       <View style={styles.cardBody}>
         {isToday ? (
-          <Text style={[styles.cardBigLabel, { color: accent }]} numberOfLines={1}>Heute! 🎉</Text>
+          <Text style={[styles.cardBigLabel, compact && styles.cardBigLabelCompact, { color: accent }]} numberOfLines={1}>Heute! 🎉</Text>
         ) : isPast ? (
-          <Text style={[styles.cardBigLabel, { color: colors.textMuted }]} numberOfLines={1}>vorbei</Text>
+          <Text style={[styles.cardBigLabel, compact && styles.cardBigLabelCompact, { color: colors.textMuted }]} numberOfLines={1}>vorbei</Text>
         ) : (
           <View style={styles.cardNumberRow}>
-            <Text style={[styles.cardNumber, { color: colors.text }]}>{days}</Text>
-            <Text style={[styles.cardUnit, { color: colors.textMuted }]}>{days === 1 ? 'Tag' : 'Tage'}</Text>
+            <Text style={[styles.cardNumber, compact && styles.cardNumberCompact, { color: colors.text }]}>{days}</Text>
+            <Text style={[styles.cardUnit, compact && styles.cardUnitCompact, { color: colors.textMuted }]}>{days === 1 ? 'Tag' : 'Tage'}</Text>
           </View>
         )}
-        <Text style={[styles.cardTitle, { color: colors.textSecondary }]} numberOfLines={1}>
+        <Text style={[styles.cardTitle, compact && styles.cardTitleCompact, { color: colors.textSecondary }]} numberOfLines={1}>
           {countdown.title}
         </Text>
-        <Text style={[styles.cardMotivation, { color: accent }]} numberOfLines={1}>
-          {motivationLine(days, isToday, isPast)}
-        </Text>
+        {/* TE-153: In der kompakten Spalte entfällt die Motivationszeile, damit die Kachel flach bleibt. */}
+        {!compact && (
+          <Text style={[styles.cardMotivation, { color: accent }]} numberOfLines={1}>
+            {motivationLine(days, isToday, isPast)}
+          </Text>
+        )}
       </View>
     </Pressable>
   );
 }
 
-function AddCard({ colors, onPress }: { colors: ThemeColors; onPress: () => void }) {
+function AddCard({ colors, onPress, compact = false }: { colors: ThemeColors; onPress: () => void; compact?: boolean }) {
   return (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [
         styles.card,
+        compact && styles.cardCompact,
         styles.addCard,
         { borderColor: colors.border, opacity: pressed ? 0.6 : 1 },
       ]}
     >
-      <Ionicons name="add" size={22} color={colors.textMuted} />
-      <Text style={[styles.addCardText, { color: colors.textMuted }]}>Neue Vorfreude</Text>
+      <Ionicons name="add" size={compact ? 18 : 22} color={colors.textMuted} />
+      <Text style={[styles.addCardText, compact && styles.addCardTextCompact, { color: colors.textMuted }]}>Neue Vorfreude</Text>
     </Pressable>
   );
 }
 
-export function CountdownStrip({ colors }: { colors: ThemeColors }) {
+export function CountdownStrip({ colors, compact = false }: { colors: ThemeColors; compact?: boolean }) {
   const { settings, updateSettings } = useStore();
   const familyId = useFamilyId();
   const [items, setItems] = useState<SharedCountdown[] | null>(null);
@@ -268,9 +273,9 @@ export function CountdownStrip({ colors }: { colors: ThemeColors }) {
       ) : (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
           {sorted.map((c) => (
-            <CountdownCard key={c.id} countdown={c} colors={colors} onPress={() => openEdit(c)} />
+            <CountdownCard key={c.id} countdown={c} colors={colors} onPress={() => openEdit(c)} compact={compact} />
           ))}
-          <AddCard colors={colors} onPress={openNew} />
+          <AddCard colors={colors} onPress={openNew} compact={compact} />
         </ScrollView>
       )}
 
@@ -406,6 +411,12 @@ const CARD_GAP = 10;
 const CARD_WIDTH = (SCREEN_WIDTH - STRIP_PADDING * 2 - CARD_GAP * 2) / 3;
 const CARD_HEIGHT = Math.round(CARD_WIDTH * 0.66);
 
+// TE-153: kompakte Kacheln für die schmale Dashboard-Spalte – deutlich kleiner
+// als die regulären Karten, ohne Motivationszeile, damit mehrere in die Spalte
+// passen (horizontal scrollbar).
+const COMPACT_CARD_WIDTH = 110;
+const COMPACT_CARD_HEIGHT = 60;
+
 const styles = StyleSheet.create({
   wrap: { marginBottom: 4 },
   scrollContent: { paddingHorizontal: 16, gap: 10 },
@@ -453,8 +464,18 @@ const styles = StyleSheet.create({
   cardTitle: { fontSize: 11, fontWeight: '700' },
   cardMotivation: { fontSize: 10, fontWeight: '600' },
 
+  // TE-153: kompakte Varianten für die schmale Dashboard-Spalte.
+  cardCompact: { width: COMPACT_CARD_WIDTH, height: COMPACT_CARD_HEIGHT, borderRadius: 12, paddingHorizontal: 8, gap: 6 },
+  cardEmojiWrapCompact: { width: 26, height: 26, borderRadius: 13 },
+  cardEmojiBigCompact: { fontSize: 14 },
+  cardNumberCompact: { fontSize: 15, lineHeight: 17 },
+  cardUnitCompact: { fontSize: 8 },
+  cardBigLabelCompact: { fontSize: 11 },
+  cardTitleCompact: { fontSize: 9 },
+
   addCard: { borderStyle: 'dashed', flexDirection: 'column', gap: 4, justifyContent: 'center' },
   addCardText: { fontSize: 10, fontWeight: '700' },
+  addCardTextCompact: { fontSize: 9 },
 
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center', padding: 24 },
   formCard: { width: '100%', maxWidth: 420, borderRadius: 16, borderWidth: 1, padding: 18 },
