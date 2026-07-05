@@ -38,6 +38,7 @@ import { LinkCardBar } from '../components/LinkCardBar';
 import { WeatherWidget } from '../components/WeatherWidget';
 import { GoogleConnectBanner } from '../components/GoogleConnectBanner';
 import { CountdownStrip } from '../components/CountdownStrip';
+import { FussballKachel } from '../components/FussballKachel';
 import { FeedBlock, FeedItem } from '../components/FeedBlock';
 import { subscribeToFeedOrder, saveFeedOrder, FeedOrder } from '../services/feedOrderService';
 import { subscribeToFeedHighlight, saveFeedHighlight } from '../services/feedHighlightService';
@@ -768,6 +769,7 @@ export function DashboardScreen() {
   const rightColW = Math.round(Math.min(300, Math.max(150, effW * 0.36)));
 
   return (
+    <View style={styles.root}>
     <ScrollView
       style={styles.container}
       contentContainerStyle={styles.content}
@@ -1514,6 +1516,14 @@ export function DashboardScreen() {
       )}
 
     </ScrollView>
+
+      {/* TE-153: Fokus-Kachel fixiert rechts-mittig am Viewport – klebt beim
+          Scrollen, weil sie außerhalb der ScrollView liegt. box-none lässt
+          Klicks überall durch, nur die Kachel selbst ist antippbar. */}
+      <View style={styles.focusFab} pointerEvents="box-none">
+        <FussballKachel iconSize={16} iconStyle={styles.focusFabTile} />
+      </View>
+    </View>
   );
 }
 
@@ -1521,8 +1531,20 @@ export function DashboardScreen() {
 
 function makeStyles(c: ThemeColors, isDark: boolean, calm: boolean) {
   return StyleSheet.create({
+    root: { flex: 1, backgroundColor: c.background },
     container: { flex: 1, backgroundColor: c.background },
     content: { paddingTop: 16, paddingBottom: 48, gap: 24 },
+
+    // TE-153: Fokus-Kachel als fixierter Button, rechts mittig am Viewport.
+    // Der volle-Höhe-Streifen zentriert die Kachel vertikal; pointerEvents wird
+    // im JSX auf "box-none" gesetzt, damit nur die Kachel Klicks abfängt.
+    focusFab: { position: 'absolute', right: 6, top: 0, bottom: 0, justifyContent: 'center', zIndex: 20 },
+    focusFabTile: {
+      width: 34,
+      height: 34,
+      borderRadius: 10,
+      ...(isDark ? neonGlow(c.accentNeon, 'soft') : {}),
+    },
 
     syncRow: {
       flexDirection: 'row',

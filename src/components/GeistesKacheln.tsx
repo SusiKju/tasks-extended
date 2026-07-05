@@ -294,9 +294,10 @@ export function GeistesKacheln({ colors, isDark, areaWidth, columns, compact = f
       <View style={s.header}>
         <Text style={[s.headerTitle, { color: colors.textSecondary }]}>GEISTESBLITZE</Text>
         {/* TE-14: Fokus-Kachel-Icons rechtsbündig in derselben Zeile (nicht sticky).
-            TE-153: in der schmalen Dashboard-Spalte deutlich kleiner, damit sie
-            nicht mit der Überschrift kollidiert. */}
-        <FussballKachel iconSize={compact ? 13 : 18} iconStyle={compact ? s.funTileCompact : undefined} />
+            TE-153: In der schmalen Dashboard-Spalte (compact) wird die Fokus-Kachel
+            NICHT hier gerendert, sondern als fixierter Button rechts-mittig am
+            Viewport (siehe DashboardScreen). */}
+        {!compact && <FussballKachel iconSize={18} />}
       </View>
 
       {tiles.length === 0 ? (
@@ -353,7 +354,6 @@ const s = StyleSheet.create({
   empty: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1.5, borderStyle: 'dashed', borderRadius: 12, padding: 16 },
   emptyText: { fontSize: 13 },
   // TE-153: kompakte Varianten für die schmale Dashboard-Spalte.
-  funTileCompact: { width: 22, height: 22, borderRadius: 6 },
   emptyCompact: { padding: 10, gap: 8 },
   emptyTextCompact: { fontSize: 11, flex: 1 },
 

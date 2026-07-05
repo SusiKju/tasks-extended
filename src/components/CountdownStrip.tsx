@@ -106,7 +106,7 @@ function NeonSweep({ accent }: { accent: string }) {
   );
 }
 
-function CountdownCard({ countdown, colors, onPress, compact = false }: { countdown: SharedCountdown; colors: ThemeColors; onPress: () => void; compact?: boolean }) {
+function CountdownCard({ countdown, colors, onPress, compact = false, grid = false }: { countdown: SharedCountdown; colors: ThemeColors; onPress: () => void; compact?: boolean; grid?: boolean }) {
   const days = daysUntil(countdown.targetDate);
   const isPast = days < 0;
   const isToday = days === 0;
@@ -118,6 +118,7 @@ function CountdownCard({ countdown, colors, onPress, compact = false }: { countd
       style={({ pressed }) => [
         styles.card,
         compact && styles.cardCompact,
+        grid && styles.cardGrid,
         {
           borderColor: isToday ? accent : colors.border,
           backgroundColor: isToday ? accent + '14' : colors.surface,
@@ -154,13 +155,14 @@ function CountdownCard({ countdown, colors, onPress, compact = false }: { countd
   );
 }
 
-function AddCard({ colors, onPress, compact = false }: { colors: ThemeColors; onPress: () => void; compact?: boolean }) {
+function AddCard({ colors, onPress, compact = false, grid = false }: { colors: ThemeColors; onPress: () => void; compact?: boolean; grid?: boolean }) {
   return (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [
         styles.card,
         compact && styles.cardCompact,
+        grid && styles.cardGrid,
         styles.addCard,
         { borderColor: colors.border, opacity: pressed ? 0.6 : 1 },
       ]}
@@ -270,6 +272,16 @@ export function CountdownStrip({ colors, compact = false }: { colors: ThemeColor
         </View>
       ) : items === null ? (
         <ActivityIndicator color={accent} style={{ marginVertical: 10, marginLeft: 16 }} />
+      ) : compact ? (
+        // TE-153: In der schmalen Spalte kein horizontales Scrollen – die
+        // Countdowns liegen als zweispaltiges Grid untereinander, damit alle
+        // sichtbar sind.
+        <View style={styles.grid}>
+          {sorted.map((c) => (
+            <CountdownCard key={c.id} countdown={c} colors={colors} onPress={() => openEdit(c)} compact grid />
+          ))}
+          <AddCard colors={colors} onPress={openNew} compact grid />
+        </View>
       ) : (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
           {sorted.map((c) => (
@@ -415,11 +427,15 @@ const CARD_HEIGHT = Math.round(CARD_WIDTH * 0.66);
 // als die regulären Karten, ohne Motivationszeile, damit mehrere in die Spalte
 // passen (horizontal scrollbar).
 const COMPACT_CARD_WIDTH = 110;
-const COMPACT_CARD_HEIGHT = 60;
+const COMPACT_CARD_HEIGHT = 54;
 
 const styles = StyleSheet.create({
   wrap: { marginBottom: 4 },
   scrollContent: { paddingHorizontal: 16, gap: 10 },
+  // TE-153: zweispaltiges Grid ohne horizontales Scrollen – die Karten füllen
+  // je knapp die halbe Spaltenbreite (2 pro Reihe) und umbrechen darunter.
+  grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', paddingHorizontal: 16, rowGap: 8 },
+  cardGrid: { width: '48%' },
 
   errorRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingVertical: 6 },
   errorText: { fontSize: 11, flex: 1, lineHeight: 15 },
@@ -465,9 +481,9 @@ const styles = StyleSheet.create({
   cardMotivation: { fontSize: 10, fontWeight: '600' },
 
   // TE-153: kompakte Varianten für die schmale Dashboard-Spalte.
-  cardCompact: { width: COMPACT_CARD_WIDTH, height: COMPACT_CARD_HEIGHT, borderRadius: 12, paddingHorizontal: 8, gap: 6 },
-  cardEmojiWrapCompact: { width: 26, height: 26, borderRadius: 13 },
-  cardEmojiBigCompact: { fontSize: 14 },
+  cardCompact: { width: COMPACT_CARD_WIDTH, height: COMPACT_CARD_HEIGHT, borderRadius: 12, paddingHorizontal: 7, gap: 5 },
+  cardEmojiWrapCompact: { width: 22, height: 22, borderRadius: 11 },
+  cardEmojiBigCompact: { fontSize: 12 },
   cardNumberCompact: { fontSize: 15, lineHeight: 17 },
   cardUnitCompact: { fontSize: 8 },
   cardBigLabelCompact: { fontSize: 11 },
