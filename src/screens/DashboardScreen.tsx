@@ -1365,7 +1365,7 @@ export function DashboardScreen() {
             onMore={() => router.push('/(tabs)/kids' as any)}
             colors={colors}
           />
-          <View style={[styles.card, styles.kidCard]}>
+          <View style={styles.card}>
             {openAllowanceChildren.map((child, i) => {
               const m = allowanceByChild[child.id]?.[currentAllowanceMonth];
               const corrected = m?.overrideAmount != null;
