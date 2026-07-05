@@ -11,6 +11,7 @@ import {
   Platform,
   Dimensions,
   Modal,
+  useWindowDimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -18,7 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useStore } from '../store';
 import { useTheme, ThemeColors, readableTextOn, neonGlow } from '../utils/theme';
 import { useScratchpad } from '../hooks/useScratchpad';
-import { parseScratchpad, sortScratch } from '../components/Scratchpad';
+import { parseScratchpad, serializeScratchpad, sortScratch, makeNoteId } from '../components/Scratchpad';
 import { useFirebaseAuth } from '../hooks/useFirebaseAuth';
 import { useGoogleTasksSync } from '../hooks/useGoogleTasksSync';
 import { useGoogleContactsBirthdaysSync } from '../hooks/useGoogleContactsBirthdaysSync';
@@ -40,7 +41,7 @@ import { FeedBlock, FeedItem } from '../components/FeedBlock';
 import { subscribeToFeedOrder, saveFeedOrder, FeedOrder } from '../services/feedOrderService';
 import { subscribeToFeedHighlight, saveFeedHighlight } from '../services/feedHighlightService';
 import { SharedNoteItem, subscribeToSharedNotes } from '../services/sharedNotes';
-import { subscribeToQuickNotes } from '../services/quickNotesService';
+import { addQuickNote, subscribeToQuickNotes } from '../services/quickNotesService';
 import { GeistesKachel, subscribeToGeistesKacheln } from '../services/geistesKacheln';
 import { DashboardBlockKey, QuickNote, Task } from '../types';
 
@@ -135,18 +136,27 @@ function dayLabel(d: Date): string {
 // ─── Section Label ────────────────────────────────────────────────────────────
 
 function SectionLabel({
-  title, onMore, moreLabel = 'Alle →', colors,
+  title, onMore, moreLabel = 'Alle →', colors, onAdd,
 }: {
   title: string; onMore?: () => void; moreLabel?: string; colors: ThemeColors;
+  // TE-152: optionales Plus-Icon fürs schnelle Anlegen direkt aus dem Abschnitt.
+  onAdd?: () => void;
 }) {
   return (
     <View style={labelStyles.row}>
       <Text style={[labelStyles.title, { color: colors.textSecondary }]}>{title}</Text>
-      {onMore && (
-        <Pressable onPress={onMore} hitSlop={8}>
-          <Text style={[labelStyles.more, { color: colors.textMuted }]}>{moreLabel}</Text>
-        </Pressable>
-      )}
+      <View style={labelStyles.actions}>
+        {onAdd && (
+          <Pressable onPress={onAdd} hitSlop={8} style={labelStyles.addBtn}>
+            <Ionicons name="add" size={16} color={colors.textSecondary} />
+          </Pressable>
+        )}
+        {onMore && (
+          <Pressable onPress={onMore} hitSlop={8}>
+            <Text style={[labelStyles.more, { color: colors.textMuted }]}>{moreLabel}</Text>
+          </Pressable>
+        )}
+      </View>
     </View>
   );
 }
@@ -169,6 +179,14 @@ const labelStyles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
   },
+  actions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  addBtn: {
+    padding: 2,
+  },
 });
 
 // TE-150: NoteChip/chipStyles/chipText entfernt – Personal Tasks erscheinen nicht
@@ -188,7 +206,9 @@ export function DashboardScreen() {
   const { settings, birthdays: storeBirthdays, pinnedMailIds, tasks } = useStore();
   // TE-104: Notizblock-Wert + Firestore-Abo zentral aus dem Hook. Das Dashboard
   // zeigt ihn nur an (readOnly); bearbeitet wird er im Tasks-Tab.
-  const { scratchpad } = useScratchpad();
+  // TE-152: `onChange` wird zusätzlich fürs Schnell-Anlegen über das Plus-Icon
+  // gebraucht (neuer Eintrag oben, kein voller Bearbeitungsmodus).
+  const { scratchpad, onChange: saveScratchpadText } = useScratchpad();
   // TE-77: nur aktivierte Dashboard-Blöcke rendern. Fehlt ein Key (alter Stand /
   // neuer Block), gilt er als sichtbar – so verschwindet nichts versehentlich.
   const showBlock = useCallback(
@@ -208,6 +228,12 @@ export function DashboardScreen() {
   // sondern wird über das Icon links neben dem Sync-Button als Dialog geöffnet.
   const [feedDialogOpen, setFeedDialogOpen] = useState(false);
   const spinLoop = useRef<Animated.CompositeAnimation | null>(null);
+
+  // TE-152: Schnell-Anlegen für Personal Tasks & Notizen direkt aus der
+  // Kurzübersicht – kleines Text-Modal statt vollem Formular (Google Tasks
+  // gehen weiterhin über das bestehende Anlegen-Formular, siehe onAdd unten).
+  const [quickAddKind, setQuickAddKind] = useState<'personal' | 'notiz' | null>(null);
+  const [quickAddText, setQuickAddText] = useState('');
 
   // TE-41/TE-75: Fenster-Mails + angepinnte Mails (auch außerhalb des Fensters) laden.
   // Das Fenster folgt settings.mailWindowDays (wie MailScreen, TE-37), damit ein
@@ -372,6 +398,26 @@ export function DashboardScreen() {
     () => sortScratch(parseScratchpad(scratchpad).filter((e) => e.text.trim() !== '' && !e.done)),
     [scratchpad],
   );
+
+  // TE-152: Übernimmt den Text aus dem Schnell-Anlegen-Modal – je nach
+  // `quickAddKind` entweder als neuer Scratchpad-Eintrag (oben eingefügt, wie
+  // addEntryAtTop in components/Scratchpad.tsx) oder als neue Notiz über den
+  // bestehenden quickNotesService.
+  const handleQuickAddSubmit = useCallback(() => {
+    const text = quickAddText.trim();
+    if (!text) { setQuickAddKind(null); return; }
+    if (quickAddKind === 'personal') {
+      const current = parseScratchpad(scratchpad).filter((e) => e.text.trim() !== '');
+      saveScratchpadText(serializeScratchpad([
+        { id: makeNoteId(), text, color: '#9E9E9E' },
+        ...current,
+      ]));
+    } else if (quickAddKind === 'notiz') {
+      if (fid && user?.uid) addQuickNote(fid, user.uid, text).catch(() => {});
+    }
+    setQuickAddText('');
+    setQuickAddKind(null);
+  }, [quickAddKind, quickAddText, scratchpad, saveScratchpadText, fid, user?.uid]);
 
   const [feedGeistesKacheln, setFeedGeistesKacheln] = useState<GeistesKachel[]>([]);
   useEffect(() => {
@@ -673,6 +719,15 @@ export function DashboardScreen() {
   // Synchron zum Glow „atmende" Skalierung – gemeinsam für beide Card-Varianten.
   const flameScale = flameAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, 1.05, 1] });
 
+  // TE-153: Zwei-Spalten-Layout – links die Kurzübersicht (Google/Personal Tasks,
+  // Notizen), rechts eine neue Spalte mit Links, Geistesblitzen und Countdowns.
+  // Die rechte Spalte hat eine aus der Fensterbreite abgeleitete, geklammerte
+  // Breite; auf schmalen Screens bricht die rechte Spalte unter die linke um
+  // (flexWrap). Diese Breite dient zugleich als Bezugsgröße für die Kachelgrößen
+  // (Geistesblitze) – die Countdowns werden per `compact` deutlich verkleinert.
+  const { width: winW } = useWindowDimensions();
+  const rightColW = Math.round(Math.min(340, Math.max(220, winW * 0.36)));
+
   return (
     <ScrollView
       style={styles.container}
@@ -819,12 +874,19 @@ export function DashboardScreen() {
           die drei Abschnitte durch eigene Überschrift + Abstand klar getrennt.
           Reihenfolge: 1. Google Tasks, 2. Personal Tasks, 3. Notizen. */}
 
-      {/* 1. Google Tasks – offene Tasks aus dem Google-Tasks-Store (Klick → Tasks-Tab). */}
-      {showBlock('googleTasks') && dashboardTasks.length > 0 && (
+      {/* TE-153: Zweispaltiger Block – links Kurzübersicht, rechts Links/Geistesblitze/Countdowns. */}
+      <View style={styles.dashCols}>
+      <View style={styles.dashColLeft}>
+
+      {/* 1. Google Tasks – offene Tasks aus dem Google-Tasks-Store (Klick → Tasks-Tab).
+          TE-152: Abschnitt bleibt auch ohne offene Tasks sichtbar, damit das
+          Plus-Icon zum schnellen Anlegen jederzeit erreichbar ist. */}
+      {showBlock('googleTasks') && (
         <View style={styles.section}>
           <SectionLabel
             title="Google Tasks"
             onMore={() => router.push('/(tabs)/tasks' as any)}
+            onAdd={() => router.push('/task/new' as any)}
             colors={colors}
           />
           <View>
@@ -853,12 +915,15 @@ export function DashboardScreen() {
         </View>
       )}
 
-      {/* 2. Personal Tasks – persönlicher Notizblock (Scratchpad), Klick → Tasks-Tab. */}
-      {showBlock('scratchpad') && personalNotes.length > 0 && (
+      {/* 2. Personal Tasks – persönlicher Notizblock (Scratchpad), Klick → Tasks-Tab.
+          TE-152: Abschnitt bleibt auch ohne offene Einträge sichtbar, Plus-Icon
+          öffnet das Schnell-Anlegen-Modal statt des vollen Tasks-Tabs. */}
+      {showBlock('scratchpad') && (
         <View style={styles.section}>
           <SectionLabel
             title="Personal Tasks"
             onMore={() => router.push('/(tabs)/tasks' as any)}
+            onAdd={() => setQuickAddKind('personal')}
             colors={colors}
           />
           <View>
@@ -887,12 +952,15 @@ export function DashboardScreen() {
         </View>
       )}
 
-      {/* 3. Notizen – kurze Notizen ohne Datum aus dem Notizen-Tab (TE-148). */}
-      {showBlock('quickNotes') && quickNotes.length > 0 && (
+      {/* 3. Notizen – kurze Notizen ohne Datum aus dem Notizen-Tab (TE-148).
+          TE-152: Abschnitt bleibt auch ohne Notizen sichtbar, Plus-Icon öffnet
+          das Schnell-Anlegen-Modal statt des vollen Notizen-Tabs. */}
+      {showBlock('quickNotes') && (
         <View style={styles.section}>
           <SectionLabel
             title="Notizen"
             onMore={() => router.push('/(tabs)/notes' as any)}
+            onAdd={() => setQuickAddKind('notiz')}
             colors={colors}
           />
           <View>
@@ -915,14 +983,59 @@ export function DashboardScreen() {
         </View>
       )}
 
+      </View>{/* TE-153: Ende linke Spalte */}
+
+      {/* TE-152: Schnell-Anlegen-Modal für Personal Tasks & Notizen – ein Textfeld,
+          Absenden legt den Eintrag direkt an (kein voller Formular-Umweg). */}
+      <Modal
+        visible={quickAddKind !== null}
+        animationType="fade"
+        transparent
+        onRequestClose={() => { setQuickAddKind(null); setQuickAddText(''); }}
+      >
+        <View style={[styles.feedModalOverlay, { backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center' }]}>
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => { setQuickAddKind(null); setQuickAddText(''); }}
+          />
+          <View style={[styles.quickAddCard, { backgroundColor: colors.background }]}>
+            <Text style={[styles.feedModalTitle, { color: colors.text }]}>
+              {quickAddKind === 'personal' ? 'Neuer Personal Task' : 'Neue Notiz'}
+            </Text>
+            <TextInput
+              value={quickAddText}
+              onChangeText={setQuickAddText}
+              placeholder="Text eingeben …"
+              placeholderTextColor={colors.textMuted}
+              style={[styles.quickAddInput, { color: colors.text, borderColor: colors.border }]}
+              autoFocus
+              onSubmitEditing={handleQuickAddSubmit}
+              returnKeyType="done"
+            />
+            <Pressable
+              onPress={handleQuickAddSubmit}
+              style={({ pressed }) => [styles.quickAddSaveBtn, { backgroundColor: colors.accent, opacity: pressed ? 0.8 : 1 }]}
+            >
+              <Text style={styles.quickAddSaveText}>Speichern</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      {/* TE-153: rechte Spalte – Links, Geistesblitze, Countdowns. */}
+      <View style={[styles.dashColRight, { width: rightColW }]}>
+
       {/* ── Links-Schnellleiste (TE-32): nur aktive Links, oberhalb der Geistesblitze ── */}
       {showBlock('links') && <LinkCardBar colors={colors} isDark={isDark} />}
 
-      {/* ── Geistesblitze: persönliche Gedanken-Kacheln ── */}
-      {showBlock('geistesblitze') && <GeistesKacheln colors={colors} isDark={isDark} />}
+      {/* ── Geistesblitze: persönliche Gedanken-Kacheln – Kachelgröße aus Spaltenbreite (TE-153) ── */}
+      {showBlock('geistesblitze') && <GeistesKacheln colors={colors} isDark={isDark} areaWidth={rightColW} columns={5} />}
 
-      {/* ── Countdowns (TE-128): filigrane, motivierende Karten oberhalb der Termine ── */}
-      {showBlock('countdowns') && <CountdownStrip colors={colors} />}
+      {/* ── Countdowns (TE-128): filigrane Karten, in der Spalte deutlich verkleinert (TE-153) ── */}
+      {showBlock('countdowns') && <CountdownStrip colors={colors} compact />}
+
+      </View>{/* TE-153: Ende rechte Spalte */}
+      </View>{/* TE-153: Ende zweispaltiger Block */}
 
       {/* ── Kalender ── */}
       {showBlock('calendar') && settings.googleCalendarEnabled && (
@@ -1355,6 +1468,31 @@ function makeStyles(c: ThemeColors, isDark: boolean, calm: boolean) {
       fontWeight: '700',
     },
 
+    // TE-152: Schnell-Anlegen-Modal (Personal Tasks / Notizen).
+    quickAddCard: {
+      marginHorizontal: 24,
+      borderRadius: 16,
+      padding: 20,
+      gap: 12,
+    },
+    quickAddInput: {
+      borderWidth: 1,
+      borderRadius: 10,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      fontSize: 15,
+    },
+    quickAddSaveBtn: {
+      borderRadius: 10,
+      paddingVertical: 10,
+      alignItems: 'center',
+    },
+    quickAddSaveText: {
+      color: '#fff',
+      fontWeight: '600',
+      fontSize: 14,
+    },
+
     section: {},
 
     card: {
@@ -1404,6 +1542,14 @@ function makeStyles(c: ThemeColors, isDark: boolean, calm: boolean) {
     },
     dezentText: { flex: 1, fontSize: 13, color: c.textSecondary },
     dezentMore: { fontSize: 12, paddingHorizontal: 16, paddingTop: 2 },
+
+    // TE-153: Zwei-Spalten-Layout auf dem Dashboard. Auf breiten Screens stehen
+    // linke Spalte (Kurzübersicht) und rechte Spalte (Links/Geistesblitze/
+    // Countdowns) nebeneinander; auf schmalen Screens bricht die rechte Spalte
+    // per flexWrap unter die linke um.
+    dashCols: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-start', columnGap: 8, rowGap: 20 },
+    dashColLeft: { flexGrow: 1, flexShrink: 1, flexBasis: 320, minWidth: 260, gap: 16 },
+    dashColRight: { gap: 16 },
 
     // Birthday – ganz oben, neon-gelb, schnell blinkend
     birthdayCard: {
