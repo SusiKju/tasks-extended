@@ -177,7 +177,7 @@ export function TaskListScreen() {
         <View style={[styles.groupCard, styles.groupCardGrow]}>
           <View style={styles.groupHeader}>
             <Ionicons name="checkmark-circle-outline" size={18} color={colors.text} />
-            <Text style={styles.groupTitle}>Tasks</Text>
+            <Text style={styles.groupTitle}>Google Tasks</Text>
             <TouchableOpacity
               onPress={() => router.push('/task/new')}
               style={styles.bigAddBtn}
