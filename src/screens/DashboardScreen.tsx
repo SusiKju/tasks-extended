@@ -22,7 +22,7 @@ import { parseScratchpad, sortScratch } from '../components/Scratchpad';
 import { useFirebaseAuth } from '../hooks/useFirebaseAuth';
 import { useGoogleTasksSync } from '../hooks/useGoogleTasksSync';
 import { useGoogleContactsBirthdaysSync } from '../hooks/useGoogleContactsBirthdaysSync';
-import { isOverdue, isDueToday } from '../utils/dateFormat';
+import { isOverdue, isDueToday, localDateStr } from '../utils/dateFormat';
 import { fetchRecentMails, fetchMailsByIds, MailMessage } from '../services/googleMail';
 import { listUpcomingEvents, CalendarEvent } from '../services/googleCalendar';
 import {
@@ -59,13 +59,16 @@ function dueInfo(task?: ChildTask): { label: string; overdue: boolean } | null {
   return { label: `${d}.${m}.`, overdue };
 }
 
-/** TE-150: Fälligkeit für Google/Personal Tasks (ISO "YYYY-MM-DD"): "heute" /
- * "TT.MM." mit Overdue-Markierung – analog zu dueInfo() für Kinder-Aufgaben. */
+/** TE-150: Fälligkeit für Google/Personal Tasks: "heute" / "TT.MM." mit
+ * Overdue-Markierung – analog zu dueInfo() für Kinder-Aufgaben. `dateStr` kann
+ * ein voller RFC3339-Zeitstempel sein (Google Tasks liefern z. B.
+ * "2025-06-25T10:00:00.000Z") – deshalb erst über localDateStr() auf das lokale
+ * "YYYY-MM-DD" normalisieren, bevor Tag/Monat herausgelöst werden. */
 function taskDue(dateStr?: string | null): { label: string; overdue: boolean } | null {
   if (!dateStr) return null;
   if (isDueToday(dateStr)) return { label: 'heute', overdue: false };
   const overdue = isOverdue(dateStr);
-  const [, m, d] = dateStr.split('-');
+  const [, m, d] = localDateStr(dateStr).split('-');
   return { label: `${d}.${m}.`, overdue };
 }
 
