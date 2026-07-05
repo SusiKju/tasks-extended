@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   TextInput, Alert, ActivityIndicator, RefreshControl, Modal, Pressable, Platform,
@@ -35,6 +35,7 @@ import {
   subscribeToChildTasks, addTask, updateTask, deleteTask, deleteCompletedTasks, rejectTask,
   releaseTaskReward,
   getActivityLog,
+  getEmailReminderConfig, setEmailReminderConfig,
 } from '../../src/services/kinderTasks';
 import { useFamily } from '../../src/hooks/useFamily';
 import {
@@ -321,7 +322,9 @@ export default function KinderScreen() {
 
   // "Push & Mail an alle" (TE-118): schickt Push + personalisierte Aufgaben-Mail
   // an jedes Kind mit hinterlegter E-Mail-Adresse, eines nach dem anderen.
-  const handleSendAllMail = useCallback(async () => {
+  // silent=true unterdrückt das Abschluss-Popup — für den automatischen
+  // Versand (TE-149), der ohne Nutzer-Interaktion läuft.
+  const runSendAllMail = useCallback(async (silent: boolean) => {
     setSendingAllMail(true);
     try {
       let sent = 0, skipped = 0, failed = 0;
@@ -331,14 +334,83 @@ export default function KinderScreen() {
         else if (result === 'skipped') skipped++;
         else failed++;
       }
-      const parts = [`${sent} verschickt`];
-      if (skipped > 0) parts.push(`${skipped} ohne E-Mail-Adresse übersprungen`);
-      if (failed > 0) parts.push(`${failed} fehlgeschlagen`);
-      crossInfo('✓ Push & Mail an alle', parts.join(' · '));
+      if (!silent) {
+        const parts = [`${sent} verschickt`];
+        if (skipped > 0) parts.push(`${skipped} ohne E-Mail-Adresse übersprungen`);
+        if (failed > 0) parts.push(`${failed} fehlgeschlagen`);
+        crossInfo('✓ Push & Mail an alle', parts.join(' · '));
+      }
     } finally {
       setSendingAllMail(false);
     }
   }, [familyChildren, sendTaskMailToChild]);
+
+  const handleSendAllMail = useCallback(() => runSendAllMail(false), [runSendAllMail]);
+
+  // ─── Automatischer täglicher Versand (TE-149) ──────────────────────────────
+  // Clientseitiger Scheduler: prüft alle 30 s die konfigurierten Zeiten und
+  // löst „Push & Mail an alle" still aus. Feuert nur, solange die App offen ist.
+  const [emailAutoEnabled, setEmailAutoEnabled] = useState(false);
+  const [emailTimes, setEmailTimes] = useState<string[]>(['06:00', '14:00']);
+  const [newTimeInput, setNewTimeInput] = useState('');
+
+  // Konfiguration einmal pro Familie laden.
+  useEffect(() => {
+    if (!fid) return;
+    getEmailReminderConfig(fid)
+      .then((c) => { setEmailAutoEnabled(c.enabled); setEmailTimes(c.times); })
+      .catch(() => {});
+  }, [fid]);
+
+  const persistEmailConfig = useCallback((enabled: boolean, times: string[]) => {
+    if (!fid) return;
+    setEmailReminderConfig(fid, { enabled, times }).catch(() => {});
+  }, [fid]);
+
+  const toggleEmailAuto = useCallback(() => {
+    const next = !emailAutoEnabled;
+    setEmailAutoEnabled(next);
+    persistEmailConfig(next, emailTimes);
+  }, [emailAutoEnabled, emailTimes, persistEmailConfig]);
+
+  const addEmailTime = useCallback(() => {
+    const t = newTimeInput.trim();
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(t)) {
+      crossInfo('Ungültige Zeit', 'Bitte im Format HH:MM eingeben, z. B. 06:00.');
+      return;
+    }
+    if (emailTimes.includes(t)) { setNewTimeInput(''); return; }
+    const next = [...emailTimes, t].sort();
+    setEmailTimes(next);
+    setNewTimeInput('');
+    persistEmailConfig(emailAutoEnabled, next);
+  }, [newTimeInput, emailTimes, emailAutoEnabled, persistEmailConfig]);
+
+  const removeEmailTime = useCallback((t: string) => {
+    const next = emailTimes.filter((x) => x !== t);
+    setEmailTimes(next);
+    persistEmailConfig(emailAutoEnabled, next);
+  }, [emailTimes, emailAutoEnabled, persistEmailConfig]);
+
+  // Scheduler: Ref auf die jeweils aktuelle Sende-Funktion, damit das Intervall
+  // nicht bei jeder Neuberechnung neu aufgesetzt werden muss.
+  const runSendAllRef = useRef(runSendAllMail);
+  useEffect(() => { runSendAllRef.current = runSendAllMail; }, [runSendAllMail]);
+  const lastFiredKeyRef = useRef('');
+
+  useEffect(() => {
+    if (!fid || !emailAutoEnabled || emailTimes.length === 0) return;
+    const id = setInterval(() => {
+      const now = new Date();
+      const hhmm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      if (!emailTimes.includes(hhmm)) return;
+      const key = `${now.toDateString()} ${hhmm}`;
+      if (lastFiredKeyRef.current === key) return; // pro Slot nur einmal pro Tag
+      lastFiredKeyRef.current = key;
+      runSendAllRef.current(true);
+    }, 30_000);
+    return () => clearInterval(id);
+  }, [fid, emailAutoEnabled, emailTimes]);
 
   // Gruppenaufgabe bei allen Teilnehmern löschen (TE-56).
   const handleDeleteGroupTask = useCallback((entry: { title: string; members: { childId: string; taskId: string }[] }) => {
@@ -1112,6 +1184,52 @@ export default function KinderScreen() {
             )}
           </TouchableOpacity>
 
+          {/* Automatischer täglicher Versand (TE-149) */}
+          <View style={s.autoMailBox}>
+            <View style={s.autoMailHeader}>
+              <Ionicons name="time-outline" size={16} color={colors.textMuted} />
+              <Text style={s.autoMailTitle}>Automatisch täglich senden</Text>
+              <TouchableOpacity
+                style={[s.autoToggle, emailAutoEnabled && s.autoToggleOn]}
+                onPress={toggleEmailAuto}
+              >
+                <Text style={[s.autoToggleText, emailAutoEnabled && s.autoToggleTextOn]}>
+                  {emailAutoEnabled ? 'An' : 'Aus'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+            <Text style={s.autoMailHint}>
+              Löst „Push & Mail an alle" automatisch zu diesen Zeiten aus – nur solange die App geöffnet ist.
+            </Text>
+            <View style={s.timeChips}>
+              {emailTimes.map((t) => (
+                <View key={t} style={s.timeChip}>
+                  <Text style={s.timeChipText}>{t}</Text>
+                  <TouchableOpacity onPress={() => removeEmailTime(t)} hitSlop={8}>
+                    <Ionicons name="close" size={14} color={colors.textMuted} />
+                  </TouchableOpacity>
+                </View>
+              ))}
+              {emailTimes.length === 0 && (
+                <Text style={s.autoMailHint}>Keine Zeiten – bitte unten hinzufügen.</Text>
+              )}
+            </View>
+            <View style={s.inputRow}>
+              <TextInput
+                style={s.input}
+                placeholder="HH:MM (z. B. 06:00)"
+                placeholderTextColor={colors.placeholder}
+                value={newTimeInput}
+                onChangeText={setNewTimeInput}
+                onSubmitEditing={addEmailTime}
+                keyboardType="numbers-and-punctuation"
+              />
+              <TouchableOpacity style={s.addBtn} onPress={addEmailTime}>
+                <Ionicons name="add" size={20} color="#000" />
+              </TouchableOpacity>
+            </View>
+          </View>
+
           {/* Kinder-Gerät einrichten — bewusst dezent (TE-89), damit er nicht versehentlich angetippt wird */}
           <TouchableOpacity style={s.setupBtn} onPress={() => setSetupModalVisible(true)}>
             <Ionicons name="phone-portrait-outline" size={14} color={colors.textMuted} />
@@ -1216,6 +1334,28 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
       backgroundColor: colors.accentNeon, borderRadius: 10,
       paddingHorizontal: 14, justifyContent: 'center',
     },
+    // Automatischer täglicher Versand (TE-149)
+    autoMailBox: {
+      marginTop: 10, gap: 8, padding: 12, borderRadius: 12,
+      backgroundColor: colors.inputBackground, borderWidth: 1, borderColor: colors.border,
+    },
+    autoMailHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    autoMailTitle: { flex: 1, fontSize: 14, fontWeight: '700', color: colors.text },
+    autoMailHint: { fontSize: 12, color: colors.textMuted, lineHeight: 16 },
+    autoToggle: {
+      paddingHorizontal: 12, paddingVertical: 5, borderRadius: 8,
+      borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface,
+    },
+    autoToggleOn: { backgroundColor: colors.accentNeon, borderColor: colors.accentNeon },
+    autoToggleText: { fontSize: 13, fontWeight: '800', color: colors.textMuted },
+    autoToggleTextOn: { color: '#000' },
+    timeChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+    timeChip: {
+      flexDirection: 'row', alignItems: 'center', gap: 6,
+      borderWidth: 1, borderColor: colors.border, borderRadius: 8,
+      paddingLeft: 10, paddingRight: 6, paddingVertical: 5, backgroundColor: colors.surface,
+    },
+    timeChipText: { fontSize: 14, fontWeight: '700', color: colors.text, letterSpacing: 0.5 },
     emailToggle: {
       flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4,
     },

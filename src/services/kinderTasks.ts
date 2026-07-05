@@ -59,6 +59,9 @@ function activityCol(familyId: string, childId: string) {
 function configDoc(familyId: string) {
   return doc(db, 'families', familyId, 'config', 'reminders');
 }
+function emailConfigDoc(familyId: string) {
+  return doc(db, 'families', familyId, 'config', 'emailReminders');
+}
 function pushTriggerDoc(familyId: string, childId: string) {
   return doc(db, 'families', familyId, 'pushTriggers', childId);
 }
@@ -369,4 +372,30 @@ export async function getReminderTimes(familyId: string): Promise<string[]> {
 
 export async function setReminderTimes(familyId: string, times: string[]): Promise<void> {
   await setDoc(configDoc(familyId), { times });
+}
+
+// ─── Automatischer E-Mail-Versand (TE-149) ───────────────────────────────────
+// Konfiguration für den täglichen Auto-Versand von „Push & Mail an alle".
+// Familien-geteilt (nicht per-Gerät), global für alle Kinder. Default: aus,
+// Standardzeiten 06:00 und 14:00.
+
+export interface EmailReminderConfig {
+  enabled: boolean;
+  times: string[];
+}
+
+export async function getEmailReminderConfig(familyId: string): Promise<EmailReminderConfig> {
+  const snap = await getDoc(emailConfigDoc(familyId));
+  if (snap.exists()) {
+    const d = snap.data();
+    return {
+      enabled: d.enabled === true,
+      times: Array.isArray(d.times) ? (d.times as string[]) : ['06:00', '14:00'],
+    };
+  }
+  return { enabled: false, times: ['06:00', '14:00'] };
+}
+
+export async function setEmailReminderConfig(familyId: string, config: EmailReminderConfig): Promise<void> {
+  await setDoc(emailConfigDoc(familyId), config);
 }
