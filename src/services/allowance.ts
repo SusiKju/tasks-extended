@@ -29,6 +29,26 @@ export interface AllowanceMonth {
   amount: number;
   /** ISO-Zeitstempel der letzten Bestätigung, null wenn zurückgesetzt. */
   confirmedAt: string | null;
+  /**
+   * Manuelle Monats-Korrektur (TE-154): überschreibt den regulären Betrag NUR
+   * für diesen Monat. null/undefined = keine Korrektur, regulärer Betrag gilt.
+   * Folgemonate bleiben unberührt (jede Korrektur steht nur unter ihrem Key).
+   */
+  overrideAmount?: number | null;
+  /** Optionaler Grund für die Korrektur (TE-154), z.B. "geborgt". */
+  overrideReason?: string | null;
+}
+
+/**
+ * Effektiver Taschengeld-Betrag eines Monats: die manuelle Korrektur, falls
+ * gesetzt, sonst der regulär konfigurierte Betrag. Zentraler Helfer, damit
+ * Eltern-Ansicht und Kind-Ansicht denselben Wert zeigen (TE-154).
+ */
+export function effectiveAllowance(
+  configured: number,
+  month?: AllowanceMonth,
+): number {
+  return month?.overrideAmount != null ? month.overrideAmount : configured;
 }
 
 function childDoc(familyId: string, childId: string) {
@@ -105,6 +125,35 @@ export async function setAllowanceReceived(
   await setDoc(
     childDoc(familyId, childId),
     { allowanceMonths: { [month]: entry } },
+    { merge: true },
+  );
+}
+
+/**
+ * Setzt (oder löscht) die manuelle Monats-Korrektur eines Kindes (TE-154).
+ * `overrideAmount === null` entfernt die Korrektur (regulärer Betrag gilt wieder).
+ * setDoc-merge überschreibt nur die beiden Korrektur-Felder des betroffenen
+ * Monats; `received`/`amount`/`confirmedAt` bleiben unangetastet (Firestore
+ * merged Map-Felder rekursiv). Legt den Monatseintrag bei Bedarf an.
+ */
+export async function setAllowanceOverride(
+  familyId: string,
+  childId: string,
+  month: string,
+  overrideAmount: number | null,
+  overrideReason: string | null = null,
+): Promise<void> {
+  await setDoc(
+    childDoc(familyId, childId),
+    {
+      allowanceMonths: {
+        [month]: {
+          overrideAmount,
+          // Grund nur behalten, wenn eine Korrektur besteht.
+          overrideReason: overrideAmount != null ? overrideReason : null,
+        },
+      },
+    },
     { merge: true },
   );
 }

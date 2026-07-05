@@ -11,6 +11,7 @@ import {
   Platform,
   Dimensions,
   Modal,
+  Alert,
   useWindowDimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -29,7 +30,7 @@ import { listUpcomingEvents, CalendarEvent } from '../services/googleCalendar';
 import {
   ChildTask, subscribeToChildTasks,
 } from '../services/kinderTasks';
-import { AllowanceMonth, subscribeToAllowanceMonths, monthKey, formatEuro, formatMonthLabel } from '../services/allowance';
+import { AllowanceMonth, subscribeToAllowanceMonths, monthKey, formatEuro, formatMonthLabel, effectiveAllowance, setAllowanceOverride } from '../services/allowance';
 import { useFamily } from '../hooks/useFamily';
 import { SharedNotepad } from '../components/SharedNotepad';
 import { GeistesKacheln } from '../components/GeistesKacheln';
@@ -352,6 +353,38 @@ export function DashboardScreen() {
     ),
     [familyChildren, allowanceByChild, currentAllowanceMonth]
   );
+
+  // Taschengeld-Korrektur für den laufenden Monat (TE-154): Eltern passen den
+  // Betrag eines Kindes nur für diesen Monat an, optional mit Grund.
+  const [allowanceEdit, setAllowanceEdit] = useState<{
+    childId: string; amount: string; reason: string;
+  } | null>(null);
+  const openAllowanceEdit = useCallback((childId: string) => {
+    const m = allowanceByChild[childId]?.[currentAllowanceMonth];
+    const configured = familyChildren.find((c) => c.id === childId)?.allowance ?? 0;
+    setAllowanceEdit({
+      childId,
+      amount: String(m?.overrideAmount != null ? m.overrideAmount : configured),
+      reason: m?.overrideReason ?? '',
+    });
+  }, [allowanceByChild, currentAllowanceMonth, familyChildren]);
+  const saveAllowanceEdit = useCallback(async () => {
+    if (!allowanceEdit || !fid) { setAllowanceEdit(null); return; }
+    const t = allowanceEdit.amount.trim().replace(',', '.');
+    const n = t === '' ? NaN : parseFloat(t);
+    const configured = familyChildren.find((c) => c.id === allowanceEdit.childId)?.allowance ?? 0;
+    // Betrag == regulär → Korrektur entfernen; sonst als Override speichern.
+    const override = Number.isFinite(n) && n >= 0 && n !== configured ? n : null;
+    try {
+      await setAllowanceOverride(
+        fid, allowanceEdit.childId, currentAllowanceMonth,
+        override, allowanceEdit.reason.trim() || null,
+      );
+    } catch (e: any) {
+      Alert.alert('Fehler', e?.message ?? 'Korrektur speichern fehlgeschlagen.');
+    }
+    setAllowanceEdit(null);
+  }, [allowanceEdit, fid, currentAllowanceMonth, familyChildren]);
 
   // ── Feed-Block ("Mein Tag"): zusätzliche Datenquellen, die bisher nur in den ──
   // jeweiligen Einzel-Komponenten geladen wurden (Geteilte Liste, Countdowns,
@@ -1326,27 +1359,83 @@ export function DashboardScreen() {
             colors={colors}
           />
           <View style={[styles.card, styles.kidCard]}>
-            {openAllowanceChildren.map((child, i) => (
-              <View
-                key={child.id}
-                style={[styles.kidRow, i < openAllowanceChildren.length - 1 && styles.rowDivider]}
-              >
-                <View style={[styles.kidAvatar, { backgroundColor: childColor(child.id) }]}>
-                  <Text style={styles.kidAvatarText}>
-                    {childEmoji(child.id) ?? childName(child.id).charAt(0)}
+            {openAllowanceChildren.map((child, i) => {
+              const m = allowanceByChild[child.id]?.[currentAllowanceMonth];
+              const corrected = m?.overrideAmount != null;
+              const amount = effectiveAllowance(child.allowance ?? 0, m);
+              return (
+                <Pressable
+                  key={child.id}
+                  onPress={() => openAllowanceEdit(child.id)}
+                  style={[styles.kidRow, i < openAllowanceChildren.length - 1 && styles.rowDivider]}
+                >
+                  <View style={[styles.kidAvatar, { backgroundColor: childColor(child.id) }]}>
+                    <Text style={styles.kidAvatarText}>
+                      {childEmoji(child.id) ?? childName(child.id).charAt(0)}
+                    </Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.kidTaskText, { color: colors.text }]} numberOfLines={1}>
+                      {childName(child.id)}
+                    </Text>
+                    {corrected && (
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: '#B45309' }} numberOfLines={1}>
+                        angepasst{m?.overrideReason ? ` · ${m.overrideReason}` : ''}
+                      </Text>
+                    )}
+                  </View>
+                  <Text style={[styles.dueBadge, styles.dueBadgeOverdue]}>
+                    {formatEuro(amount)}
                   </Text>
-                </View>
-                <Text style={[styles.kidTaskText, { color: colors.text }]} numberOfLines={1}>
-                  {childName(child.id)}
-                </Text>
-                <Text style={[styles.dueBadge, styles.dueBadgeOverdue]}>
-                  {formatEuro(child.allowance ?? 0)}
-                </Text>
-              </View>
-            ))}
+                  <Ionicons name="pencil" size={13} color={colors.textMuted} style={{ marginLeft: 6 }} />
+                </Pressable>
+              );
+            })}
           </View>
         </View>
       )}
+
+      {/* ── Taschengeld-Korrektur (TE-154): Betrag nur für diesen Monat anpassen ── */}
+      <Modal visible={allowanceEdit !== null} transparent animationType="fade">
+        <Pressable style={styles.allowanceEditOverlay} onPress={() => setAllowanceEdit(null)}>
+          <Pressable style={[styles.allowanceEditBox, { backgroundColor: colors.surface }]} onPress={() => {}}>
+            <Text style={[styles.allowanceEditTitle, { color: colors.text }]}>
+              Taschengeld anpassen
+            </Text>
+            <Text style={[styles.allowanceEditSub, { color: colors.textMuted }]}>
+              {allowanceEdit ? `${childName(allowanceEdit.childId)} · ${formatMonthLabel(currentAllowanceMonth)}` : ''}
+              {'  ·  '}gilt nur diesen Monat
+            </Text>
+            <View style={styles.allowanceEditRow}>
+              <TextInput
+                style={[styles.allowanceEditInput, { color: colors.text, borderColor: colors.border }]}
+                value={allowanceEdit?.amount ?? ''}
+                onChangeText={(v) => setAllowanceEdit((s) => (s ? { ...s, amount: v } : s))}
+                keyboardType="decimal-pad"
+                placeholder="Betrag"
+                placeholderTextColor={colors.placeholder}
+                autoFocus
+              />
+              <Text style={{ color: colors.text, fontWeight: '700' }}>€</Text>
+            </View>
+            <TextInput
+              style={[styles.allowanceEditInput, { color: colors.text, borderColor: colors.border, marginTop: 8 }]}
+              value={allowanceEdit?.reason ?? ''}
+              onChangeText={(v) => setAllowanceEdit((s) => (s ? { ...s, reason: v } : s))}
+              placeholder="Grund (optional, z.B. geborgt)"
+              placeholderTextColor={colors.placeholder}
+            />
+            <View style={styles.allowanceEditActions}>
+              <Pressable onPress={() => setAllowanceEdit(null)} hitSlop={8}>
+                <Text style={{ color: colors.textMuted, fontWeight: '700' }}>Abbrechen</Text>
+              </Pressable>
+              <Pressable onPress={saveAllowanceEdit} hitSlop={8} style={[styles.allowanceEditSave, { backgroundColor: colors.accentNeon }]}>
+                <Text style={{ color: readableTextOn(colors.accentNeon), fontWeight: '800' }}>Speichern</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {/* ── Posteingang ── */}
       {showBlock('mail') && settings.googleAccessToken && (
@@ -1674,6 +1763,27 @@ function makeStyles(c: ThemeColors, isDark: boolean, calm: boolean) {
       paddingVertical: 10,
     },
     kidTaskText: { flex: 1, fontSize: 13, fontWeight: '500' },
+    // Taschengeld-Korrektur-Modal (TE-154)
+    allowanceEditOverlay: {
+      flex: 1, backgroundColor: 'rgba(0,0,0,0.55)',
+      justifyContent: 'center', alignItems: 'center', padding: 24,
+    },
+    allowanceEditBox: {
+      width: '100%', maxWidth: 340, borderRadius: 16, padding: 20,
+      borderWidth: 1, borderColor: c.border,
+    },
+    allowanceEditTitle: { fontSize: 17, fontWeight: '800' },
+    allowanceEditSub: { fontSize: 12, marginTop: 2, marginBottom: 14 },
+    allowanceEditRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    allowanceEditInput: {
+      flex: 1, borderWidth: 1, borderRadius: 10,
+      paddingHorizontal: 12, paddingVertical: 9, fontSize: 15,
+    },
+    allowanceEditActions: {
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end',
+      gap: 18, marginTop: 18,
+    },
+    allowanceEditSave: { paddingHorizontal: 18, paddingVertical: 9, borderRadius: 10 },
     kidTaskDone: { textDecorationLine: 'line-through', color: c.textMuted },
     // Fälligkeitsdatum je Aufgabe (TE-119): rot, wenn der Termin überschritten ist.
     dueBadge: {

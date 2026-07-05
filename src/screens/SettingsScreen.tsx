@@ -46,7 +46,10 @@ import {
   subscribeToMembers, leaveFamily,
   addChild, updateChild, deleteChild,
 } from '../services/family';
-import { setChildAllowance } from '../services/allowance';
+import {
+  setChildAllowance, setAllowanceOverride, subscribeToAllowanceMonths,
+  monthKey, formatMonthLabel, AllowanceMonth,
+} from '../services/allowance';
 
 /** Eingabe-Toleranz: "5,50" → 5.5, leer → null, ungültig/negativ → null. */
 function parseAllowance(text: string): number | null {
@@ -111,6 +114,12 @@ export function SettingsScreen() {
   // Taschengeld-Eingabe (TE-52): lokaler Roh-Text pro Kind, damit "5," beim
   // Tippen nicht sofort zu null geparst wird. Persistiert beim Verlassen des Felds.
   const [allowanceDrafts, setAllowanceDrafts] = useState<Record<string, string>>({});
+  // Monats-Korrektur (TE-154): Echtzeit-Stand + lokale Roh-Eingaben pro Kind.
+  const currentMonth = monthKey();
+  const [allowanceMonthsByChild, setAllowanceMonthsByChild] =
+    useState<Record<string, Record<string, AllowanceMonth>>>({});
+  const [overrideDrafts, setOverrideDrafts] = useState<Record<string, string>>({});
+  const [reasonDrafts, setReasonDrafts] = useState<Record<string, string>>({});
 
   const handleAllowanceCommit = useCallback(async (child: ChildConfig, text: string) => {
     if (!familyId) return;
@@ -123,10 +132,50 @@ export function SettingsScreen() {
     }
   }, [familyId]);
 
+  // Korrektur für den laufenden Monat schreiben. Leer oder == regulärer Betrag
+  // → Korrektur entfernen; sonst als Override speichern.
+  const handleOverrideCommit = useCallback(async (child: ChildConfig) => {
+    if (!familyId) return;
+    const touchedAmount = overrideDrafts[child.id] !== undefined;
+    const touchedReason = reasonDrafts[child.id] !== undefined;
+    if (!touchedAmount && !touchedReason) return; // nichts angefasst
+    const existing = allowanceMonthsByChild[child.id]?.[currentMonth];
+    const configured = child.allowance ?? 0;
+    // Betrag: aus Eingabe, sonst bestehende Korrektur behalten. Betrag == regulär → keine Korrektur.
+    let override: number | null;
+    if (touchedAmount) {
+      const amount = parseAllowance(overrideDrafts[child.id]);
+      override = amount != null && amount !== configured ? amount : null;
+    } else {
+      override = existing?.overrideAmount ?? null;
+    }
+    const reason = touchedReason
+      ? ((reasonDrafts[child.id] ?? '').trim() || null)
+      : (existing?.overrideReason ?? null);
+    if ((existing?.overrideAmount ?? null) === override
+        && (existing?.overrideReason ?? null) === reason) return; // keine Änderung
+    try {
+      await setAllowanceOverride(familyId, child.id, currentMonth, override, reason);
+    } catch (e: any) {
+      Alert.alert('Fehler', e?.message ?? 'Korrektur speichern fehlgeschlagen.');
+    }
+  }, [familyId, overrideDrafts, reasonDrafts, allowanceMonthsByChild, currentMonth]);
+
   useEffect(() => {
     if (!familyId) return;
     return subscribeToMembers(familyId, setMembers);
   }, [familyId]);
+
+  // Taschengeld-Monate pro Kind für die Korrektur-Anzeige (TE-154).
+  useEffect(() => {
+    if (!familyId || familyChildren.length === 0) return;
+    const unsubs = familyChildren.map((child) =>
+      subscribeToAllowanceMonths(familyId, child.id, (months) =>
+        setAllowanceMonthsByChild((prev) => ({ ...prev, [child.id]: months }))
+      )
+    );
+    return () => unsubs.forEach((u) => u());
+  }, [familyId, familyChildren]);
 
   const handleCopyCode = useCallback(() => {
     if (!meta?.code) return;
@@ -599,6 +648,45 @@ export function SettingsScreen() {
                   />
                   <Text style={styles.rowSubtitle}>€</Text>
                 </View>
+                {/* Monats-Korrektur (TE-154): nur für den laufenden Monat */}
+                {(child.allowance ?? 0) > 0 && (
+                  <>
+                    <View style={styles.allowanceRow}>
+                      <Ionicons name="create-outline" size={16} color={colors.textSecondary} />
+                      <Text style={[styles.rowSubtitle, { flex: 1 }]}>
+                        Diesen Monat ({formatMonthLabel(currentMonth)})
+                      </Text>
+                      <TextInput
+                        style={[styles.settingInput, styles.allowanceInput]}
+                        placeholder={String(child.allowance ?? 0)}
+                        placeholderTextColor={colors.placeholder}
+                        value={
+                          overrideDrafts[child.id] ??
+                          (allowanceMonthsByChild[child.id]?.[currentMonth]?.overrideAmount != null
+                            ? String(allowanceMonthsByChild[child.id][currentMonth].overrideAmount)
+                            : '')
+                        }
+                        onChangeText={(v) => setOverrideDrafts((d) => ({ ...d, [child.id]: v }))}
+                        onEndEditing={() => handleOverrideCommit(child)}
+                        onBlur={() => handleOverrideCommit(child)}
+                        keyboardType="decimal-pad"
+                      />
+                      <Text style={styles.rowSubtitle}>€</Text>
+                    </View>
+                    <TextInput
+                      style={[styles.settingInput, { marginTop: 4 }]}
+                      placeholder="Grund (optional, z.B. geborgt)"
+                      placeholderTextColor={colors.placeholder}
+                      value={
+                        reasonDrafts[child.id] ??
+                        (allowanceMonthsByChild[child.id]?.[currentMonth]?.overrideReason ?? '')
+                      }
+                      onChangeText={(v) => setReasonDrafts((d) => ({ ...d, [child.id]: v }))}
+                      onEndEditing={() => handleOverrideCommit(child)}
+                      onBlur={() => handleOverrideCommit(child)}
+                    />
+                  </>
+                )}
               </View>
             ))}
           </View>

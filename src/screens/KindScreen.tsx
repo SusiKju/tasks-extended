@@ -20,7 +20,7 @@ import {
 import { ChildConfig, subscribeToChildren } from '../services/family';
 import {
   AllowanceMonth, subscribeToAllowanceMonths, setAllowanceReceived, monthKey,
-  formatEuro, formatMonthLabel,
+  formatEuro, formatMonthLabel, effectiveAllowance,
 } from '../services/allowance';
 import { registerPushToken } from '../services/pushNotifications';
 
@@ -223,9 +223,13 @@ export default function KindScreen({ onExitChildMode }: Props) {
 
   // Taschengeld (TE-53/TE-54)
   const selectedChild = familyChildren.find((c) => c.id === childId);
-  const allowance = selectedChild?.allowance ?? 0;
   const thisMonthKey = monthKey();
-  const allowanceReceived = allowanceMonths[thisMonthKey]?.received ?? false;
+  // Effektiver Betrag dieses Monats: manuelle Korrektur (TE-154) sonst regulär.
+  const configuredAllowance = selectedChild?.allowance ?? 0;
+  const thisMonth = allowanceMonths[thisMonthKey];
+  const allowance = effectiveAllowance(configuredAllowance, thisMonth);
+  const allowanceCorrected = thisMonth?.overrideAmount != null;
+  const allowanceReceived = thisMonth?.received ?? false;
   // Verlauf absteigend sortiert (neuster Monat zuerst) – Basis für TE-54.
   const allowanceHistory = Object.entries(allowanceMonths)
     .sort(([a], [b]) => b.localeCompare(a));
@@ -324,13 +328,18 @@ export default function KindScreen({ onExitChildMode }: Props) {
         </View>
       </View>
 
-      {/* Taschengeld-Karte (TE-53) – nur wenn ein Betrag konfiguriert ist */}
-      {allowance > 0 && (
+      {/* Taschengeld-Karte (TE-53) – wenn ein Betrag konfiguriert oder korrigiert ist */}
+      {(configuredAllowance > 0 || allowanceCorrected) && (
         <View style={[s.allowanceCard, allowanceReceived && s.allowanceCardDone]}>
           <Text style={s.allowanceEmoji}>💶</Text>
           <View style={{ flex: 1 }}>
             <Text style={s.allowanceLabel}>Taschengeld {formatMonthLabel(thisMonthKey)}</Text>
             <Text style={s.allowanceAmount}>{formatEuro(allowance)}</Text>
+            {allowanceCorrected && (
+              <Text style={s.allowanceCorrected}>
+                Diesen Monat angepasst{thisMonth?.overrideReason ? ` · ${thisMonth.overrideReason}` : ''}
+              </Text>
+            )}
             <Text style={s.allowanceHint}>
               {allowanceReceived ? 'Erhalten ✓' : 'Schon bekommen? Hier abhaken.'}
             </Text>
@@ -498,6 +507,7 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
     allowanceLabel: { fontSize: 14, fontWeight: '700', color: '#2A5B9E' },
     allowanceAmount: { fontSize: 26, fontWeight: '900', color: '#14305E', marginTop: 1 },
     allowanceHint: { fontSize: 13, color: '#3A6BB5', marginTop: 2 },
+    allowanceCorrected: { fontSize: 12, fontWeight: '700', color: '#B45309', marginTop: 2 },
     allowanceActions: { alignItems: 'center', gap: 8 },
     allowanceCheck: {
       width: 40, height: 40, borderRadius: 20, borderWidth: 2.5,
