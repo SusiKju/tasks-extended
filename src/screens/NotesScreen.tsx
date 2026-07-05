@@ -717,6 +717,10 @@ export function NotesScreen() {
         styles={styles}
       />
 
+      {/* TE-148/TE-151: eigener Abschnitt „Notizen" für die komplexen Notizen –
+          klar abgesetzt vom Schnelle-Notizen-Block darüber. */}
+      <SectionHeader label="Notizen" colors={colors} />
+
       {/* Filter + sort bar */}
       <View style={styles.filterBar}>
         <View style={styles.filterTopRow}>
@@ -796,7 +800,7 @@ export function NotesScreen() {
           )}
           {unpinnedNotes.length > 0 && (
             <>
-              {pinnedNotes.length > 0 && <SectionHeader label="Notizen" colors={colors} />}
+              {pinnedNotes.length > 0 && <SectionHeader label="Weitere" colors={colors} />}
               <View style={styles.grid}>{renderGrid(unpinnedNotes)}</View>
             </>
           )}
@@ -830,7 +834,7 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: c.background },
     // TE-148: Schnelle Notizen
-    quickSection: { paddingBottom: 4 },
+    quickSection: { paddingTop: 4, paddingBottom: 14 },
     quickCard: {
       marginHorizontal: 16,
       borderRadius: 12,
@@ -858,10 +862,11 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
     quickBullet: { width: 6, height: 6, borderRadius: 3 },
     quickText: { flex: 1, fontSize: 15, lineHeight: 20 },
     quickDelete: { padding: 2 },
-    filterBar: { paddingTop: 8, gap: 4 },
+    filterBar: { paddingTop: 4, paddingBottom: 10, gap: 4 },
     filterTopRow: {
       flexDirection: 'row',
       alignItems: 'center',
+      justifyContent: 'flex-end',
       paddingHorizontal: 16,
       gap: 8,
     },
@@ -886,7 +891,7 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
       borderWidth: 1, borderColor: c.border,
     },
     groupFilterText: { fontSize: 13, fontWeight: '500' },
-    scrollContent: { paddingBottom: 100 },
+    scrollContent: { paddingTop: 4, paddingBottom: 100 },
     grid: { paddingHorizontal: GRID_PADDING, gap: GRID_GAP },
     gridRow: { flexDirection: 'row', gap: GRID_GAP, marginBottom: 0 },
     noteCard: {
