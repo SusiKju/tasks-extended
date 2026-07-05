@@ -40,8 +40,9 @@ import { FeedBlock, FeedItem } from '../components/FeedBlock';
 import { subscribeToFeedOrder, saveFeedOrder, FeedOrder } from '../services/feedOrderService';
 import { subscribeToFeedHighlight, saveFeedHighlight } from '../services/feedHighlightService';
 import { SharedNoteItem, subscribeToSharedNotes } from '../services/sharedNotes';
+import { subscribeToQuickNotes } from '../services/quickNotesService';
 import { GeistesKachel, subscribeToGeistesKacheln } from '../services/geistesKacheln';
-import { DashboardBlockKey } from '../types';
+import { DashboardBlockKey, QuickNote } from '../types';
 
 // Fallback-Farbe falls Kind keine Farbe gesetzt hat
 const CHILD_COLOR_FALLBACK = '#4f86f7';
@@ -431,6 +432,15 @@ export function DashboardScreen() {
     );
     return unsub;
   }, [fid]);
+
+  // TE-148: Schnelle Notizen (eigener Dashboard-Block, nur Anzeige – bearbeitet
+  // wird im Notizen-Tab). Neueste zuerst; auf dem Dashboard gekappt.
+  const [quickNotes, setQuickNotes] = useState<QuickNote[]>([]);
+  useEffect(() => {
+    if (!fid || !user?.uid) return;
+    const unsub = subscribeToQuickNotes(fid, user.uid, setQuickNotes, () => setQuickNotes([]));
+    return unsub;
+  }, [fid, user?.uid]);
 
   const [feedGeistesKacheln, setFeedGeistesKacheln] = useState<GeistesKachel[]>([]);
   useEffect(() => {
@@ -918,6 +928,38 @@ export function DashboardScreen() {
         })()}
 
       </View>
+      )}
+
+      {/* ── Schnelle Notizen (TE-148): kurze Notizen ohne Datum aus dem Notizen-Tab ── */}
+      {showBlock('quickNotes') && quickNotes.length > 0 && (
+        <View style={styles.section}>
+          <SectionLabel
+            title="Schnelle Notizen"
+            onMore={() => router.push('/(tabs)/notes' as any)}
+            colors={colors}
+          />
+          <Pressable
+            style={[styles.card, styles.kidCard]}
+            onPress={() => router.push('/(tabs)/notes' as any)}
+          >
+            {quickNotes.slice(0, 6).map((n, i, arr) => (
+              <View
+                key={n.id}
+                style={[styles.kidRow, i < arr.length - 1 && styles.rowDivider]}
+              >
+                <View style={styles.quickNoteBullet} />
+                <Text style={[styles.kidTaskText, { color: colors.text }]} numberOfLines={2}>
+                  {n.text}
+                </Text>
+              </View>
+            ))}
+            {quickNotes.length > 6 && (
+              <Text style={[styles.emptyText, { paddingTop: 6 }]}>
+                +{quickNotes.length - 6} weitere
+              </Text>
+            )}
+          </Pressable>
+        </View>
       )}
 
       {/* ── Links-Schnellleiste (TE-32): nur aktive Links, oberhalb der Geistesblitze ── */}
@@ -1555,6 +1597,8 @@ function makeStyles(c: ThemeColors, isDark: boolean, calm: boolean) {
     },
     kidTaskText: { flex: 1, fontSize: 13, fontWeight: '500' },
     kidTaskDone: { textDecorationLine: 'line-through', color: c.textMuted },
+    // TE-148: Aufzählungspunkt vor einer schnellen Notiz auf dem Dashboard.
+    quickNoteBullet: { width: 6, height: 6, borderRadius: 3, backgroundColor: c.textMuted },
     // Fälligkeitsdatum je Aufgabe (TE-119): rot, wenn der Termin überschritten ist.
     dueBadge: {
       fontSize: 11, fontWeight: '700', color: c.textMuted,

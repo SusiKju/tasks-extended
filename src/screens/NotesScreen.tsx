@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useStore } from '../store';
-import { Note, NoteChecklistItem } from '../types';
+import { Note, NoteChecklistItem, QuickNote } from '../types';
 import { DatePickerModal } from '../components/DatePickerModal';
 import { formatDate, isOverdue, isDueToday } from '../utils/dateFormat';
 import { useTheme, ThemeColors, neonGlow, readableTextOn } from '../utils/theme';
@@ -27,6 +27,11 @@ import {
   updatePersonalNote,
   deletePersonalNote,
 } from '../services/personalNotesService';
+import {
+  subscribeToQuickNotes,
+  addQuickNote,
+  deleteQuickNote,
+} from '../services/quickNotesService';
 
 const NOTE_COLORS = [
   { value: '#F0C040', label: 'Amber' },
@@ -421,6 +426,76 @@ function SectionHeader({ label, colors }: { label: string; colors: ThemeColors }
   );
 }
 
+// ─── Quick Notes Section (TE-148) ─────────────────────────────────────────────
+// Bewusst simpler Abschnitt oberhalb der komplexen Notizen: nur Text, kein Datum.
+// Neue Notiz über das Eingabefeld oben, Löschen über das ✕ je Zeile.
+
+interface QuickNotesSectionProps {
+  notes: QuickNote[];
+  onAdd: (text: string) => void;
+  onDelete: (note: QuickNote) => void;
+  colors: ThemeColors;
+  styles: ReturnType<typeof makeStyles>;
+}
+
+function QuickNotesSection({ notes, onAdd, onDelete, colors, styles }: QuickNotesSectionProps) {
+  const [draft, setDraft] = useState('');
+
+  const submit = useCallback(() => {
+    const text = draft.trim();
+    if (!text) return;
+    onAdd(text);
+    setDraft('');
+  }, [draft, onAdd]);
+
+  return (
+    <View style={styles.quickSection}>
+      <SectionHeader label="⚡ Schnelle Notizen" colors={colors} />
+      <View style={[styles.quickCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        {/* Eingabe */}
+        <View style={styles.quickAddRow}>
+          <Ionicons name="add" size={18} color={colors.textSecondary} />
+          <TextInput
+            style={[styles.quickInput, { color: colors.text }]}
+            value={draft}
+            onChangeText={setDraft}
+            placeholder="Schnelle Notiz…"
+            placeholderTextColor={colors.textMuted}
+            onSubmitEditing={submit}
+            returnKeyType="done"
+            blurOnSubmit={false}
+          />
+          {draft.trim() ? (
+            <Pressable onPress={submit} hitSlop={8}>
+              <Text style={[styles.quickAddText, { color: colors.accent }]}>Sichern</Text>
+            </Pressable>
+          ) : null}
+        </View>
+
+        {/* Liste */}
+        {notes.length === 0 ? (
+          <Text style={[styles.quickEmpty, { color: colors.textMuted }]}>
+            Noch keine schnellen Notizen
+          </Text>
+        ) : (
+          notes.map((n, i) => (
+            <View
+              key={n.id}
+              style={[styles.quickRow, i < notes.length - 1 && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}
+            >
+              <View style={[styles.quickBullet, { backgroundColor: colors.textMuted }]} />
+              <Text style={[styles.quickText, { color: colors.text }]}>{n.text}</Text>
+              <Pressable onPress={() => onDelete(n)} hitSlop={8} style={styles.quickDelete}>
+                <Ionicons name="close" size={16} color={colors.textMuted} />
+              </Pressable>
+            </View>
+          ))
+        )}
+      </View>
+    </View>
+  );
+}
+
 // ─── Notes Screen ─────────────────────────────────────────────────────────────
 
 export function NotesScreen() {
@@ -432,6 +507,8 @@ export function NotesScreen() {
 
   const [notes, setNotes] = useState<Note[]>([]);
   const [loading, setLoading] = useState(true);
+  // TE-148: schnelle Notizen (eigener Firestore-Store, unabhängig von den komplexen Notizen)
+  const [quickNotes, setQuickNotes] = useState<QuickNote[]>([]);
 
   // Firestore-Echtzeit-Abo
   useEffect(() => {
@@ -445,6 +522,33 @@ export function NotesScreen() {
     const loadingGuard = setTimeout(() => setLoading(false), 5000);
     return () => { unsub(); clearTimeout(loadingGuard); };
   }, [familyId, user?.uid]);
+
+  // TE-148: Echtzeit-Abo der schnellen Notizen
+  useEffect(() => {
+    if (!familyId || !user?.uid) return;
+    const unsub = subscribeToQuickNotes(familyId, user.uid, setQuickNotes);
+    return unsub;
+  }, [familyId, user?.uid]);
+
+  const handleAddQuick = useCallback(
+    (text: string) => {
+      if (!familyId || !user?.uid) return;
+      addQuickNote(familyId, user.uid, text).catch((err) =>
+        Alert.alert('Fehler beim Speichern', err?.message ?? String(err)),
+      );
+    },
+    [familyId, user?.uid],
+  );
+
+  const handleDeleteQuick = useCallback(
+    (note: QuickNote) => {
+      if (!familyId || !user?.uid) return;
+      deleteQuickNote(familyId, user.uid, note.id).catch((err) =>
+        Alert.alert('Fehler beim Löschen', err?.message ?? String(err)),
+      );
+    },
+    [familyId, user?.uid],
+  );
 
   const [modalVisible, setModalVisible] = useState(false);
   const [editingNote, setEditingNote] = useState<Note | null>(null);
@@ -603,6 +707,16 @@ export function NotesScreen() {
 
   return (
     <View style={styles.container}>
+      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+      {/* TE-148: Schnelle Notizen – eigener, simpler Abschnitt oberhalb der komplexen Notizen */}
+      <QuickNotesSection
+        notes={quickNotes}
+        onAdd={handleAddQuick}
+        onDelete={handleDeleteQuick}
+        colors={colors}
+        styles={styles}
+      />
+
       {/* Filter + sort bar */}
       <View style={styles.filterBar}>
         <View style={styles.filterTopRow}>
@@ -659,7 +773,7 @@ export function NotesScreen() {
         )}
       </View>
 
-      {/* Content */}
+      {/* Content (komplexe Notizen) */}
       {loading ? (
         <View style={styles.empty}>
           <ActivityIndicator color={colors.accent} />
@@ -673,7 +787,7 @@ export function NotesScreen() {
           </Text>
         </View>
       ) : (
-        <ScrollView contentContainerStyle={styles.scrollContent}>
+        <>
           {pinnedNotes.length > 0 && (
             <>
               <SectionHeader label="📌 Angeheftet" colors={colors} />
@@ -686,8 +800,9 @@ export function NotesScreen() {
               <View style={styles.grid}>{renderGrid(unpinnedNotes)}</View>
             </>
           )}
-        </ScrollView>
+        </>
       )}
+      </ScrollView>
 
       <Pressable style={[styles.fab, { backgroundColor: 'transparent' }]} onPress={handleAdd}>
         <Ionicons name="add" size={28} color="#fff" />
@@ -714,6 +829,35 @@ export function NotesScreen() {
 function makeStyles(c: ThemeColors, isDark: boolean) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: c.background },
+    // TE-148: Schnelle Notizen
+    quickSection: { paddingBottom: 4 },
+    quickCard: {
+      marginHorizontal: 16,
+      borderRadius: 12,
+      borderWidth: 1,
+      paddingHorizontal: 12,
+      paddingVertical: 4,
+    },
+    quickAddRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      paddingVertical: 8,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: c.border,
+    },
+    quickInput: { flex: 1, fontSize: 15, paddingVertical: 2 },
+    quickAddText: { fontSize: 14, fontWeight: '600' },
+    quickEmpty: { fontSize: 13, paddingVertical: 12, textAlign: 'center' },
+    quickRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      paddingVertical: 9,
+    },
+    quickBullet: { width: 6, height: 6, borderRadius: 3 },
+    quickText: { flex: 1, fontSize: 15, lineHeight: 20 },
+    quickDelete: { padding: 2 },
     filterBar: { paddingTop: 8, gap: 4 },
     filterTopRow: {
       flexDirection: 'row',

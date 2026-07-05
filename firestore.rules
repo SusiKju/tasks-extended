@@ -123,6 +123,11 @@ service cloud.firestore {
         allow read, write: if isFamilyMember(familyId) && request.auth.uid == uid;
       }
 
+      // Schnelle Notizen pro User (TE-148)
+      match /quickNotesByUser/{uid}/notes/{noteId} {
+        allow read, write: if isFamilyMember(familyId) && request.auth.uid == uid;
+      }
+
       // Persönliche Linkliste pro User (TE-32)
       match /linksByUser/{uid}/links/{linkId} {
         allow read, write: if isFamilyMember(familyId) && request.auth.uid == uid;
