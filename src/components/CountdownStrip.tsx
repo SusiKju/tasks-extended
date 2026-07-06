@@ -117,50 +117,41 @@ function CountdownCard({ countdown, colors, onPress, compact = false, size }: { 
     backgroundColor: isToday ? accent + '14' : colors.surface,
   };
 
-  // TE-157: Zwei Zeilen im Vordergrund – Icon oben, Beschreibung darunter
-  // (darf jetzt wieder zweizeilig umbrechen statt mit "..." abzuschneiden).
-  // Die verbleibenden Tage stehen nicht mehr als eigene Zeile, sondern riesig
-  // und dezent als Wasserzeichen hinter Icon+Text – prägnant, ohne Platz in
-  // der eigentlichen Textzeile zu kosten. Größe kommt als exakter Pixelwert
-  // (aus der gemessenen Spaltenbreite, siehe CountdownStrip) statt CSS-
-  // Prozent/aspectRatio – Letzteres hat im echten Dashboard-Panel nicht
-  // zuverlässig zwei Karten pro Zeile umgebrochen.
+  // TE-157: Die verbleibenden Tage sitzen als knallgelber Tab oben links,
+  // leicht über die Kachelkante hinaus versetzt – klar lesbar statt dezentem
+  // Wasserzeichen. Icon und Beschreibung (zweizeilig, kein "...") bleiben
+  // im Kartenkörper darunter. Der Tab sitzt in einem eigenen Wrapper ohne
+  // `overflow: hidden`, damit er über den Rand hinausragen kann (die Karte
+  // selbst braucht `overflow: hidden` für den NeonSweep-Effekt).
   if (compact) {
-    // Schriftgröße hängt von der Ziffernanzahl ab (1 vs. "219"), sonst würde
-    // eine dreistellige Zahl über die Kachel hinauslaufen und per Ellipsis
-    // hässlich abgeschnitten werden.
-    const bgDigits = String(days).length;
-    const bgScale = bgDigits <= 1 ? 0.85 : bgDigits === 2 ? 0.55 : bgDigits === 3 ? 0.42 : 0.34;
-    const bgFontSize = size != null ? Math.round(size * bgScale) : 40;
+    const badgeFontSize = size != null ? Math.max(13, Math.min(20, Math.round(size * 0.2))) : 15;
     return (
-      <Pressable
-        onPress={onPress}
-        style={({ pressed }) => [
-          styles.card,
-          styles.cardCompact,
-          size != null && { width: size, height: size },
-          { ...borderAndBg, opacity: pressed ? 0.7 : isPast ? 0.6 : 1 },
-        ]}
-      >
-        <NeonSweep accent={accent} />
+      <View style={size != null ? { width: size, height: size } : undefined}>
+        <Pressable
+          onPress={onPress}
+          style={({ pressed }) => [
+            styles.card,
+            styles.cardCompact,
+            size != null && { width: size, height: size },
+            { ...borderAndBg, opacity: pressed ? 0.7 : isPast ? 0.6 : 1 },
+          ]}
+        >
+          <NeonSweep accent={accent} />
+          <View style={[styles.cardEmojiWrap, styles.cardEmojiWrapCompact, { backgroundColor: accent + '22' }]}>
+            <Text style={[styles.cardEmojiBig, styles.cardEmojiBigCompact]}>{countdown.emoji ?? '💛'}</Text>
+          </View>
+          <Text style={[styles.cardTitle, styles.cardTitleCompact, { color: colors.textSecondary }]} numberOfLines={2}>
+            {isToday ? '🎉 ' : ''}{countdown.title}
+          </Text>
+        </Pressable>
         {!isToday && !isPast && (
-          <View style={styles.cardBgNumberWrap} pointerEvents="none">
-            <Text
-              style={[styles.cardBgNumber, { fontSize: bgFontSize, lineHeight: bgFontSize, color: accent + '26' }]}
-              numberOfLines={1}
-              ellipsizeMode="clip"
-            >
+          <View style={styles.cardDaysBadge}>
+            <Text style={[styles.cardDaysBadgeText, { fontSize: badgeFontSize, lineHeight: badgeFontSize + 2 }]} numberOfLines={1}>
               {days}
             </Text>
           </View>
         )}
-        <View style={[styles.cardEmojiWrap, styles.cardEmojiWrapCompact, { backgroundColor: accent + '22' }]}>
-          <Text style={[styles.cardEmojiBig, styles.cardEmojiBigCompact]}>{countdown.emoji ?? '💛'}</Text>
-        </View>
-        <Text style={[styles.cardTitle, styles.cardTitleCompact, { color: colors.textSecondary }]} numberOfLines={2}>
-          {isToday ? '🎉 ' : ''}{countdown.title}
-        </Text>
-      </Pressable>
+      </View>
     );
   }
 
@@ -555,8 +546,27 @@ const styles = StyleSheet.create({
   // Große, dezente Zahl hinter Icon+Titel – füllt die ganze Kachel als
   // Wasserzeichen. `pointerEvents: 'none'` lässt Taps ungehindert zum
   // Pressable durch.
-  cardBgNumberWrap: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
-  cardBgNumber: { fontWeight: '900' },
+  // Gelber Tab für die verbleibenden Tage: sitzt im äußeren (nicht
+  // geclippten) Wrapper, deshalb kann er leicht über die Kachelkante
+  // hinausragen (top/left negativ).
+  cardDaysBadge: {
+    position: 'absolute',
+    top: -8,
+    left: -8,
+    minWidth: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFCC33',
+    borderRadius: 8,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  cardDaysBadgeText: { fontWeight: '800', color: '#1A1400' },
   // flexShrink: 0 verhindert, dass Icon/Titel bei sehr schmaler Spalte
   // (Dashboard-Mindestbreite) auf Höhe 0 zusammengequetscht werden – lieber
   // unten leicht überlaufen (geclippt durch `overflow: hidden`) als ganz
