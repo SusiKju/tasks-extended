@@ -117,13 +117,21 @@ function CountdownCard({ countdown, colors, onPress, compact = false, size }: { 
     backgroundColor: isToday ? accent + '14' : colors.surface,
   };
 
-  // TE-157: Im Dashboard-Grid (compact) sitzt das Icon oben links neben der
-  // Zahl (ohne "Tage"-Label), die Beschreibung darunter ist einzeilig mit
-  // Ellipsis. Größe kommt als exakter Pixelwert (aus der gemessenen
-  // Spaltenbreite, siehe CountdownStrip) statt CSS-Prozent/aspectRatio –
-  // Letzteres hat im echten Dashboard-Panel nicht zuverlässig zwei Karten
-  // pro Zeile umgebrochen.
+  // TE-157: Zwei Zeilen im Vordergrund – Icon oben, Beschreibung darunter
+  // (darf jetzt wieder zweizeilig umbrechen statt mit "..." abzuschneiden).
+  // Die verbleibenden Tage stehen nicht mehr als eigene Zeile, sondern riesig
+  // und dezent als Wasserzeichen hinter Icon+Text – prägnant, ohne Platz in
+  // der eigentlichen Textzeile zu kosten. Größe kommt als exakter Pixelwert
+  // (aus der gemessenen Spaltenbreite, siehe CountdownStrip) statt CSS-
+  // Prozent/aspectRatio – Letzteres hat im echten Dashboard-Panel nicht
+  // zuverlässig zwei Karten pro Zeile umgebrochen.
   if (compact) {
+    // Schriftgröße hängt von der Ziffernanzahl ab (1 vs. "219"), sonst würde
+    // eine dreistellige Zahl über die Kachel hinauslaufen und per Ellipsis
+    // hässlich abgeschnitten werden.
+    const bgDigits = String(days).length;
+    const bgScale = bgDigits <= 1 ? 0.85 : bgDigits === 2 ? 0.55 : bgDigits === 3 ? 0.42 : 0.34;
+    const bgFontSize = size != null ? Math.round(size * bgScale) : 40;
     return (
       <Pressable
         onPress={onPress}
@@ -135,20 +143,22 @@ function CountdownCard({ countdown, colors, onPress, compact = false, size }: { 
         ]}
       >
         <NeonSweep accent={accent} />
-        <View style={styles.cardTopRowCompact}>
-          <View style={[styles.cardEmojiWrap, styles.cardEmojiWrapCompact, { backgroundColor: accent + '22' }]}>
-            <Text style={[styles.cardEmojiBig, styles.cardEmojiBigCompact]}>{countdown.emoji ?? '💛'}</Text>
+        {!isToday && !isPast && (
+          <View style={styles.cardBgNumberWrap} pointerEvents="none">
+            <Text
+              style={[styles.cardBgNumber, { fontSize: bgFontSize, lineHeight: bgFontSize, color: accent + '26' }]}
+              numberOfLines={1}
+              ellipsizeMode="clip"
+            >
+              {days}
+            </Text>
           </View>
-          {isToday ? (
-            <Text style={[styles.cardBigLabel, styles.cardBigLabelCompact, { color: accent }]} numberOfLines={1}>Heute! 🎉</Text>
-          ) : isPast ? (
-            <Text style={[styles.cardBigLabel, styles.cardBigLabelCompact, { color: colors.textMuted }]} numberOfLines={1}>vorbei</Text>
-          ) : (
-            <Text style={[styles.cardNumberCompact, { color: colors.text }]}>{days}</Text>
-          )}
+        )}
+        <View style={[styles.cardEmojiWrap, styles.cardEmojiWrapCompact, { backgroundColor: accent + '22' }]}>
+          <Text style={[styles.cardEmojiBig, styles.cardEmojiBigCompact]}>{countdown.emoji ?? '💛'}</Text>
         </View>
-        <Text style={[styles.cardTitle, styles.cardTitleCompact, { color: colors.textSecondary }]} numberOfLines={1}>
-          {countdown.title}
+        <Text style={[styles.cardTitle, styles.cardTitleCompact, { color: colors.textSecondary }]} numberOfLines={2}>
+          {isToday ? '🎉 ' : ''}{countdown.title}
         </Text>
       </Pressable>
     );
@@ -537,20 +547,22 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     flexDirection: 'column',
     alignItems: 'flex-start',
-    justifyContent: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 8,
-    gap: 6,
+    justifyContent: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    gap: 8,
   },
-  // flexShrink: 0 verhindert, dass Icon+Zahl bei sehr schmaler Spalte
+  // Große, dezente Zahl hinter Icon+Titel – füllt die ganze Kachel als
+  // Wasserzeichen. `pointerEvents: 'none'` lässt Taps ungehindert zum
+  // Pressable durch.
+  cardBgNumberWrap: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
+  cardBgNumber: { fontWeight: '900' },
+  // flexShrink: 0 verhindert, dass Icon/Titel bei sehr schmaler Spalte
   // (Dashboard-Mindestbreite) auf Höhe 0 zusammengequetscht werden – lieber
   // unten leicht überlaufen (geclippt durch `overflow: hidden`) als ganz
   // verschwinden.
-  cardTopRowCompact: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 0 },
-  cardEmojiWrapCompact: { width: 28, height: 28, borderRadius: 14 },
+  cardEmojiWrapCompact: { width: 28, height: 28, borderRadius: 14, flexShrink: 0 },
   cardEmojiBigCompact: { fontSize: 14 },
-  cardNumberCompact: { fontSize: 18, fontWeight: '800', lineHeight: 20 },
-  cardBigLabelCompact: { fontSize: 12 },
   cardTitleCompact: { fontSize: 11, flexShrink: 0 },
 
   addCard: { borderStyle: 'dashed', flexDirection: 'column', alignItems: 'center', gap: 4, justifyContent: 'center' },
