@@ -40,7 +40,7 @@ import {
 import { useFamily } from '../../src/hooks/useFamily';
 import {
   AllowanceMonth, subscribeToAllowanceMonths, monthKey, setAllowanceReceived,
-  formatEuro, formatMonthLabel, nextAllowanceMonth,
+  formatEuro, formatMonthLabel, nextAllowanceMonth, effectiveAllowance,
 } from '../../src/services/allowance';
 import { sendHtmlMail } from '../../src/services/googleMail';
 import { sendReminderToAllChildren, sendReminderToChild } from '../../src/services/pushNotifications';
@@ -998,7 +998,12 @@ export default function KinderScreen() {
         {allowanceHistory.length === 0 ? (
           <Text style={s.empty}>Noch keine Taschengeld-Einträge.</Text>
         ) : (
-          allowanceHistory.map(([key, m]) => (
+          allowanceHistory.map(([key, m]) => {
+            // Effektiver Betrag statt m.amount (TE-154): eine reine Monats-Korrektur
+            // ohne bestätigten Erhalt legt keinen amount-Wert an – m.amount wäre dann
+            // undefined und formatEuro würde crashen (weißer Bildschirm im Kinder-Tab).
+            const amount = effectiveAllowance(allowanceAmount, m);
+            return (
             <View key={key} style={s.allowanceRow}>
               <View style={{ flex: 1 }}>
                 <Text style={s.allowanceMonth}>{formatMonthLabel(key)}</Text>
@@ -1008,10 +1013,10 @@ export default function KinderScreen() {
                   </Text>
                 )}
               </View>
-              <Text style={s.allowanceAmount}>{formatEuro(m.amount)}</Text>
+              <Text style={s.allowanceAmount}>{formatEuro(amount)}</Text>
               <TouchableOpacity
                 style={[s.allowanceStatus, m.received && s.allowanceStatusOk]}
-                onPress={() => handleToggleAllowanceReceived(key, m.received, m.amount)}
+                onPress={() => handleToggleAllowanceReceived(key, m.received, amount)}
               >
                 <Ionicons
                   name={m.received ? 'checkmark-circle' : 'ellipse-outline'}
@@ -1023,7 +1028,8 @@ export default function KinderScreen() {
                 </Text>
               </TouchableOpacity>
             </View>
-          ))
+            );
+          })
         )}
       </View>
 
