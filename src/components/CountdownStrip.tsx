@@ -112,44 +112,75 @@ function CountdownCard({ countdown, colors, onPress, compact = false, grid = fal
   const isToday = days === 0;
   const accent = colors.accentNeon;
 
+  const borderAndBg = {
+    borderColor: isToday ? accent : colors.border,
+    backgroundColor: isToday ? accent + '14' : colors.surface,
+  };
+
+  // TE-157: Im Dashboard-Grid (compact) sitzt das Icon oben links neben der
+  // Zahl (ohne "Tage"-Label), die Beschreibung darunter darf zweizeilig
+  // werden – mehr Luft in der Karte statt gedrängtem Nebeneinander.
+  if (compact) {
+    return (
+      <Pressable
+        onPress={onPress}
+        style={({ pressed }) => [
+          styles.card,
+          styles.cardCompact,
+          grid && styles.cardGrid,
+          { ...borderAndBg, opacity: pressed ? 0.7 : isPast ? 0.6 : 1 },
+        ]}
+      >
+        <NeonSweep accent={accent} />
+        <View style={styles.cardTopRowCompact}>
+          <View style={[styles.cardEmojiWrap, styles.cardEmojiWrapCompact, { backgroundColor: accent + '22' }]}>
+            <Text style={[styles.cardEmojiBig, styles.cardEmojiBigCompact]}>{countdown.emoji ?? '💛'}</Text>
+          </View>
+          {isToday ? (
+            <Text style={[styles.cardBigLabel, styles.cardBigLabelCompact, { color: accent }]} numberOfLines={1}>Heute! 🎉</Text>
+          ) : isPast ? (
+            <Text style={[styles.cardBigLabel, styles.cardBigLabelCompact, { color: colors.textMuted }]} numberOfLines={1}>vorbei</Text>
+          ) : (
+            <Text style={[styles.cardNumberCompact, { color: colors.text }]}>{days}</Text>
+          )}
+        </View>
+        <Text style={[styles.cardTitle, styles.cardTitleCompact, { color: colors.textSecondary }]} numberOfLines={2}>
+          {countdown.title}
+        </Text>
+      </Pressable>
+    );
+  }
+
   return (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [
         styles.card,
-        compact && styles.cardCompact,
-        grid && styles.cardGrid,
-        {
-          borderColor: isToday ? accent : colors.border,
-          backgroundColor: isToday ? accent + '14' : colors.surface,
-          opacity: pressed ? 0.7 : isPast ? 0.6 : 1,
-        },
+        styles.cardRowLayout,
+        { ...borderAndBg, opacity: pressed ? 0.7 : isPast ? 0.6 : 1 },
       ]}
     >
       <NeonSweep accent={accent} />
-      <View style={[styles.cardEmojiWrap, compact && styles.cardEmojiWrapCompact, { backgroundColor: accent + '22' }]}>
-        <Text style={[styles.cardEmojiBig, compact && styles.cardEmojiBigCompact]}>{countdown.emoji ?? '💛'}</Text>
+      <View style={[styles.cardEmojiWrap, { backgroundColor: accent + '22' }]}>
+        <Text style={styles.cardEmojiBig}>{countdown.emoji ?? '💛'}</Text>
       </View>
-      <View style={[styles.cardBody, compact ? styles.cardBodyCompact : styles.cardBodyRow]}>
+      <View style={styles.cardBodyRow}>
         {isToday ? (
-          <Text style={[styles.cardBigLabel, compact && styles.cardBigLabelCompact, { color: accent }]} numberOfLines={1}>Heute! 🎉</Text>
+          <Text style={[styles.cardBigLabel, { color: accent }]} numberOfLines={1}>Heute! 🎉</Text>
         ) : isPast ? (
-          <Text style={[styles.cardBigLabel, compact && styles.cardBigLabelCompact, { color: colors.textMuted }]} numberOfLines={1}>vorbei</Text>
+          <Text style={[styles.cardBigLabel, { color: colors.textMuted }]} numberOfLines={1}>vorbei</Text>
         ) : (
           <View style={styles.cardNumberRow}>
-            <Text style={[styles.cardNumber, compact && styles.cardNumberCompact, { color: colors.text }]}>{days}</Text>
-            <Text style={[styles.cardUnit, compact && styles.cardUnitCompact, { color: colors.textMuted }]}>{days === 1 ? 'Tag' : 'Tage'}</Text>
+            <Text style={[styles.cardNumber, { color: colors.text }]}>{days}</Text>
+            <Text style={[styles.cardUnit, { color: colors.textMuted }]}>{days === 1 ? 'Tag' : 'Tage'}</Text>
           </View>
         )}
-        <Text style={[styles.cardTitle, compact && styles.cardTitleCompact, { color: colors.textSecondary }]} numberOfLines={1}>
+        <Text style={[styles.cardTitle, { color: colors.textSecondary }]} numberOfLines={1}>
           {countdown.title}
         </Text>
-        {/* TE-153: In der kompakten Spalte entfällt die Motivationszeile, damit die Kachel flach bleibt. */}
-        {!compact && (
-          <Text style={[styles.cardMotivation, { color: accent }]} numberOfLines={1}>
-            {motivationLine(days, isToday, isPast)}
-          </Text>
-        )}
+        <Text style={[styles.cardMotivation, { color: accent }]} numberOfLines={1}>
+          {motivationLine(days, isToday, isPast)}
+        </Text>
       </View>
     </Pressable>
   );
@@ -161,7 +192,7 @@ function AddCard({ colors, onPress, compact = false, grid = false }: { colors: T
       onPress={onPress}
       style={({ pressed }) => [
         styles.card,
-        compact && styles.cardCompact,
+        compact ? styles.cardCompact : styles.cardRowLayout,
         grid && styles.cardGrid,
         styles.addCard,
         { borderColor: colors.border, opacity: pressed ? 0.6 : 1 },
@@ -426,18 +457,20 @@ const CARD_HEIGHT = Math.round(CARD_WIDTH * 0.66);
 // TE-153: kompakte Kacheln für die schmale Dashboard-Spalte – deutlich kleiner
 // als die regulären Karten, ohne Motivationszeile, damit mehrere in die Spalte
 // passen (horizontal scrollbar).
-// TE-157: Icon liegt oben mittig, Countdown-Infos darunter – dafür etwas mehr
-// Höhe als vorher (54px reichten für die nebeneinander liegende Variante).
+// TE-157: Icon+Zahl oben nebeneinander, Beschreibung darf zweizeilig darunter
+// stehen – Mindesthöhe statt fixer Höhe, damit ein- und zweizeilige Titel
+// beide Platz haben, ohne dass der Rest der Karte gestaucht wird.
 const COMPACT_CARD_WIDTH = 110;
-const COMPACT_CARD_HEIGHT = 66;
+const COMPACT_CARD_MIN_HEIGHT = 82;
 
 const styles = StyleSheet.create({
   wrap: { marginBottom: 4 },
   scrollContent: { paddingHorizontal: 16, gap: 10 },
   // TE-153: zweispaltiges Grid ohne horizontales Scrollen – die Karten füllen
   // je knapp die halbe Spaltenbreite (2 pro Reihe) und umbrechen darunter.
-  grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', paddingHorizontal: 16, rowGap: 8 },
-  cardGrid: { width: '48%' },
+  // TE-157: etwas mehr Luft zwischen den Karten (Feedback: Karten "kleben").
+  grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', paddingHorizontal: 16, rowGap: 12 },
+  cardGrid: { width: '47%' },
 
   errorRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingVertical: 6 },
   errorText: { fontSize: 11, flex: 1, lineHeight: 15 },
@@ -446,15 +479,18 @@ const styles = StyleSheet.create({
   // warmer Akzent-Farbton im Hintergrund und eine liebevolle Zeile, die die
   // Vorfreude zeigt – breiter und flacher als zuvor (TE-128-Feedback).
   card: {
-    width: CARD_WIDTH,
-    height: CARD_HEIGHT,
     borderRadius: 16,
     borderWidth: 1,
+    overflow: 'hidden',
+  },
+  // Nur die reguläre (Zeilen-)Kachel: Icon links, Text rechts, feste Breite/Höhe.
+  cardRowLayout: {
+    width: CARD_WIDTH,
+    height: CARD_HEIGHT,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 10,
     gap: 8,
-    overflow: 'hidden',
   },
   // Container, der den Neon-Streifen exakt auf die Kachel zuschneidet, damit
   // die "Welle" nicht über den Rand hinausragt (Spiegel-Effekt, TE-128).
@@ -474,14 +510,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   cardEmojiBig: { fontSize: 20 },
-  cardBody: { gap: 1 },
   // Nur im Zeilen-Layout (Icon links, Text rechts) soll der Textblock die
-  // restliche Breite ausfüllen. Im TE-157-Spaltenlayout (compact) darf
-  // `flex` NICHT über das `flex`-Shorthand gesetzt werden: RN übersetzt
-  // `flex: 0`/`flex: 1` in `flexBasis: 0%`, was zusammen mit `overflow:
-  // hidden` der Karte dank der Flexbox-"automatic minimum size"-Regel die
-  // Box (und damit den Titel-Text) auf Höhe 0 kollabieren lässt.
-  cardBodyRow: { flex: 1 },
+  // restliche Breite ausfüllen.
+  cardBodyRow: { flex: 1, gap: 1 },
   cardNumberRow: { flexDirection: 'row', alignItems: 'baseline', gap: 3 },
   cardNumber: { fontSize: 22, fontWeight: '800', lineHeight: 24 },
   cardUnit: { fontSize: 11 },
@@ -490,28 +521,27 @@ const styles = StyleSheet.create({
   cardMotivation: { fontSize: 10, fontWeight: '600' },
 
   // TE-153: kompakte Varianten für die schmale Dashboard-Spalte.
-  // TE-157: Icon oben mittig statt links daneben – flexDirection auf 'column'
-  // gedreht, Inhalt zentriert, damit alles schlank innerhalb der Kachel bleibt.
+  // TE-157: Icon+Zahl oben nebeneinander (links ausgerichtet statt zentriert),
+  // Beschreibung darunter darf zweizeilig werden. Mehr Innenabstand, damit
+  // nichts mehr am Kartenrand klebt.
   cardCompact: {
     width: COMPACT_CARD_WIDTH,
-    height: COMPACT_CARD_HEIGHT,
-    borderRadius: 12,
+    minHeight: COMPACT_CARD_MIN_HEIGHT,
+    borderRadius: 14,
     flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 6,
-    paddingVertical: 6,
-    gap: 4,
+    alignItems: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    gap: 8,
   },
-  cardBodyCompact: { alignItems: 'center' },
-  cardEmojiWrapCompact: { width: 22, height: 22, borderRadius: 11 },
-  cardEmojiBigCompact: { fontSize: 12 },
-  cardNumberCompact: { fontSize: 15, lineHeight: 17 },
-  cardUnitCompact: { fontSize: 8 },
-  cardBigLabelCompact: { fontSize: 11 },
-  cardTitleCompact: { fontSize: 9 },
+  cardTopRowCompact: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  cardEmojiWrapCompact: { width: 30, height: 30, borderRadius: 15 },
+  cardEmojiBigCompact: { fontSize: 15 },
+  cardNumberCompact: { fontSize: 20, fontWeight: '800', lineHeight: 22 },
+  cardBigLabelCompact: { fontSize: 13 },
+  cardTitleCompact: { fontSize: 11, lineHeight: 14 },
 
-  addCard: { borderStyle: 'dashed', flexDirection: 'column', gap: 4, justifyContent: 'center' },
+  addCard: { borderStyle: 'dashed', flexDirection: 'column', alignItems: 'center', gap: 4, justifyContent: 'center' },
   addCardText: { fontSize: 10, fontWeight: '700' },
   addCardTextCompact: { fontSize: 9 },
 
