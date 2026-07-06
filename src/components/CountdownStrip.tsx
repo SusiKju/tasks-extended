@@ -130,7 +130,7 @@ function CountdownCard({ countdown, colors, onPress, compact = false, grid = fal
       <View style={[styles.cardEmojiWrap, compact && styles.cardEmojiWrapCompact, { backgroundColor: accent + '22' }]}>
         <Text style={[styles.cardEmojiBig, compact && styles.cardEmojiBigCompact]}>{countdown.emoji ?? '💛'}</Text>
       </View>
-      <View style={styles.cardBody}>
+      <View style={[styles.cardBody, compact ? styles.cardBodyCompact : styles.cardBodyRow]}>
         {isToday ? (
           <Text style={[styles.cardBigLabel, compact && styles.cardBigLabelCompact, { color: accent }]} numberOfLines={1}>Heute! 🎉</Text>
         ) : isPast ? (
@@ -426,8 +426,10 @@ const CARD_HEIGHT = Math.round(CARD_WIDTH * 0.66);
 // TE-153: kompakte Kacheln für die schmale Dashboard-Spalte – deutlich kleiner
 // als die regulären Karten, ohne Motivationszeile, damit mehrere in die Spalte
 // passen (horizontal scrollbar).
+// TE-157: Icon liegt oben mittig, Countdown-Infos darunter – dafür etwas mehr
+// Höhe als vorher (54px reichten für die nebeneinander liegende Variante).
 const COMPACT_CARD_WIDTH = 110;
-const COMPACT_CARD_HEIGHT = 54;
+const COMPACT_CARD_HEIGHT = 66;
 
 const styles = StyleSheet.create({
   wrap: { marginBottom: 4 },
@@ -472,7 +474,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   cardEmojiBig: { fontSize: 20 },
-  cardBody: { flex: 1, gap: 1 },
+  cardBody: { gap: 1 },
+  // Nur im Zeilen-Layout (Icon links, Text rechts) soll der Textblock die
+  // restliche Breite ausfüllen. Im TE-157-Spaltenlayout (compact) darf
+  // `flex` NICHT über das `flex`-Shorthand gesetzt werden: RN übersetzt
+  // `flex: 0`/`flex: 1` in `flexBasis: 0%`, was zusammen mit `overflow:
+  // hidden` der Karte dank der Flexbox-"automatic minimum size"-Regel die
+  // Box (und damit den Titel-Text) auf Höhe 0 kollabieren lässt.
+  cardBodyRow: { flex: 1 },
   cardNumberRow: { flexDirection: 'row', alignItems: 'baseline', gap: 3 },
   cardNumber: { fontSize: 22, fontWeight: '800', lineHeight: 24 },
   cardUnit: { fontSize: 11 },
@@ -481,7 +490,20 @@ const styles = StyleSheet.create({
   cardMotivation: { fontSize: 10, fontWeight: '600' },
 
   // TE-153: kompakte Varianten für die schmale Dashboard-Spalte.
-  cardCompact: { width: COMPACT_CARD_WIDTH, height: COMPACT_CARD_HEIGHT, borderRadius: 12, paddingHorizontal: 7, gap: 5 },
+  // TE-157: Icon oben mittig statt links daneben – flexDirection auf 'column'
+  // gedreht, Inhalt zentriert, damit alles schlank innerhalb der Kachel bleibt.
+  cardCompact: {
+    width: COMPACT_CARD_WIDTH,
+    height: COMPACT_CARD_HEIGHT,
+    borderRadius: 12,
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+    paddingVertical: 6,
+    gap: 4,
+  },
+  cardBodyCompact: { alignItems: 'center' },
   cardEmojiWrapCompact: { width: 22, height: 22, borderRadius: 11 },
   cardEmojiBigCompact: { fontSize: 12 },
   cardNumberCompact: { fontSize: 15, lineHeight: 17 },
