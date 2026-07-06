@@ -28,8 +28,6 @@ import {
   deleteSharedCountdown,
 } from '../services/sharedCountdowns';
 
-const COUNTDOWN_EMOJIS = ['✈️', '🏖️', '🎉', '🎂', '❤️', '🎄', '🏡', '⭐'];
-
 /** Tage bis zum Zieldatum (kalendarisch, ohne Uhrzeit) – negativ, wenn vorbei. */
 function daysUntil(targetDate: string): number {
   const today = new Date();
@@ -215,7 +213,6 @@ export function CountdownStrip({ colors, compact = false, areaWidth }: { colors:
   const [editing, setEditing] = useState<SharedCountdown | null>(null);
   const [formVisible, setFormVisible] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
-  const [emojiDraft, setEmojiDraft] = useState<string | null>(COUNTDOWN_EMOJIS[0]);
   const [dateDraft, setDateDraft] = useState<Date | null>(null);
   const [datePickerVisible, setDatePickerVisible] = useState(false);
   const [nameDraft, setNameDraft] = useState('');
@@ -247,7 +244,6 @@ export function CountdownStrip({ colors, compact = false, areaWidth }: { colors:
   const openNew = useCallback(() => {
     setEditing(null);
     setTitleDraft('');
-    setEmojiDraft(COUNTDOWN_EMOJIS[0]);
     setDateDraft(null);
     setFormVisible(true);
   }, []);
@@ -255,11 +251,12 @@ export function CountdownStrip({ colors, compact = false, areaWidth }: { colors:
   const openEdit = useCallback((c: SharedCountdown) => {
     setEditing(c);
     setTitleDraft(c.title);
-    setEmojiDraft(c.emoji ?? null);
     setDateDraft(new Date(c.targetDate + 'T00:00:00'));
     setFormVisible(true);
   }, []);
 
+  // TE-157: Die Karten zeigen kein Icon mehr – der Emoji-Picker im Formular
+  // ist damit hinfällig. `emoji` wird nicht mehr aktiv gesetzt/geändert.
   const handleSave = useCallback(async () => {
     const title = titleDraft.trim();
     if (!title || !dateDraft || !myName) return;
@@ -267,16 +264,16 @@ export function CountdownStrip({ colors, compact = false, areaWidth }: { colors:
     setBusy(true);
     try {
       if (editing) {
-        await updateSharedCountdown(familyId, editing.id, { title, emoji: emojiDraft, targetDate: isoDate });
+        await updateSharedCountdown(familyId, editing.id, { title, targetDate: isoDate });
       } else {
-        await addSharedCountdown(familyId, title, isoDate, emojiDraft, myName);
+        await addSharedCountdown(familyId, title, isoDate, null, myName);
       }
       setFormVisible(false);
     } catch {
     } finally {
       setBusy(false);
     }
-  }, [editing, titleDraft, emojiDraft, dateDraft, myName]);
+  }, [editing, titleDraft, dateDraft, myName]);
 
   const handleDelete = useCallback(async () => {
     if (!editing) return;
@@ -366,7 +363,7 @@ export function CountdownStrip({ colors, compact = false, areaWidth }: { colors:
                     onPress={handleSaveName}
                     disabled={!nameDraft.trim()}
                   >
-                    <Ionicons name="checkmark" size={18} color="#fff" />
+                    <Ionicons name="checkmark" size={18} color={colors.accentFg} />
                   </Pressable>
                 </View>
               </View>
@@ -383,25 +380,6 @@ export function CountdownStrip({ colors, compact = false, areaWidth }: { colors:
                   value={titleDraft}
                   onChangeText={setTitleDraft}
                 />
-
-                <View style={styles.emojiRow}>
-                  {COUNTDOWN_EMOJIS.map((e) => {
-                    const selected = emojiDraft === e;
-                    return (
-                      <Pressable
-                        key={e}
-                        onPress={() => setEmojiDraft(selected ? null : e)}
-                        style={[
-                          styles.emojiChip,
-                          { borderColor: selected ? accent : colors.border, backgroundColor: selected ? accent + '22' : 'transparent' },
-                        ]}
-                        hitSlop={4}
-                      >
-                        <Text style={styles.emojiChipText}>{e}</Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
 
                 <Pressable
                   onPress={() => setDatePickerVisible(true)}
@@ -432,7 +410,7 @@ export function CountdownStrip({ colors, compact = false, areaWidth }: { colors:
                     disabled={!canSave}
                     style={[styles.saveBtn, { backgroundColor: accent, opacity: canSave ? 1 : 0.4 }]}
                   >
-                    <Text style={styles.saveBtnText}>Speichern</Text>
+                    <Text style={[styles.saveBtnText, { color: colors.accentFg }]}>Speichern</Text>
                   </Pressable>
                 </View>
               </>
@@ -591,10 +569,6 @@ const styles = StyleSheet.create({
 
   input: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, marginBottom: 12 },
 
-  emojiRow: { flexDirection: 'row', gap: 6, flexWrap: 'wrap', marginBottom: 12 },
-  emojiChip: { width: 36, height: 36, borderRadius: 18, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
-  emojiChipText: { fontSize: 17 },
-
   dateBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 11, marginBottom: 8 },
   dateBtnText: { fontSize: 14 },
   addedByText: { fontSize: 11, marginBottom: 8 },
@@ -603,5 +577,5 @@ const styles = StyleSheet.create({
   deleteBtn: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   deleteBtnText: { fontSize: 13, fontWeight: '700' },
   saveBtn: { borderRadius: 10, paddingHorizontal: 18, paddingVertical: 10 },
-  saveBtnText: { fontSize: 14, fontWeight: '800', color: '#fff' },
+  saveBtnText: { fontSize: 14, fontWeight: '800' },
 });
