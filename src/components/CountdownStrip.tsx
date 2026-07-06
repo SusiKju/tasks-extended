@@ -119,10 +119,12 @@ function CountdownCard({ countdown, colors, onPress, compact = false, size }: { 
 
   // TE-157: Die verbleibenden Tage sitzen als knallgelber Tab oben links,
   // leicht über die Kachelkante hinaus versetzt – klar lesbar statt dezentem
-  // Wasserzeichen. Icon und Beschreibung (zweizeilig, kein "...") bleiben
-  // im Kartenkörper darunter. Der Tab sitzt in einem eigenen Wrapper ohne
-  // `overflow: hidden`, damit er über den Rand hinausragen kann (die Karte
-  // selbst braucht `overflow: hidden` für den NeonSweep-Effekt).
+  // Wasserzeichen. Kein Icon mehr in der kompakten Karte (kein Platz dafür),
+  // nur noch die Beschreibung (zweizeilig, kein "..."), unten ausgerichtet,
+  // damit sie nicht mit dem Tab oben kollidiert. Der Tab sitzt in einem
+  // eigenen Wrapper ohne `overflow: hidden`, damit er über den Rand
+  // hinausragen kann (die Karte selbst braucht `overflow: hidden` für den
+  // NeonSweep-Effekt).
   if (compact) {
     const badgeFontSize = size != null ? Math.max(13, Math.min(20, Math.round(size * 0.2))) : 15;
     return (
@@ -137,9 +139,6 @@ function CountdownCard({ countdown, colors, onPress, compact = false, size }: { 
           ]}
         >
           <NeonSweep accent={accent} />
-          <View style={[styles.cardEmojiWrap, styles.cardEmojiWrapCompact, { backgroundColor: accent + '22' }]}>
-            <Text style={[styles.cardEmojiBig, styles.cardEmojiBigCompact]}>{countdown.emoji ?? '💛'}</Text>
-          </View>
           <Text style={[styles.cardTitle, styles.cardTitleCompact, { color: colors.textSecondary }]} numberOfLines={2}>
             {isToday ? '🎉 ' : ''}{countdown.title}
           </Text>
@@ -538,7 +537,9 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     flexDirection: 'column',
     alignItems: 'flex-start',
-    justifyContent: 'flex-start',
+    // Ohne Icon ist die Beschreibung der einzige Vordergrund-Inhalt – unten
+    // ausgerichtet, damit sie nicht mit dem Tab oben links kollidiert.
+    justifyContent: 'flex-end',
     paddingHorizontal: 10,
     paddingVertical: 10,
     gap: 8,
@@ -567,12 +568,10 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   cardDaysBadgeText: { fontWeight: '800', color: '#1A1400' },
-  // flexShrink: 0 verhindert, dass Icon/Titel bei sehr schmaler Spalte
-  // (Dashboard-Mindestbreite) auf Höhe 0 zusammengequetscht werden – lieber
+  // flexShrink: 0 verhindert, dass der Titel bei sehr schmaler Spalte
+  // (Dashboard-Mindestbreite) auf Höhe 0 zusammengequetscht wird – lieber
   // unten leicht überlaufen (geclippt durch `overflow: hidden`) als ganz
   // verschwinden.
-  cardEmojiWrapCompact: { width: 28, height: 28, borderRadius: 14, flexShrink: 0 },
-  cardEmojiBigCompact: { fontSize: 14 },
   cardTitleCompact: { fontSize: 11, flexShrink: 0 },
 
   addCard: { borderStyle: 'dashed', flexDirection: 'column', alignItems: 'center', gap: 4, justifyContent: 'center' },
