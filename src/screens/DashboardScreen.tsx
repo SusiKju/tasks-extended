@@ -1074,7 +1074,7 @@ export function DashboardScreen() {
       {showBlock('geistesblitze') && <GeistesKacheln colors={colors} isDark={isDark} areaWidth={rightColW} columns={4} compact />}
 
       {/* ── Countdowns (TE-128): filigrane Karten, in der Spalte deutlich verkleinert (TE-153) ── */}
-      {showBlock('countdowns') && <CountdownStrip colors={colors} compact />}
+      {showBlock('countdowns') && <CountdownStrip colors={colors} compact areaWidth={rightColW} />}
 
       </View>{/* TE-153: Ende rechte Spalte */}
       </View>{/* TE-153: Ende zweispaltiger Block */}

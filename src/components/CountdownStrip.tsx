@@ -106,7 +106,7 @@ function NeonSweep({ accent }: { accent: string }) {
   );
 }
 
-function CountdownCard({ countdown, colors, onPress, compact = false, grid = false }: { countdown: SharedCountdown; colors: ThemeColors; onPress: () => void; compact?: boolean; grid?: boolean }) {
+function CountdownCard({ countdown, colors, onPress, compact = false, size }: { countdown: SharedCountdown; colors: ThemeColors; onPress: () => void; compact?: boolean; size?: number }) {
   const days = daysUntil(countdown.targetDate);
   const isPast = days < 0;
   const isToday = days === 0;
@@ -118,8 +118,11 @@ function CountdownCard({ countdown, colors, onPress, compact = false, grid = fal
   };
 
   // TE-157: Im Dashboard-Grid (compact) sitzt das Icon oben links neben der
-  // Zahl (ohne "Tage"-Label), die Beschreibung darunter darf zweizeilig
-  // werden – mehr Luft in der Karte statt gedrängtem Nebeneinander.
+  // Zahl (ohne "Tage"-Label), die Beschreibung darunter ist einzeilig mit
+  // Ellipsis. Größe kommt als exakter Pixelwert (aus der gemessenen
+  // Spaltenbreite, siehe CountdownStrip) statt CSS-Prozent/aspectRatio –
+  // Letzteres hat im echten Dashboard-Panel nicht zuverlässig zwei Karten
+  // pro Zeile umgebrochen.
   if (compact) {
     return (
       <Pressable
@@ -127,7 +130,7 @@ function CountdownCard({ countdown, colors, onPress, compact = false, grid = fal
         style={({ pressed }) => [
           styles.card,
           styles.cardCompact,
-          grid && styles.cardGrid,
+          size != null && { width: size, height: size },
           { ...borderAndBg, opacity: pressed ? 0.7 : isPast ? 0.6 : 1 },
         ]}
       >
@@ -144,7 +147,7 @@ function CountdownCard({ countdown, colors, onPress, compact = false, grid = fal
             <Text style={[styles.cardNumberCompact, { color: colors.text }]}>{days}</Text>
           )}
         </View>
-        <Text style={[styles.cardTitle, styles.cardTitleCompact, { color: colors.textSecondary }]} numberOfLines={2}>
+        <Text style={[styles.cardTitle, styles.cardTitleCompact, { color: colors.textSecondary }]} numberOfLines={1}>
           {countdown.title}
         </Text>
       </Pressable>
@@ -186,14 +189,14 @@ function CountdownCard({ countdown, colors, onPress, compact = false, grid = fal
   );
 }
 
-function AddCard({ colors, onPress, compact = false, grid = false }: { colors: ThemeColors; onPress: () => void; compact?: boolean; grid?: boolean }) {
+function AddCard({ colors, onPress, compact = false, size }: { colors: ThemeColors; onPress: () => void; compact?: boolean; size?: number }) {
   return (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [
         styles.card,
         compact ? styles.cardCompact : styles.cardRowLayout,
-        grid && styles.cardGrid,
+        compact && size != null && { width: size, height: size },
         styles.addCard,
         { borderColor: colors.border, opacity: pressed ? 0.6 : 1 },
       ]}
@@ -204,7 +207,7 @@ function AddCard({ colors, onPress, compact = false, grid = false }: { colors: T
   );
 }
 
-export function CountdownStrip({ colors, compact = false }: { colors: ThemeColors; compact?: boolean }) {
+export function CountdownStrip({ colors, compact = false, areaWidth }: { colors: ThemeColors; compact?: boolean; areaWidth?: number }) {
   const { settings, updateSettings } = useStore();
   const familyId = useFamilyId();
   const [items, setItems] = useState<SharedCountdown[] | null>(null);
@@ -290,6 +293,14 @@ export function CountdownStrip({ colors, compact = false }: { colors: ThemeColor
   const accent = colors.accentNeon;
   const canSave = titleDraft.trim().length > 0 && !!dateDraft && !busy;
 
+  // TE-157: Kachelgröße aus der verfügbaren Fläche ableiten (gleiches Muster
+  // wie GeistesKacheln) statt CSS-Prozent/aspectRatio – so passen im schmalen
+  // Dashboard-Panel zuverlässig zwei Karten pro Zeile, unabhängig von
+  // RN-Web-Eigenheiten bei Prozent-Breiten in Flex-Wrap-Containern.
+  const compactCols = 2;
+  const compactAreaWidth = areaWidth ?? Dimensions.get('window').width;
+  const compactCardSize = Math.floor((compactAreaWidth - 32 - (compactCols - 1) * 10) / compactCols);
+
   if (!familyId) return null;
 
   return (
@@ -309,9 +320,9 @@ export function CountdownStrip({ colors, compact = false }: { colors: ThemeColor
         // sichtbar sind.
         <View style={styles.grid}>
           {sorted.map((c) => (
-            <CountdownCard key={c.id} countdown={c} colors={colors} onPress={() => openEdit(c)} compact grid />
+            <CountdownCard key={c.id} countdown={c} colors={colors} onPress={() => openEdit(c)} compact size={compactCardSize} />
           ))}
-          <AddCard colors={colors} onPress={openNew} compact grid />
+          <AddCard colors={colors} onPress={openNew} compact size={compactCardSize} />
         </View>
       ) : (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
@@ -457,11 +468,9 @@ const CARD_HEIGHT = Math.round(CARD_WIDTH * 0.66);
 // TE-153: kompakte Kacheln für die schmale Dashboard-Spalte – deutlich kleiner
 // als die regulären Karten, ohne Motivationszeile, damit mehrere in die Spalte
 // passen (horizontal scrollbar).
-// TE-157: Icon+Zahl oben nebeneinander, Beschreibung darf zweizeilig darunter
-// stehen – Mindesthöhe statt fixer Höhe, damit ein- und zweizeilige Titel
-// beide Platz haben, ohne dass der Rest der Karte gestaucht wird.
-const COMPACT_CARD_WIDTH = 110;
-const COMPACT_CARD_MIN_HEIGHT = 82;
+// TE-157: Karte bleibt quadratisch, Titel einzeilig mit Ellipsis. Die
+// tatsächliche Kantenlänge kommt als Pixelwert von `CountdownStrip` (aus
+// der gemessenen Spaltenbreite berechnet), nicht mehr aus einer Konstante.
 
 const styles = StyleSheet.create({
   wrap: { marginBottom: 4 },
@@ -469,8 +478,7 @@ const styles = StyleSheet.create({
   // TE-153: zweispaltiges Grid ohne horizontales Scrollen – die Karten füllen
   // je knapp die halbe Spaltenbreite (2 pro Reihe) und umbrechen darunter.
   // TE-157: etwas mehr Luft zwischen den Karten (Feedback: Karten "kleben").
-  grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', paddingHorizontal: 16, rowGap: 12 },
-  cardGrid: { width: '47%' },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 16, gap: 10 },
 
   errorRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingVertical: 6 },
   errorText: { fontSize: 11, flex: 1, lineHeight: 15 },
@@ -522,24 +530,28 @@ const styles = StyleSheet.create({
 
   // TE-153: kompakte Varianten für die schmale Dashboard-Spalte.
   // TE-157: Icon+Zahl oben nebeneinander (links ausgerichtet statt zentriert),
-  // Beschreibung darunter darf zweizeilig werden. Mehr Innenabstand, damit
-  // nichts mehr am Kartenrand klebt.
+  // Titel einzeilig mit Ellipsis darunter. `aspectRatio: 1` hält die Karte
+  // quadratisch unabhängig von der (durch das Grid vorgegebenen) Breite.
+  // Innenabstand knapp gehalten, damit mehr Raum für Icon/Zahl/Titel bleibt.
   cardCompact: {
-    width: COMPACT_CARD_WIDTH,
-    minHeight: COMPACT_CARD_MIN_HEIGHT,
     borderRadius: 14,
     flexDirection: 'column',
     alignItems: 'flex-start',
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    gap: 8,
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    gap: 6,
   },
-  cardTopRowCompact: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  cardEmojiWrapCompact: { width: 30, height: 30, borderRadius: 15 },
-  cardEmojiBigCompact: { fontSize: 15 },
-  cardNumberCompact: { fontSize: 20, fontWeight: '800', lineHeight: 22 },
-  cardBigLabelCompact: { fontSize: 13 },
-  cardTitleCompact: { fontSize: 11, lineHeight: 14 },
+  // flexShrink: 0 verhindert, dass Icon+Zahl bei sehr schmaler Spalte
+  // (Dashboard-Mindestbreite) auf Höhe 0 zusammengequetscht werden – lieber
+  // unten leicht überlaufen (geclippt durch `overflow: hidden`) als ganz
+  // verschwinden.
+  cardTopRowCompact: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 0 },
+  cardEmojiWrapCompact: { width: 28, height: 28, borderRadius: 14 },
+  cardEmojiBigCompact: { fontSize: 14 },
+  cardNumberCompact: { fontSize: 18, fontWeight: '800', lineHeight: 20 },
+  cardBigLabelCompact: { fontSize: 12 },
+  cardTitleCompact: { fontSize: 11, flexShrink: 0 },
 
   addCard: { borderStyle: 'dashed', flexDirection: 'column', alignItems: 'center', gap: 4, justifyContent: 'center' },
   addCardText: { fontSize: 10, fontWeight: '700' },
