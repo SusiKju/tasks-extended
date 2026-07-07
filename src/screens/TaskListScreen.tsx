@@ -143,38 +143,8 @@ export function TaskListScreen() {
         contentContainerStyle={[styles.scrollContent, hasSelection && styles.listWithBulkBar]}
         keyboardShouldPersistTaps="handled"
       >
-        {/* ── Notizblock-Bereich ── */}
-        <View style={styles.groupCard}>
-          <View style={styles.groupHeader}>
-            <Ionicons name="document-text-outline" size={18} color={colors.text} />
-            <Text style={styles.groupTitle}>Personal Tasks</Text>
-            <TouchableOpacity
-              onPress={() => scratchAddRef.current?.()}
-              style={styles.bigAddBtn}
-              activeOpacity={0.85}
-            >
-              <Ionicons name="add" size={26} color={isDark ? colors.accentNeon : '#fff'} />
-            </TouchableOpacity>
-          </View>
-          <View style={styles.groupBody}>
-            <Scratchpad
-              value={scratchpad}
-              onChange={onScratchpadChange}
-              isDark={isDark}
-              colors={colors}
-              registerAdd={(fn) => { scratchAddRef.current = fn; }}
-              history={scratchpadHistory}
-              onArchive={archiveNote}
-              onRemoveHistory={removeHistory}
-              onClearHistory={clearHistory}
-            />
-          </View>
-        </View>
-
         {/* ── Tasks-Bereich ── */}
-        {/* TE-117: card streckt sich über den restlichen Platz, statt Leerraum
-            unterhalb der Karte als nackten Hintergrund stehen zu lassen. */}
-        <View style={[styles.groupCard, styles.groupCardGrow]}>
+        <View style={styles.groupCard}>
           <View style={styles.groupHeader}>
             <Ionicons name="checkmark-circle-outline" size={18} color={colors.text} />
             <Text style={styles.groupTitle}>Google Tasks</Text>
@@ -187,7 +157,7 @@ export function TaskListScreen() {
             </TouchableOpacity>
           </View>
 
-          <View style={[styles.groupBody, styles.groupBodyGrow]}>
+          <View style={styles.groupBody}>
             {/* Kompakter Status-Filter (kein Gruppen-/Label-Filter mehr, TE-106) */}
             <View style={styles.filterRow}>
               {(['all', 'open', 'overdue', 'done'] as FilterMode[]).map((f) => {
@@ -245,6 +215,36 @@ export function TaskListScreen() {
                 ))}
               </View>
             )}
+          </View>
+        </View>
+
+        {/* ── Notizblock-Bereich ── */}
+        {/* TE-117: card streckt sich über den restlichen Platz, statt Leerraum
+            unterhalb der Karte als nackten Hintergrund stehen zu lassen. */}
+        <View style={[styles.groupCard, styles.groupCardGrow]}>
+          <View style={styles.groupHeader}>
+            <Ionicons name="document-text-outline" size={18} color={colors.text} />
+            <Text style={styles.groupTitle}>Personal Tasks</Text>
+            <TouchableOpacity
+              onPress={() => scratchAddRef.current?.()}
+              style={styles.bigAddBtn}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="add" size={26} color={isDark ? colors.accentNeon : '#fff'} />
+            </TouchableOpacity>
+          </View>
+          <View style={[styles.groupBody, styles.groupBodyGrow]}>
+            <Scratchpad
+              value={scratchpad}
+              onChange={onScratchpadChange}
+              isDark={isDark}
+              colors={colors}
+              registerAdd={(fn) => { scratchAddRef.current = fn; }}
+              history={scratchpadHistory}
+              onArchive={archiveNote}
+              onRemoveHistory={removeHistory}
+              onClearHistory={clearHistory}
+            />
           </View>
         </View>
       </ScrollView>
