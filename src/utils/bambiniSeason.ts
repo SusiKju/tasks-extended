@@ -1,6 +1,7 @@
 export const SAISON_STICHTAG_MONAT = 7; // August (0-indexiert)
 export const BAMBINI_START_OFFSET = 4;
 export const F_JUGEND_WECHSEL_OFFSET = 7;
+export const TRAINER_START_JAHR = 2024; // Trainer aktiv seit August 2024
 
 export type JahrgangStatus = 'aktiv' | 'gewechselt';
 
@@ -20,8 +21,9 @@ export function getJahrgangStatus(birthYear: number, now: Date = new Date()): Ja
 }
 
 export function getBetreuungsZeitraum(birthYear: number): { von: number; bis: number } {
-  return {
-    von: birthYear + BAMBINI_START_OFFSET,
-    bis: birthYear + F_JUGEND_WECHSEL_OFFSET,
-  };
+  const bis = birthYear + F_JUGEND_WECHSEL_OFFSET;
+  // Math.min gegen `bis`: verhindert "betreut 2024–2022" für Jahrgänge, die schon
+  // komplett vor dem Trainer-Start gewechselt sind.
+  const von = Math.min(Math.max(birthYear + BAMBINI_START_OFFSET, TRAINER_START_JAHR), bis);
+  return { von, bis };
 }
