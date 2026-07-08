@@ -30,6 +30,7 @@ import {
 import {
   subscribeToQuickNotes,
   addQuickNote,
+  updateQuickNote,
   deleteQuickNote,
 } from '../services/quickNotesService';
 
@@ -434,11 +435,12 @@ interface QuickNotesSectionProps {
   notes: QuickNote[];
   onAdd: (text: string) => void;
   onDelete: (note: QuickNote) => void;
+  onToggleImportant: (note: QuickNote) => void;
   colors: ThemeColors;
   styles: ReturnType<typeof makeStyles>;
 }
 
-function QuickNotesSection({ notes, onAdd, onDelete, colors, styles }: QuickNotesSectionProps) {
+function QuickNotesSection({ notes, onAdd, onDelete, onToggleImportant, colors, styles }: QuickNotesSectionProps) {
   const [draft, setDraft] = useState('');
 
   const submit = useCallback(() => {
@@ -485,6 +487,14 @@ function QuickNotesSection({ notes, onAdd, onDelete, colors, styles }: QuickNote
             >
               <View style={[styles.quickBullet, { backgroundColor: colors.textMuted }]} />
               <Text style={[styles.quickText, { color: colors.text }]}>{n.text}</Text>
+              {/* TE-160: Wichtig-Label umschalten – steuert die Dashboard-Sichtbarkeit. */}
+              <Pressable onPress={() => onToggleImportant(n)} hitSlop={8} style={styles.quickDelete}>
+                <Ionicons
+                  name={n.important ? 'flag' : 'flag-outline'}
+                  size={16}
+                  color={n.important ? IMPORTANT_RED : colors.textMuted}
+                />
+              </Pressable>
               <Pressable onPress={() => onDelete(n)} hitSlop={8} style={styles.quickDelete}>
                 <Ionicons name="close" size={16} color={colors.textMuted} />
               </Pressable>
@@ -545,6 +555,17 @@ export function NotesScreen() {
       if (!familyId || !user?.uid) return;
       deleteQuickNote(familyId, user.uid, note.id).catch((err) =>
         Alert.alert('Fehler beim Löschen', err?.message ?? String(err)),
+      );
+    },
+    [familyId, user?.uid],
+  );
+
+  // TE-160: Wichtig-Label umschalten – nur wichtige Schnellnotizen erscheinen im Dashboard.
+  const handleToggleQuickImportant = useCallback(
+    (note: QuickNote) => {
+      if (!familyId || !user?.uid) return;
+      updateQuickNote(familyId, user.uid, note.id, { important: !note.important }).catch((err) =>
+        Alert.alert('Fehler beim Speichern', err?.message ?? String(err)),
       );
     },
     [familyId, user?.uid],
@@ -713,6 +734,7 @@ export function NotesScreen() {
         notes={quickNotes}
         onAdd={handleAddQuick}
         onDelete={handleDeleteQuick}
+        onToggleImportant={handleToggleQuickImportant}
         colors={colors}
         styles={styles}
       />

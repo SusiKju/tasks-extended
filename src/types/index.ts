@@ -165,6 +165,8 @@ export interface QuickNote {
   id: string;
   text: string;
   createdAt: string;
+  /** TE-160: Wichtig-Label – nur wichtige Schnellnotizen erscheinen im Dashboard. */
+  important?: boolean;
 }
 
 export interface Note {

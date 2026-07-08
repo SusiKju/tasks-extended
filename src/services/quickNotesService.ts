@@ -46,21 +46,26 @@ export async function addQuickNote(
   familyId: string,
   uid: string,
   text: string,
+  important?: boolean,
 ): Promise<string> {
   const col = collection(db, 'families', familyId, 'quickNotesByUser', uid, 'notes');
-  const ref = await addDoc(col, { text, createdAt: new Date().toISOString() });
+  const ref = await addDoc(col, {
+    text,
+    createdAt: new Date().toISOString(),
+    ...(important ? { important: true } : {}),
+  });
   return ref.id;
 }
 
-/** Aktualisiert den Text einer schnellen Notiz. */
+/** Aktualisiert Text und/oder Wichtig-Label einer schnellen Notiz. */
 export async function updateQuickNote(
   familyId: string,
   uid: string,
   noteId: string,
-  text: string,
+  updates: Partial<Pick<QuickNote, 'text' | 'important'>>,
 ): Promise<void> {
   const ref = doc(db, 'families', familyId, 'quickNotesByUser', uid, 'notes', noteId);
-  await setDoc(ref, { text }, { merge: true });
+  await setDoc(ref, updates, { merge: true });
 }
 
 /** Löscht eine schnelle Notiz. */

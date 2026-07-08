@@ -411,6 +411,12 @@ export function DashboardScreen() {
     return unsub;
   }, [fid, user?.uid]);
 
+  // TE-160: Nur wichtige Schnellnotizen erscheinen im Dashboard.
+  const importantQuickNotes = useMemo(
+    () => quickNotes.filter((n) => n.important),
+    [quickNotes],
+  );
+
   // TE-150: Google Tasks fürs Dashboard – offene Tasks, wichtig zuerst, dann nach
   // Fälligkeit. Zeilenweise & dezent über den Links dargestellt (Klick → Tasks-Tab).
   const dashboardTasks = useMemo<Task[]>(
@@ -426,10 +432,17 @@ export function DashboardScreen() {
     [tasks],
   );
 
-  // TE-150: Personal Tasks (Notizblock/Scratchpad) – offene Einträge, intelligent
-  // sortiert (wichtig/Fälligkeit), erledigte raus. Zeilenweise statt Pillen.
+  // TE-150/TE-160: Personal Tasks (Notizblock/Scratchpad) – offene Einträge,
+  // intelligent sortiert (wichtig/Fälligkeit), erledigte raus. Auf dem Dashboard
+  // nur wichtige oder bereits fällige (heute/überfällig) Einträge – zukünftige,
+  // nicht als wichtig markierte Einträge bleiben dem Tasks-Tab vorbehalten.
   const personalNotes = useMemo(
-    () => sortScratch(parseScratchpad(scratchpad).filter((e) => e.text.trim() !== '' && !e.done)),
+    () =>
+      sortScratch(
+        parseScratchpad(scratchpad).filter(
+          (e) => e.text.trim() !== '' && !e.done && (e.important || isDueToday(e.dueDate ?? null) || isOverdue(e.dueDate ?? null)),
+        ),
+      ),
     [scratchpad],
   );
 
@@ -996,7 +1009,8 @@ export function DashboardScreen() {
 
       {/* 3. Notizen – kurze Notizen ohne Datum aus dem Notizen-Tab (TE-148).
           TE-152: Abschnitt bleibt auch ohne Notizen sichtbar, Plus-Icon öffnet
-          das Schnell-Anlegen-Modal statt des vollen Notizen-Tabs. */}
+          das Schnell-Anlegen-Modal statt des vollen Notizen-Tabs.
+          TE-160: nur mit Wichtig-Label markierte Schnellnotizen erscheinen hier. */}
       {showBlock('quickNotes') && (
         <View style={styles.section}>
           <SectionLabel
@@ -1006,19 +1020,19 @@ export function DashboardScreen() {
             colors={colors}
           />
           <View>
-            {quickNotes.slice(0, 6).map((n) => (
+            {importantQuickNotes.slice(0, 6).map((n) => (
               <Pressable
                 key={n.id}
                 onPress={() => router.push('/(tabs)/notes' as any)}
                 style={({ pressed }) => [styles.dezentRow, { opacity: pressed ? 0.6 : 1 }]}
               >
-                <View style={styles.dezentBullet} />
+                <View style={[styles.dezentBullet, { backgroundColor: C.important }]} />
                 <Text style={styles.dezentText} numberOfLines={1}>{n.text}</Text>
               </Pressable>
             ))}
-            {quickNotes.length > 6 && (
+            {importantQuickNotes.length > 6 && (
               <Text style={[styles.dezentMore, { color: colors.textMuted }]}>
-                +{quickNotes.length - 6} weitere
+                +{importantQuickNotes.length - 6} weitere
               </Text>
             )}
           </View>
