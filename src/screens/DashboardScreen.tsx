@@ -91,10 +91,12 @@ function feedDateGroup(dateStr: string | null | undefined): 'overdue' | 'today' 
 
 // ─── Colors ───────────────────────────────────────────────────────────────────
 const C = {
-  tasks:    '#3B82F6',   // Blau
+  tasks:    '#3B82F6',   // Blau – Google Tasks
   calendar: '#4285F4',   // Google Kalender Blau
   important:'#FF3B30',   // Rot
   overdue:  '#FF3B30',
+  personal: '#8B5CF6',   // Violett – Personal Tasks
+  notes:    '#F59E0B',   // Amber – Notizen
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -923,117 +925,138 @@ export function DashboardScreen() {
         </Modal>
       )}
 
-      {/* ── Kurzübersicht (TE-150/TE-161): Google Tasks, Personal Tasks, Notizen ──
-          Zeilenweise & extrem dezent (schlichte Textzeilen, kein Karten-Chrome),
-          die drei Abschnitte durch eigene Überschrift + Abstand klar getrennt.
+      {/* ── Kurzübersicht (TE-150/TE-161/TE-164): Google Tasks, Personal Tasks, Notizen ──
+          Zeilenweise & extrem dezent (schlichte Textzeilen, kein Karten-Chrome pro
+          Zeile), aber TE-164: die drei Abschnitte teilen sich jetzt einen
+          gemeinsamen Rahmen (wie kidsSectionCard bei "Aufgaben der Kinder"), damit
+          die Kurzübersicht als ein zusammengehöriger Block erkennbar ist. Innerhalb
+          des Rahmens trennt eine farbige linke Akzentleiste pro Kategorie
+          (Blau/Violett/Amber) die drei Bereiche optisch, plus ein Trennstrich
+          zwischen den vorhandenen Abschnitten.
           Reihenfolge: 1. Google Tasks, 2. Personal Tasks, 3. Notizen.
           TE-161: läuft über die volle Breite – die frühere zweispaltige
           Aufteilung (schmale rechte Spalte für Links/Geistesblitze/Countdowns)
           ist entfallen, jene drei Blöcke sitzen jetzt ganz unten (siehe dort). */}
+      {(showBlock('googleTasks') || showBlock('scratchpad') || showBlock('quickNotes')) && (
+        <View style={styles.quickOverviewCard}>
 
-      {/* 1. Google Tasks – offene Tasks aus dem Google-Tasks-Store (Klick → Tasks-Tab).
-          TE-152: Abschnitt bleibt auch ohne offene Tasks sichtbar, damit das
-          Plus-Icon zum schnellen Anlegen jederzeit erreichbar ist. */}
-      {showBlock('googleTasks') && (
-        <View style={styles.section}>
-          <SectionLabel
-            title="Google Tasks"
-            onMore={() => router.push('/(tabs)/tasks' as any)}
-            onAdd={() => router.push('/task/new' as any)}
-            colors={colors}
-          />
-          <View>
-            {dashboardTasks.slice(0, 6).map((t) => {
-              const due = taskDue(t.dueDate);
-              return (
-                <Pressable
-                  key={t.id}
-                  onPress={() => router.push('/(tabs)/tasks' as any)}
-                  style={({ pressed }) => [styles.dezentRow, { opacity: pressed ? 0.6 : 1 }]}
-                >
-                  <View style={[styles.dezentBullet, t.important && { backgroundColor: C.important }]} />
-                  <Text style={styles.dezentText} numberOfLines={1}>{t.title}</Text>
-                  {due && (
-                    <Text style={[styles.dueBadge, due.overdue && styles.dueBadgeOverdue]}>{due.label}</Text>
-                  )}
-                </Pressable>
-              );
-            })}
-            {dashboardTasks.length > 6 && (
-              <Text style={[styles.dezentMore, { color: colors.textMuted }]}>
-                +{dashboardTasks.length - 6} weitere
-              </Text>
-            )}
-          </View>
-        </View>
-      )}
+          {/* 1. Google Tasks – offene Tasks aus dem Google-Tasks-Store (Klick → Tasks-Tab).
+              TE-152: Abschnitt bleibt auch ohne offene Tasks sichtbar, damit das
+              Plus-Icon zum schnellen Anlegen jederzeit erreichbar ist. */}
+          {showBlock('googleTasks') && (
+            <View style={[styles.quickOverviewSection, { borderLeftColor: mono(C.tasks) }]}>
+              <SectionLabel
+                title="Google Tasks"
+                onMore={() => router.push('/(tabs)/tasks' as any)}
+                onAdd={() => router.push('/task/new' as any)}
+                colors={colors}
+              />
+              <View>
+                {dashboardTasks.slice(0, 6).map((t) => {
+                  const due = taskDue(t.dueDate);
+                  return (
+                    <Pressable
+                      key={t.id}
+                      onPress={() => router.push('/(tabs)/tasks' as any)}
+                      style={({ pressed }) => [styles.dezentRow, { opacity: pressed ? 0.6 : 1 }]}
+                    >
+                      <View style={[styles.dezentBullet, t.important && { backgroundColor: C.important }]} />
+                      <Text style={styles.dezentText} numberOfLines={1}>{t.title}</Text>
+                      {due && (
+                        <Text style={[styles.dueBadge, due.overdue && styles.dueBadgeOverdue]}>{due.label}</Text>
+                      )}
+                    </Pressable>
+                  );
+                })}
+                {dashboardTasks.length > 6 && (
+                  <Text style={[styles.dezentMore, { color: colors.textMuted }]}>
+                    +{dashboardTasks.length - 6} weitere
+                  </Text>
+                )}
+              </View>
+            </View>
+          )}
 
-      {/* 2. Personal Tasks – persönlicher Notizblock (Scratchpad), Klick → Tasks-Tab.
-          TE-152: Abschnitt bleibt auch ohne offene Einträge sichtbar, Plus-Icon
-          öffnet das Schnell-Anlegen-Modal statt des vollen Tasks-Tabs. */}
-      {showBlock('scratchpad') && (
-        <View style={styles.section}>
-          <SectionLabel
-            title="Personal Tasks"
-            onMore={() => router.push('/(tabs)/tasks' as any)}
-            onAdd={() => setQuickAddKind('personal')}
-            colors={colors}
-          />
-          <View>
-            {personalNotes.slice(0, 6).map((entry, idx) => {
-              const due = taskDue(entry.dueDate);
-              return (
-                <Pressable
-                  key={entry.id ?? idx}
-                  onPress={() => router.push('/(tabs)/tasks' as any)}
-                  style={({ pressed }) => [styles.dezentRow, { opacity: pressed ? 0.6 : 1 }]}
-                >
-                  <View style={[styles.dezentBullet, entry.important && { backgroundColor: C.important }]} />
-                  <Text style={styles.dezentText} numberOfLines={1}>{entry.text}</Text>
-                  {due && (
-                    <Text style={[styles.dueBadge, due.overdue && styles.dueBadgeOverdue]}>{due.label}</Text>
-                  )}
-                </Pressable>
-              );
-            })}
-            {personalNotes.length > 6 && (
-              <Text style={[styles.dezentMore, { color: colors.textMuted }]}>
-                +{personalNotes.length - 6} weitere
-              </Text>
-            )}
-          </View>
-        </View>
-      )}
+          {/* 2. Personal Tasks – persönlicher Notizblock (Scratchpad), Klick → Tasks-Tab.
+              TE-152: Abschnitt bleibt auch ohne offene Einträge sichtbar, Plus-Icon
+              öffnet das Schnell-Anlegen-Modal statt des vollen Tasks-Tabs. */}
+          {showBlock('scratchpad') && (
+            <View
+              style={[
+                styles.quickOverviewSection,
+                showBlock('googleTasks') && styles.quickOverviewDivider,
+                { borderLeftColor: mono(C.personal) },
+              ]}
+            >
+              <SectionLabel
+                title="Personal Tasks"
+                onMore={() => router.push('/(tabs)/tasks' as any)}
+                onAdd={() => setQuickAddKind('personal')}
+                colors={colors}
+              />
+              <View>
+                {personalNotes.slice(0, 6).map((entry, idx) => {
+                  const due = taskDue(entry.dueDate);
+                  return (
+                    <Pressable
+                      key={entry.id ?? idx}
+                      onPress={() => router.push('/(tabs)/tasks' as any)}
+                      style={({ pressed }) => [styles.dezentRow, { opacity: pressed ? 0.6 : 1 }]}
+                    >
+                      <View style={[styles.dezentBullet, entry.important && { backgroundColor: C.important }]} />
+                      <Text style={styles.dezentText} numberOfLines={1}>{entry.text}</Text>
+                      {due && (
+                        <Text style={[styles.dueBadge, due.overdue && styles.dueBadgeOverdue]}>{due.label}</Text>
+                      )}
+                    </Pressable>
+                  );
+                })}
+                {personalNotes.length > 6 && (
+                  <Text style={[styles.dezentMore, { color: colors.textMuted }]}>
+                    +{personalNotes.length - 6} weitere
+                  </Text>
+                )}
+              </View>
+            </View>
+          )}
 
-      {/* 3. Notizen – kurze Notizen ohne Datum aus dem Notizen-Tab (TE-148).
-          TE-152: Abschnitt bleibt auch ohne Notizen sichtbar, Plus-Icon öffnet
-          das Schnell-Anlegen-Modal statt des vollen Notizen-Tabs.
-          TE-160: nur mit Wichtig-Label markierte Schnellnotizen erscheinen hier. */}
-      {showBlock('quickNotes') && (
-        <View style={styles.section}>
-          <SectionLabel
-            title="Notizen"
-            onMore={() => router.push('/(tabs)/notes' as any)}
-            onAdd={() => setQuickAddKind('notiz')}
-            colors={colors}
-          />
-          <View>
-            {importantQuickNotes.slice(0, 6).map((n) => (
-              <Pressable
-                key={n.id}
-                onPress={() => router.push('/(tabs)/notes' as any)}
-                style={({ pressed }) => [styles.dezentRow, { opacity: pressed ? 0.6 : 1 }]}
-              >
-                <View style={[styles.dezentBullet, { backgroundColor: C.important }]} />
-                <Text style={styles.dezentText} numberOfLines={1}>{n.text}</Text>
-              </Pressable>
-            ))}
-            {importantQuickNotes.length > 6 && (
-              <Text style={[styles.dezentMore, { color: colors.textMuted }]}>
-                +{importantQuickNotes.length - 6} weitere
-              </Text>
-            )}
-          </View>
+          {/* 3. Notizen – kurze Notizen ohne Datum aus dem Notizen-Tab (TE-148).
+              TE-152: Abschnitt bleibt auch ohne Notizen sichtbar, Plus-Icon öffnet
+              das Schnell-Anlegen-Modal statt des vollen Notizen-Tabs.
+              TE-160: nur mit Wichtig-Label markierte Schnellnotizen erscheinen hier. */}
+          {showBlock('quickNotes') && (
+            <View
+              style={[
+                styles.quickOverviewSection,
+                (showBlock('googleTasks') || showBlock('scratchpad')) && styles.quickOverviewDivider,
+                { borderLeftColor: mono(C.notes) },
+              ]}
+            >
+              <SectionLabel
+                title="Notizen"
+                onMore={() => router.push('/(tabs)/notes' as any)}
+                onAdd={() => setQuickAddKind('notiz')}
+                colors={colors}
+              />
+              <View>
+                {importantQuickNotes.slice(0, 6).map((n) => (
+                  <Pressable
+                    key={n.id}
+                    onPress={() => router.push('/(tabs)/notes' as any)}
+                    style={({ pressed }) => [styles.dezentRow, { opacity: pressed ? 0.6 : 1 }]}
+                  >
+                    <View style={[styles.dezentBullet, { backgroundColor: C.important }]} />
+                    <Text style={styles.dezentText} numberOfLines={1}>{n.text}</Text>
+                  </Pressable>
+                ))}
+                {importantQuickNotes.length > 6 && (
+                  <Text style={[styles.dezentMore, { color: colors.textMuted }]}>
+                    +{importantQuickNotes.length - 6} weitere
+                  </Text>
+                )}
+              </View>
+            </View>
+          )}
         </View>
       )}
 
@@ -1622,6 +1645,29 @@ function makeStyles(c: ThemeColors, isDark: boolean, calm: boolean) {
     },
 
     section: {},
+
+    // TE-164: gemeinsamer Rahmen für die Kurzübersicht (Google Tasks/Personal
+    // Tasks/Notizen) – analog zu kidsSectionCard, damit die drei Kategorien als
+    // ein zusammengehöriger Block erkennbar sind. Die einzelnen Abschnitte
+    // bekommen darin je eine farbige linke Akzentleiste (quickOverviewSection)
+    // zur Unterscheidung, getrennt durch einen dezenten Strich (quickOverviewDivider).
+    quickOverviewCard: {
+      marginHorizontal: 16,
+      backgroundColor: c.surface,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: isDark && !calm ? c.accentNeon + '40' : c.border,
+      overflow: 'hidden',
+      ...(isDark ? neonGlow(c.accentNeon, 'soft') : {}),
+    },
+    quickOverviewSection: {
+      paddingVertical: 10,
+      borderLeftWidth: 3,
+    },
+    quickOverviewDivider: {
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: c.border,
+    },
 
     card: {
       marginHorizontal: 16,
