@@ -205,7 +205,7 @@ function AddCard({ colors, onPress, compact = false, size }: { colors: ThemeColo
   );
 }
 
-export function CountdownStrip({ colors, compact = false, areaWidth }: { colors: ThemeColors; compact?: boolean; areaWidth?: number }) {
+export function CountdownStrip({ colors, compact = false, areaWidth, columns }: { colors: ThemeColors; compact?: boolean; areaWidth?: number; columns?: number }) {
   const { settings, updateSettings } = useStore();
   const familyId = useFamilyId();
   const [items, setItems] = useState<SharedCountdown[] | null>(null);
@@ -292,9 +292,12 @@ export function CountdownStrip({ colors, compact = false, areaWidth }: { colors:
 
   // TE-157: Kachelgröße aus der verfügbaren Fläche ableiten (gleiches Muster
   // wie GeistesKacheln) statt CSS-Prozent/aspectRatio – so passen im schmalen
-  // Dashboard-Panel zuverlässig zwei Karten pro Zeile, unabhängig von
+  // Dashboard-Panel zuverlässig mehrere Karten pro Zeile, unabhängig von
   // RN-Web-Eigenheiten bei Prozent-Breiten in Flex-Wrap-Containern.
-  const compactCols = 2;
+  // TE-161: Spaltenzahl konfigurierbar – am Dashboard-Fuß (volle Breite)
+  // wird eine höhere Zahl übergeben, damit die Karten größer & besser
+  // lesbar/tapbar werden statt in der schmalen Spalte auf 2 zu verharren.
+  const compactCols = columns ?? 2;
   const compactAreaWidth = areaWidth ?? Dimensions.get('window').width;
   const compactCardSize = Math.floor((compactAreaWidth - 32 - (compactCols - 1) * 10) / compactCols);
 

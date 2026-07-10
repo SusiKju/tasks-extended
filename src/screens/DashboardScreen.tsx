@@ -766,20 +766,21 @@ export function DashboardScreen() {
   // Synchron zum Glow „atmende" Skalierung – gemeinsam für beide Card-Varianten.
   const flameScale = flameAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, 1.05, 1] });
 
-  // TE-153: Zwei-Spalten-Layout – links die Kurzübersicht (Google/Personal Tasks,
-  // Notizen), rechts eine feste Spalte mit Links, Geistesblitzen und Countdowns.
-  // WICHTIG: Die Breite wird aus der *tatsächlichen Container-Breite* abgeleitet
-  // (onLayout), nicht aus der Fensterbreite – das Dashboard rendert oft in einem
-  // schmalen Panel, das viel kleiner als das Fenster ist. Mit der Fensterbreite
-  // wurde die rechte Spalte zu breit berechnet und brach unter die linke um.
-  // Die linke Spalte nimmt den Rest (flex:1), die rechte einen geklammerten
-  // Bruchteil – dadurch stehen sie immer nebeneinander. Die rechte Breite dient
-  // zugleich als Bezugsgröße für die Kachelgrößen (Geistesblitze); die Countdowns
-  // werden per `compact` deutlich verkleinert.
+  // TE-161: Google Tasks/Personal Tasks/Notizen laufen jetzt einspaltig über
+  // die volle Breite; Links/Geistesblitze/Countdowns sitzen als eigener,
+  // ebenfalls volle-Breite-Block ganz unten (siehe Render). Die Spaltenzahl
+  // für deren Kachel-Grids wird aus der *tatsächlichen Container-Breite*
+  // abgeleitet (onLayout), nicht aus der Fensterbreite – das Dashboard
+  // rendert oft in einem schmalen Panel, das viel kleiner als das Fenster
+  // ist. Die Zielgröße pro Kachel ist bewusst größer als in der früheren
+  // schmalen Spalte, damit
+  // Inhalte besser lesbar und leichter zu treffen sind; bei vielen Einträgen
+  // bricht das Grid einfach in weitere Zeilen um.
   const { width: winW } = useWindowDimensions();
   const [dashW, setDashW] = useState(0);
   const effW = dashW || winW;
-  const rightColW = Math.round(Math.min(300, Math.max(150, effW * 0.36)));
+  const wideCols = Math.max(4, Math.round((effW - 26) / 86));
+  const countdownCols = Math.max(2, Math.round((effW - 22) / 180));
 
   return (
     <View style={styles.root}>
@@ -924,14 +925,13 @@ export function DashboardScreen() {
         </Modal>
       )}
 
-      {/* ── Kurzübersicht (TE-150): Google Tasks, Personal Tasks, Notizen ──
+      {/* ── Kurzübersicht (TE-150/TE-161): Google Tasks, Personal Tasks, Notizen ──
           Zeilenweise & extrem dezent (schlichte Textzeilen, kein Karten-Chrome),
           die drei Abschnitte durch eigene Überschrift + Abstand klar getrennt.
-          Reihenfolge: 1. Google Tasks, 2. Personal Tasks, 3. Notizen. */}
-
-      {/* TE-153: Zweispaltiger Block – links Kurzübersicht, rechts Links/Geistesblitze/Countdowns. */}
-      <View style={styles.dashCols}>
-      <View style={styles.dashColLeft}>
+          Reihenfolge: 1. Google Tasks, 2. Personal Tasks, 3. Notizen.
+          TE-161: läuft über die volle Breite – die frühere zweispaltige
+          Aufteilung (schmale rechte Spalte für Links/Geistesblitze/Countdowns)
+          ist entfallen, jene drei Blöcke sitzen jetzt ganz unten (siehe dort). */}
 
       {/* 1. Google Tasks – offene Tasks aus dem Google-Tasks-Store (Klick → Tasks-Tab).
           TE-152: Abschnitt bleibt auch ohne offene Tasks sichtbar, damit das
@@ -1039,8 +1039,6 @@ export function DashboardScreen() {
         </View>
       )}
 
-      </View>{/* TE-153: Ende linke Spalte */}
-
       {/* TE-152: Schnell-Anlegen-Modal für Personal Tasks & Notizen – ein Textfeld,
           Absenden legt den Eintrag direkt an (kein voller Formular-Umweg). */}
       <Modal
@@ -1077,21 +1075,6 @@ export function DashboardScreen() {
           </View>
         </View>
       </Modal>
-
-      {/* TE-153: rechte Spalte – Links, Geistesblitze, Countdowns. */}
-      <View style={[styles.dashColRight, { width: rightColW }]}>
-
-      {/* ── Links-Schnellleiste (TE-32): nur aktive Links, oberhalb der Geistesblitze ── */}
-      {showBlock('links') && <LinkCardBar colors={colors} isDark={isDark} compact />}
-
-      {/* ── Geistesblitze: persönliche Gedanken-Kacheln – Kachelgröße aus Spaltenbreite (TE-153) ── */}
-      {showBlock('geistesblitze') && <GeistesKacheln colors={colors} isDark={isDark} areaWidth={rightColW} columns={4} compact />}
-
-      {/* ── Countdowns (TE-128): filigrane Karten, in der Spalte deutlich verkleinert (TE-153) ── */}
-      {showBlock('countdowns') && <CountdownStrip colors={colors} compact areaWidth={rightColW} />}
-
-      </View>{/* TE-153: Ende rechte Spalte */}
-      </View>{/* TE-153: Ende zweispaltiger Block */}
 
       {/* ── Kalender ── */}
       {showBlock('calendar') && settings.googleCalendarEnabled && (
@@ -1529,6 +1512,21 @@ export function DashboardScreen() {
         </View>
       )}
 
+      {/* ── Links, Geistesblitze, Countdowns (TE-161) ──
+          Ganz unten, über die volle Breite – größere, besser lesbare und
+          tapbare Kacheln als in der früheren schmalen rechten Spalte (TE-153,
+          jetzt entfallen). Bricht bei vielen Einträgen einfach in weitere
+          Zeilen um, statt zu scrollen oder abzuschneiden. */}
+      <View style={styles.bottomWideSection}>
+        {showBlock('links') && <LinkCardBar colors={colors} />}
+        {showBlock('geistesblitze') && (
+          <GeistesKacheln colors={colors} isDark={isDark} areaWidth={effW} columns={wideCols} compact />
+        )}
+        {showBlock('countdowns') && (
+          <CountdownStrip colors={colors} compact areaWidth={effW} columns={countdownCols} />
+        )}
+      </View>
+
     </ScrollView>
 
       {/* TE-153: Fokus-Kachel fixiert rechts-mittig am Viewport – klebt beim
@@ -1682,9 +1680,8 @@ function makeStyles(c: ThemeColors, isDark: boolean, calm: boolean) {
     // TE-153: strikte Zeile ohne Umbruch – linke Spalte nimmt den Rest, rechte
     // Spalte hat eine feste (aus der Container-Breite abgeleitete) Breite. So
     // stehen die beiden Spalten immer nebeneinander, egal wie schmal das Panel ist.
-    dashCols: { flexDirection: 'row', alignItems: 'flex-start', columnGap: 8 },
-    dashColLeft: { flex: 1, minWidth: 0, gap: 16 },
-    dashColRight: { gap: 16 },
+    // TE-161: voller-Breite-Block ganz unten für Links/Geistesblitze/Countdowns.
+    bottomWideSection: { gap: 20 },
 
     // Birthday – ganz oben, neon-gelb, schnell blinkend
     birthdayCard: {

@@ -1,20 +1,21 @@
 /**
  * LinkCardBar.tsx
  *
- * Schnellleiste der aktivierten Links – horizontal scrollbare Icon-Karten
- * oberhalb der Geistesblitze (TE-32). Erscheint nur, wenn mindestens ein Link
- * aktiv ist. Klick auf eine Karte öffnet die URL.
+ * Schnellleiste der aktivierten Links – große Icon-Karten am Fuß des
+ * Dashboards (TE-161: über die volle Breite, bricht bei vielen Einträgen
+ * einfach um statt horizontal zu scrollen). Erscheint nur, wenn mindestens
+ * ein Link aktiv ist. Klick auf eine Karte öffnet die URL.
  */
 
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { ThemeColors } from '../utils/theme';
 import { useFirebaseAuth } from '../hooks/useFirebaseAuth';
 import { useFamily } from '../hooks/useFamily';
 import { LinkItem, subscribeToLinks, openLink } from '../services/links';
 import { LinkAvatar } from './LinkAvatar';
 
-export function LinkCardBar({ colors, compact = false }: { colors: ThemeColors; isDark?: boolean; compact?: boolean }) {
+export function LinkCardBar({ colors }: { colors: ThemeColors }) {
   const { user } = useFirebaseAuth();
   const { familyId } = useFamily();
   const [links, setLinks] = useState<LinkItem[]>([]);
@@ -34,34 +35,26 @@ export function LinkCardBar({ colors, compact = false }: { colors: ThemeColors; 
   return (
     <View style={s.section}>
       <Text style={[s.headerTitle, { color: colors.textSecondary }]}>LINKS</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[s.row, compact && s.rowCompact]}>
+      <View style={s.row}>
         {active.map((l) => (
           <Pressable
             key={l.id}
-            style={({ pressed }) => [s.card, compact && s.cardCompact, { opacity: pressed ? 0.7 : 1 }]}
+            style={({ pressed }) => [s.card, { opacity: pressed ? 0.7 : 1 }]}
             onPress={() => openLink(l.url)}
           >
-            <LinkAvatar link={l} size={compact ? 24 : 30} />
-            {/* TE-153: im kompakten Modus (schmale Dashboard-Spalte) nur das Icon –
-                das Label entfällt, da das Icon den Link bereits eindeutig zeigt. */}
-            {!compact && (
-              <Text style={[s.label, { color: colors.textSecondary }]} numberOfLines={1}>{l.title}</Text>
-            )}
+            <LinkAvatar link={l} size={44} />
+            <Text style={[s.label, { color: colors.textSecondary }]} numberOfLines={1}>{l.title}</Text>
           </Pressable>
         ))}
-      </ScrollView>
+      </View>
     </View>
   );
 }
 
 const s = StyleSheet.create({
-  section: { paddingHorizontal: 16, gap: 8 },
+  section: { paddingHorizontal: 16, gap: 10 },
   headerTitle: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8 },
-  row: { gap: 12, paddingVertical: 2, paddingRight: 8 },
-  card: { alignItems: 'center', gap: 3, width: 46 },
-  label: { fontSize: 9, fontWeight: '600', textAlign: 'center' },
-  // TE-153: kompakte Variante für die schmale Dashboard-Spalte – kleinere Icons,
-  // schmalere Karten, damit mehr Links ohne Abschneiden hineinpassen.
-  rowCompact: { gap: 10 },
-  cardCompact: { width: 34 },
+  row: { flexDirection: 'row', flexWrap: 'wrap', gap: 16, paddingVertical: 2 },
+  card: { alignItems: 'center', gap: 5, width: 68 },
+  label: { fontSize: 11, fontWeight: '600', textAlign: 'center' },
 });
