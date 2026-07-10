@@ -1656,9 +1656,8 @@ function makeStyles(c: ThemeColors, isDark: boolean, calm: boolean) {
       backgroundColor: c.surface,
       borderRadius: 14,
       borderWidth: 1,
-      borderColor: isDark && !calm ? c.accentNeon + '40' : c.border,
+      borderColor: c.border,
       overflow: 'hidden',
-      ...(isDark ? neonGlow(c.accentNeon, 'soft') : {}),
     },
     quickOverviewSection: {
       paddingVertical: 10,
