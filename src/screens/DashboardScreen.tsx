@@ -944,7 +944,7 @@ export function DashboardScreen() {
               TE-152: Abschnitt bleibt auch ohne offene Tasks sichtbar, damit das
               Plus-Icon zum schnellen Anlegen jederzeit erreichbar ist. */}
           {showBlock('googleTasks') && (
-            <View style={[styles.quickOverviewSection, { borderLeftColor: mono(C.tasks) }]}>
+            <View style={[styles.quickOverviewSection, { borderLeftColor: C.tasks }]}>
               <SectionLabel
                 title="Google Tasks"
                 onMore={() => router.push('/(tabs)/tasks' as any)}
@@ -985,7 +985,7 @@ export function DashboardScreen() {
               style={[
                 styles.quickOverviewSection,
                 showBlock('googleTasks') && styles.quickOverviewDivider,
-                { borderLeftColor: mono(C.personal) },
+                { borderLeftColor: C.personal },
               ]}
             >
               <SectionLabel
@@ -1029,7 +1029,7 @@ export function DashboardScreen() {
               style={[
                 styles.quickOverviewSection,
                 (showBlock('googleTasks') || showBlock('scratchpad')) && styles.quickOverviewDivider,
-                { borderLeftColor: mono(C.notes) },
+                { borderLeftColor: C.notes },
               ]}
             >
               <SectionLabel
