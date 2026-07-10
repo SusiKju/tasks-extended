@@ -769,18 +769,16 @@ export function DashboardScreen() {
   // TE-161: Google Tasks/Personal Tasks/Notizen laufen jetzt einspaltig über
   // die volle Breite; Links/Geistesblitze/Countdowns sitzen als eigener,
   // ebenfalls volle-Breite-Block ganz unten (siehe Render). Die Spaltenzahl
-  // für deren Kachel-Grids wird aus der *tatsächlichen Container-Breite*
+  // für die Geistesblitze wird aus der *tatsächlichen Container-Breite*
   // abgeleitet (onLayout), nicht aus der Fensterbreite – das Dashboard
   // rendert oft in einem schmalen Panel, das viel kleiner als das Fenster
-  // ist. Die Zielgröße pro Kachel ist bewusst größer als in der früheren
-  // schmalen Spalte, damit
-  // Inhalte besser lesbar und leichter zu treffen sind; bei vielen Einträgen
-  // bricht das Grid einfach in weitere Zeilen um.
+  // ist. Countdowns haben seit TE-162 wieder eine feste Kachelgröße (wie am
+  // Anfang) und brauchen daher keine berechnete Spaltenzahl mehr – sie
+  // brechen per flexWrap von selbst um.
   const { width: winW } = useWindowDimensions();
   const [dashW, setDashW] = useState(0);
   const effW = dashW || winW;
   const wideCols = Math.max(4, Math.round((effW - 26) / 86));
-  const countdownCols = Math.max(2, Math.round((effW - 22) / 180));
 
   return (
     <View style={styles.root}>
@@ -1523,7 +1521,7 @@ export function DashboardScreen() {
           <GeistesKacheln colors={colors} isDark={isDark} areaWidth={effW} columns={wideCols} compact />
         )}
         {showBlock('countdowns') && (
-          <CountdownStrip colors={colors} compact areaWidth={effW} columns={countdownCols} />
+          <CountdownStrip colors={colors} compact />
         )}
       </View>
 

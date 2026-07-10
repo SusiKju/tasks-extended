@@ -12,12 +12,11 @@
  * Anzeigename (settings.myName) abgefragt, damit Einträge zuordenbar sind.
  */
 
-import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, TextInput, Modal, ActivityIndicator, Dimensions, Animated, Easing } from 'react-native';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import { View, Text, StyleSheet, Pressable, ScrollView, TextInput, Modal, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useStore } from '../store';
-import { ThemeColors, useTheme } from '../utils/theme';
+import { ThemeColors } from '../utils/theme';
 import { DatePickerModal } from './DatePickerModal';
 import { useFamilyId } from '../hooks/useFamily';
 import {
@@ -41,171 +40,65 @@ function formatDateDe(isoDate: string): string {
   return new Date(isoDate + 'T00:00:00').toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
-/** Liebevolle, emotionale Zeile passend zur Restzeit – macht aus einem nüchternen Zähler eine Vorfreude-Anzeige. */
-function motivationLine(days: number, isToday: boolean, isPast: boolean): string {
-  if (isToday) return 'Heute ist es soweit! 🎉';
-  if (isPast) return 'Geschafft 💛';
-  if (days <= 3) return 'Gleich ist es so weit! 🤩';
-  if (days <= 14) return 'Wir freuen uns schon riesig! 🥰';
-  return 'Wir zählen die Tage zusammen ✨';
-}
-
-/**
- * Dezenter Neon-Hintergrundeffekt: ein schräger Lichtstreifen "schwimmt" wie
- * eine Spiegelung/Welle quer über die Karte – sanfte Endlosschleife, damit
- * die Kacheln auf den ersten Blick lebendig und ein bisschen magisch wirken.
- */
-function NeonSweep({ accent }: { accent: string }) {
-  const { reduceMotion } = useTheme();
-  const progress = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    // Calm-Theme: kein wandernder Lichtstreifen – die Kacheln bleiben ruhig.
-    if (reduceMotion) return;
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(progress, {
-          toValue: 1,
-          duration: 3200,
-          easing: Easing.inOut(Easing.sin),
-          useNativeDriver: true,
-        }),
-        Animated.timing(progress, {
-          toValue: 0,
-          duration: 0,
-          useNativeDriver: true,
-        }),
-        Animated.delay(900),
-      ])
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [progress, reduceMotion]);
-
-  if (reduceMotion) return null;
-
-  const translateX = progress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [-CARD_WIDTH * 1.3, CARD_WIDTH * 1.3],
-  });
-
-  return (
-    <View style={styles.sweepClip} pointerEvents="none">
-      <Animated.View style={[styles.sweepBand, { transform: [{ translateX }, { rotate: '-18deg' }] }]}>
-        <LinearGradient
-          colors={['transparent', accent + '00', accent + '4D', accent + '00', 'transparent']}
-          locations={[0, 0.35, 0.5, 0.65, 1]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={StyleSheet.absoluteFill}
-        />
-      </Animated.View>
-    </View>
-  );
-}
-
-function CountdownCard({ countdown, colors, onPress, compact = false, size }: { countdown: SharedCountdown; colors: ThemeColors; onPress: () => void; compact?: boolean; size?: number }) {
+// TE-162: Karten-Design zurück auf die allererste Umsetzung (TE-128) – Icon
+// oben mittig, große Zahl + Einheit darunter, Titel darunter, alles zentriert
+// in einer quadratischen 84×84-Kachel. Kein Leuchteffekt, keine Motivations-
+// zeile, kein farbiger Zahlen-Tab – die zwischenzeitlichen TE-153/TE-157-
+// Varianten (Zeilen-Layout mit Motivationszeile, kompakte Karte mit gelbem
+// Zahlen-Tab ohne Icon) sind damit abgelöst.
+function CountdownCard({ countdown, colors, onPress }: { countdown: SharedCountdown; colors: ThemeColors; onPress: () => void }) {
   const days = daysUntil(countdown.targetDate);
   const isPast = days < 0;
   const isToday = days === 0;
   const accent = colors.accentNeon;
 
-  const borderAndBg = {
-    borderColor: isToday ? accent : colors.border,
-    backgroundColor: isToday ? accent + '14' : colors.surface,
-  };
-
-  // TE-157: Die verbleibenden Tage sitzen als knallgelber Tab oben links,
-  // leicht über die Kachelkante hinaus versetzt – klar lesbar statt dezentem
-  // Wasserzeichen. Kein Icon mehr in der kompakten Karte (kein Platz dafür),
-  // nur noch die Beschreibung (zweizeilig, kein "..."), unten ausgerichtet,
-  // damit sie nicht mit dem Tab oben kollidiert. Der Tab sitzt in einem
-  // eigenen Wrapper ohne `overflow: hidden`, damit er über den Rand
-  // hinausragen kann (die Karte selbst braucht `overflow: hidden` für den
-  // NeonSweep-Effekt).
-  if (compact) {
-    const badgeFontSize = size != null ? Math.max(13, Math.min(20, Math.round(size * 0.2))) : 15;
-    return (
-      <View style={size != null ? { width: size, height: size } : undefined}>
-        <Pressable
-          onPress={onPress}
-          style={({ pressed }) => [
-            styles.card,
-            styles.cardCompact,
-            size != null && { width: size, height: size },
-            { ...borderAndBg, opacity: pressed ? 0.7 : isPast ? 0.6 : 1 },
-          ]}
-        >
-          <NeonSweep accent={accent} />
-          <Text style={[styles.cardTitle, styles.cardTitleCompact, { color: colors.textSecondary }]} numberOfLines={2}>
-            {isToday ? '🎉 ' : ''}{countdown.title}
-          </Text>
-        </Pressable>
-        {!isToday && !isPast && (
-          <View style={styles.cardDaysBadge}>
-            <Text style={[styles.cardDaysBadgeText, { fontSize: badgeFontSize, lineHeight: badgeFontSize + 2 }]} numberOfLines={1}>
-              {days}
-            </Text>
-          </View>
-        )}
-      </View>
-    );
-  }
-
   return (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [
         styles.card,
-        styles.cardRowLayout,
-        { ...borderAndBg, opacity: pressed ? 0.7 : isPast ? 0.6 : 1 },
+        {
+          borderColor: isToday ? accent : colors.border,
+          backgroundColor: colors.surface,
+          opacity: pressed ? 0.7 : isPast ? 0.55 : 1,
+        },
       ]}
     >
-      <NeonSweep accent={accent} />
-      <View style={[styles.cardEmojiWrap, { backgroundColor: accent + '22' }]}>
-        <Text style={styles.cardEmojiBig}>{countdown.emoji ?? '💛'}</Text>
-      </View>
-      <View style={styles.cardBodyRow}>
-        {isToday ? (
-          <Text style={[styles.cardBigLabel, { color: accent }]} numberOfLines={1}>Heute! 🎉</Text>
-        ) : isPast ? (
-          <Text style={[styles.cardBigLabel, { color: colors.textMuted }]} numberOfLines={1}>vorbei</Text>
-        ) : (
-          <View style={styles.cardNumberRow}>
-            <Text style={[styles.cardNumber, { color: colors.text }]}>{days}</Text>
-            <Text style={[styles.cardUnit, { color: colors.textMuted }]}>{days === 1 ? 'Tag' : 'Tage'}</Text>
-          </View>
-        )}
-        <Text style={[styles.cardTitle, { color: colors.textSecondary }]} numberOfLines={1}>
-          {countdown.title}
-        </Text>
-        <Text style={[styles.cardMotivation, { color: accent }]} numberOfLines={1}>
-          {motivationLine(days, isToday, isPast)}
-        </Text>
-      </View>
+      <Text style={styles.cardEmoji}>{countdown.emoji ?? '💛'}</Text>
+      {isToday ? (
+        <Text style={[styles.cardBigLabel, { color: accent }]} numberOfLines={1}>Heute! 🎉</Text>
+      ) : isPast ? (
+        <Text style={[styles.cardBigLabel, { color: colors.textMuted }]} numberOfLines={1}>vorbei</Text>
+      ) : (
+        <>
+          <Text style={[styles.cardNumber, { color: colors.text }]}>{days}</Text>
+          <Text style={[styles.cardUnit, { color: colors.textMuted }]}>{days === 1 ? 'Tag' : 'Tage'}</Text>
+        </>
+      )}
+      <Text style={[styles.cardTitle, { color: colors.textSecondary }]} numberOfLines={2}>
+        {countdown.title}
+      </Text>
     </Pressable>
   );
 }
 
-function AddCard({ colors, onPress, compact = false, size }: { colors: ThemeColors; onPress: () => void; compact?: boolean; size?: number }) {
+function AddCard({ colors, onPress }: { colors: ThemeColors; onPress: () => void }) {
   return (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [
         styles.card,
-        compact ? styles.cardCompact : styles.cardRowLayout,
-        compact && size != null && { width: size, height: size },
         styles.addCard,
         { borderColor: colors.border, opacity: pressed ? 0.6 : 1 },
       ]}
     >
-      <Ionicons name="add" size={compact ? 18 : 22} color={colors.textMuted} />
-      <Text style={[styles.addCardText, compact && styles.addCardTextCompact, { color: colors.textMuted }]}>Neue Vorfreude</Text>
+      <Ionicons name="add" size={26} color={colors.textMuted} />
+      <Text style={[styles.addCardText, { color: colors.textMuted }]}>Countdown</Text>
     </Pressable>
   );
 }
 
-export function CountdownStrip({ colors, compact = false, areaWidth, columns }: { colors: ThemeColors; compact?: boolean; areaWidth?: number; columns?: number }) {
+export function CountdownStrip({ colors, compact = false }: { colors: ThemeColors; compact?: boolean }) {
   const { settings, updateSettings } = useStore();
   const familyId = useFamilyId();
   const [items, setItems] = useState<SharedCountdown[] | null>(null);
@@ -290,17 +183,6 @@ export function CountdownStrip({ colors, compact = false, areaWidth, columns }: 
   const accent = colors.accentNeon;
   const canSave = titleDraft.trim().length > 0 && !!dateDraft && !busy;
 
-  // TE-157: Kachelgröße aus der verfügbaren Fläche ableiten (gleiches Muster
-  // wie GeistesKacheln) statt CSS-Prozent/aspectRatio – so passen im schmalen
-  // Dashboard-Panel zuverlässig mehrere Karten pro Zeile, unabhängig von
-  // RN-Web-Eigenheiten bei Prozent-Breiten in Flex-Wrap-Containern.
-  // TE-161: Spaltenzahl konfigurierbar – am Dashboard-Fuß (volle Breite)
-  // wird eine höhere Zahl übergeben, damit die Karten größer & besser
-  // lesbar/tapbar werden statt in der schmalen Spalte auf 2 zu verharren.
-  const compactCols = columns ?? 2;
-  const compactAreaWidth = areaWidth ?? Dimensions.get('window').width;
-  const compactCardSize = Math.floor((compactAreaWidth - 32 - (compactCols - 1) * 10) / compactCols);
-
   if (!familyId) return null;
 
   return (
@@ -315,21 +197,22 @@ export function CountdownStrip({ colors, compact = false, areaWidth, columns }: 
       ) : items === null ? (
         <ActivityIndicator color={accent} style={{ marginVertical: 10, marginLeft: 16 }} />
       ) : compact ? (
-        // TE-153: In der schmalen Spalte kein horizontales Scrollen – die
-        // Countdowns liegen als zweispaltiges Grid untereinander, damit alle
-        // sichtbar sind.
+        // TE-161: feste Kartengröße (TE-162: wieder wie am Anfang, 84×84) –
+        // die Karten brechen dank flexWrap einfach in weitere Zeilen um,
+        // statt horizontal zu scrollen oder in ein starres Spalten-Raster
+        // gepresst zu werden.
         <View style={styles.grid}>
           {sorted.map((c) => (
-            <CountdownCard key={c.id} countdown={c} colors={colors} onPress={() => openEdit(c)} compact size={compactCardSize} />
+            <CountdownCard key={c.id} countdown={c} colors={colors} onPress={() => openEdit(c)} />
           ))}
-          <AddCard colors={colors} onPress={openNew} compact size={compactCardSize} />
+          <AddCard colors={colors} onPress={openNew} />
         </View>
       ) : (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
           {sorted.map((c) => (
-            <CountdownCard key={c.id} countdown={c} colors={colors} onPress={() => openEdit(c)} compact={compact} />
+            <CountdownCard key={c.id} countdown={c} colors={colors} onPress={() => openEdit(c)} />
           ))}
-          <AddCard colors={colors} onPress={openNew} compact={compact} />
+          <AddCard colors={colors} onPress={openNew} />
         </ScrollView>
       )}
 
@@ -438,126 +321,39 @@ function formStyles_subtitle(colors: ThemeColors) {
   return { fontSize: 12, color: colors.textMuted, marginTop: 4, marginBottom: 12, lineHeight: 17 };
 }
 
-// Drei Karten passen nebeneinander auf den Bildschirm – etwas breiter und
-// dafür flacher als zuvor (weniger Höhe auf dem Dashboard, TE-128-Feedback).
-const SCREEN_WIDTH = Dimensions.get('window').width;
-const STRIP_PADDING = 16;
-const CARD_GAP = 10;
-const CARD_WIDTH = (SCREEN_WIDTH - STRIP_PADDING * 2 - CARD_GAP * 2) / 3;
-const CARD_HEIGHT = Math.round(CARD_WIDTH * 0.66);
-
-// TE-153: kompakte Kacheln für die schmale Dashboard-Spalte – deutlich kleiner
-// als die regulären Karten, ohne Motivationszeile, damit mehrere in die Spalte
-// passen (horizontal scrollbar).
-// TE-157: Karte bleibt quadratisch, Titel einzeilig mit Ellipsis. Die
-// tatsächliche Kantenlänge kommt als Pixelwert von `CountdownStrip` (aus
-// der gemessenen Spaltenbreite berechnet), nicht mehr aus einer Konstante.
+// TE-162: Kartengröße wieder wie bei der allerersten Umsetzung (TE-128) –
+// feste 84×84-Kachel statt aus der Container-Breite abgeleiteter Größe.
+const CARD_SIZE = 84;
 
 const styles = StyleSheet.create({
   wrap: { marginBottom: 4 },
   scrollContent: { paddingHorizontal: 16, gap: 10 },
-  // TE-153: zweispaltiges Grid ohne horizontales Scrollen – die Karten füllen
-  // je knapp die halbe Spaltenbreite (2 pro Reihe) und umbrechen darunter.
-  // TE-157: etwas mehr Luft zwischen den Karten (Feedback: Karten "kleben").
+  // TE-161: Grid statt horizontalem Scrollen – die Karten brechen bei vielen
+  // Einträgen einfach in weitere Zeilen um.
   grid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 16, gap: 10 },
 
   errorRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingVertical: 6 },
   errorText: { fontSize: 11, flex: 1, lineHeight: 15 },
 
-  // "Filigran", aber herzlich: dünner Rahmen, große Eckenrundung, dafür ein
-  // warmer Akzent-Farbton im Hintergrund und eine liebevolle Zeile, die die
-  // Vorfreude zeigt – breiter und flacher als zuvor (TE-128-Feedback).
+  // "Filigran": dünner Rahmen, große Eckenrundung, kein Schatten/Füllfarbe-Wumms.
   card: {
-    borderRadius: 16,
+    width: CARD_SIZE,
+    height: CARD_SIZE,
+    borderRadius: 18,
     borderWidth: 1,
-    overflow: 'hidden',
-  },
-  // Nur die reguläre (Zeilen-)Kachel: Icon links, Text rechts, feste Breite/Höhe.
-  cardRowLayout: {
-    width: CARD_WIDTH,
-    height: CARD_HEIGHT,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    gap: 8,
-  },
-  // Container, der den Neon-Streifen exakt auf die Kachel zuschneidet, damit
-  // die "Welle" nicht über den Rand hinausragt (Spiegel-Effekt, TE-128).
-  sweepClip: { ...StyleSheet.absoluteFillObject, borderRadius: 16, overflow: 'hidden' },
-  sweepBand: {
-    position: 'absolute',
-    top: -CARD_HEIGHT,
-    left: 0,
-    width: CARD_WIDTH * 0.7,
-    height: CARD_HEIGHT * 3,
-  },
-  cardEmojiWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: 6,
+    gap: 1,
   },
-  cardEmojiBig: { fontSize: 20 },
-  // Nur im Zeilen-Layout (Icon links, Text rechts) soll der Textblock die
-  // restliche Breite ausfüllen.
-  cardBodyRow: { flex: 1, gap: 1 },
-  cardNumberRow: { flexDirection: 'row', alignItems: 'baseline', gap: 3 },
+  cardEmoji: { fontSize: 16, marginBottom: 1 },
   cardNumber: { fontSize: 22, fontWeight: '800', lineHeight: 24 },
-  cardUnit: { fontSize: 11 },
-  cardBigLabel: { fontSize: 14, fontWeight: '800' },
-  cardTitle: { fontSize: 11, fontWeight: '700' },
-  cardMotivation: { fontSize: 10, fontWeight: '600' },
+  cardUnit: { fontSize: 10, marginTop: -2 },
+  cardBigLabel: { fontSize: 13, fontWeight: '800' },
+  cardTitle: { fontSize: 10, fontWeight: '600', textAlign: 'center', marginTop: 2 },
 
-  // TE-153: kompakte Varianten für die schmale Dashboard-Spalte.
-  // TE-157: Icon+Zahl oben nebeneinander (links ausgerichtet statt zentriert),
-  // Titel einzeilig mit Ellipsis darunter. `aspectRatio: 1` hält die Karte
-  // quadratisch unabhängig von der (durch das Grid vorgegebenen) Breite.
-  // Innenabstand knapp gehalten, damit mehr Raum für Icon/Zahl/Titel bleibt.
-  cardCompact: {
-    borderRadius: 14,
-    flexDirection: 'column',
-    alignItems: 'flex-start',
-    // Ohne Icon ist die Beschreibung der einzige Vordergrund-Inhalt – unten
-    // ausgerichtet, damit sie nicht mit dem Tab oben links kollidiert.
-    justifyContent: 'flex-end',
-    paddingHorizontal: 10,
-    paddingVertical: 10,
-    gap: 8,
-  },
-  // Große, dezente Zahl hinter Icon+Titel – füllt die ganze Kachel als
-  // Wasserzeichen. `pointerEvents: 'none'` lässt Taps ungehindert zum
-  // Pressable durch.
-  // Gelber Tab für die verbleibenden Tage: sitzt im äußeren (nicht
-  // geclippten) Wrapper, deshalb kann er leicht über die Kachelkante
-  // hinausragen (top/left negativ).
-  cardDaysBadge: {
-    position: 'absolute',
-    top: -8,
-    left: -8,
-    minWidth: 26,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FFCC33',
-    borderRadius: 8,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 3,
-    elevation: 3,
-  },
-  cardDaysBadgeText: { fontWeight: '800', color: '#1A1400' },
-  // flexShrink: 0 verhindert, dass der Titel bei sehr schmaler Spalte
-  // (Dashboard-Mindestbreite) auf Höhe 0 zusammengequetscht wird – lieber
-  // unten leicht überlaufen (geclippt durch `overflow: hidden`) als ganz
-  // verschwinden.
-  cardTitleCompact: { fontSize: 11, flexShrink: 0 },
-
-  addCard: { borderStyle: 'dashed', flexDirection: 'column', alignItems: 'center', gap: 4, justifyContent: 'center' },
+  addCard: { borderStyle: 'dashed', gap: 4 },
   addCardText: { fontSize: 10, fontWeight: '700' },
-  addCardTextCompact: { fontSize: 9 },
 
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center', padding: 24 },
   formCard: { width: '100%', maxWidth: 420, borderRadius: 16, borderWidth: 1, padding: 18 },
