@@ -939,12 +939,21 @@ export function DashboardScreen() {
           ist entfallen, jene drei Blöcke sitzen jetzt ganz unten (siehe dort). */}
       {(showBlock('googleTasks') || showBlock('scratchpad') || showBlock('quickNotes')) && (
         <View style={styles.quickOverviewCard}>
+          {/* TE-167: ein durchgehender Verlauf statt drei harter Farbsegmente –
+              die Kategoriefarben gehen über die volle Höhe der Card fließend
+              ineinander über, statt an den Sektionsgrenzen hart zu wechseln. */}
+          <LinearGradient
+            colors={[C.tasks, C.personal, C.notes]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+            style={styles.quickOverviewAccent}
+          />
 
           {/* 1. Google Tasks – offene Tasks aus dem Google-Tasks-Store (Klick → Tasks-Tab).
               TE-152: Abschnitt bleibt auch ohne offene Tasks sichtbar, damit das
               Plus-Icon zum schnellen Anlegen jederzeit erreichbar ist. */}
           {showBlock('googleTasks') && (
-            <View style={[styles.quickOverviewSection, { borderLeftColor: C.tasks }]}>
+            <View style={styles.quickOverviewSection}>
               <SectionLabel
                 title="Google Tasks"
                 onMore={() => router.push('/(tabs)/tasks' as any)}
@@ -985,7 +994,6 @@ export function DashboardScreen() {
               style={[
                 styles.quickOverviewSection,
                 showBlock('googleTasks') && styles.quickOverviewDivider,
-                { borderLeftColor: C.personal },
               ]}
             >
               <SectionLabel
@@ -1029,7 +1037,6 @@ export function DashboardScreen() {
               style={[
                 styles.quickOverviewSection,
                 (showBlock('googleTasks') || showBlock('scratchpad')) && styles.quickOverviewDivider,
-                { borderLeftColor: C.notes },
               ]}
             >
               <SectionLabel
@@ -1646,11 +1653,12 @@ function makeStyles(c: ThemeColors, isDark: boolean, calm: boolean) {
 
     section: {},
 
-    // TE-164: gemeinsamer Rahmen für die Kurzübersicht (Google Tasks/Personal
-    // Tasks/Notizen) – analog zu kidsSectionCard, damit die drei Kategorien als
-    // ein zusammengehöriger Block erkennbar sind. Die einzelnen Abschnitte
-    // bekommen darin je eine farbige linke Akzentleiste (quickOverviewSection)
-    // zur Unterscheidung, getrennt durch einen dezenten Strich (quickOverviewDivider).
+    // TE-164/TE-167: gemeinsamer Rahmen für die Kurzübersicht (Google Tasks/
+    // Personal Tasks/Notizen) – analog zu kidsSectionCard, damit die drei
+    // Kategorien als ein zusammengehöriger Block erkennbar sind. Statt drei
+    // hart wechselnder Farbsegmente pro Sektion läuft ein einziger,
+    // durchgehender Verlauf (quickOverviewAccent) über die volle Höhe der
+    // Card, sodass die Kategoriefarben fließend ineinander übergehen.
     quickOverviewCard: {
       marginHorizontal: 16,
       backgroundColor: c.surface,
@@ -1659,9 +1667,16 @@ function makeStyles(c: ThemeColors, isDark: boolean, calm: boolean) {
       borderColor: c.border,
       overflow: 'hidden',
     },
+    quickOverviewAccent: {
+      position: 'absolute',
+      left: 0,
+      top: 0,
+      bottom: 0,
+      width: 3,
+    },
     quickOverviewSection: {
       paddingVertical: 10,
-      borderLeftWidth: 3,
+      paddingLeft: 3,
     },
     quickOverviewDivider: {
       borderTopWidth: StyleSheet.hairlineWidth,
