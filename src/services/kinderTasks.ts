@@ -147,6 +147,19 @@ export async function getTasksForChild(familyId: string, childId: string, date: 
 }
 
 /**
+ * Einmaliger Fetch mit derselben Filterlogik wie subscribeToChildTasks: alle
+ * offenen Aufgaben (unabhängig vom Datum, TE-117) plus die für `date`
+ * erledigten. Für Aufrufer ohne aktiven Live-Listener, z. B. den
+ * automatischen Mail-Versand (TE-163).
+ */
+export async function getInboxTasksForChild(familyId: string, childId: string, date: string): Promise<ChildTask[]> {
+  const snap = await getDocs(tasksCol(familyId, childId));
+  return snap.docs
+    .map((d) => ({ id: d.id, ...d.data() } as ChildTask))
+    .filter((t) => !t.done || t.date === date);
+}
+
+/**
  * Echtzeit-Listener für Eltern-/Kind-Tab.
  *
  * Liefert alle noch offenen Aufgaben (unabhängig vom Datum, damit überfällige

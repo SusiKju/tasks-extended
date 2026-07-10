@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   TextInput, Alert, ActivityIndicator, RefreshControl, Modal, Pressable, Platform,
@@ -42,9 +42,7 @@ import {
   AllowanceMonth, subscribeToAllowanceMonths, monthKey, setAllowanceReceived,
   formatEuro, formatMonthLabel, nextAllowanceMonth, effectiveAllowance,
 } from '../../src/services/allowance';
-import { sendHtmlMail } from '../../src/services/googleMail';
-import { sendReminderToAllChildren, sendReminderToChild } from '../../src/services/pushNotifications';
-import { writePushTrigger, writePushTriggerAll } from '../../src/services/kinderTasks';
+import { sendTaskMailToChild as sendTaskMailCore } from '../../src/services/taskMail';
 import uuid from 'react-native-uuid';
 import { format } from 'date-fns';
 
@@ -92,7 +90,6 @@ export default function KinderScreen() {
   const [groupSelection, setGroupSelection] = useState<Record<string, boolean>>({});
   const [mailingChild, setMailingChild] = useState<string | null>(null);
   const [sendingAllMail, setSendingAllMail] = useState(false);
-  const [sending, setSending] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [setupModalVisible, setSetupModalVisible] = useState(false);
   // Bearbeiten inkl. Belohnung (TE-63). rewardType=null → keine Belohnung.
@@ -208,97 +205,20 @@ export default function KinderScreen() {
     }
   }, [fid, familyChildren, newTaskTitle, groupSelection, buildDraftReward, resetDraftReward]);
 
-  // Baut die HTML-Mail + verschickt Push & E-Mail für genau ein Kind.
-  // Wird sowohl vom Einzel-Button als auch vom "Push & Mail an alle"-Button genutzt (TE-118).
+  // Verschickt Push & E-Mail für genau ein Kind (HTML-Aufbau + Versand lebt in
+  // taskMail.ts, damit der automatische Versand ihn auch ohne gemountete
+  // Kinder-Tab nutzen kann, TE-163). Wird sowohl vom Einzel-Button als auch
+  // vom "Mail Push für alle"-Button genutzt (TE-118).
   // Gibt zurück, ob tatsächlich gesendet wurde ('sent'), das Kind keine E-Mail/Token hat
   // ('skipped') oder ein Fehler auftrat ('error').
   const sendTaskMailToChild = useCallback(async (childId: string): Promise<'sent' | 'skipped' | 'error'> => {
     const email = (settings.childEmails ?? {})[childId];
     if (!email || !settings.googleAccessToken || !fid) return 'skipped';
 
-    try {
-      // Firestore-Push (App offen)
-      const name = childName(childId);
-      await writePushTrigger(fid, childId, name);
-      if (Platform.OS !== 'web') {
-        await sendReminderToChild(fid, childId, name).catch(() => {});
-      }
-
-      const openTasks = (tasksByChild[childId] ?? []).filter((t) => !t.done);
-      const doneTasks = (tasksByChild[childId] ?? []).filter((t) => t.done);
-      // family mitgeben, damit der Link self-contained ist: index.tsx persistiert
-      // child + family, KindScreen kann die Aufgaben sofort laden (TE-46).
-      const appUrl = `https://susikju.github.io/tasks-extended/?child=${childId}&family=${fid}`;
-
-      const taskRows = (tasks: ChildTask[], done: boolean) =>
-        tasks.map((t) => `
-          <tr>
-            <td style="padding:10px 12px;border-bottom:1px solid #f0f0f0;font-size:15px;color:${done ? '#aaa' : '#1a1a2e'};${done ? 'text-decoration:line-through;' : ''}">
-              <span style="font-size:18px;margin-right:8px">${done ? '✅' : '⭕'}</span>${t.title}
-            </td>
-          </tr>`).join('');
-
-      const html = `<!DOCTYPE html>
-<html lang="de">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#f0f4ff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
-  <div style="max-width:480px;margin:32px auto;background:white;border-radius:20px;overflow:hidden;box-shadow:0 4px 24px rgba(79,134,247,0.12)">
-    <!-- Header -->
-    <div style="background:linear-gradient(135deg,#4f86f7,#6ea3ff);padding:32px 28px;text-align:center">
-      <div style="font-size:48px;margin-bottom:8px">📋</div>
-      <h1 style="margin:0;color:white;font-size:22px;font-weight:800">Hey ${name}! 👋</h1>
-      <p style="margin:8px 0 0;color:rgba(255,255,255,0.85);font-size:15px">
-        ${openTasks.length === 0
-          ? 'Du hast alles erledigt! 🎉'
-          : `Du hast noch <strong>${openTasks.length} Aufgabe${openTasks.length !== 1 ? 'n' : ''}</strong> offen`}
-      </p>
-    </div>
-
-    <!-- Aufgabenliste -->
-    <div style="padding:20px 16px">
-      ${openTasks.length > 0 ? `
-        <p style="margin:0 0 12px;font-size:13px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:0.5px">Noch offen</p>
-        <table width="100%" cellpadding="0" cellspacing="0" style="border-radius:12px;overflow:hidden;border:1px solid #eee">
-          ${taskRows(openTasks, false)}
-        </table>` : ''}
-
-      ${doneTasks.length > 0 ? `
-        <p style="margin:${openTasks.length > 0 ? '20px' : '0'} 0 12px;font-size:13px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:0.5px">Schon geschafft 🏆</p>
-        <table width="100%" cellpadding="0" cellspacing="0" style="border-radius:12px;overflow:hidden;border:1px solid #eee">
-          ${taskRows(doneTasks, true)}
-        </table>` : ''}
-
-      ${openTasks.length === 0 && doneTasks.length === 0 ? `
-        <p style="text-align:center;color:#aaa;font-size:15px;padding:20px 0">Aktuell keine Aufgaben.</p>` : ''}
-    </div>
-
-    <!-- CTA Button -->
-    <div style="padding:8px 28px 32px;text-align:center">
-      <a href="${appUrl}" style="display:inline-block;background:#4f86f7;color:white;text-decoration:none;border-radius:14px;padding:14px 32px;font-size:16px;font-weight:700">
-        Aufgaben ansehen →
-      </a>
-    </div>
-
-    <!-- Footer -->
-    <div style="background:#f8f9ff;padding:16px 28px;text-align:center;border-top:1px solid #eee">
-      <p style="margin:0;font-size:12px;color:#aaa">Gesendet von Papa ❤️</p>
-    </div>
-  </div>
-</body>
-</html>`;
-
-      await sendHtmlMail(
-        settings.googleAccessToken,
-        email,
-        openTasks.length > 0
-          ? `📋 ${openTasks.length} Aufgabe${openTasks.length !== 1 ? 'n' : ''} offen, ${name}!`
-          : `🎉 Alles erledigt, ${name}!`,
-        html
-      );
-      return 'sent';
-    } catch (e: any) {
-      return 'error';
-    }
+    const name = childName(childId);
+    const openTasks = (tasksByChild[childId] ?? []).filter((t) => !t.done);
+    const doneTasks = (tasksByChild[childId] ?? []).filter((t) => t.done);
+    return sendTaskMailCore(fid, childId, name, email, settings.googleAccessToken, openTasks, doneTasks);
   }, [fid, settings, tasksByChild, familyChildren]);
 
   const handlePushMail = useCallback(async (childId: string) => {
@@ -324,7 +244,7 @@ export default function KinderScreen() {
   // an jedes Kind mit hinterlegter E-Mail-Adresse, eines nach dem anderen.
   // silent=true unterdrückt das Abschluss-Popup — für den automatischen
   // Versand (TE-149), der ohne Nutzer-Interaktion läuft.
-  const runSendAllMail = useCallback(async (silent: boolean) => {
+  const handleSendAllMail = useCallback(async () => {
     setSendingAllMail(true);
     try {
       let sent = 0, skipped = 0, failed = 0;
@@ -334,22 +254,20 @@ export default function KinderScreen() {
         else if (result === 'skipped') skipped++;
         else failed++;
       }
-      if (!silent) {
-        const parts = [`${sent} verschickt`];
-        if (skipped > 0) parts.push(`${skipped} ohne E-Mail-Adresse übersprungen`);
-        if (failed > 0) parts.push(`${failed} fehlgeschlagen`);
-        crossInfo('✓ Push & Mail an alle', parts.join(' · '));
-      }
+      const parts = [`${sent} verschickt`];
+      if (skipped > 0) parts.push(`${skipped} ohne E-Mail-Adresse übersprungen`);
+      if (failed > 0) parts.push(`${failed} fehlgeschlagen`);
+      crossInfo('✓ Mail Push für alle', parts.join(' · '));
     } finally {
       setSendingAllMail(false);
     }
   }, [familyChildren, sendTaskMailToChild]);
 
-  const handleSendAllMail = useCallback(() => runSendAllMail(false), [runSendAllMail]);
-
   // ─── Automatischer täglicher Versand (TE-149) ──────────────────────────────
-  // Clientseitiger Scheduler: prüft alle 30 s die konfigurierten Zeiten und
-  // löst „Push & Mail an alle" still aus. Feuert nur, solange die App offen ist.
+  // Nur noch die Konfiguration (An/Aus + Uhrzeiten) lebt hier. Der eigentliche
+  // Scheduler läuft app-weit im RootLayout (TE-163) — vorher lief er lokal in
+  // diesem Tab und feuerte nie, wenn die Kinder-Tab in der Session nicht
+  // geöffnet wurde, obwohl "An" eingestellt war.
   const [emailAutoEnabled, setEmailAutoEnabled] = useState(false);
   const [emailTimes, setEmailTimes] = useState<string[]>(['06:00', '14:00']);
   const [newTimeInput, setNewTimeInput] = useState('');
@@ -391,26 +309,6 @@ export default function KinderScreen() {
     setEmailTimes(next);
     persistEmailConfig(emailAutoEnabled, next);
   }, [emailTimes, emailAutoEnabled, persistEmailConfig]);
-
-  // Scheduler: Ref auf die jeweils aktuelle Sende-Funktion, damit das Intervall
-  // nicht bei jeder Neuberechnung neu aufgesetzt werden muss.
-  const runSendAllRef = useRef(runSendAllMail);
-  useEffect(() => { runSendAllRef.current = runSendAllMail; }, [runSendAllMail]);
-  const lastFiredKeyRef = useRef('');
-
-  useEffect(() => {
-    if (!fid || !emailAutoEnabled || emailTimes.length === 0) return;
-    const id = setInterval(() => {
-      const now = new Date();
-      const hhmm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-      if (!emailTimes.includes(hhmm)) return;
-      const key = `${now.toDateString()} ${hhmm}`;
-      if (lastFiredKeyRef.current === key) return; // pro Slot nur einmal pro Tag
-      lastFiredKeyRef.current = key;
-      runSendAllRef.current(true);
-    }, 30_000);
-    return () => clearInterval(id);
-  }, [fid, emailAutoEnabled, emailTimes]);
 
   // Gruppenaufgabe bei allen Teilnehmern löschen (TE-56).
   const handleDeleteGroupTask = useCallback((entry: { title: string; members: { childId: string; taskId: string }[] }) => {
@@ -553,22 +451,6 @@ export default function KinderScreen() {
     }
   }, [fid]);
 
-  const handleSendNow = useCallback(async () => {
-    setSending(true);
-    try {
-      // Web: Firestore-Trigger (App muss offen sein)
-      // Native: Expo Push Service (echter Hintergrund-Push)
-      await writePushTriggerAll(fid, familyChildren);
-      if (Platform.OS !== 'web') {
-        await sendReminderToAllChildren(fid, familyChildren).catch(() => {});
-      }
-      crossInfo('✓ Push gesendet', 'Alle Kinder wurden benachrichtigt.');
-    } catch (e: any) {
-      crossInfo('Fehler', e?.message ?? 'Push konnte nicht gesendet werden.');
-    } finally {
-      setSending(false);
-    }
-  }, [fid, familyChildren]);
 
   const tasks = tasksByChild[selectedChild] ?? [];
   const done = tasks.filter((t) => t.done).length;
@@ -1179,26 +1061,18 @@ export default function KinderScreen() {
       </Modal>
 
       {/* Extras-Tab (TE-93): Push-/Mail-Aktionen an alle + Gerät einrichten.
-          Vorher dauerhaft am Seitenende, jetzt nur im Extras-Tab sichtbar. */}
+          Vorher dauerhaft am Seitenende, jetzt nur im Extras-Tab sichtbar.
+          "App-Push an alle" (Firestore-Trigger ohne Mail) entfernt (TE-163):
+          funktionierte für diese Familie nur bei offener App, da der native
+          Hintergrund-Push nur auf Nicht-Web-Plattformen ausgelöst wird und
+          hier ausschließlich die Web-App genutzt wird. */}
       {mode === 'extras' && (
         <View style={s.section}>
           <Text style={s.sectionTitle}>Extras</Text>
 
-          {/* Push jetzt senden — dezent gestaltet (TE-90), damit die Buttons weniger präsent wirken */}
-          <TouchableOpacity style={s.pushBtn} onPress={handleSendNow} disabled={sending}>
-            {sending ? (
-              <ActivityIndicator color={colors.textMuted} />
-            ) : (
-              <>
-                <Ionicons name="notifications-outline" size={18} color={colors.textMuted} />
-                <Text style={s.pushBtnText}>App-Push an alle (nur wenn App offen)</Text>
-              </>
-            )}
-          </TouchableOpacity>
-
-          {/* Push & Mail an alle (TE-118) */}
+          {/* Mail Push für alle (TE-118, TE-163 umbenannt von "Push & Mail an alle") */}
           <TouchableOpacity
-            style={[s.pushBtn, { marginTop: 10 }]}
+            style={s.pushBtn}
             onPress={handleSendAllMail}
             disabled={sendingAllMail}
           >
@@ -1207,7 +1081,7 @@ export default function KinderScreen() {
             ) : (
               <>
                 <Ionicons name="mail-outline" size={18} color={colors.textMuted} />
-                <Text style={s.pushBtnText}>Push & Mail an alle</Text>
+                <Text style={s.pushBtnText}>Mail Push für alle</Text>
               </>
             )}
           </TouchableOpacity>
@@ -1227,7 +1101,7 @@ export default function KinderScreen() {
               </TouchableOpacity>
             </View>
             <Text style={s.autoMailHint}>
-              Löst „Push & Mail an alle" automatisch zu diesen Zeiten aus – nur solange die App geöffnet ist.
+              Löst „Mail Push für alle" automatisch zu diesen Zeiten aus – nur solange die App geöffnet ist.
             </Text>
             <View style={s.timeChips}>
               {emailTimes.map((t) => (

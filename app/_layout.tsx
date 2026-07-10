@@ -9,6 +9,8 @@ import { useGoogleTasksSync } from '../src/hooks/useGoogleTasksSync';
 import { useGoogleContactsBirthdaysSync } from '../src/hooks/useGoogleContactsBirthdaysSync';
 import { getValidAccessToken } from '../src/services/googleCalendar';
 import { scheduleCheckIfNeeded, stopScheduledPush } from '../src/services/scheduledPush';
+import { getEmailReminderConfig } from '../src/services/kinderTasks';
+import { runAutoSendAll } from '../src/services/taskMail';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFirebaseAuth } from '../src/hooks/useFirebaseAuth';
 import { useFamily } from '../src/hooks/useFamily';
@@ -159,6 +161,33 @@ export default function RootLayout() {
     });
     return () => stopScheduledPush();
   }, [familyId, familyChildren]);
+
+  // Automatischer täglicher Mail-Push (TE-149/TE-163): lief vorher lokal im
+  // Kinder-Tab und feuerte deshalb nie, wenn dieser Tab in der Session nicht
+  // geöffnet wurde. Jetzt hier im Root – läuft app-weit im Eltern-Modus,
+  // solange die App offen ist, unabhängig vom aktiven Tab.
+  const autoMailLastFiredRef = useRef('');
+  useEffect(() => {
+    if (!familyId || familyChildren.length === 0 || isChildMode) return;
+    const id = setInterval(async () => {
+      try {
+        const config = await getEmailReminderConfig(familyId);
+        if (!config.enabled || config.times.length === 0) return;
+        const now = new Date();
+        const hhmm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+        if (!config.times.includes(hhmm)) return;
+        const key = `${now.toDateString()} ${hhmm}`;
+        if (autoMailLastFiredRef.current === key) return; // pro Slot nur einmal pro Tag
+        autoMailLastFiredRef.current = key;
+        const current = useStore.getState().settings;
+        if (!current.googleAccessToken) return;
+        await runAutoSendAll(familyId, familyChildren, current.childEmails ?? {}, current.googleAccessToken);
+      } catch (e) {
+        console.warn('[AutoMail] Fehler:', e);
+      }
+    }, 30_000);
+    return () => clearInterval(id);
+  }, [familyId, familyChildren, isChildMode]);
 
   // Während Auth/Family/Kinder-Modus noch laden: Spinner zeigen
   if (authLoading || familyLoading || isChildMode === null) {
