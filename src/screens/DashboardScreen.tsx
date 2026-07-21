@@ -14,6 +14,7 @@ import {
   Alert,
   useWindowDimensions,
   Linking,
+  Image,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -959,18 +960,17 @@ export function DashboardScreen() {
           des Rahmens trennt eine farbige linke Akzentleiste pro Kategorie
           (Blau/Violett/Amber) die drei Bereiche optisch, plus ein Trennstrich
           zwischen den vorhandenen Abschnitten.
-          Reihenfolge: 1. Google Tasks, 2. Personal Tasks, 3. Notizen, 4. Drive-Favoriten.
+          Reihenfolge: 1. Google Tasks, 2. Personal Tasks, 3. Notizen.
           TE-161: läuft über die volle Breite – die frühere zweispaltige
           Aufteilung (schmale rechte Spalte für Links/Geistesblitze/Countdowns)
           ist entfallen, jene drei Blöcke sitzen jetzt ganz unten (siehe dort). */}
-      {(showBlock('googleTasks') || showBlock('scratchpad') || showBlock('quickNotes') ||
-        (showBlock('driveFavorites') && driveFavorites.length > 0)) && (
+      {(showBlock('googleTasks') || showBlock('scratchpad') || showBlock('quickNotes')) && (
         <View style={styles.quickOverviewCard}>
           {/* TE-167: ein durchgehender Verlauf statt drei harter Farbsegmente –
               die Kategoriefarben gehen über die volle Höhe der Card fließend
               ineinander über, statt an den Sektionsgrenzen hart zu wechseln. */}
           <LinearGradient
-            colors={[C.tasks, C.personal, C.notes, C.drive]}
+            colors={[C.tasks, C.personal, C.notes]}
             start={{ x: 0, y: 0 }}
             end={{ x: 0, y: 1 }}
             style={styles.quickOverviewAccent}
@@ -1092,38 +1092,6 @@ export function DashboardScreen() {
             </View>
           )}
 
-          {/* 4. Drive-Favoriten – als Favorit markierte Google-Drive-Dateien (TE-168).
-              Nur sichtbar, wenn es tatsächlich Favoriten gibt (kein Schnell-Anlegen
-              möglich, im Gegensatz zu den übrigen Abschnitten – Favorisieren
-              passiert in Drive selbst). Klick öffnet die Datei direkt in Drive. */}
-          {showBlock('driveFavorites') && driveFavorites.length > 0 && (
-            <View
-              style={[
-                styles.quickOverviewSection,
-                (showBlock('googleTasks') || showBlock('scratchpad') || showBlock('quickNotes')) &&
-                  styles.quickOverviewDivider,
-              ]}
-            >
-              <SectionLabel title="Drive-Favoriten" colors={colors} />
-              <View>
-                {driveFavorites.slice(0, 6).map((f) => (
-                  <Pressable
-                    key={f.id}
-                    onPress={() => f.webViewLink && Linking.openURL(f.webViewLink)}
-                    style={({ pressed }) => [styles.dezentRow, { opacity: pressed ? 0.6 : 1 }]}
-                  >
-                    <View style={[styles.dezentBullet, { backgroundColor: C.drive }]} />
-                    <Text style={styles.dezentText} numberOfLines={1}>{f.name}</Text>
-                  </Pressable>
-                ))}
-                {driveFavorites.length > 6 && (
-                  <Text style={[styles.dezentMore, { color: colors.textMuted }]}>
-                    +{driveFavorites.length - 6} weitere
-                  </Text>
-                )}
-              </View>
-            </View>
-          )}
         </View>
       )}
 
@@ -1614,6 +1582,55 @@ export function DashboardScreen() {
           <CountdownStrip colors={colors} compact />
         )}
       </View>
+
+      {/* ── Drive-Favoriten (TE-168) ── eigene Kategorie, ganz am Ende der
+          Seite – anders als Google Tasks/Personal Tasks/Notizen kein Teil der
+          Kurzübersicht, sondern eine eigenständige Karte im Stil des
+          Posteingangs (mailRow/mailAvatar). Nur sichtbar, wenn es tatsächlich
+          Favoriten gibt (kein Schnell-Anlegen möglich, im Gegensatz zu den
+          übrigen Abschnitten – Favorisieren passiert in Drive selbst).
+          Jede Zeile: Drive-eigenes Datei-/Ordner-Icon (iconLink, unterscheidet
+          Ordner automatisch von Dateitypen wie Docs/Sheets/PDF) + "öffnet
+          extern"-Pfeil, damit klar ist, dass ein Klick die Datei in Drive
+          öffnet. */}
+      {showBlock('driveFavorites') && driveFavorites.length > 0 && (
+        <View style={styles.section}>
+          <SectionLabel title="Drive-Favoriten" colors={colors} />
+          <View style={[styles.card, !reduceMotion && { borderLeftColor: colors.border, borderLeftWidth: 3 }]}>
+            {driveFavorites.slice(0, 6).map((f, i) => {
+              const isFolder = f.mimeType === 'application/vnd.google-apps.folder';
+              return (
+                <Pressable
+                  key={f.id}
+                  onPress={() => f.webViewLink && Linking.openURL(f.webViewLink)}
+                  style={({ pressed }) => [
+                    styles.mailRow,
+                    i < Math.min(driveFavorites.length, 6) - 1 && styles.rowDivider,
+                    { opacity: pressed ? 0.6 : 1 },
+                  ]}
+                >
+                  <View style={[styles.mailAvatar, { backgroundColor: colors.surfaceHigh }]}>
+                    {f.iconLink ? (
+                      <Image source={{ uri: f.iconLink }} style={{ width: 18, height: 18 }} resizeMode="contain" />
+                    ) : (
+                      <Ionicons name={isFolder ? 'folder' : 'document-text-outline'} size={16} color={C.drive} />
+                    )}
+                  </View>
+                  <Text style={[styles.mailFrom, { color: colors.text, flex: 1 }]} numberOfLines={1}>
+                    {f.name}
+                  </Text>
+                  <Ionicons name="open-outline" size={16} color={colors.textMuted} />
+                </Pressable>
+              );
+            })}
+            {driveFavorites.length > 6 && (
+              <Text style={[styles.dezentMore, { color: colors.textMuted }]}>
+                +{driveFavorites.length - 6} weitere
+              </Text>
+            )}
+          </View>
+        </View>
+      )}
 
     </ScrollView>
 
