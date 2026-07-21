@@ -16,6 +16,9 @@ const SCOPES = [
   'https://www.googleapis.com/auth/tasks',
   'https://www.googleapis.com/auth/gmail.modify',
   'https://www.googleapis.com/auth/contacts.readonly',
+  // TE-168: nur Metadaten (Name, Icon, Link, starred-Flag) für die
+  // Drive-Favoriten-Kurzübersicht – kein Zugriff auf Dateiinhalte.
+  'https://www.googleapis.com/auth/drive.metadata.readonly',
 ];
 
 const CALENDAR_API = 'https://www.googleapis.com/calendar/v3';

@@ -112,6 +112,7 @@ export type DashboardBlockKey =
   | 'googleTasks'
   | 'scratchpad'
   | 'quickNotes'
+  | 'driveFavorites'
   | 'links'
   | 'geistesblitze'
   | 'countdowns'
@@ -128,6 +129,7 @@ export const DASHBOARD_BLOCKS: { key: DashboardBlockKey; label: string; descript
   { key: 'googleTasks',   label: 'Google Tasks',        description: 'Offene Google Tasks, zeilenweise über den Links.' },
   { key: 'scratchpad',    label: 'Personal Tasks',      description: 'Persönliche Tasks mit Wichtig-Label und Fälligkeitsdatum.' },
   { key: 'quickNotes',    label: 'Schnelle Notizen',    description: 'Kurze Notizen ohne Datum aus dem Notizen-Tab.' },
+  { key: 'driveFavorites',label: 'Drive-Favoriten',     description: 'Als Favorit markierte Google-Drive-Dateien.' },
   { key: 'links',         label: 'Links',               description: 'Schnellleiste mit deinen Links.' },
   { key: 'geistesblitze', label: 'Geistesblitze',       description: 'Persönliche Gedanken-Kacheln.' },
   { key: 'countdowns',    label: 'Countdowns',          description: 'Countdowns bis zu Ereignissen.' },

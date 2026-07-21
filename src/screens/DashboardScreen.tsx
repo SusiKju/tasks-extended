@@ -13,6 +13,7 @@ import {
   Modal,
   Alert,
   useWindowDimensions,
+  Linking,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -26,7 +27,8 @@ import { useGoogleTasksSync } from '../hooks/useGoogleTasksSync';
 import { useGoogleContactsBirthdaysSync } from '../hooks/useGoogleContactsBirthdaysSync';
 import { isOverdue, isDueToday, localDateStr } from '../utils/dateFormat';
 import { fetchRecentMails, fetchMailsByIds, MailMessage } from '../services/googleMail';
-import { listUpcomingEvents, CalendarEvent } from '../services/googleCalendar';
+import { listUpcomingEvents, CalendarEvent, getValidAccessToken } from '../services/googleCalendar';
+import { listStarredDriveFiles, DriveFile } from '../services/googleDrive';
 import {
   ChildTask, subscribeToChildTasks,
 } from '../services/kinderTasks';
@@ -97,6 +99,7 @@ const C = {
   overdue:  '#FF3B30',
   personal: '#8B5CF6',   // Violett – Personal Tasks
   notes:    '#F59E0B',   // Amber – Notizen
+  drive:    '#0F9D58',   // Google-Drive-Grün – Drive-Favoriten
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -257,6 +260,20 @@ export function DashboardScreen() {
     }
   }, [pinnedMailIds, settings.mailWindowDays]);
 
+  // TE-168: Als Favorit markierte Google-Drive-Dateien für die Kurzübersicht.
+  // 401 = abgelaufenes Token → einmal mit frischem Token retryen, analog zum
+  // Geburtstage-Sync (useGoogleContactsBirthdaysSync).
+  const loadDriveFavorites = useCallback(async (token: string) => {
+    let result = await listStarredDriveFiles(token).catch(() => null);
+    if (result === null) {
+      const fresh = await getValidAccessToken(true);
+      if (fresh && fresh !== token) {
+        result = await listStarredDriveFiles(fresh).catch(() => null);
+      }
+    }
+    if (result !== null) setDriveFavorites(result);
+  }, []);
+
   const handleSync = useCallback(async () => {
     if (syncing) return;
     setSyncing(true);
@@ -273,6 +290,7 @@ export function DashboardScreen() {
       // Mails + Kalender neu laden
       if (settings.googleAccessToken) {
         loadDashboardMails(settings.googleAccessToken);
+        loadDriveFavorites(settings.googleAccessToken);
         if (settings.googleCalendarEnabled) {
           setCalLoading(true);
           listUpcomingEvents(settings.googleAccessToken, settings.selectedCalendarIds ?? [], 2)
@@ -290,7 +308,7 @@ export function DashboardScreen() {
       spinAnim.setValue(0);
       setSyncing(false);
     }
-  }, [syncing, syncTasks, syncBirthdays, settings, loadDashboardMails]);
+  }, [syncing, syncTasks, syncBirthdays, settings, loadDashboardMails, loadDriveFavorites]);
 
   const styles = useMemo(() => makeStyles(colors, isDark, reduceMotion), [colors, isDark, reduceMotion]);
 
@@ -298,6 +316,7 @@ export function DashboardScreen() {
   const [mailLoading, setMailLoading] = useState(false);
   const [calEvents, setCalEvents] = useState<CalendarEvent[]>([]);
   const [calLoading, setCalLoading] = useState(false);
+  const [driveFavorites, setDriveFavorites] = useState<DriveFile[]>([]);
 
   // TE-41: Auf dem Dashboard nur angepinnte + ungelesene Mails, angepinnte oben.
   const pinnedSet = useMemo(() => new Set(pinnedMailIds), [pinnedMailIds]);
@@ -720,6 +739,13 @@ export function DashboardScreen() {
     loadDashboardMails(settings.googleAccessToken);
   }, [settings.googleAccessToken, loadDashboardMails]);
 
+  // TE-168: Drive-Favoriten beim Laden automatisch ziehen – analog zu Mails/
+  // Kalender. Nur wenn der Block überhaupt sichtbar ist (kein unnötiger Call).
+  useEffect(() => {
+    if (!settings.googleAccessToken || !showBlock('driveFavorites')) return;
+    loadDriveFavorites(settings.googleAccessToken);
+  }, [settings.googleAccessToken, loadDriveFavorites, showBlock]);
+
   useEffect(() => {
     if (!settings.googleAccessToken || !settings.googleCalendarEnabled) return;
     setCalLoading(true);
@@ -933,17 +959,18 @@ export function DashboardScreen() {
           des Rahmens trennt eine farbige linke Akzentleiste pro Kategorie
           (Blau/Violett/Amber) die drei Bereiche optisch, plus ein Trennstrich
           zwischen den vorhandenen Abschnitten.
-          Reihenfolge: 1. Google Tasks, 2. Personal Tasks, 3. Notizen.
+          Reihenfolge: 1. Google Tasks, 2. Personal Tasks, 3. Notizen, 4. Drive-Favoriten.
           TE-161: läuft über die volle Breite – die frühere zweispaltige
           Aufteilung (schmale rechte Spalte für Links/Geistesblitze/Countdowns)
           ist entfallen, jene drei Blöcke sitzen jetzt ganz unten (siehe dort). */}
-      {(showBlock('googleTasks') || showBlock('scratchpad') || showBlock('quickNotes')) && (
+      {(showBlock('googleTasks') || showBlock('scratchpad') || showBlock('quickNotes') ||
+        (showBlock('driveFavorites') && driveFavorites.length > 0)) && (
         <View style={styles.quickOverviewCard}>
           {/* TE-167: ein durchgehender Verlauf statt drei harter Farbsegmente –
               die Kategoriefarben gehen über die volle Höhe der Card fließend
               ineinander über, statt an den Sektionsgrenzen hart zu wechseln. */}
           <LinearGradient
-            colors={[C.tasks, C.personal, C.notes]}
+            colors={[C.tasks, C.personal, C.notes, C.drive]}
             start={{ x: 0, y: 0 }}
             end={{ x: 0, y: 1 }}
             style={styles.quickOverviewAccent}
@@ -1059,6 +1086,39 @@ export function DashboardScreen() {
                 {importantQuickNotes.length > 6 && (
                   <Text style={[styles.dezentMore, { color: colors.textMuted }]}>
                     +{importantQuickNotes.length - 6} weitere
+                  </Text>
+                )}
+              </View>
+            </View>
+          )}
+
+          {/* 4. Drive-Favoriten – als Favorit markierte Google-Drive-Dateien (TE-168).
+              Nur sichtbar, wenn es tatsächlich Favoriten gibt (kein Schnell-Anlegen
+              möglich, im Gegensatz zu den übrigen Abschnitten – Favorisieren
+              passiert in Drive selbst). Klick öffnet die Datei direkt in Drive. */}
+          {showBlock('driveFavorites') && driveFavorites.length > 0 && (
+            <View
+              style={[
+                styles.quickOverviewSection,
+                (showBlock('googleTasks') || showBlock('scratchpad') || showBlock('quickNotes')) &&
+                  styles.quickOverviewDivider,
+              ]}
+            >
+              <SectionLabel title="Drive-Favoriten" colors={colors} />
+              <View>
+                {driveFavorites.slice(0, 6).map((f) => (
+                  <Pressable
+                    key={f.id}
+                    onPress={() => f.webViewLink && Linking.openURL(f.webViewLink)}
+                    style={({ pressed }) => [styles.dezentRow, { opacity: pressed ? 0.6 : 1 }]}
+                  >
+                    <View style={[styles.dezentBullet, { backgroundColor: C.drive }]} />
+                    <Text style={styles.dezentText} numberOfLines={1}>{f.name}</Text>
+                  </Pressable>
+                ))}
+                {driveFavorites.length > 6 && (
+                  <Text style={[styles.dezentMore, { color: colors.textMuted }]}>
+                    +{driveFavorites.length - 6} weitere
                   </Text>
                 )}
               </View>
