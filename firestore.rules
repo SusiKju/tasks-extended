@@ -78,9 +78,14 @@ service cloud.firestore {
         allow read, write: if isFamilyMember(familyId);
       }
 
-      // Geteilte Notizliste + Countdowns
+      // Geteilte Notizliste
       match /shared/{document=**} {
         allow read, write: if isFamilyMember(familyId);
+      }
+
+      // Countdown-Karten pro User (TE-171: vorher geteilt unter shared/countdowns)
+      match /countdownsByUser/{uid}/items/{itemId} {
+        allow read, write: if isFamilyMember(familyId) && request.auth.uid == uid;
       }
 
       // Persönlicher Scratchpad pro User
