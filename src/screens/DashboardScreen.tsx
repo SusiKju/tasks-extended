@@ -1222,25 +1222,21 @@ export function DashboardScreen() {
         </View>
       )}
 
-      {/* ── Fokus-Kacheln (Fußball/Yoga/Garten): standen bisher als schwebender
-          Fab rechts am Rand fest über dem gesamten Screen (siehe unten
-          entfernte styles.focusFab) – dort klebten sie ohne erkennbaren
-          Bezug zu einem Abschnitt. Stehen jetzt vorneweg direkt vor den
-          Links, icon-only wie schon immer (FussballKachel selbst zeigt nie
-          Text), aber eingebettet statt sticky. ── */}
-      <View style={styles.focusInline}>
-        <FussballKachel iconSize={16} />
-      </View>
-
-      {/* ── Schnellzugriff (privat): Links + Drive-Favoriten (TE-168) in einer
-          gemeinsamen, horizontal scrollenden Zeile statt getrennter
-          Abschnitte – Redesign-Auftrag, überschreibt bewusst die TE-161-
-          Entscheidung fürs umbrechende Links-Grid. ── */}
-      {(showBlock('links') || showBlock('driveFavorites')) && (
+      {/* ── Schnellzugriff (privat): Fokus-Kacheln + Links + Drive-Favoriten
+          (TE-168) in EINER gemeinsamen, horizontal scrollenden Zeile.
+          Vorher standen die Fokus-Kacheln als eigene Reihe ÜBER Schnellzugriff
+          (sah aus wie ein eigener Abschnitt) statt als erste Elemente IN der
+          Zeile selbst – das war nicht das, was gezeigt wurde. Jetzt läuft
+          FussballKachel als `leading`-Slot direkt in LinkCardBars ScrollView,
+          mit einem dünnen Trenner vor den gelabelten Chips. Überschreibt
+          bewusst die TE-161-Entscheidung fürs umbrechende Links-Grid. ── */}
+      {(showBlock('links') || showBlock('driveFavorites') || (settings.funTileThemes ?? []).length > 0) && (
         <LinkCardBar
           colors={colors}
           showLinks={showBlock('links')}
           driveFavorites={showBlock('driveFavorites') ? driveFavorites : []}
+          hasLeading={(settings.funTileThemes ?? []).length > 0}
+          leading={<FussballKachel iconSize={16} />}
         />
       )}
 
@@ -1265,123 +1261,107 @@ export function DashboardScreen() {
             colors={colors}
           />
 
-          {/* Eigene Karte (TE-123): kapselt den ganzen Abschnitt sichtbar ab */}
-          <View style={styles.kidsSectionCard}>
-
-            {/* Einzelne Kinder – einspaltig, mit Avatar + Fälligkeitsdatum (TE-119) */}
-            {childrenWithTasks.length > 0 && (
-              <View style={{ gap: 10 }}>
-                {childrenWithTasks.map((childId) => {
-                  const list = individualByChild[childId];
-                  const doneCount = list.filter((t) => t.done).length;
-                  return (
-                    <View key={childId}>
-                      <View style={styles.kidLabelRow}>
-                        <View style={[styles.kidAvatar, { backgroundColor: childColor(childId) }]}>
-                          <Text style={styles.kidAvatarText}>
-                            {childEmoji(childId) ?? childName(childId).charAt(0)}
-                          </Text>
-                        </View>
-                        <Text style={[styles.dayLabel, styles.kidColLabel, { color: colors.textMuted }]}>
-                          {childName(childId)} · {doneCount}/{list.length}
-                        </Text>
-                      </View>
-                      <Pressable
-                        style={[styles.card, styles.kidCard]}
-                        onPress={() => router.push('/(tabs)/kids' as any)}
-                      >
-                        {list.map((task, i) => {
-                          const due = dueInfo(task);
-                          return (
-                            <View
-                              key={task.id}
-                              style={[styles.kidRow, i < list.length - 1 && styles.rowDivider]}
-                            >
-                              <Ionicons
-                                name={task.done ? 'checkmark-circle' : task.rejected ? 'close-circle' : 'ellipse-outline'}
-                                size={18}
-                                color={task.done ? colors.success : task.rejected ? colors.danger : colors.textMuted}
-                              />
-                              <Text
-                                style={[
-                                  styles.kidTaskText,
-                                  { color: colors.text },
-                                  task.done && styles.kidTaskDone,
-                                  task.rejected && { color: colors.danger },
-                                ]}
-                                numberOfLines={1}
-                              >
-                                {task.title}
-                              </Text>
-                              {due && (
-                                <Text style={[styles.dueBadge, due.overdue && styles.dueBadgeOverdue]}>
-                                  {due.label}
-                                </Text>
-                              )}
-                            </View>
-                          );
-                        })}
-                      </Pressable>
+          {/* Redesign: eine flache Card statt verschachtelter Boxen (vorher:
+              äußere kidsSectionCard, darin pro Kind ein eigener, nochmal
+              separat umrandeter kidCard-Block) – jetzt derselbe flache
+              Zeilen-Stil wie Kurzübersicht/Posteingang. */}
+          <View style={styles.card}>
+            {childrenWithTasks.map((childId) => {
+              const list = individualByChild[childId];
+              const doneCount = list.filter((t) => t.done).length;
+              return (
+                <React.Fragment key={childId}>
+                  <View style={[styles.kidHeaderRow, styles.rowDivider]}>
+                    <View style={[styles.kidAvatar, { backgroundColor: childColor(childId) }]}>
+                      <Text style={styles.kidAvatarText}>
+                        {childEmoji(childId) ?? childName(childId).charAt(0)}
+                      </Text>
                     </View>
-                  );
-                })}
-              </View>
-            )}
-  
-            {/* Gruppenarbeiten – einspaltig mit eigenem Avatar + Fälligkeitsdatum (TE-115/TE-119) */}
-            {groupTasks.length > 0 && (
-              <View style={{ gap: 10, marginTop: childrenWithTasks.length > 0 ? 10 : 0 }}>
-                {groupTasks.map((g) => {
-                  const doneCount = g.entries.filter((e) => e.task.done).length;
-                  const due = dueInfo(g.entries[0]?.task);
-                  return (
-                    <View key={g.groupId}>
-                      <View style={styles.kidLabelRow}>
-                        <View style={[styles.kidAvatar, { backgroundColor: colors.accentNeon }]}>
-                          <Ionicons name="people" size={12} color="#000" />
-                        </View>
-                        <Text style={[styles.dayLabel, styles.kidColLabel, { color: colors.textMuted }]} numberOfLines={1}>
-                          {g.title} · {doneCount}/{g.entries.length}
+                    <Text style={[styles.kidHeaderText, { color: colors.textMuted }]}>
+                      {childName(childId)} · {doneCount}/{list.length}
+                    </Text>
+                  </View>
+                  {list.map((task) => {
+                    const due = dueInfo(task);
+                    return (
+                      <Pressable
+                        key={task.id}
+                        onPress={() => router.push('/(tabs)/kids' as any)}
+                        style={({ pressed }) => [styles.kidRow, styles.rowDivider, { opacity: pressed ? 0.6 : 1 }]}
+                      >
+                        <Ionicons
+                          name={task.done ? 'checkmark-circle' : task.rejected ? 'close-circle' : 'ellipse-outline'}
+                          size={18}
+                          color={task.done ? colors.success : task.rejected ? colors.danger : colors.textMuted}
+                        />
+                        <Text
+                          style={[
+                            styles.kidTaskText,
+                            { color: colors.text },
+                            task.done && styles.kidTaskDone,
+                            task.rejected && { color: colors.danger },
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {task.title}
                         </Text>
                         {due && (
                           <Text style={[styles.dueBadge, due.overdue && styles.dueBadgeOverdue]}>
                             {due.label}
                           </Text>
                         )}
-                      </View>
-                      <Pressable
-                        style={[styles.card, styles.kidCard]}
-                        onPress={() => router.push('/(tabs)/kids' as any)}
-                      >
-                        {g.entries.map((e, i) => (
-                          <View
-                            key={e.childId}
-                            style={[styles.kidRow, i < g.entries.length - 1 && styles.rowDivider]}
-                          >
-                            <Ionicons
-                              name={e.task.done ? 'checkmark-circle' : e.task.rejected ? 'close-circle' : 'ellipse-outline'}
-                              size={18}
-                              color={e.task.done ? colors.success : e.task.rejected ? colors.danger : colors.textMuted}
-                            />
-                            <Text
-                              style={[
-                                styles.kidTaskText,
-                                { color: colors.text },
-                                e.task.done && styles.kidTaskDone,
-                                e.task.rejected && { color: colors.danger },
-                              ]}
-                              numberOfLines={1}
-                            >
-                              {childName(e.childId)}
-                            </Text>
-                          </View>
-                        ))}
                       </Pressable>
+                    );
+                  })}
+                </React.Fragment>
+              );
+            })}
+
+            {groupTasks.map((g) => {
+              const doneCount = g.entries.filter((e) => e.task.done).length;
+              const due = dueInfo(g.entries[0]?.task);
+              return (
+                <React.Fragment key={g.groupId}>
+                  <View style={[styles.kidHeaderRow, styles.rowDivider]}>
+                    <View style={[styles.kidAvatar, { backgroundColor: colors.accentNeon }]}>
+                      <Ionicons name="people" size={12} color="#000" />
                     </View>
-                  );
-                })}
-              </View>
-            )}
+                    <Text style={[styles.kidHeaderText, { color: colors.textMuted, flex: 1 }]} numberOfLines={1}>
+                      {g.title} · {doneCount}/{g.entries.length}
+                    </Text>
+                    {due && (
+                      <Text style={[styles.dueBadge, due.overdue && styles.dueBadgeOverdue]}>
+                        {due.label}
+                      </Text>
+                    )}
+                  </View>
+                  {g.entries.map((e) => (
+                    <Pressable
+                      key={e.childId}
+                      onPress={() => router.push('/(tabs)/kids' as any)}
+                      style={({ pressed }) => [styles.kidRow, styles.rowDivider, { opacity: pressed ? 0.6 : 1 }]}
+                    >
+                      <Ionicons
+                        name={e.task.done ? 'checkmark-circle' : e.task.rejected ? 'close-circle' : 'ellipse-outline'}
+                        size={18}
+                        color={e.task.done ? colors.success : e.task.rejected ? colors.danger : colors.textMuted}
+                      />
+                      <Text
+                        style={[
+                          styles.kidTaskText,
+                          { color: colors.text },
+                          e.task.done && styles.kidTaskDone,
+                          e.task.rejected && { color: colors.danger },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {childName(e.childId)}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </React.Fragment>
+              );
+            })}
           </View>
         </View>
       )}
@@ -1489,10 +1469,6 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
     // Abschnitten, näher am Artefakt.
     content: { paddingTop: 16, paddingBottom: 48, gap: 18 },
 
-    // Fokus-Kacheln stehen jetzt inline vor den Links statt als fixierter
-    // Fab rechts am Rand (siehe JSX-Kommentar oben bei focusInline).
-    focusInline: { flexDirection: 'row', paddingHorizontal: 16, marginBottom: -6 },
-
     syncRow: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -1581,13 +1557,9 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
     emptyRow: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 14 },
     emptyText: { fontSize: 13, color: c.textSecondary },
 
-    dayLabel: {
-      fontSize: 9,
+    kidHeaderText: {
+      fontSize: 12.5,
       fontWeight: '700',
-      letterSpacing: 0.8,
-      textTransform: 'uppercase',
-      paddingHorizontal: 16,
-      marginBottom: 4,
     },
 
     // Kurzübersicht (Redesign): flache Liste in derselben Card wie
@@ -1723,27 +1695,15 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
       paddingHorizontal: 6,
     },
     dueBadgeOverdue: { color: '#fff', backgroundColor: '#ef4444', borderRadius: 6, paddingVertical: 1, overflow: 'hidden' },
-    // Zweispaltiges Kinder-Grid (TE-115)
-    kidGrid: {
+    // Redesign: Kind-/Gruppen-Kopfzeile als normale Zeile innerhalb der
+    // flachen Card (vorher: eigener, unbordered Label-Block über einer
+    // separat umrandeten Mini-Karte pro Kind).
+    kidHeaderRow: {
       flexDirection: 'row',
-      flexWrap: 'wrap',
-      justifyContent: 'space-between',
-      paddingHorizontal: 16,
-      rowGap: 10,
-    },
-    kidCol: { width: '48%' },
-    kidColLabel: { paddingHorizontal: 0 },
-    kidLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
-    // Eigene, abgekapselte Karte für die Kinder-Sektion (TE-123) – grenzt den
-    // Abschnitt sichtbar von Kalender/Geteilter Liste/etc. ab.
-    kidsSectionCard: {
-      marginHorizontal: 16,
-      borderRadius: 18,
-      borderWidth: 1,
-      backgroundColor: c.surface,
-      borderColor: c.border + '55',
-      padding: 12,
-      gap: 12,
+      alignItems: 'center',
+      gap: 8,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
     },
     kidAvatar: {
       width: 22,
@@ -1753,7 +1713,6 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
       justifyContent: 'center',
     },
     kidAvatarText: { fontSize: 11, fontWeight: '800', color: '#fff' },
-    kidCard: { marginHorizontal: 0, borderLeftWidth: 1 },
     // Gruppenarbeit-Karte (TE-115)
     groupTitle: {
       fontSize: 14,

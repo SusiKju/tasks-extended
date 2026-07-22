@@ -29,12 +29,21 @@ export function LinkCardBar({
   colors,
   showLinks = true,
   driveFavorites = [],
+  leading,
+  hasLeading = false,
 }: {
   colors: ThemeColors;
   /** Steuert nur den Links-Teil (Dashboard-Block-Toggle) – Drive-Favoriten
    *  werden schon vom Aufrufer leer übergeben, wenn deaktiviert. */
   showLinks?: boolean;
   driveFavorites?: DriveFile[];
+  /** Fokus-Kacheln (Fußball/Yoga/Garten) – rendern als erste Elemente in
+   *  DERSELBEN scrollenden Zeile, nicht als eigene Reihe darüber (Redesign-
+   *  Vorgabe: "an den Anfang", innerhalb von Schnellzugriff, nicht davor). */
+  leading?: React.ReactNode;
+  /** Ob `leading` überhaupt etwas rendert (FussballKachel kann intern null
+   *  liefern, das weiß der Aufrufer über settings.funTileThemes vorab). */
+  hasLeading?: boolean;
 }) {
   const { user } = useFirebaseAuth();
   const { familyId } = useFamily();
@@ -53,7 +62,7 @@ export function LinkCardBar({
   const driveOverflow = driveFavorites.length - drive.length;
 
   // Nur sichtbar, wenn es überhaupt etwas zu zeigen gibt.
-  if (active.length === 0 && drive.length === 0) return null;
+  if (active.length === 0 && drive.length === 0 && !hasLeading) return null;
 
   return (
     <View style={s.section}>
@@ -62,6 +71,12 @@ export function LinkCardBar({
         <Text style={[s.headerTitle, { color: colors.textSecondary }]}>SCHNELLZUGRIFF</Text>
       </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.row}>
+        {hasLeading && (
+          <>
+            {leading}
+            {(active.length > 0 || drive.length > 0) && <View style={s.divider} />}
+          </>
+        )}
         {active.map((l) => (
           <Pressable
             key={l.id}
@@ -105,7 +120,8 @@ const s = StyleSheet.create({
   section: { paddingHorizontal: 16, gap: 10 },
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   headerTitle: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8 },
-  row: { flexDirection: 'row', gap: 16, paddingVertical: 2, paddingRight: 8 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 16, paddingVertical: 2, paddingRight: 8 },
+  divider: { width: 1, alignSelf: 'stretch', backgroundColor: '#FFFFFF1A', marginVertical: 4 },
   card: { alignItems: 'center', gap: 5, width: 68 },
   driveAvatar: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   label: { fontSize: 11, fontWeight: '600', textAlign: 'center' },
