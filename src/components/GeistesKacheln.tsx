@@ -292,7 +292,10 @@ export function GeistesKacheln({ colors, isDark, areaWidth, columns, compact = f
   return (
     <View style={s.section}>
       <View style={s.header}>
-        <Text style={[s.headerTitle, { color: colors.textSecondary }]}>GEISTESBLITZE</Text>
+        <View style={s.headerTitleRow}>
+          <Ionicons name="bulb-outline" size={13} color={colors.textMuted} />
+          <Text style={[s.headerTitle, { color: colors.textSecondary }]}>GEISTESBLITZE</Text>
+        </View>
         {/* TE-14: Fokus-Kachel-Icons rechtsbündig in derselben Zeile (nicht sticky).
             TE-153: In der schmalen Dashboard-Spalte (compact) wird die Fokus-Kachel
             NICHT hier gerendert, sondern als fixierter Button rechts-mittig am
@@ -343,6 +346,7 @@ const s = StyleSheet.create({
   section: { paddingHorizontal: 16, gap: 10 },
 
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  headerTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   headerTitle: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8 },
   addBtn: { flexDirection: 'row', alignItems: 'center', gap: 3, borderWidth: 1, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 },
   addBtnText: { fontSize: 11, fontWeight: '600' },

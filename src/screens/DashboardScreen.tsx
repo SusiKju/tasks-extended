@@ -13,7 +13,6 @@ import {
   Alert,
   useWindowDimensions,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useStore } from '../store';
@@ -141,15 +140,20 @@ function dayLabel(d: Date): string {
 // ─── Section Label ────────────────────────────────────────────────────────────
 
 function SectionLabel({
-  title, onMore, moreLabel = 'Alle →', colors, onAdd,
+  title, onMore, moreLabel = 'Alle →', colors, onAdd, icon,
 }: {
   title: string; onMore?: () => void; moreLabel?: string; colors: ThemeColors;
   // TE-152: optionales Plus-Icon fürs schnelle Anlegen direkt aus dem Abschnitt.
   onAdd?: () => void;
+  /** Optionales Icon vor dem Titel (Redesign: Geistesblitze/Countdowns/Kurzübersicht). */
+  icon?: React.ComponentProps<typeof Ionicons>['name'];
 }) {
   return (
     <View style={labelStyles.row}>
-      <Text style={[labelStyles.title, { color: colors.textSecondary }]}>{title}</Text>
+      <View style={labelStyles.titleRow}>
+        {icon && <Ionicons name={icon} size={13} color={colors.textMuted} />}
+        <Text style={[labelStyles.title, { color: colors.textSecondary }]}>{title}</Text>
+      </View>
       <View style={labelStyles.actions}>
         {onAdd && (
           <Pressable onPress={onAdd} hitSlop={8} style={labelStyles.addBtn}>
@@ -173,6 +177,11 @@ const labelStyles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     marginBottom: 8,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   title: {
     fontSize: 11,
@@ -806,32 +815,8 @@ export function DashboardScreen() {
       onLayout={(e) => setDashW(e.nativeEvent.layout.width)}
     >
 
-      {/* ── Geburtstage: ganz oben, privat (eigene Google-Kontakte, nicht family-weit geteilt) ──
-          Muss immer ins Auge stechen (User-Wunsch) – deshalb pulsiert der Rand
-          statt des sonst überall gleichen, dezenten colors.border. */}
-      {showBlock('birthdays') && todayBirthdays.length > 0 && (
-        <Animated.View
-          style={[
-            styles.birthdayCard,
-            {
-              borderWidth: birthdayPulse.interpolate({ inputRange: [0, 1], outputRange: [2, 3.5] }),
-              borderColor: birthdayPulse.interpolate({ inputRange: [0, 1], outputRange: ['#8A6D00', '#FFD400'] }),
-            },
-          ]}
-        >
-          <Text style={styles.birthdayIcon}>🎂</Text>
-          <Text style={styles.birthdayText} numberOfLines={1}>
-            {todayBirthdays
-              .map((b) => `${b.name}${b.year != null ? ` (${new Date().getFullYear() - b.year})` : ''}`)
-              .join(', ')}
-          </Text>
-        </Animated.View>
-      )}
-
-      {/* ── Google-Connect-Banner (nur wenn noch nicht verbunden) ── */}
-      {!settings.googleCalendarEnabled && <GoogleConnectBanner colors={colors} />}
-
-      {/* ── Wettervorhersage (TE-126, links) + "Mein Tag"-Icon + Sync-Button (rechts) ── */}
+      {/* ── Wettervorhersage (TE-126, links) + "Mein Tag"-Icon + Sync-Button (rechts) ──
+          Redesign: steht jetzt ganz oben, vor dem Geburtstag (vorher umgekehrt). ── */}
       <View style={styles.syncRow}>
         {showBlock('weather') ? <WeatherWidget colors={colors} /> : <View />}
         <View style={styles.syncRowRight}>
@@ -861,12 +846,53 @@ export function DashboardScreen() {
         </View>
       </View>
 
-      {/* ── Geistesblitze (privat): direkt unter dem Wetter-Abschnitt ──
+      {/* ── Google-Connect-Banner (nur wenn noch nicht verbunden) ── */}
+      {!settings.googleCalendarEnabled && <GoogleConnectBanner colors={colors} />}
+
+      {/* ── Geburtstage: privat (eigene Google-Kontakte, nicht family-weit geteilt) ──
+          Muss immer ins Auge stechen (User-Wunsch) – deshalb pulsiert der Rand
+          statt des sonst überall gleichen, dezenten colors.border, und die
+          Fläche ist dunkel-neutral statt gelb gefüllt (Redesign: der Glow
+          allein soll auffallen, nicht eine grelle Farbfläche). */}
+      {showBlock('birthdays') && todayBirthdays.length > 0 && (
+        <Animated.View
+          style={[
+            styles.birthdayCard,
+            {
+              borderWidth: birthdayPulse.interpolate({ inputRange: [0, 1], outputRange: [2, 3.5] }),
+              borderColor: birthdayPulse.interpolate({ inputRange: [0, 1], outputRange: ['#8A6D00', '#FFD400'] }),
+              shadowColor: '#FFD400',
+              shadowOpacity: birthdayPulse.interpolate({ inputRange: [0, 1], outputRange: [0.35, 0.75] }),
+              shadowRadius: birthdayPulse.interpolate({ inputRange: [0, 1], outputRange: [10, 22] }),
+              shadowOffset: { width: 0, height: 0 },
+            },
+          ]}
+        >
+          <Text style={styles.birthdayIcon}>🎂</Text>
+          <Text style={styles.birthdayText} numberOfLines={1}>
+            {todayBirthdays
+              .map((b) => `${b.name}${b.year != null ? ` (${new Date().getFullYear() - b.year})` : ''}`)
+              .join(', ')}
+          </Text>
+        </Animated.View>
+      )}
+
+      {/* ── Geistesblitze (privat): direkt unter dem Geburtstag ──
           Bewusst ganz oben im privaten Block, damit ein Geistesblitz schnell
           eingetragen werden kann, ohne erst am gesamten Dashboard vorbei zu
           scrollen. */}
       {showBlock('geistesblitze') && (
         <GeistesKacheln colors={colors} isDark={isDark} areaWidth={effW} columns={wideCols} compact />
+      )}
+
+      {/* ── Countdowns (privat): direkt unter Geistesblitze statt weit unten
+          nach Posteingang/Schnellzugriff (Redesign). Eigenes Label, weil
+          CountdownStrip selbst keinen Header rendert. ── */}
+      {showBlock('countdowns') && (
+        <View style={styles.section}>
+          <SectionLabel title="Countdowns" icon="hourglass-outline" colors={colors} />
+          <CountdownStrip colors={colors} compact />
+        </View>
       )}
 
       {/* ── "Mein Tag" (Feed): nicht mehr inline auf dem Dashboard, sondern als Dialog ── */}
@@ -902,148 +928,104 @@ export function DashboardScreen() {
         </Modal>
       )}
 
-      {/* ── Kurzübersicht (TE-150/TE-161/TE-164): Google Tasks, Personal Tasks, Notizen ──
-          Zeilenweise & extrem dezent (schlichte Textzeilen, kein Karten-Chrome pro
-          Zeile), aber TE-164: die drei Abschnitte teilen sich jetzt einen
-          gemeinsamen Rahmen (wie kidsSectionCard bei "Aufgaben der Kinder"), damit
-          die Kurzübersicht als ein zusammengehöriger Block erkennbar ist. Innerhalb
-          des Rahmens trennt eine farbige linke Akzentleiste pro Kategorie
-          (Blau/Violett/Amber) die drei Bereiche optisch, plus ein Trennstrich
-          zwischen den vorhandenen Abschnitten.
-          Reihenfolge: 1. Google Tasks, 2. Personal Tasks, 3. Notizen.
-          TE-161: läuft über die volle Breite – die frühere zweispaltige
-          Aufteilung (schmale rechte Spalte für Links/Geistesblitze/Countdowns)
-          ist entfallen, jene drei Blöcke sitzen jetzt ganz unten (siehe dort). */}
-      {(showBlock('googleTasks') || showBlock('scratchpad') || showBlock('quickNotes')) && (
-        <View style={styles.quickOverviewCard}>
-          {/* TE-167: ein durchgehender Verlauf statt drei harter Farbsegmente –
-              die Kategoriefarben gehen über die volle Höhe der Card fließend
-              ineinander über, statt an den Sektionsgrenzen hart zu wechseln. */}
-          <LinearGradient
-            colors={[C.tasks, C.personal, C.notes]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 0, y: 1 }}
-            style={styles.quickOverviewAccent}
-          />
+      {/* ── Kurzübersicht (Redesign): Google Tasks, Personal Tasks, Notizen in
+          EINER flachen Liste statt drei fett überschriebener Unterabschnitte
+          mit farbigem Verlaufsbalken links – nur noch farbige Punkte pro
+          Zeile zeigen die Kategorie. Leere Kategorien verschwinden nicht
+          spurlos: eine einzelne dezente Zeile fasst zusammen, was gerade
+          nichts offen hat. Die drei Schnell-Anlegen-Icons (vorher je ein
+          "+" pro Unterüberschrift, TE-152) sitzen jetzt gemeinsam rechts
+          im Kopf – Funktion bleibt erhalten, nur kompakter. */}
+      {(showBlock('googleTasks') || showBlock('scratchpad') || showBlock('quickNotes')) && (() => {
+        const emptyLabels: string[] = [];
+        if (showBlock('googleTasks') && dashboardTasks.length === 0) emptyLabels.push('Google Tasks');
+        if (showBlock('scratchpad') && personalNotes.length === 0) emptyLabels.push('Personal Tasks');
+        if (showBlock('quickNotes') && importantQuickNotes.length === 0) emptyLabels.push('Notizen');
+        const emptySummary = emptyLabels.length > 0
+          ? `${emptyLabels.join(' & ')}: aktuell nichts offen`
+          : null;
 
-          {/* 1. Google Tasks – offene Tasks aus dem Google-Tasks-Store (Klick → Tasks-Tab).
-              TE-152: Abschnitt bleibt auch ohne offene Tasks sichtbar, damit das
-              Plus-Icon zum schnellen Anlegen jederzeit erreichbar ist. */}
-          {showBlock('googleTasks') && (
-            <View style={styles.quickOverviewSection}>
-              <SectionLabel
-                title="Google Tasks"
-                onMore={() => router.push('/(tabs)/tasks' as any)}
-                onAdd={() => router.push('/task/new' as any)}
-                colors={colors}
-              />
-              <View>
-                {dashboardTasks.slice(0, 6).map((t) => {
-                  const due = taskDue(t.dueDate);
-                  return (
-                    <Pressable
-                      key={t.id}
-                      onPress={() => router.push('/(tabs)/tasks' as any)}
-                      style={({ pressed }) => [styles.dezentRow, { opacity: pressed ? 0.6 : 1 }]}
-                    >
-                      <View style={[styles.dezentBullet, t.important && { backgroundColor: C.important }]} />
-                      <Text style={styles.dezentText} numberOfLines={1}>{t.title}</Text>
-                      {due && (
-                        <Text style={[styles.dueBadge, due.overdue && styles.dueBadgeOverdue]}>{due.label}</Text>
-                      )}
-                    </Pressable>
-                  );
-                })}
-                {dashboardTasks.length > 6 && (
-                  <Text style={[styles.dezentMore, { color: colors.textMuted }]}>
-                    +{dashboardTasks.length - 6} weitere
-                  </Text>
-                )}
+        return (
+          <View>
+            <View style={labelStyles.row}>
+              <View style={labelStyles.titleRow}>
+                <Ionicons name="list-outline" size={13} color={colors.textMuted} />
+                <Text style={[labelStyles.title, { color: colors.textSecondary }]}>Kurzübersicht</Text>
               </View>
-            </View>
-          )}
-
-          {/* 2. Personal Tasks – persönlicher Notizblock (Scratchpad), Klick → Tasks-Tab.
-              TE-152: Abschnitt bleibt auch ohne offene Einträge sichtbar, Plus-Icon
-              öffnet das Schnell-Anlegen-Modal statt des vollen Tasks-Tabs. */}
-          {showBlock('scratchpad') && (
-            <View
-              style={[
-                styles.quickOverviewSection,
-                showBlock('googleTasks') && styles.quickOverviewDivider,
-              ]}
-            >
-              <SectionLabel
-                title="Personal Tasks"
-                onMore={() => router.push('/(tabs)/tasks' as any)}
-                onAdd={() => setQuickAddKind('personal')}
-                colors={colors}
-              />
-              <View>
-                {personalNotes.slice(0, 6).map((entry, idx) => {
-                  const due = taskDue(entry.dueDate);
-                  return (
-                    <Pressable
-                      key={entry.id ?? idx}
-                      onPress={() => router.push('/(tabs)/tasks' as any)}
-                      style={({ pressed }) => [styles.dezentRow, { opacity: pressed ? 0.6 : 1 }]}
-                    >
-                      <View style={[styles.dezentBullet, entry.important && { backgroundColor: C.important }]} />
-                      <Text style={styles.dezentText} numberOfLines={1}>{entry.text}</Text>
-                      {due && (
-                        <Text style={[styles.dueBadge, due.overdue && styles.dueBadgeOverdue]}>{due.label}</Text>
-                      )}
-                    </Pressable>
-                  );
-                })}
-                {personalNotes.length > 6 && (
-                  <Text style={[styles.dezentMore, { color: colors.textMuted }]}>
-                    +{personalNotes.length - 6} weitere
-                  </Text>
-                )}
-              </View>
-            </View>
-          )}
-
-          {/* 3. Notizen – kurze Notizen ohne Datum aus dem Notizen-Tab (TE-148).
-              TE-152: Abschnitt bleibt auch ohne Notizen sichtbar, Plus-Icon öffnet
-              das Schnell-Anlegen-Modal statt des vollen Notizen-Tabs.
-              TE-160: nur mit Wichtig-Label markierte Schnellnotizen erscheinen hier. */}
-          {showBlock('quickNotes') && (
-            <View
-              style={[
-                styles.quickOverviewSection,
-                (showBlock('googleTasks') || showBlock('scratchpad')) && styles.quickOverviewDivider,
-              ]}
-            >
-              <SectionLabel
-                title="Notizen"
-                onMore={() => router.push('/(tabs)/notes' as any)}
-                onAdd={() => setQuickAddKind('notiz')}
-                colors={colors}
-              />
-              <View>
-                {importantQuickNotes.slice(0, 6).map((n) => (
-                  <Pressable
-                    key={n.id}
-                    onPress={() => router.push('/(tabs)/notes' as any)}
-                    style={({ pressed }) => [styles.dezentRow, { opacity: pressed ? 0.6 : 1 }]}
-                  >
-                    <View style={[styles.dezentBullet, { backgroundColor: C.important }]} />
-                    <Text style={styles.dezentText} numberOfLines={1}>{n.text}</Text>
+              <View style={labelStyles.actions}>
+                {showBlock('googleTasks') && (
+                  <Pressable onPress={() => router.push('/task/new' as any)} hitSlop={8} accessibilityLabel="Google Task anlegen">
+                    <Ionicons name="checkmark-circle-outline" size={16} color={colors.textSecondary} />
                   </Pressable>
-                ))}
-                {importantQuickNotes.length > 6 && (
-                  <Text style={[styles.dezentMore, { color: colors.textMuted }]}>
-                    +{importantQuickNotes.length - 6} weitere
-                  </Text>
+                )}
+                {showBlock('scratchpad') && (
+                  <Pressable onPress={() => setQuickAddKind('personal')} hitSlop={8} accessibilityLabel="Personal Task anlegen">
+                    <Ionicons name="create-outline" size={16} color={colors.textSecondary} />
+                  </Pressable>
+                )}
+                {showBlock('quickNotes') && (
+                  <Pressable onPress={() => setQuickAddKind('notiz')} hitSlop={8} accessibilityLabel="Notiz anlegen">
+                    <Ionicons name="document-text-outline" size={16} color={colors.textSecondary} />
+                  </Pressable>
                 )}
               </View>
             </View>
-          )}
 
-        </View>
-      )}
+            <View style={styles.card}>
+              {showBlock('googleTasks') && dashboardTasks.slice(0, 6).map((t) => {
+                const due = taskDue(t.dueDate);
+                return (
+                  <Pressable
+                    key={`gt-${t.id}`}
+                    onPress={() => router.push('/(tabs)/tasks' as any)}
+                    style={({ pressed }) => [styles.dezentRow, styles.rowDivider, { opacity: pressed ? 0.6 : 1 }]}
+                  >
+                    <View style={[styles.dezentBullet, { backgroundColor: C.tasks }, t.important && { backgroundColor: C.important }]} />
+                    <Text style={styles.dezentText} numberOfLines={1}>{t.title}</Text>
+                    {due ? (
+                      <Text style={[styles.dueBadge, due.overdue && styles.dueBadgeOverdue]}>{due.label}</Text>
+                    ) : (
+                      <Text style={[styles.dezentCategory, { color: colors.textMuted }]}>Google Task</Text>
+                    )}
+                  </Pressable>
+                );
+              })}
+              {showBlock('scratchpad') && personalNotes.slice(0, 6).map((entry, idx) => {
+                const due = taskDue(entry.dueDate);
+                return (
+                  <Pressable
+                    key={`pt-${entry.id ?? idx}`}
+                    onPress={() => router.push('/(tabs)/tasks' as any)}
+                    style={({ pressed }) => [styles.dezentRow, styles.rowDivider, { opacity: pressed ? 0.6 : 1 }]}
+                  >
+                    <View style={[styles.dezentBullet, { backgroundColor: C.personal }, entry.important && { backgroundColor: C.important }]} />
+                    <Text style={styles.dezentText} numberOfLines={1}>{entry.text}</Text>
+                    {due ? (
+                      <Text style={[styles.dueBadge, due.overdue && styles.dueBadgeOverdue]}>{due.label}</Text>
+                    ) : (
+                      <Text style={[styles.dezentCategory, { color: colors.textMuted }]}>Personal</Text>
+                    )}
+                  </Pressable>
+                );
+              })}
+              {showBlock('quickNotes') && importantQuickNotes.slice(0, 6).map((n) => (
+                <Pressable
+                  key={`qn-${n.id}`}
+                  onPress={() => router.push('/(tabs)/notes' as any)}
+                  style={({ pressed }) => [styles.dezentRow, styles.rowDivider, { opacity: pressed ? 0.6 : 1 }]}
+                >
+                  <View style={[styles.dezentBullet, { backgroundColor: C.important }]} />
+                  <Text style={styles.dezentText} numberOfLines={1}>{n.text}</Text>
+                  <Text style={[styles.dezentCategory, { color: colors.textMuted }]}>Notiz</Text>
+                </Pressable>
+              ))}
+              {emptySummary && (
+                <Text style={[styles.dezentEmptySummary, { color: colors.textMuted }]}>{emptySummary}</Text>
+              )}
+            </View>
+          </View>
+        );
+      })()}
 
       {/* TE-152: Schnell-Anlegen-Modal für Personal Tasks & Notizen – ein Textfeld,
           Absenden legt den Eintrag direkt an (kein voller Formular-Umweg). */}
@@ -1259,9 +1241,6 @@ export function DashboardScreen() {
           driveFavorites={showBlock('driveFavorites') ? driveFavorites : []}
         />
       )}
-
-      {/* ── Countdowns (privat) ── */}
-      {showBlock('countdowns') && <CountdownStrip colors={colors} compact />}
 
       {/* ── Trennlinie: ab hier mit der Familie geteilte Module (TE-172) ── */}
       <View style={styles.sectionDivider}>
@@ -1575,36 +1554,6 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
 
     section: {},
 
-    // TE-164/TE-167: gemeinsamer Rahmen für die Kurzübersicht (Google Tasks/
-    // Personal Tasks/Notizen) – analog zu kidsSectionCard, damit die drei
-    // Kategorien als ein zusammengehöriger Block erkennbar sind. Statt drei
-    // hart wechselnder Farbsegmente pro Sektion läuft ein einziger,
-    // durchgehender Verlauf (quickOverviewAccent) über die volle Höhe der
-    // Card, sodass die Kategoriefarben fließend ineinander übergehen.
-    quickOverviewCard: {
-      marginHorizontal: 16,
-      backgroundColor: c.surface,
-      borderRadius: 14,
-      borderWidth: 1,
-      borderColor: c.border,
-      overflow: 'hidden',
-    },
-    quickOverviewAccent: {
-      position: 'absolute',
-      left: 0,
-      top: 0,
-      bottom: 0,
-      width: 3,
-    },
-    quickOverviewSection: {
-      paddingVertical: 10,
-      paddingLeft: 3,
-    },
-    quickOverviewDivider: {
-      borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: c.border,
-    },
-
     card: {
       marginHorizontal: 16,
       backgroundColor: c.surface,
@@ -1635,22 +1584,25 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
       marginBottom: 4,
     },
 
-    // Kurzübersicht (TE-150): extrem dezente Textzeile – kein Karten-Hintergrund,
-    // kein Rahmen, kein Glow. Nur ein kleiner Punkt + gedämpfter Text (+ Fälligkeit).
+    // Kurzübersicht (Redesign): flache Liste in derselben Card wie
+    // Posteingang/Drive – Punkt pro Zeile trägt die Kategoriefarbe,
+    // Fälligkeit oder ersatzweise der Kategoriename stehen rechts.
     dezentRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 8,
-      paddingHorizontal: 16,
-      paddingVertical: 5,
+      gap: 10,
+      paddingHorizontal: 14,
+      paddingVertical: 11,
     },
     dezentBullet: {
-      width: 5,
-      height: 5,
-      borderRadius: 2.5,
+      width: 8,
+      height: 8,
+      borderRadius: 4,
       backgroundColor: c.textMuted,
     },
-    dezentText: { flex: 1, fontSize: 13, color: c.textSecondary },
+    dezentText: { flex: 1, fontSize: 13.5, fontWeight: '600', color: c.text },
+    dezentCategory: { fontSize: 11, fontVariant: ['tabular-nums'] },
+    dezentEmptySummary: { fontSize: 12.5, padding: 14 },
     dezentMore: { fontSize: 12, paddingHorizontal: 16, paddingTop: 2 },
 
     // TE-172: Trennlinie zwischen privaten Modulen (oben) und den mit der
@@ -1666,20 +1618,22 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
     },
 
     // Birthday – ganz oben, schnell blinkend
+    // Redesign: dunkle, stark abgerundete Pille statt gelber Fläche – der
+    // pulsierende Rand + Glow (siehe JSX) soll auffallen, nicht die Farbe.
     birthdayCard: {
       flexDirection: 'row',
       alignItems: 'center',
-      backgroundColor: '#EEFF00',
+      backgroundColor: c.surface,
       marginHorizontal: 16,
       marginTop: 4,
       marginBottom: 6,
-      borderRadius: 16,
-      paddingVertical: 9,
-      paddingHorizontal: 14,
-      gap: 8,
+      borderRadius: 28,
+      paddingVertical: 12,
+      paddingHorizontal: 18,
+      gap: 10,
     },
-    birthdayIcon: { fontSize: 16 },
-    birthdayText: { flex: 1, fontSize: 13, fontWeight: '700', color: '#1A1A00' },
+    birthdayIcon: { fontSize: 17 },
+    birthdayText: { flex: 1, fontSize: 14, fontWeight: '700', color: c.text },
 
     // Termine "heute" – gleiche Hervorhebung wie die Geburtstags-Card (TE-120).
     todayEventsGlowCard: {
