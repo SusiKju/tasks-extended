@@ -830,7 +830,7 @@ export function DashboardScreen() {
       onLayout={(e) => setDashW(e.nativeEvent.layout.width)}
     >
 
-      {/* ── Geburtstage: ganz oben ── */}
+      {/* ── Geburtstage: ganz oben, privat (eigene Google-Kontakte, nicht family-weit geteilt) ── */}
       {showBlock('birthdays') && todayBirthdays.length > 0 && (
         richBirthday ? (
           // Neon-Dark: AI-Style mit rotierendem Regenbogen-Rand + atmendem Flammen-Glow.
@@ -931,15 +931,12 @@ export function DashboardScreen() {
         </View>
       </View>
 
-      {/* ── Geistesblitze: direkt unter dem Wetter-Abschnitt ──
-          Bewusst ganz oben im Dashboard, damit ein Geistesblitz schnell
+      {/* ── Geistesblitze (privat): direkt unter dem Wetter-Abschnitt ──
+          Bewusst ganz oben im privaten Block, damit ein Geistesblitz schnell
           eingetragen werden kann, ohne erst am gesamten Dashboard vorbei zu
-          scrollen. Links/Countdowns bleiben im vollbreiten Block ganz unten
-          (siehe dort). */}
+          scrollen. */}
       {showBlock('geistesblitze') && (
-        <View style={styles.bottomWideSection}>
-          <GeistesKacheln colors={colors} isDark={isDark} areaWidth={effW} columns={wideCols} compact />
-        </View>
+        <GeistesKacheln colors={colors} isDark={isDark} areaWidth={effW} columns={wideCols} compact />
       )}
 
       {/* ── "Mein Tag" (Feed): nicht mehr inline auf dem Dashboard, sondern als Dialog ── */}
@@ -1301,11 +1298,140 @@ export function DashboardScreen() {
         </View>
       )}
 
-      {/* ── Geteilte Liste (TE-121): bewusst auffällig gestaltete Card, ── */}
+      {/* ── Posteingang (privat) ── */}
+      {showBlock('mail') && settings.googleAccessToken && (
+        <View style={styles.section}>
+          <SectionLabel
+            title="Posteingang"
+            onMore={() => router.push('/(tabs)/mail')}
+            colors={colors}
+          />
+          <View style={[styles.card, !reduceMotion && { borderLeftColor: colors.border, borderLeftWidth: 3 }]}>
+            {mailLoading ? (
+              <View style={styles.loadingRow}>
+                <ActivityIndicator color={colors.textMuted} size="small" />
+              </View>
+            ) : dashboardMails.length === 0 ? (
+              <View style={styles.emptyRow}>
+                <Ionicons name="checkmark-circle-outline" size={16} color={colors.success} />
+                <Text style={styles.emptyText}>Keine angepinnten oder ungelesenen Mails</Text>
+              </View>
+            ) : (
+              dashboardMails.map((mail, i) => {
+                const pinned = pinnedSet.has(mail.id);
+                return (
+                  <View
+                    key={mail.id}
+                    style={[styles.mailRow, i < dashboardMails.length - 1 && styles.rowDivider]}
+                  >
+                    <View style={[styles.mailAvatar, { backgroundColor: colors.surfaceHigh }]}>
+                      <Text style={[styles.mailAvatarText, { color: colors.textSecondary }]}>
+                        {parseDisplayFrom(mail.from).charAt(0).toUpperCase()}
+                      </Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <View style={styles.mailMeta}>
+                        <Text
+                          style={[styles.mailFrom, { color: colors.text }, mail.unread && { fontWeight: '800' }]}
+                          numberOfLines={1}
+                        >
+                          {parseDisplayFrom(mail.from)}
+                        </Text>
+                        <Text style={[styles.mailDate, { color: colors.textMuted }]}>
+                          {formatMailDate(mail.date)}
+                        </Text>
+                      </View>
+                      <View style={[styles.mailMeta, { alignItems: 'center', marginBottom: 0 }]}>
+                        <Text
+                          style={[
+                            styles.mailSubject,
+                            { color: mail.unread ? colors.text : colors.textSecondary, flex: 1 },
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {mail.subject || '(Kein Betreff)'}
+                        </Text>
+                        {pinned && (
+                          <Ionicons name="bookmark" size={12} color={colors.accentNeon} style={{ marginLeft: 6 }} />
+                        )}
+                        {mail.unread && !pinned && (
+                          <View style={[styles.unreadDot, { backgroundColor: colors.accentNeon }]} />
+                        )}
+                      </View>
+                    </View>
+                  </View>
+                );
+              })
+            )}
+          </View>
+        </View>
+      )}
+
+      {/* ── Links (privat) ── */}
+      {showBlock('links') && <LinkCardBar colors={colors} />}
+
+      {/* ── Countdowns (privat) ── */}
+      {showBlock('countdowns') && <CountdownStrip colors={colors} compact />}
+
+      {/* ── Drive-Favoriten (TE-168, privat) ── eigene Kategorie – anders als Google
+          Tasks/Personal Tasks/Notizen kein Teil der Kurzübersicht, sondern eine
+          eigenständige Karte im Stil des Posteingangs (mailRow/mailAvatar). Nur
+          sichtbar, wenn es tatsächlich Favoriten gibt (kein Schnell-Anlegen
+          möglich, im Gegensatz zu den übrigen Abschnitten – Favorisieren
+          passiert in Drive selbst). Jede Zeile: Drive-eigenes Datei-/Ordner-Icon
+          (iconLink, unterscheidet Ordner automatisch von Dateitypen wie
+          Docs/Sheets/PDF) + "öffnet extern"-Pfeil. */}
+      {showBlock('driveFavorites') && driveFavorites.length > 0 && (
+        <View style={styles.section}>
+          <SectionLabel title="Drive-Favoriten" colors={colors} />
+          <View style={[styles.card, !reduceMotion && { borderLeftColor: colors.border, borderLeftWidth: 3 }]}>
+            {driveFavorites.slice(0, 6).map((f, i) => {
+              const isFolder = f.mimeType === 'application/vnd.google-apps.folder';
+              return (
+                <Pressable
+                  key={f.id}
+                  onPress={() => f.webViewLink && Linking.openURL(f.webViewLink)}
+                  style={({ pressed }) => [
+                    styles.mailRow,
+                    i < Math.min(driveFavorites.length, 6) - 1 && styles.rowDivider,
+                    { opacity: pressed ? 0.6 : 1 },
+                  ]}
+                >
+                  <View style={[styles.mailAvatar, { backgroundColor: colors.surfaceHigh }]}>
+                    {f.iconLink ? (
+                      <Image source={{ uri: f.iconLink }} style={{ width: 18, height: 18 }} resizeMode="contain" />
+                    ) : (
+                      <Ionicons name={isFolder ? 'folder' : 'document-text-outline'} size={16} color={C.drive} />
+                    )}
+                  </View>
+                  <Text style={[styles.mailFrom, { color: colors.text, flex: 1 }]} numberOfLines={1}>
+                    {f.name}
+                  </Text>
+                  <Ionicons name="open-outline" size={16} color={colors.textMuted} />
+                </Pressable>
+              );
+            })}
+            {driveFavorites.length > 6 && (
+              <Text style={[styles.dezentMore, { color: colors.textMuted }]}>
+                +{driveFavorites.length - 6} weitere
+              </Text>
+            )}
+          </View>
+        </View>
+      )}
+
+      {/* ── Trennlinie: ab hier mit der Familie geteilte Module (TE-172) ── */}
+      <View style={styles.sectionDivider}>
+        <View style={styles.sectionDividerLine} />
+        <Text style={styles.sectionDividerLabel}>Geteilt mit der Familie</Text>
+        <View style={styles.sectionDividerLine} />
+      </View>
+
+      {/* ── Geteilte Liste (TE-121, geteilt): bewusst auffällig gestaltete Card, ── */}
       {/* damit z. B. eine gemeinsame Einkaufsliste mit dem Partner sofort ins Auge fällt. */}
       {showBlock('sharedList') && <SharedNotepad colors={colors} isDark={isDark} />}
 
-      {/* ── Aufgaben der Kinder (TE-110/TE-115) ── */}
+      {/* ── Aufgaben der Kinder (TE-110/TE-115, geteilt) ── */}
       {showBlock('kidsTasks') && (childrenWithTasks.length > 0 || groupTasks.length > 0) && (
         <View style={styles.section}>
           <SectionLabel
@@ -1522,138 +1648,6 @@ export function DashboardScreen() {
         </Pressable>
       </Modal>
 
-      {/* ── Posteingang ── */}
-      {showBlock('mail') && settings.googleAccessToken && (
-        <View style={styles.section}>
-          <SectionLabel
-            title="Posteingang"
-            onMore={() => router.push('/(tabs)/mail')}
-            colors={colors}
-          />
-          <View style={[styles.card, !reduceMotion && { borderLeftColor: colors.border, borderLeftWidth: 3 }]}>
-            {mailLoading ? (
-              <View style={styles.loadingRow}>
-                <ActivityIndicator color={colors.textMuted} size="small" />
-              </View>
-            ) : dashboardMails.length === 0 ? (
-              <View style={styles.emptyRow}>
-                <Ionicons name="checkmark-circle-outline" size={16} color={colors.success} />
-                <Text style={styles.emptyText}>Keine angepinnten oder ungelesenen Mails</Text>
-              </View>
-            ) : (
-              dashboardMails.map((mail, i) => {
-                const pinned = pinnedSet.has(mail.id);
-                return (
-                  <View
-                    key={mail.id}
-                    style={[styles.mailRow, i < dashboardMails.length - 1 && styles.rowDivider]}
-                  >
-                    <View style={[styles.mailAvatar, { backgroundColor: colors.surfaceHigh }]}>
-                      <Text style={[styles.mailAvatarText, { color: colors.textSecondary }]}>
-                        {parseDisplayFrom(mail.from).charAt(0).toUpperCase()}
-                      </Text>
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <View style={styles.mailMeta}>
-                        <Text
-                          style={[styles.mailFrom, { color: colors.text }, mail.unread && { fontWeight: '800' }]}
-                          numberOfLines={1}
-                        >
-                          {parseDisplayFrom(mail.from)}
-                        </Text>
-                        <Text style={[styles.mailDate, { color: colors.textMuted }]}>
-                          {formatMailDate(mail.date)}
-                        </Text>
-                      </View>
-                      <View style={[styles.mailMeta, { alignItems: 'center', marginBottom: 0 }]}>
-                        <Text
-                          style={[
-                            styles.mailSubject,
-                            { color: mail.unread ? colors.text : colors.textSecondary, flex: 1 },
-                          ]}
-                          numberOfLines={1}
-                        >
-                          {mail.subject || '(Kein Betreff)'}
-                        </Text>
-                        {pinned && (
-                          <Ionicons name="bookmark" size={12} color={colors.accentNeon} style={{ marginLeft: 6 }} />
-                        )}
-                        {mail.unread && !pinned && (
-                          <View style={[styles.unreadDot, { backgroundColor: colors.accentNeon }]} />
-                        )}
-                      </View>
-                    </View>
-                  </View>
-                );
-              })
-            )}
-          </View>
-        </View>
-      )}
-
-      {/* ── Links, Countdowns (TE-161) ──
-          Ganz unten, über die volle Breite – größere, besser lesbare und
-          tapbare Kacheln als in der früheren schmalen rechten Spalte (TE-153,
-          jetzt entfallen). Bricht bei vielen Einträgen einfach in weitere
-          Zeilen um, statt zu scrollen oder abzuschneiden. Geistesblitze sitzen
-          seit TE-169 nicht mehr hier, sondern ganz oben unter dem
-          Wetter-Abschnitt (siehe dort). */}
-      <View style={styles.bottomWideSection}>
-        {showBlock('links') && <LinkCardBar colors={colors} />}
-        {showBlock('countdowns') && (
-          <CountdownStrip colors={colors} compact />
-        )}
-      </View>
-
-      {/* ── Drive-Favoriten (TE-168) ── eigene Kategorie, ganz am Ende der
-          Seite – anders als Google Tasks/Personal Tasks/Notizen kein Teil der
-          Kurzübersicht, sondern eine eigenständige Karte im Stil des
-          Posteingangs (mailRow/mailAvatar). Nur sichtbar, wenn es tatsächlich
-          Favoriten gibt (kein Schnell-Anlegen möglich, im Gegensatz zu den
-          übrigen Abschnitten – Favorisieren passiert in Drive selbst).
-          Jede Zeile: Drive-eigenes Datei-/Ordner-Icon (iconLink, unterscheidet
-          Ordner automatisch von Dateitypen wie Docs/Sheets/PDF) + "öffnet
-          extern"-Pfeil, damit klar ist, dass ein Klick die Datei in Drive
-          öffnet. */}
-      {showBlock('driveFavorites') && driveFavorites.length > 0 && (
-        <View style={styles.section}>
-          <SectionLabel title="Drive-Favoriten" colors={colors} />
-          <View style={[styles.card, !reduceMotion && { borderLeftColor: colors.border, borderLeftWidth: 3 }]}>
-            {driveFavorites.slice(0, 6).map((f, i) => {
-              const isFolder = f.mimeType === 'application/vnd.google-apps.folder';
-              return (
-                <Pressable
-                  key={f.id}
-                  onPress={() => f.webViewLink && Linking.openURL(f.webViewLink)}
-                  style={({ pressed }) => [
-                    styles.mailRow,
-                    i < Math.min(driveFavorites.length, 6) - 1 && styles.rowDivider,
-                    { opacity: pressed ? 0.6 : 1 },
-                  ]}
-                >
-                  <View style={[styles.mailAvatar, { backgroundColor: colors.surfaceHigh }]}>
-                    {f.iconLink ? (
-                      <Image source={{ uri: f.iconLink }} style={{ width: 18, height: 18 }} resizeMode="contain" />
-                    ) : (
-                      <Ionicons name={isFolder ? 'folder' : 'document-text-outline'} size={16} color={C.drive} />
-                    )}
-                  </View>
-                  <Text style={[styles.mailFrom, { color: colors.text, flex: 1 }]} numberOfLines={1}>
-                    {f.name}
-                  </Text>
-                  <Ionicons name="open-outline" size={16} color={colors.textMuted} />
-                </Pressable>
-              );
-            })}
-            {driveFavorites.length > 6 && (
-              <Text style={[styles.dezentMore, { color: colors.textMuted }]}>
-                +{driveFavorites.length - 6} weitere
-              </Text>
-            )}
-          </View>
-        </View>
-      )}
-
     </ScrollView>
 
       {/* TE-153: Fokus-Kachel fixiert rechts-mittig am Viewport – klebt beim
@@ -1830,15 +1824,17 @@ function makeStyles(c: ThemeColors, isDark: boolean, calm: boolean) {
     dezentText: { flex: 1, fontSize: 13, color: c.textSecondary },
     dezentMore: { fontSize: 12, paddingHorizontal: 16, paddingTop: 2 },
 
-    // TE-153: Zwei-Spalten-Layout auf dem Dashboard. Auf breiten Screens stehen
-    // linke Spalte (Kurzübersicht) und rechte Spalte (Links/Geistesblitze/
-    // Countdowns) nebeneinander; auf schmalen Screens bricht die rechte Spalte
-    // per flexWrap unter die linke um.
-    // TE-153: strikte Zeile ohne Umbruch – linke Spalte nimmt den Rest, rechte
-    // Spalte hat eine feste (aus der Container-Breite abgeleitete) Breite. So
-    // stehen die beiden Spalten immer nebeneinander, egal wie schmal das Panel ist.
-    // TE-161: voller-Breite-Block ganz unten für Links/Geistesblitze/Countdowns.
-    bottomWideSection: { gap: 20 },
+    // TE-172: Trennlinie zwischen privaten Modulen (oben) und den mit der
+    // Familie geteilten Modulen (unten).
+    sectionDivider: { flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: 16 },
+    sectionDividerLine: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: c.border },
+    sectionDividerLabel: {
+      fontSize: 11,
+      fontWeight: '700',
+      letterSpacing: 0.8,
+      textTransform: 'uppercase',
+      color: c.textMuted,
+    },
 
     // Birthday – ganz oben, neon-gelb, schnell blinkend
     birthdayCard: {
