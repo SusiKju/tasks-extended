@@ -33,7 +33,7 @@ import { listStarredDriveFiles, DriveFile } from '../services/googleDrive';
 import {
   ChildTask, subscribeToChildTasks,
 } from '../services/kinderTasks';
-import { AllowanceMonth, subscribeToAllowanceMonths, monthKey, formatEuro, formatMonthLabel, effectiveAllowance, setAllowanceOverride } from '../services/allowance';
+import { AllowanceMonth, subscribeToAllowanceMonths, nextAllowanceMonth, formatEuro, formatMonthLabel, effectiveAllowance, setAllowanceOverride } from '../services/allowance';
 import { useFamily } from '../hooks/useFamily';
 import { SharedNotepad } from '../components/SharedNotepad';
 import { GeistesKacheln } from '../components/GeistesKacheln';
@@ -367,30 +367,41 @@ export function DashboardScreen() {
     return () => unsubs.forEach((u) => u());
   }, [fid, familyChildren]);
 
-  // Kinder mit konfiguriertem Taschengeld, das für den laufenden Monat noch
-  // nicht bestätigt wurde.
-  const currentAllowanceMonth = monthKey();
+  // Kinder mit konfiguriertem Taschengeld, das für den jeweils nächsten
+  // fälligen Monat noch nicht bestätigt wurde. TE-170: gleiche
+  // "nächster fälliger Monat"-Logik wie im Kids-Tab (nextAllowanceMonth) –
+  // vorher verglich das Dashboard stur den laufenden Kalendermonat, sodass
+  // ein bereits für diesen Monat bestätigtes Kind bis Monatsende komplett
+  // aus dem Dashboard verschwand, obwohl der Kids-Tab den nächsten Monat
+  // schon korrekt als offen zeigte.
+  const dueMonthByChild = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const c of familyChildren) {
+      map[c.id] = nextAllowanceMonth(allowanceByChild[c.id] ?? {});
+    }
+    return map;
+  }, [familyChildren, allowanceByChild]);
   const openAllowanceChildren = useMemo(
     () => familyChildren.filter(
-      (c) => (c.allowance ?? 0) > 0 && !allowanceByChild[c.id]?.[currentAllowanceMonth]?.received
+      (c) => (c.allowance ?? 0) > 0 && !allowanceByChild[c.id]?.[dueMonthByChild[c.id]]?.received
     ),
-    [familyChildren, allowanceByChild, currentAllowanceMonth]
+    [familyChildren, allowanceByChild, dueMonthByChild]
   );
 
-  // Taschengeld-Korrektur für den laufenden Monat (TE-154): Eltern passen den
+  // Taschengeld-Korrektur für den fälligen Monat (TE-154): Eltern passen den
   // Betrag eines Kindes nur für diesen Monat an, optional mit Grund.
   const [allowanceEdit, setAllowanceEdit] = useState<{
     childId: string; amount: string; reason: string;
   } | null>(null);
   const openAllowanceEdit = useCallback((childId: string) => {
-    const m = allowanceByChild[childId]?.[currentAllowanceMonth];
+    const m = allowanceByChild[childId]?.[dueMonthByChild[childId]];
     const configured = familyChildren.find((c) => c.id === childId)?.allowance ?? 0;
     setAllowanceEdit({
       childId,
       amount: String(m?.overrideAmount != null ? m.overrideAmount : configured),
       reason: m?.overrideReason ?? '',
     });
-  }, [allowanceByChild, currentAllowanceMonth, familyChildren]);
+  }, [allowanceByChild, dueMonthByChild, familyChildren]);
   const saveAllowanceEdit = useCallback(async () => {
     if (!allowanceEdit || !fid) { setAllowanceEdit(null); return; }
     const t = allowanceEdit.amount.trim().replace(',', '.');
@@ -400,14 +411,14 @@ export function DashboardScreen() {
     const override = Number.isFinite(n) && n >= 0 && n !== configured ? n : null;
     try {
       await setAllowanceOverride(
-        fid, allowanceEdit.childId, currentAllowanceMonth,
+        fid, allowanceEdit.childId, dueMonthByChild[allowanceEdit.childId],
         override, allowanceEdit.reason.trim() || null,
       );
     } catch (e: any) {
       Alert.alert('Fehler', e?.message ?? 'Korrektur speichern fehlgeschlagen.');
     }
     setAllowanceEdit(null);
-  }, [allowanceEdit, fid, currentAllowanceMonth, familyChildren]);
+  }, [allowanceEdit, fid, dueMonthByChild, familyChildren]);
 
   // ── Feed-Block ("Mein Tag"): zusätzliche Datenquellen, die bisher nur in den ──
   // jeweiligen Einzel-Komponenten geladen wurden (Geteilte Liste, Countdowns,
@@ -715,14 +726,14 @@ export function DashboardScreen() {
       });
     });
 
-    // Taschengeld – Kinder, deren Betrag für den laufenden Monat noch offen ist (TE-78).
+    // Taschengeld – Kinder, deren Betrag für den nächsten fälligen Monat noch offen ist (TE-78).
     for (const c of openAllowanceChildren) {
       items.push({
         key: `allowance:${c.id}`,
         category: 'allowance',
         group: 'later',
         title: `Taschengeld ${childName(c.id)}`,
-        subtitle: `${formatEuro(c.allowance ?? 0)} · ${formatMonthLabel(currentAllowanceMonth)}`,
+        subtitle: `${formatEuro(c.allowance ?? 0)} · ${formatMonthLabel(dueMonthByChild[c.id])}`,
         onPress: () => router.push('/(tabs)/kids' as any),
       });
     }
@@ -731,7 +742,7 @@ export function DashboardScreen() {
   }, [
     familyChildren, childTasks, feedPinnedMails, pinnedSet,
     todayEvents, todayBirthdays, feedSharedNotes,
-    feedGeistesKacheln, openAllowanceChildren, currentAllowanceMonth, router,
+    feedGeistesKacheln, openAllowanceChildren, dueMonthByChild, router,
     scratchpad, isMono, isDark, colors,
   ]);
 
@@ -1434,7 +1445,7 @@ export function DashboardScreen() {
           />
           <View style={styles.card}>
             {openAllowanceChildren.map((child, i) => {
-              const m = allowanceByChild[child.id]?.[currentAllowanceMonth];
+              const m = allowanceByChild[child.id]?.[dueMonthByChild[child.id]];
               const corrected = m?.overrideAmount != null;
               const amount = effectiveAllowance(child.allowance ?? 0, m);
               return (
@@ -1477,7 +1488,7 @@ export function DashboardScreen() {
               Taschengeld anpassen
             </Text>
             <Text style={[styles.allowanceEditSub, { color: colors.textMuted }]}>
-              {allowanceEdit ? `${childName(allowanceEdit.childId)} · ${formatMonthLabel(currentAllowanceMonth)}` : ''}
+              {allowanceEdit ? `${childName(allowanceEdit.childId)} · ${formatMonthLabel(dueMonthByChild[allowanceEdit.childId])}` : ''}
               {'  ·  '}gilt nur diesen Monat
             </Text>
             <View style={styles.allowanceEditRow}>
