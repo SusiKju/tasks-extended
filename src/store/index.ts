@@ -95,7 +95,6 @@ const DEFAULT_GROUPS: Group[] = [
 
 const DEFAULT_SETTINGS: AppSettings = {
   dateFormat: 'de',
-  theme: 'dark-mono',
   googleCalendarEnabled: false,
   googleClientId: null,
   googleAccessToken: null,
@@ -285,7 +284,7 @@ export const useStore = create<TaskState>()(
     }),
     {
       name: 'tasks-extended-store',
-      version: 24,
+      version: 25,
       migrate: (persistedState: any, version: number) => {
         if (version < 1 && persistedState?.tasks) {
           persistedState.tasks = persistedState.tasks.map((t: any) => ({
@@ -416,6 +415,10 @@ export const useStore = create<TaskState>()(
         if (version < 24) {
           // TE-112: Verlauf gelöschter Scratchpad-Notizen – neu, Default leer.
           persistedState.scratchpadHistory = persistedState.scratchpadHistory ?? '';
+        }
+        if (version < 25 && persistedState?.settings) {
+          // Neon Mono entfernt – nur noch das ruhige Schwarz-Weiß-Theme, keine Auswahl mehr.
+          delete persistedState.settings.theme;
         }
         return persistedState;
       },

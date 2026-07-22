@@ -15,14 +15,9 @@ import {
 import { Clipboard } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useStore } from '../store';
-import { useTheme, ThemeColors, neonGlow, THEMES } from '../utils/theme';
-import { Theme, FunTileTheme, MAIL_WINDOW_OPTIONS, DASHBOARD_BLOCKS, DEFAULT_DASHBOARD_BLOCKS } from '../types';
+import { useTheme, ThemeColors, neonGlow } from '../utils/theme';
+import { FunTileTheme, MAIL_WINDOW_OPTIONS, DASHBOARD_BLOCKS, DEFAULT_DASHBOARD_BLOCKS } from '../types';
 import { FUN_THEMES } from '../components/FussballKachel';
-
-const THEME_OPTIONS: { key: Theme; label: string; description: string }[] = [
-  { key: 'dark-mono', label: 'Neon Mono', description: 'Schwarz-Weiß mit Glow & Animationen' },
-  { key: 'dark-calm', label: 'Ruhig', description: 'Schwarz-Weiß, ohne Glow & Animationen' },
-];
 
 // Fokus-Kachel-Themen (TE-10) – Reihenfolge wie in FUN_THEMES definiert.
 const FUN_TILE_OPTIONS = (Object.keys(FUN_THEMES) as FunTileTheme[]).map((key) => ({
@@ -915,39 +910,6 @@ export function SettingsScreen() {
         })}
       </View>
 
-      {/* Darstellung */}
-      <View style={styles.section}>
-        <Text style={styles.sectionHeader}>Darstellung</Text>
-        {THEME_OPTIONS.map((opt) => {
-          const tc = THEMES[opt.key];
-          const active = settings.theme === opt.key;
-          return (
-            <Pressable
-              key={opt.key}
-              style={({ pressed }) => [styles.themeRow, active && styles.themeRowActive, pressed && { opacity: 0.85 }]}
-              onPress={() => updateSettings({ theme: opt.key })}
-            >
-              <View style={[styles.themePreview, { backgroundColor: tc.background, borderColor: tc.border }]}>
-                <View
-                  style={[
-                    styles.themePreviewBar,
-                    { backgroundColor: tc.accentNeon },
-                    // Nur das Neon-Theme zeigt im Mini-Preview einen Glow.
-                    opt.key === 'dark-mono' && { shadowColor: '#FFFFFF', shadowOpacity: 0.9, shadowRadius: 6, shadowOffset: { width: 0, height: 0 }, elevation: 6 },
-                  ]}
-                />
-                <View style={[styles.themePreviewDot, { backgroundColor: tc.success }]} />
-              </View>
-              <View style={styles.rowContent}>
-                <Text style={styles.rowTitle}>{opt.label}</Text>
-                <Text style={styles.rowSubtitle}>{opt.description}</Text>
-              </View>
-              {active && <Ionicons name="checkmark-circle" size={22} color={colors.accentNeon} />}
-            </Pressable>
-          );
-        })}
-      </View>
-
       {/* App info */}
       <View style={styles.section}>
         <Text style={styles.sectionHeader}>App</Text>
@@ -1008,16 +970,6 @@ function makeStyles(c: ThemeColors) {
       alignItems: 'flex-start',
       paddingLeft: 6,
       gap: 4,
-    },
-    themePreviewBar: {
-      width: 24,
-      height: 5,
-      borderRadius: 2,
-    },
-    themePreviewDot: {
-      width: 8,
-      height: 8,
-      borderRadius: 4,
     },
     row: {
       flexDirection: 'row',

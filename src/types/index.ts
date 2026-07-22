@@ -1,7 +1,5 @@
 export type DateFormat = 'iso' | 'de' | 'us' | 'relative';
 
-export type Theme = 'dark-mono' | 'dark-calm';
-
 export interface Attachment {
   id: string;
   taskId: string;
@@ -62,7 +60,6 @@ export interface Countdown {
 
 export interface AppSettings {
   dateFormat: DateFormat;
-  theme: Theme;
   googleCalendarEnabled: boolean;
   googleClientId: string | null;
   googleAccessToken: string | null;

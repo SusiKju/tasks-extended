@@ -87,7 +87,7 @@ const CATEGORY_ICON: Record<FeedCategory, IconName> = {
 
 /**
  * Feste, farbige Icon-Farben pro Kategorie (statt neutralem textMuted) – gut
- * unterscheidbar auf beiden dunklen Themes (dark-mono/dark-calm).
+ * unterscheidbar auf dem dunklen Theme.
  */
 const CATEGORY_COLOR: Record<FeedCategory, string> = {
   birthday: '#f472b6', // pink

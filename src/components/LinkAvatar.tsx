@@ -5,9 +5,8 @@
  * Lade-Fehler (oder fehlender URL) auf das hinterlegte Ionicons-Symbol vor
  * farbigem Hintergrund zurück (TE-32/TE-33).
  *
- * TE-35: ringförmiger Rahmen (~4px). Im Neon-Theme (`dark-mono`) regenbogenfarbig
- * via LinearGradient – wie der Geburtstags-Ring; sonst ein dezenter, einfarbiger
- * Rahmen. Dieselbe Komponente wird im Link-Tab und in der Dashboard-Leiste genutzt.
+ * TE-35: ringförmiger Rahmen (~4px), dezent einfarbig. Dieselbe Komponente
+ * wird im Link-Tab und in der Dashboard-Leiste genutzt.
  *
  * TE-86: kennt Google's Favicon-Dienst eine Domain nicht (404), wird als zweiter
  * Versuch das eigene <link rel="icon">-Tag der Seite nachgeladen, bevor auf das
@@ -16,7 +15,6 @@
 
 import React, { useState, useEffect } from 'react';
 import { View, Image, StyleSheet } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../utils/theme';
 import { LinkItem, faviconUrl, fetchPageFaviconUrl } from '../services/links';
@@ -24,10 +22,9 @@ import { LinkItem, faviconUrl, fetchPageFaviconUrl } from '../services/links';
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 
 const BORDER = 3;
-const RAINBOW = ['#FF0080', '#FF8C00', '#FFE600', '#00FF88', '#00EEFF', '#7A5CFF', '#FF0080'] as const;
 
 export function LinkAvatar({ link, size }: { link: LinkItem; size: number }) {
-  const { colors, theme } = useTheme();
+  const { colors } = useTheme();
   const fav = faviconUrl(link.url, 64);
   const [googleFailed, setGoogleFailed] = useState(false);
   const [pageFavUrl, setPageFavUrl] = useState<string | null>(null);
@@ -55,8 +52,6 @@ export function LinkAvatar({ link, size }: { link: LinkItem; size: number }) {
     return () => { cancelled = true; };
   }, [googleFailed, pageFetchDone, link.url]);
 
-  // Regenbogen-Ring nur im Neon-Theme (dark-mono); Calm-Theme bleibt schlicht.
-  const rainbow = theme === 'dark-mono';
   const iconName = (link.icon as IoniconName) ?? 'link-outline';
 
   const outerRadius = Math.round(size * 0.26);
@@ -80,19 +75,6 @@ export function LinkAvatar({ link, size }: { link: LinkItem; size: number }) {
       )}
     </View>
   );
-
-  if (rainbow) {
-    return (
-      <LinearGradient
-        colors={RAINBOW}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={[styles.ring, { width: size, height: size, borderRadius: outerRadius }]}
-      >
-        {inner}
-      </LinearGradient>
-    );
-  }
 
   return (
     <View style={[styles.ring, { width: size, height: size, borderRadius: outerRadius, backgroundColor: colors.border }]}>

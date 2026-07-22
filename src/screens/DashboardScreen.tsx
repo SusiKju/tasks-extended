@@ -9,7 +9,6 @@ import {
   TextInput,
   Animated,
   Platform,
-  Dimensions,
   Modal,
   Alert,
   useWindowDimensions,
@@ -223,7 +222,7 @@ export function DashboardScreen() {
     (key: DashboardBlockKey) => settings.dashboardBlocks?.[key] !== false,
     [settings.dashboardBlocks]
   );
-  const { colors, isDark, theme, mono, isMono, reduceMotion } = useTheme();
+  const { colors, isDark, mono, isMono } = useTheme();
   const { user } = useFirebaseAuth();
   const { syncTasks } = useGoogleTasksSync();
   const { syncBirthdays } = useGoogleContactsBirthdaysSync();
@@ -311,7 +310,7 @@ export function DashboardScreen() {
     }
   }, [syncing, syncTasks, syncBirthdays, settings, loadDashboardMails, loadDriveFavorites]);
 
-  const styles = useMemo(() => makeStyles(colors, isDark, reduceMotion), [colors, isDark, reduceMotion]);
+  const styles = useMemo(() => makeStyles(colors, isDark), [colors, isDark]);
 
   const [mails, setMails] = useState<MailMessage[]>([]);
   const [mailLoading, setMailLoading] = useState(false);
@@ -590,15 +589,6 @@ export function DashboardScreen() {
   // TE-138: Tasks-Gruppierung fürs Dashboard entfernt – Tasks erscheinen nur
   // noch im Tasks-Tab, nicht mehr auf dem Dashboard.
 
-  // Bunter Geburtstags-Stil (rotierender Regenbogen-Rand im AI-Komponenten-Stil):
-  // im Neon-Theme und im Schwarz-Weiß-Theme – dort bleibt die Geburtstags-Card
-  // bewusst bunt als Ausnahme zum sonst monochromen Look (TE-81).
-  // Bunte Geburtstags-Card nur im Neon-Mono-Theme; das Calm-Theme bleibt schlicht.
-  const richBirthday = theme === 'dark-mono';
-  const rainbowRotate = useRef(new Animated.Value(0)).current;
-  // Atmender, farbwechselnder Flammen-Glow (Gemini-Look).
-  const flameAnim = useRef(new Animated.Value(0)).current;
-
   const todayBirthdays = useMemo(() => {
     const now = new Date();
     return storeBirthdays.filter(
@@ -617,10 +607,6 @@ export function DashboardScreen() {
       tomorrowEvents: calEvents.filter((e) => new Date(e.start).toDateString() === tomorrowStr),
     };
   }, [calEvents]);
-
-  // Hervorhebung (Glow/Regenbogen) ist aktiv, sobald es heute etwas zu feiern
-  // ODER einen Termin gibt – beide teilen sich denselben "Flammen"-Look (TE-120).
-  const hasHighlight = todayBirthdays.length > 0 || todayEvents.length > 0;
 
   // Alle Quellen zu einer einheitlichen Item-Liste verschmelzen (TE-?: "Mein Tag").
   // Nur berechnet/gerendert, wenn der Block aktiv ist – additiv, ersetzt keine
@@ -776,36 +762,6 @@ export function DashboardScreen() {
     syncBirthdays().catch(() => {});
   }, [settings.googleAccessToken, settings.googleBirthdaysEnabled, syncBirthdays]);
 
-  // Neon-Dark: Regenbogen-Gradient dreht sich endlos (läuft um den Rand).
-  useEffect(() => {
-    if (!hasHighlight || !richBirthday) { rainbowRotate.setValue(0); return; }
-    const loop = Animated.loop(
-      Animated.timing(rainbowRotate, { toValue: 1, duration: 2500, useNativeDriver: true })
-    );
-    loop.start();
-    return () => { loop.stop(); rainbowRotate.setValue(0); };
-  }, [hasHighlight, richBirthday, rainbowRotate]);
-
-  // Atmender Flammen-Glow (Gemini-Look) – Schatten pulsiert + wechselt die Farbe,
-  // dazu skaliert die Card synchron („atmen"). Läuft in ALLEN Themes, damit der
-  // Geburtstag immer sehr präsent ist. useNativeDriver: false, weil Schatten-
-  // werte animiert werden (Scale wird auf demselben Node mitgeführt).
-  useEffect(() => {
-    // Calm-Theme: kein atmender Flammen-Glow – Geburtstags-Card bleibt still.
-    if (!hasHighlight || reduceMotion) { flameAnim.setValue(0); return; }
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(flameAnim, { toValue: 1, duration: 1600, useNativeDriver: false }),
-        Animated.timing(flameAnim, { toValue: 0, duration: 1600, useNativeDriver: false }),
-      ])
-    );
-    loop.start();
-    return () => { loop.stop(); flameAnim.setValue(0); };
-  }, [hasHighlight, reduceMotion, flameAnim]);
-
-  // Synchron zum Glow „atmende" Skalierung – gemeinsam für beide Card-Varianten.
-  const flameScale = flameAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, 1.05, 1] });
-
   // TE-161: Google Tasks/Personal Tasks/Notizen laufen jetzt einspaltig über
   // die volle Breite; Links/Countdowns sitzen als eigener, ebenfalls
   // volle-Breite-Block ganz unten (siehe Render). Geistesblitze stehen seit
@@ -832,70 +788,14 @@ export function DashboardScreen() {
 
       {/* ── Geburtstage: ganz oben, privat (eigene Google-Kontakte, nicht family-weit geteilt) ── */}
       {showBlock('birthdays') && todayBirthdays.length > 0 && (
-        richBirthday ? (
-          // Neon-Dark: AI-Style mit rotierendem Regenbogen-Rand + atmendem Flammen-Glow.
-          <Animated.View
-            style={[
-              styles.birthdayNeonWrap,
-              {
-                shadowColor: flameAnim.interpolate({
-                  inputRange: [0, 0.25, 0.5, 0.75, 1],
-                  outputRange: ['#FF0080', '#FF8C00', '#00FF88', '#00EEFF', '#7A5CFF'],
-                }),
-                shadowOpacity: flameAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.7, 1, 0.7] }),
-                shadowRadius: flameAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [16, 46, 16] }),
-                transform: [{ scale: flameScale }],
-              },
-            ]}
-          >
-            <Animated.View
-              style={[
-                styles.birthdayRainbowLayer,
-                { transform: [{ rotate: rainbowRotate.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] }) }] },
-              ]}
-            >
-              <LinearGradient
-                colors={['#FF0080', '#FF8C00', '#FFE600', '#00FF88', '#00EEFF', '#7A5CFF', '#FF0080']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={StyleSheet.absoluteFill}
-              />
-            </Animated.View>
-            <View style={styles.birthdayNeonInner}>
-              <Text style={styles.birthdayIcon}>🎂</Text>
-              <Text style={[styles.birthdayText, styles.birthdayTextNeon]} numberOfLines={1}>
-                {todayBirthdays
-                  .map((b) => `${b.name}${b.year != null ? ` (${new Date().getFullYear() - b.year})` : ''}`)
-                  .join(', ')}
-              </Text>
-            </View>
-          </Animated.View>
-        ) : (
-          <Animated.View
-            style={[
-              styles.birthdayCard,
-              reduceMotion
-                // Calm-Theme: keine farbige Flammen-Aura, kein Atmen – schlichte Card.
-                ? { borderWidth: 1, borderColor: colors.border }
-                : {
-                    shadowColor: flameAnim.interpolate({
-                      inputRange: [0, 0.25, 0.5, 0.75, 1],
-                      outputRange: ['#FF6B00', '#FF0080', '#FF3B30', '#FF8C00', '#FF0080'],
-                    }),
-                    shadowOpacity: flameAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.5, 0.95, 0.5] }),
-                    shadowRadius: flameAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [10, 34, 10] }),
-                    transform: [{ scale: flameScale }],
-                  },
-            ]}
-          >
-            <Text style={styles.birthdayIcon}>🎂</Text>
-            <Text style={styles.birthdayText} numberOfLines={1}>
-              {todayBirthdays
-                .map((b) => `${b.name}${b.year != null ? ` (${new Date().getFullYear() - b.year})` : ''}`)
-                .join(', ')}
-            </Text>
-          </Animated.View>
-        )
+        <View style={[styles.birthdayCard, { borderWidth: 1, borderColor: colors.border }]}>
+          <Text style={styles.birthdayIcon}>🎂</Text>
+          <Text style={styles.birthdayText} numberOfLines={1}>
+            {todayBirthdays
+              .map((b) => `${b.name}${b.year != null ? ` (${new Date().getFullYear() - b.year})` : ''}`)
+              .join(', ')}
+          </Text>
+        </View>
       )}
 
       {/* ── Google-Connect-Banner (nur wenn noch nicht verbunden) ── */}
@@ -1229,67 +1129,8 @@ export function DashboardScreen() {
             return (
               <View style={{ gap: 6 }}>
                 {todayEvents.length > 0 && (
-                  <View>
-                    {/* Gleiche Hervorhebung wie die Geburtstags-Card: atmender
-                        Flammen-Glow überall, zusätzlich rotierender Regenbogen-
-                        Rand im Neon-/Mono-Dark-Theme (TE-120). */}
-                    {richBirthday ? (
-                      <Animated.View
-                        style={[
-                          styles.todayEventsNeonWrap,
-                          {
-                            shadowColor: flameAnim.interpolate({
-                              inputRange: [0, 0.25, 0.5, 0.75, 1],
-                              outputRange: ['#FF0080', '#FF8C00', '#00FF88', '#00EEFF', '#7A5CFF'],
-                            }),
-                            shadowOpacity: flameAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.7, 1, 0.7] }),
-                            shadowRadius: flameAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [16, 46, 16] }),
-                            transform: [{ scale: flameScale }],
-                          },
-                        ]}
-                      >
-                        <Animated.View
-                          style={[
-                            styles.birthdayRainbowLayer,
-                            { transform: [{ rotate: rainbowRotate.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] }) }] },
-                          ]}
-                        >
-                          <LinearGradient
-                            colors={['#FF0080', '#FF8C00', '#FFE600', '#00FF88', '#00EEFF', '#7A5CFF', '#FF0080']}
-                            start={{ x: 0, y: 0 }}
-                            end={{ x: 1, y: 1 }}
-                            style={StyleSheet.absoluteFill}
-                          />
-                        </Animated.View>
-                        <View style={styles.todayEventsNeonInner}>
-                          {todayEvents.map((e, i) => renderEvent(e, i, todayEvents, true))}
-                        </View>
-                      </Animated.View>
-                    ) : (
-                      <Animated.View
-                        style={[
-                          styles.card,
-                          styles.todayEventsGlowCard,
-                          reduceMotion
-                            // Calm-Theme (TE-44): kein Flammen-Glow – ohne diese
-                            // Gate bliebe selbst bei flameAnim=0 ein statischer
-                            // oranger Schatten (Index-0-Wert) stehen. Schlichte
-                            // Card mit dezentem blauem Rahmen (aus styles.card).
-                            ? { elevation: 0 }
-                            : {
-                                shadowColor: flameAnim.interpolate({
-                                  inputRange: [0, 0.25, 0.5, 0.75, 1],
-                                  outputRange: ['#FF6B00', '#FF0080', '#FF3B30', '#FF8C00', '#FF0080'],
-                                }),
-                                shadowOpacity: flameAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.5, 0.95, 0.5] }),
-                                shadowRadius: flameAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [10, 34, 10] }),
-                                transform: [{ scale: flameScale }],
-                              },
-                        ]}
-                      >
-                        {todayEvents.map((e, i) => renderEvent(e, i, todayEvents, true))}
-                      </Animated.View>
-                    )}
+                  <View style={[styles.card, styles.todayEventsGlowCard, { elevation: 0 }]}>
+                    {todayEvents.map((e, i) => renderEvent(e, i, todayEvents, true))}
                   </View>
                 )}
               </View>
@@ -1306,7 +1147,7 @@ export function DashboardScreen() {
             onMore={() => router.push('/(tabs)/mail')}
             colors={colors}
           />
-          <View style={[styles.card, !reduceMotion && { borderLeftColor: colors.border, borderLeftWidth: 3 }]}>
+          <View style={styles.card}>
             {mailLoading ? (
               <View style={styles.loadingRow}>
                 <ActivityIndicator color={colors.textMuted} size="small" />
@@ -1384,7 +1225,7 @@ export function DashboardScreen() {
       {showBlock('driveFavorites') && driveFavorites.length > 0 && (
         <View style={styles.section}>
           <SectionLabel title="Drive-Favoriten" colors={colors} />
-          <View style={[styles.card, !reduceMotion && { borderLeftColor: colors.border, borderLeftWidth: 3 }]}>
+          <View style={styles.card}>
             {driveFavorites.slice(0, 6).map((f, i) => {
               const isFolder = f.mimeType === 'application/vnd.google-apps.folder';
               return (
@@ -1662,7 +1503,7 @@ export function DashboardScreen() {
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-function makeStyles(c: ThemeColors, isDark: boolean, calm: boolean) {
+function makeStyles(c: ThemeColors, isDark: boolean) {
   return StyleSheet.create({
     root: { flex: 1, backgroundColor: c.background },
     container: { flex: 1, backgroundColor: c.background },
@@ -1782,10 +1623,7 @@ function makeStyles(c: ThemeColors, isDark: boolean, calm: boolean) {
       borderRadius: 14,
       overflow: 'hidden',
       borderWidth: 1,
-      // Neon/Mono-Dark: leuchtende Oberfläche wie im Tasks-Tab (weißer Neon-Rand
-      // + soft Glow). Calm-Theme (TE-44): kein weißer Rand, sondern der dezente
-      // blaue Border (c.border); Glow ist via glowSuppressed() ohnehin aus.
-      borderColor: isDark && !calm ? c.accentNeon + '40' : c.border,
+      borderColor: c.border,
       ...(isDark ? neonGlow(c.accentNeon, 'soft') : {}),
     },
 
@@ -1836,7 +1674,7 @@ function makeStyles(c: ThemeColors, isDark: boolean, calm: boolean) {
       color: c.textMuted,
     },
 
-    // Birthday – ganz oben, neon-gelb, schnell blinkend
+    // Birthday – ganz oben, schnell blinkend
     birthdayCard: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -1848,64 +1686,13 @@ function makeStyles(c: ThemeColors, isDark: boolean, calm: boolean) {
       paddingVertical: 8,
       paddingHorizontal: 12,
       gap: 8,
-      // Flammen-Glow (animiert, inline) – Offset/Elevation hier als Basis.
-      shadowOffset: { width: 0, height: 0 },
-      elevation: 14,
     },
     birthdayIcon: { fontSize: 16 },
     birthdayText: { flex: 1, fontSize: 13, fontWeight: '700', color: '#1A1A00' },
 
-    // Birthday – Neon-Dark: rotierender Regenbogen-Rand (AI-Style).
-    // Schattenfarbe/-radius/-opacity werden inline animiert (Flammen-Glow).
-    birthdayNeonWrap: {
-      marginHorizontal: 16,
-      marginTop: 4,
-      marginBottom: 6,
-      borderRadius: 12,
-      padding: 4,            // Dicke des Regenbogen-Rings
-      overflow: 'hidden',
-      shadowOffset: { width: 0, height: 0 },
-      elevation: 16,
-    },
-    birthdayRainbowLayer: {
-      position: 'absolute',
-      width: Math.max(Dimensions.get('window').width, 480),
-      height: Math.max(Dimensions.get('window').width, 480),
-      left: '50%',
-      top: '50%',
-      marginLeft: -Math.max(Dimensions.get('window').width, 480) / 2,
-      marginTop: -Math.max(Dimensions.get('window').width, 480) / 2,
-    },
-    birthdayNeonInner: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 8,
-      backgroundColor: '#0E0E16',
-      borderRadius: 10,
-      paddingVertical: 8,
-      paddingHorizontal: 12,
-    },
-    birthdayTextNeon: { color: '#EAEAFF' },
-
     // Termine "heute" – gleiche Hervorhebung wie die Geburtstags-Card (TE-120).
     todayEventsGlowCard: {
-      // Neon/Mono: kein linker Rand (Glow trägt die Kante). Calm (TE-44):
-      // einheitlicher 1px-Rahmen wie auf den anderen Seiten.
-      borderLeftWidth: calm ? 1 : 0,
-      shadowOffset: { width: 0, height: 0 },
-      elevation: 14,
-    },
-    todayEventsNeonWrap: {
-      marginHorizontal: 16,
-      borderRadius: 12,
-      padding: 4,
-      overflow: 'hidden',
-      shadowOffset: { width: 0, height: 0 },
-      elevation: 16,
-    },
-    todayEventsNeonInner: {
-      backgroundColor: '#0E0E16',
-      borderRadius: 10,
+      borderLeftWidth: 1,
       overflow: 'hidden',
     },
 
@@ -2017,7 +1804,7 @@ function makeStyles(c: ThemeColors, isDark: boolean, calm: boolean) {
       justifyContent: 'center',
     },
     kidAvatarText: { fontSize: 11, fontWeight: '800', color: '#fff' },
-    kidCard: { marginHorizontal: 0, borderLeftWidth: calm ? 1 : 0 },
+    kidCard: { marginHorizontal: 0, borderLeftWidth: 1 },
     // Gruppenarbeit-Karte (TE-115)
     groupTitle: {
       fontSize: 14,
