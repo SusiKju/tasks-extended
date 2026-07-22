@@ -303,13 +303,30 @@ export function GeistesKacheln({ colors, isDark, areaWidth, columns, compact = f
         {!compact && <FussballKachel iconSize={18} />}
       </View>
 
-      {tiles.length === 0 ? (
+      {tiles.length === 0 && compact ? (
+        // Redesign: im kompakten Dashboard-Layout dieselbe Kachel-Reihen-Optik
+        // wie bei den Countdowns – eine einzelne Add-Kachel statt der breiten
+        // gestrichelten Box mit Fließtext (vorher inkonsistent zur
+        // Countdown-Leiste direkt darunter).
+        <View style={s.grid}>
+          <Pressable
+            style={({ pressed }) => [
+              s.addCard,
+              { width: tileSize, height: tileSize, borderColor: colors.accentNeon + '25', opacity: pressed ? 0.6 : 1 },
+            ]}
+            onPress={openNew}
+          >
+            <Ionicons name="bulb-outline" size={18} color={colors.textMuted} />
+            <Text style={[s.addCardText, { color: colors.textMuted }]}>Idee</Text>
+          </Pressable>
+        </View>
+      ) : tiles.length === 0 ? (
         <Pressable
-          style={({ pressed }) => [s.empty, compact && s.emptyCompact, { borderColor: colors.accentNeon + '20', opacity: pressed ? 0.7 : 1 }]}
+          style={({ pressed }) => [s.empty, { borderColor: colors.accentNeon + '20', opacity: pressed ? 0.7 : 1 }]}
           onPress={openNew}
         >
-          <Ionicons name="bulb-outline" size={compact ? 16 : 20} color={colors.textMuted} />
-          <Text style={[s.emptyText, compact && s.emptyTextCompact, { color: colors.textMuted }]}>Ersten Geistesblitz festhalten</Text>
+          <Ionicons name="bulb-outline" size={20} color={colors.textMuted} />
+          <Text style={[s.emptyText, { color: colors.textMuted }]}>Ersten Geistesblitz festhalten</Text>
         </Pressable>
       ) : (
         <View style={s.grid}>
@@ -353,7 +370,8 @@ const s = StyleSheet.create({
 
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   card: { borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  addCard: { borderRadius: 10, borderWidth: 1.5, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center' },
+  addCard: { borderRadius: 10, borderWidth: 1.5, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center', gap: 3 },
+  addCardText: { fontSize: 9, fontWeight: '700' },
 
   empty: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1.5, borderStyle: 'dashed', borderRadius: 12, padding: 16 },
   emptyText: { fontSize: 13 },

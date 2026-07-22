@@ -57,7 +57,10 @@ export function LinkCardBar({
 
   return (
     <View style={s.section}>
-      <Text style={[s.headerTitle, { color: colors.textSecondary }]}>SCHNELLZUGRIFF</Text>
+      <View style={s.headerRow}>
+        <Ionicons name="link-outline" size={13} color={colors.textMuted} />
+        <Text style={[s.headerTitle, { color: colors.textSecondary }]}>SCHNELLZUGRIFF</Text>
+      </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.row}>
         {active.map((l) => (
           <Pressable
@@ -100,6 +103,7 @@ export function LinkCardBar({
 
 const s = StyleSheet.create({
   section: { paddingHorizontal: 16, gap: 10 },
+  headerRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   headerTitle: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8 },
   row: { flexDirection: 'row', gap: 16, paddingVertical: 2, paddingRight: 8 },
   card: { alignItems: 'center', gap: 5, width: 68 },

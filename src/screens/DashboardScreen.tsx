@@ -1064,22 +1064,23 @@ export function DashboardScreen() {
         </View>
       </Modal>
 
-      {/* ── Kalender ── */}
+      {/* ── Kalender ──
+          Bugfix (2026-07-22): Label-Sichtbarkeit hing an calEvents.length
+          (alle geladenen Termine), der Kartenkörper darunter zeigte aber nur
+          todayEvents. Bei Terminen, die zwar geladen sind, aber nicht heute
+          liegen, stand "HEUTIGE TERMINE" verwaist ohne jeden Inhalt da – ein
+          Vorher-schon-vorhandener Bug, nicht Teil des Redesigns. Beide
+          Bedingungen laufen jetzt konsistent über todayEvents. ── */}
       {showBlock('calendar') && settings.googleCalendarEnabled && (
         <View style={styles.section}>
-          {calLoading || calEvents.length > 0 ? (
+          {calLoading || todayEvents.length > 0 ? (
             <SectionLabel title="Heutige Termine" colors={colors} />
           ) : null}
           {calLoading ? (
             <View style={[styles.card, styles.loadingRow]}>
               <ActivityIndicator color={mono(C.calendar)} size="small" />
             </View>
-          ) : calEvents.length === 0 ? (
-            <View style={[styles.card, styles.emptyRow]}>
-              <Ionicons name="calendar-outline" size={16} color={colors.textMuted} />
-              <Text style={styles.emptyText}>Keine Termine</Text>
-            </View>
-          ) : (() => {
+          ) : todayEvents.length === 0 ? null : (() => {
             const renderEvent = (event: CalendarEvent, i: number, arr: CalendarEvent[], prominent: boolean) => {
               const { time } = formatEventTime(event);
               const eventColor = mono(event.color ?? C.calendar);
@@ -1156,6 +1157,7 @@ export function DashboardScreen() {
         <View style={styles.section}>
           <SectionLabel
             title="Posteingang"
+            icon="mail-outline"
             onMore={() => router.push('/(tabs)/mail')}
             colors={colors}
           />
@@ -1258,6 +1260,7 @@ export function DashboardScreen() {
         <View style={styles.section}>
           <SectionLabel
             title="Aufgaben der Kinder"
+            icon="people-outline"
             onMore={() => router.push('/(tabs)/kids' as any)}
             colors={colors}
           />
@@ -1388,6 +1391,7 @@ export function DashboardScreen() {
         <View style={styles.section}>
           <SectionLabel
             title="Taschengeld offen"
+            icon="wallet-outline"
             onMore={() => router.push('/(tabs)/kids' as any)}
             colors={colors}
           />
@@ -1481,7 +1485,9 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
   return StyleSheet.create({
     root: { flex: 1, backgroundColor: c.background },
     container: { flex: 1, backgroundColor: c.background },
-    content: { paddingTop: 16, paddingBottom: 48, gap: 24 },
+    // Redesign: 24→18 – engerer, gleichmäßigerer Rhythmus zwischen den
+    // Abschnitten, näher am Artefakt.
+    content: { paddingTop: 16, paddingBottom: 48, gap: 18 },
 
     // Fokus-Kacheln stehen jetzt inline vor den Links statt als fixierter
     // Fab rechts am Rand (siehe JSX-Kommentar oben bei focusInline).
@@ -1625,8 +1631,6 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
       alignItems: 'center',
       backgroundColor: c.surface,
       marginHorizontal: 16,
-      marginTop: 4,
-      marginBottom: 6,
       borderRadius: 28,
       paddingVertical: 12,
       paddingHorizontal: 18,
