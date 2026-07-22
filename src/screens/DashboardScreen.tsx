@@ -12,8 +12,6 @@ import {
   Modal,
   Alert,
   useWindowDimensions,
-  Linking,
-  Image,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -794,7 +792,10 @@ export function DashboardScreen() {
   const { width: winW } = useWindowDimensions();
   const [dashW, setDashW] = useState(0);
   const effW = dashW || winW;
-  const wideCols = Math.max(4, Math.round((effW - 26) / 86));
+  // Zielbreite pro Spalte (72) statt vorher 86 – kleinere Kacheln auf
+  // Nutzerwunsch, damit mehrere Geistesblitze nebeneinander nicht so viel
+  // Höhe/Breite fressen (angeglichen an die neue 68px-Countdown-Kachel).
+  const wideCols = Math.max(4, Math.round((effW - 26) / 72));
 
   return (
     <View style={styles.root}>
@@ -1247,58 +1248,20 @@ export function DashboardScreen() {
         <FussballKachel iconSize={16} />
       </View>
 
-      {/* ── Links (privat) ── */}
-      {showBlock('links') && <LinkCardBar colors={colors} />}
+      {/* ── Schnellzugriff (privat): Links + Drive-Favoriten (TE-168) in einer
+          gemeinsamen, horizontal scrollenden Zeile statt getrennter
+          Abschnitte – Redesign-Auftrag, überschreibt bewusst die TE-161-
+          Entscheidung fürs umbrechende Links-Grid. ── */}
+      {(showBlock('links') || showBlock('driveFavorites')) && (
+        <LinkCardBar
+          colors={colors}
+          showLinks={showBlock('links')}
+          driveFavorites={showBlock('driveFavorites') ? driveFavorites : []}
+        />
+      )}
 
       {/* ── Countdowns (privat) ── */}
       {showBlock('countdowns') && <CountdownStrip colors={colors} compact />}
-
-      {/* ── Drive-Favoriten (TE-168, privat) ── eigene Kategorie – anders als Google
-          Tasks/Personal Tasks/Notizen kein Teil der Kurzübersicht, sondern eine
-          eigenständige Karte im Stil des Posteingangs (mailRow/mailAvatar). Nur
-          sichtbar, wenn es tatsächlich Favoriten gibt (kein Schnell-Anlegen
-          möglich, im Gegensatz zu den übrigen Abschnitten – Favorisieren
-          passiert in Drive selbst). Jede Zeile: Drive-eigenes Datei-/Ordner-Icon
-          (iconLink, unterscheidet Ordner automatisch von Dateitypen wie
-          Docs/Sheets/PDF) + "öffnet extern"-Pfeil. */}
-      {showBlock('driveFavorites') && driveFavorites.length > 0 && (
-        <View style={styles.section}>
-          <SectionLabel title="Drive-Favoriten" colors={colors} />
-          <View style={styles.card}>
-            {driveFavorites.slice(0, 6).map((f, i) => {
-              const isFolder = f.mimeType === 'application/vnd.google-apps.folder';
-              return (
-                <Pressable
-                  key={f.id}
-                  onPress={() => f.webViewLink && Linking.openURL(f.webViewLink)}
-                  style={({ pressed }) => [
-                    styles.mailRow,
-                    i < Math.min(driveFavorites.length, 6) - 1 && styles.rowDivider,
-                    { opacity: pressed ? 0.6 : 1 },
-                  ]}
-                >
-                  <View style={[styles.mailAvatar, { backgroundColor: colors.surfaceHigh }]}>
-                    {f.iconLink ? (
-                      <Image source={{ uri: f.iconLink }} style={{ width: 18, height: 18 }} resizeMode="contain" />
-                    ) : (
-                      <Ionicons name={isFolder ? 'folder' : 'document-text-outline'} size={16} color={C.drive} />
-                    )}
-                  </View>
-                  <Text style={[styles.mailFrom, { color: colors.text, flex: 1 }]} numberOfLines={1}>
-                    {f.name}
-                  </Text>
-                  <Ionicons name="open-outline" size={16} color={colors.textMuted} />
-                </Pressable>
-              );
-            })}
-            {driveFavorites.length > 6 && (
-              <Text style={[styles.dezentMore, { color: colors.textMuted }]}>
-                +{driveFavorites.length - 6} weitere
-              </Text>
-            )}
-          </View>
-        </View>
-      )}
 
       {/* ── Trennlinie: ab hier mit der Familie geteilte Module (TE-172) ── */}
       <View style={styles.sectionDivider}>

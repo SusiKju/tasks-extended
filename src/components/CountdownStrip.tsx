@@ -93,7 +93,7 @@ function AddCard({ colors, onPress }: { colors: ThemeColors; onPress: () => void
         { borderColor: colors.border, opacity: pressed ? 0.6 : 1 },
       ]}
     >
-      <Ionicons name="add" size={26} color={colors.textMuted} />
+      <Ionicons name="add" size={21} color={colors.textMuted} />
       <Text style={[styles.addCardText, { color: colors.textMuted }]}>Countdown</Text>
     </Pressable>
   );
@@ -305,9 +305,11 @@ function formStyles_subtitle(colors: ThemeColors) {
   return { fontSize: 12, color: colors.textMuted, marginTop: 4, marginBottom: 12, lineHeight: 17 };
 }
 
-// TE-162: Kartengröße wieder wie bei der allerersten Umsetzung (TE-128) –
-// feste 84×84-Kachel statt aus der Container-Breite abgeleiteter Größe.
-const CARD_SIZE = 84;
+// TE-162 hatte auf die feste 84×84-Kachel der allerersten Umsetzung (TE-128)
+// zurückgesetzt. Redesign-Auftrag verkleinert sie erneut auf 68×68 – bei
+// mehreren Countdowns nimmt die Zeile sonst zu viel Höhe/Breite ein. Dritte
+// Größenänderung an dieser Stelle, diesmal auf expliziten Nutzerwunsch.
+const CARD_SIZE = 68;
 
 const styles = StyleSheet.create({
   wrap: { marginBottom: 4 },
@@ -323,21 +325,21 @@ const styles = StyleSheet.create({
   card: {
     width: CARD_SIZE,
     height: CARD_SIZE,
-    borderRadius: 18,
+    borderRadius: 14,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 6,
-    gap: 1,
+    paddingHorizontal: 4,
+    gap: 0,
   },
-  cardEmoji: { fontSize: 16, marginBottom: 1 },
-  cardNumber: { fontSize: 22, fontWeight: '800', lineHeight: 24 },
-  cardUnit: { fontSize: 10, marginTop: -2 },
-  cardBigLabel: { fontSize: 13, fontWeight: '800' },
-  cardTitle: { fontSize: 10, fontWeight: '600', textAlign: 'center', marginTop: 2 },
+  cardEmoji: { fontSize: 13, marginBottom: 1 },
+  cardNumber: { fontSize: 18, fontWeight: '800', lineHeight: 20 },
+  cardUnit: { fontSize: 8.5, marginTop: -2 },
+  cardBigLabel: { fontSize: 11, fontWeight: '800' },
+  cardTitle: { fontSize: 8.5, fontWeight: '600', textAlign: 'center', marginTop: 1 },
 
-  addCard: { borderStyle: 'dashed', gap: 4 },
-  addCardText: { fontSize: 10, fontWeight: '700' },
+  addCard: { borderStyle: 'dashed', gap: 3 },
+  addCardText: { fontSize: 8.5, fontWeight: '700' },
 
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center', padding: 24 },
   formCard: { width: '100%', maxWidth: 420, borderRadius: 16, borderWidth: 1, padding: 18 },
