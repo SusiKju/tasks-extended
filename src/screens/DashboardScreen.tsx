@@ -231,6 +231,13 @@ export function DashboardScreen() {
   const [syncing, setSyncing] = useState(false);
   const spinAnim = useRef(new Animated.Value(0)).current;
 
+  // Geburtstags-Card: einzige bewusste Ausnahme vom sonst durchgängig
+  // animationsfreien Ruhig-Theme (siehe theme.ts, reduceMotion === true) –
+  // ein Geburtstag soll trotzdem sofort ins Auge fallen. Pulsiert Rand statt
+  // Schatten (funktioniert plattformübergreifend gleich, ohne Web/iOS/Android-
+  // Schatten-Eigenheiten wie beim alten Flammen-Glow vor TE-4).
+  const birthdayPulse = useRef(new Animated.Value(0)).current;
+
   // "Mein Tag" (Feed): erscheint nicht mehr inline auf dem Dashboard,
   // sondern wird über das Icon links neben dem Sync-Button als Dialog geöffnet.
   const [feedDialogOpen, setFeedDialogOpen] = useState(false);
@@ -596,6 +603,18 @@ export function DashboardScreen() {
     );
   }, [storeBirthdays]);
 
+  useEffect(() => {
+    if (todayBirthdays.length === 0) { birthdayPulse.setValue(0); return; }
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(birthdayPulse, { toValue: 1, duration: 1100, useNativeDriver: false }),
+        Animated.timing(birthdayPulse, { toValue: 0, duration: 1100, useNativeDriver: false }),
+      ])
+    );
+    loop.start();
+    return () => { loop.stop(); birthdayPulse.setValue(0); };
+  }, [todayBirthdays.length, birthdayPulse]);
+
   // Termine "heute" / "morgen" – auf Komponentenebene berechnet (statt nur lokal
   // im Render), damit der Glow-Effekt unten auf "heutige Termine vorhanden?"
   // reagieren kann (TE-120: gleiche Hervorhebung wie Geburtstage).
@@ -786,16 +805,26 @@ export function DashboardScreen() {
       onLayout={(e) => setDashW(e.nativeEvent.layout.width)}
     >
 
-      {/* ── Geburtstage: ganz oben, privat (eigene Google-Kontakte, nicht family-weit geteilt) ── */}
+      {/* ── Geburtstage: ganz oben, privat (eigene Google-Kontakte, nicht family-weit geteilt) ──
+          Muss immer ins Auge stechen (User-Wunsch) – deshalb pulsiert der Rand
+          statt des sonst überall gleichen, dezenten colors.border. */}
       {showBlock('birthdays') && todayBirthdays.length > 0 && (
-        <View style={[styles.birthdayCard, { borderWidth: 1, borderColor: colors.border }]}>
+        <Animated.View
+          style={[
+            styles.birthdayCard,
+            {
+              borderWidth: birthdayPulse.interpolate({ inputRange: [0, 1], outputRange: [2, 3.5] }),
+              borderColor: birthdayPulse.interpolate({ inputRange: [0, 1], outputRange: ['#8A6D00', '#FFD400'] }),
+            },
+          ]}
+        >
           <Text style={styles.birthdayIcon}>🎂</Text>
           <Text style={styles.birthdayText} numberOfLines={1}>
             {todayBirthdays
               .map((b) => `${b.name}${b.year != null ? ` (${new Date().getFullYear() - b.year})` : ''}`)
               .join(', ')}
           </Text>
-        </View>
+        </Animated.View>
       )}
 
       {/* ── Google-Connect-Banner (nur wenn noch nicht verbunden) ── */}
@@ -1208,6 +1237,16 @@ export function DashboardScreen() {
         </View>
       )}
 
+      {/* ── Fokus-Kacheln (Fußball/Yoga/Garten): standen bisher als schwebender
+          Fab rechts am Rand fest über dem gesamten Screen (siehe unten
+          entfernte styles.focusFab) – dort klebten sie ohne erkennbaren
+          Bezug zu einem Abschnitt. Stehen jetzt vorneweg direkt vor den
+          Links, icon-only wie schon immer (FussballKachel selbst zeigt nie
+          Text), aber eingebettet statt sticky. ── */}
+      <View style={styles.focusInline}>
+        <FussballKachel iconSize={16} />
+      </View>
+
       {/* ── Links (privat) ── */}
       {showBlock('links') && <LinkCardBar colors={colors} />}
 
@@ -1490,13 +1529,6 @@ export function DashboardScreen() {
       </Modal>
 
     </ScrollView>
-
-      {/* TE-153: Fokus-Kachel fixiert rechts-mittig am Viewport – klebt beim
-          Scrollen, weil sie außerhalb der ScrollView liegt. box-none lässt
-          Klicks überall durch, nur die Kachel selbst ist antippbar. */}
-      <View style={styles.focusFab} pointerEvents="box-none">
-        <FussballKachel iconSize={16} iconStyle={styles.focusFabTile} />
-      </View>
     </View>
   );
 }
@@ -1509,16 +1541,9 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
     container: { flex: 1, backgroundColor: c.background },
     content: { paddingTop: 16, paddingBottom: 48, gap: 24 },
 
-    // TE-153: Fokus-Kachel als fixierter Button, rechts mittig am Viewport.
-    // Der volle-Höhe-Streifen zentriert die Kachel vertikal; pointerEvents wird
-    // im JSX auf "box-none" gesetzt, damit nur die Kachel Klicks abfängt.
-    focusFab: { position: 'absolute', right: 6, top: 0, bottom: 0, justifyContent: 'center', zIndex: 20 },
-    focusFabTile: {
-      width: 34,
-      height: 34,
-      borderRadius: 10,
-      ...(isDark ? neonGlow(c.accentNeon, 'soft') : {}),
-    },
+    // Fokus-Kacheln stehen jetzt inline vor den Links statt als fixierter
+    // Fab rechts am Rand (siehe JSX-Kommentar oben bei focusInline).
+    focusInline: { flexDirection: 'row', paddingHorizontal: 16, marginBottom: -6 },
 
     syncRow: {
       flexDirection: 'row',
@@ -1620,10 +1645,13 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
     card: {
       marginHorizontal: 16,
       backgroundColor: c.surface,
-      borderRadius: 14,
+      // Clean-Stil (Dashboard-Redesign): größerer Radius, deutlich leiserer
+      // Rahmen als das app-weite c.border – nur hier lokal gedimmt, damit
+      // andere Screens vom kräftigeren Standard-Rahmen unberührt bleiben.
+      borderRadius: 18,
       overflow: 'hidden',
       borderWidth: 1,
-      borderColor: c.border,
+      borderColor: c.border + '55',
       ...(isDark ? neonGlow(c.accentNeon, 'soft') : {}),
     },
 
@@ -1682,9 +1710,9 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
       marginHorizontal: 16,
       marginTop: 4,
       marginBottom: 6,
-      borderRadius: 10,
-      paddingVertical: 8,
-      paddingHorizontal: 12,
+      borderRadius: 16,
+      paddingVertical: 9,
+      paddingHorizontal: 14,
       gap: 8,
     },
     birthdayIcon: { fontSize: 16 },
@@ -1789,10 +1817,10 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
     // Abschnitt sichtbar von Kalender/Geteilter Liste/etc. ab.
     kidsSectionCard: {
       marginHorizontal: 16,
-      borderRadius: 14,
+      borderRadius: 18,
       borderWidth: 1,
       backgroundColor: c.surface,
-      borderColor: c.border,
+      borderColor: c.border + '55',
       padding: 12,
       gap: 12,
     },

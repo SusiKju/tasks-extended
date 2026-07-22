@@ -26,6 +26,8 @@ import {
   deleteCountdown,
 } from '../services/countdownsService';
 
+const COUNTDOWN_EMOJIS = ['✈️', '🏖️', '🎉', '🎂', '❤️', '🎄', '🏡', '⭐'];
+
 /** Tage bis zum Zieldatum (kalendarisch, ohne Uhrzeit) – negativ, wenn vorbei. */
 function daysUntil(targetDate: string): number {
   const today = new Date();
@@ -106,6 +108,7 @@ export function CountdownStrip({ colors, compact = false }: { colors: ThemeColor
   const [editing, setEditing] = useState<Countdown | null>(null);
   const [formVisible, setFormVisible] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
+  const [emojiDraft, setEmojiDraft] = useState<string | null>(COUNTDOWN_EMOJIS[0]);
   const [dateDraft, setDateDraft] = useState<Date | null>(null);
   const [datePickerVisible, setDatePickerVisible] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -130,6 +133,7 @@ export function CountdownStrip({ colors, compact = false }: { colors: ThemeColor
     setEditing(null);
     setTitleDraft('');
     setDateDraft(null);
+    setEmojiDraft(COUNTDOWN_EMOJIS[0]);
     setFormVisible(true);
   }, []);
 
@@ -137,11 +141,15 @@ export function CountdownStrip({ colors, compact = false }: { colors: ThemeColor
     setEditing(c);
     setTitleDraft(c.title);
     setDateDraft(new Date(c.targetDate + 'T00:00:00'));
+    setEmojiDraft(c.emoji ?? null);
     setFormVisible(true);
   }, []);
 
-  // TE-157: Die Karten zeigen kein Icon mehr – der Emoji-Picker im Formular
-  // ist damit hinfällig. `emoji` wird nicht mehr aktiv gesetzt/geändert.
+  // TE-162 zeigt auf den Karten wieder ein Icon (oben mittig) – die
+  // Wiederherstellung hatte den Emoji-Picker im Formular aber nicht mit
+  // zurückgeholt, der bei der zwischenzeitlichen TE-157-Iteration (Karten
+  // ohne Icon) entfernt wurde. Ohne Picker blieb `emoji` seither immer null,
+  // neue Countdowns bekamen nur noch den Fallback 💛 aus CountdownCard.
   const handleSave = useCallback(async () => {
     const title = titleDraft.trim();
     if (!title || !dateDraft || !uid || !familyId) return;
@@ -149,16 +157,16 @@ export function CountdownStrip({ colors, compact = false }: { colors: ThemeColor
     setBusy(true);
     try {
       if (editing) {
-        await updateCountdown(familyId, uid, editing.id, { title, targetDate: isoDate });
+        await updateCountdown(familyId, uid, editing.id, { title, targetDate: isoDate, emoji: emojiDraft });
       } else {
-        await addCountdown(familyId, uid, title, isoDate, null);
+        await addCountdown(familyId, uid, title, isoDate, emojiDraft);
       }
       setFormVisible(false);
     } catch {
     } finally {
       setBusy(false);
     }
-  }, [editing, titleDraft, dateDraft, uid, familyId]);
+  }, [editing, titleDraft, dateDraft, emojiDraft, uid, familyId]);
 
   const handleDelete = useCallback(async () => {
     if (!editing || !uid || !familyId) return;
@@ -231,6 +239,25 @@ export function CountdownStrip({ colors, compact = false }: { colors: ThemeColor
               value={titleDraft}
               onChangeText={setTitleDraft}
             />
+
+            <View style={styles.emojiRow}>
+              {COUNTDOWN_EMOJIS.map((e) => {
+                const selected = emojiDraft === e;
+                return (
+                  <Pressable
+                    key={e}
+                    onPress={() => setEmojiDraft(selected ? null : e)}
+                    style={[
+                      styles.emojiChip,
+                      { borderColor: selected ? accent : colors.border, backgroundColor: selected ? accent + '22' : 'transparent' },
+                    ]}
+                    hitSlop={4}
+                  >
+                    <Text style={styles.emojiChipText}>{e}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
 
             <Pressable
               onPress={() => setDatePickerVisible(true)}
@@ -318,6 +345,10 @@ const styles = StyleSheet.create({
   formTitle: { fontSize: 16, fontWeight: '800' },
 
   input: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, marginBottom: 12 },
+
+  emojiRow: { flexDirection: 'row', gap: 6, flexWrap: 'wrap', marginBottom: 12 },
+  emojiChip: { width: 36, height: 36, borderRadius: 18, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  emojiChipText: { fontSize: 17 },
 
   dateBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 11, marginBottom: 8 },
   dateBtnText: { fontSize: 14 },
