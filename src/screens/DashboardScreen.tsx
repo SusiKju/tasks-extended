@@ -796,8 +796,9 @@ export function DashboardScreen() {
   const flameScale = flameAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, 1.05, 1] });
 
   // TE-161: Google Tasks/Personal Tasks/Notizen laufen jetzt einspaltig über
-  // die volle Breite; Links/Geistesblitze/Countdowns sitzen als eigener,
-  // ebenfalls volle-Breite-Block ganz unten (siehe Render). Die Spaltenzahl
+  // die volle Breite; Links/Countdowns sitzen als eigener, ebenfalls
+  // volle-Breite-Block ganz unten (siehe Render). Geistesblitze stehen seit
+  // TE-169 separat ganz oben unter dem Wetter-Abschnitt. Die Spaltenzahl
   // für die Geistesblitze wird aus der *tatsächlichen Container-Breite*
   // abgeleitet (onLayout), nicht aus der Fensterbreite – das Dashboard
   // rendert oft in einem schmalen Panel, das viel kleiner als das Fenster
@@ -918,6 +919,17 @@ export function DashboardScreen() {
           </Pressable>
         </View>
       </View>
+
+      {/* ── Geistesblitze: direkt unter dem Wetter-Abschnitt ──
+          Bewusst ganz oben im Dashboard, damit ein Geistesblitz schnell
+          eingetragen werden kann, ohne erst am gesamten Dashboard vorbei zu
+          scrollen. Links/Countdowns bleiben im vollbreiten Block ganz unten
+          (siehe dort). */}
+      {showBlock('geistesblitze') && (
+        <View style={styles.bottomWideSection}>
+          <GeistesKacheln colors={colors} isDark={isDark} areaWidth={effW} columns={wideCols} compact />
+        </View>
+      )}
 
       {/* ── "Mein Tag" (Feed): nicht mehr inline auf dem Dashboard, sondern als Dialog ── */}
       {/* über das Icon links neben dem Sync-Button (siehe oben), additiv, standardmäßig AUS. */}
@@ -1568,16 +1580,15 @@ export function DashboardScreen() {
         </View>
       )}
 
-      {/* ── Links, Geistesblitze, Countdowns (TE-161) ──
+      {/* ── Links, Countdowns (TE-161) ──
           Ganz unten, über die volle Breite – größere, besser lesbare und
           tapbare Kacheln als in der früheren schmalen rechten Spalte (TE-153,
           jetzt entfallen). Bricht bei vielen Einträgen einfach in weitere
-          Zeilen um, statt zu scrollen oder abzuschneiden. */}
+          Zeilen um, statt zu scrollen oder abzuschneiden. Geistesblitze sitzen
+          seit TE-169 nicht mehr hier, sondern ganz oben unter dem
+          Wetter-Abschnitt (siehe dort). */}
       <View style={styles.bottomWideSection}>
         {showBlock('links') && <LinkCardBar colors={colors} />}
-        {showBlock('geistesblitze') && (
-          <GeistesKacheln colors={colors} isDark={isDark} areaWidth={effW} columns={wideCols} compact />
-        )}
         {showBlock('countdowns') && (
           <CountdownStrip colors={colors} compact />
         )}
