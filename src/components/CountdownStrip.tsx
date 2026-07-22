@@ -59,7 +59,9 @@ function CountdownCard({ countdown, colors, onPress }: { countdown: Countdown; c
       style={({ pressed }) => [
         styles.card,
         {
-          borderColor: isToday ? accent : colors.border,
+          // Redesign: gedimmter Rand statt vollem colors.border, angeglichen
+          // an styles.card in DashboardScreen.
+          borderColor: isToday ? accent : colors.border + '55',
           backgroundColor: colors.surface,
           opacity: pressed ? 0.7 : isPast ? 0.55 : 1,
         },
@@ -90,11 +92,11 @@ function AddCard({ colors, onPress }: { colors: ThemeColors; onPress: () => void
       style={({ pressed }) => [
         styles.card,
         styles.addCard,
-        { borderColor: colors.border, opacity: pressed ? 0.6 : 1 },
+        { borderColor: colors.border + '55', opacity: pressed ? 0.6 : 1 },
       ]}
+      accessibilityLabel="Countdown anlegen"
     >
       <Ionicons name="add" size={21} color={colors.textMuted} />
-      <Text style={[styles.addCardText, { color: colors.textMuted }]}>Countdown</Text>
     </Pressable>
   );
 }
@@ -306,10 +308,11 @@ function formStyles_subtitle(colors: ThemeColors) {
 }
 
 // TE-162 hatte auf die feste 84×84-Kachel der allerersten Umsetzung (TE-128)
-// zurückgesetzt. Redesign-Auftrag verkleinert sie erneut auf 68×68 – bei
-// mehreren Countdowns nimmt die Zeile sonst zu viel Höhe/Breite ein. Dritte
+// zurückgesetzt. Redesign-Auftrag verkleinert sie erneut, jetzt auf 72×72 –
+// exakt die Mini-Kachel-Größe aus dem Redesign-Artefakt (bei mehreren
+// Countdowns nimmt die Zeile sonst zu viel Höhe/Breite ein). Vierte
 // Größenänderung an dieser Stelle, diesmal auf expliziten Nutzerwunsch.
-const CARD_SIZE = 68;
+const CARD_SIZE = 72;
 
 const styles = StyleSheet.create({
   wrap: { marginBottom: 4 },
@@ -339,7 +342,6 @@ const styles = StyleSheet.create({
   cardTitle: { fontSize: 8.5, fontWeight: '600', textAlign: 'center', marginTop: 1 },
 
   addCard: { borderStyle: 'dashed', gap: 3 },
-  addCardText: { fontSize: 8.5, fontWeight: '700' },
 
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center', padding: 24 },
   formCard: { width: '100%', maxWidth: 420, borderRadius: 16, borderWidth: 1, padding: 18 },

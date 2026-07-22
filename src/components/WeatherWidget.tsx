@@ -71,7 +71,9 @@ export function WeatherWidget({ colors }: { colors: ThemeColors }) {
           onPress={() => setModalVisible(true)}
           style={({ pressed }) => [
             styles.chip,
-            { borderColor: colors.border, backgroundColor: colors.surface, opacity: pressed ? 0.7 : 1 },
+            // Redesign: gedimmter Rand statt vollem colors.border, angeglichen
+            // an styles.card in DashboardScreen.
+            { borderColor: colors.border + '55', backgroundColor: colors.surface, opacity: pressed ? 0.7 : 1 },
           ]}
           hitSlop={6}
         >
@@ -90,7 +92,7 @@ export function WeatherWidget({ colors }: { colors: ThemeColors }) {
           onPress={() => setAdviceVisible(true)}
           style={({ pressed }) => [
             styles.clothingBtn,
-            { borderColor: colors.border, backgroundColor: colors.surface, opacity: pressed ? 0.7 : 1 },
+            { borderColor: colors.border + '55', backgroundColor: colors.surface, opacity: pressed ? 0.7 : 1 },
           ]}
           hitSlop={6}
         >

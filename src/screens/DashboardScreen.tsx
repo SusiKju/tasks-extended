@@ -97,6 +97,7 @@ const C = {
   personal: '#8B5CF6',   // Violett – Personal Tasks
   notes:    '#F59E0B',   // Amber – Notizen
   drive:    '#0F9D58',   // Google-Drive-Grün – Drive-Favoriten
+  shared:   '#2DD4BF',   // Türkis – Kennzeichnet den geteilten Bereich (Redesign)
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -801,10 +802,10 @@ export function DashboardScreen() {
   const { width: winW } = useWindowDimensions();
   const [dashW, setDashW] = useState(0);
   const effW = dashW || winW;
-  // Zielbreite pro Spalte (72) statt vorher 86 – kleinere Kacheln auf
-  // Nutzerwunsch, damit mehrere Geistesblitze nebeneinander nicht so viel
-  // Höhe/Breite fressen (angeglichen an die neue 68px-Countdown-Kachel).
-  const wideCols = Math.max(4, Math.round((effW - 26) / 72));
+  // Zielbreite pro Spalte (76 = 72px Kachel + ~4px Gap) statt vorher 86 –
+  // kleinere Kacheln auf Nutzerwunsch, angeglichen an die 72px-Countdown-
+  // Kachel und die Mini-Kachel-Größe aus dem Redesign-Artefakt.
+  const wideCols = Math.max(4, Math.round((effW - 26) / 76));
 
   return (
     <View style={styles.root}>
@@ -1586,13 +1587,15 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
     // TE-172: Trennlinie zwischen privaten Modulen (oben) und den mit der
     // Familie geteilten Modulen (unten).
     sectionDivider: { flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: 16 },
-    sectionDividerLine: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: c.border },
+    // Redesign: türkiser Akzent statt Grau – markiert den Übergang in den
+    // geteilten Bereich (C.shared), analog zum Artefakt.
+    sectionDividerLine: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: C.shared + '55' },
     sectionDividerLabel: {
       fontSize: 11,
       fontWeight: '700',
       letterSpacing: 0.8,
       textTransform: 'uppercase',
-      color: c.textMuted,
+      color: C.shared,
     },
 
     // Birthday – ganz oben, schnell blinkend
@@ -1694,7 +1697,9 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
       fontSize: 11, fontWeight: '700', color: c.textMuted,
       paddingHorizontal: 6,
     },
-    dueBadgeOverdue: { color: '#fff', backgroundColor: '#ef4444', borderRadius: 6, paddingVertical: 1, overflow: 'hidden' },
+    // Redesign: schlichter fett-roter Text statt gefülltem Pillen-Badge
+    // (Nutzer hat die Umstellung explizit bestätigt).
+    dueBadgeOverdue: { color: C.important },
     // Redesign: Kind-/Gruppen-Kopfzeile als normale Zeile innerhalb der
     // flachen Card (vorher: eigener, unbordered Label-Block über einer
     // separat umrandeten Mini-Karte pro Kind).

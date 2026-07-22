@@ -95,7 +95,7 @@ export function LinkCardBar({
               style={({ pressed }) => [s.card, { opacity: pressed ? 0.7 : 1 }]}
               onPress={() => f.webViewLink && Linking.openURL(f.webViewLink)}
             >
-              <View style={[s.driveAvatar, { backgroundColor: colors.surfaceHigh }]}>
+              <View style={[s.driveAvatar, { backgroundColor: colors.surfaceHigh, borderColor: colors.border + '55' }]}>
                 {f.iconLink ? (
                   <Image source={{ uri: f.iconLink }} style={{ width: 20, height: 20 }} resizeMode="contain" />
                 ) : (
@@ -123,7 +123,7 @@ const s = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 16, paddingVertical: 2, paddingRight: 8 },
   divider: { width: 1, alignSelf: 'stretch', backgroundColor: '#FFFFFF1A', marginVertical: 4 },
   card: { alignItems: 'center', gap: 5, width: 68 },
-  driveAvatar: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  driveAvatar: { width: 44, height: 44, borderRadius: 14, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   label: { fontSize: 11, fontWeight: '600', textAlign: 'center' },
   overflowCard: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', alignSelf: 'flex-start' },
   overflowText: { fontSize: 13, fontWeight: '700' },
