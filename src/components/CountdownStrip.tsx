@@ -14,7 +14,7 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView, TextInput, Modal, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { ThemeColors } from '../utils/theme';
+import { ThemeColors, SOFT_BORDER } from '../utils/theme';
 import { DatePickerModal } from './DatePickerModal';
 import { useFamilyId } from '../hooks/useFamily';
 import { useFirebaseAuth } from '../hooks/useFirebaseAuth';
@@ -61,7 +61,7 @@ function CountdownCard({ countdown, colors, onPress }: { countdown: Countdown; c
         {
           // Redesign: gedimmter Rand statt vollem colors.border, angeglichen
           // an styles.card in DashboardScreen.
-          borderColor: isToday ? accent : colors.border + '55',
+          borderColor: isToday ? accent : SOFT_BORDER,
           backgroundColor: colors.surface,
           opacity: pressed ? 0.7 : isPast ? 0.55 : 1,
         },
@@ -92,7 +92,7 @@ function AddCard({ colors, onPress }: { colors: ThemeColors; onPress: () => void
       style={({ pressed }) => [
         styles.card,
         styles.addCard,
-        { borderColor: colors.border + '55', opacity: pressed ? 0.6 : 1 },
+        { borderColor: SOFT_BORDER, opacity: pressed ? 0.6 : 1 },
       ]}
       accessibilityLabel="Countdown anlegen"
     >

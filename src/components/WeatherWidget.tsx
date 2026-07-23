@@ -10,7 +10,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { ThemeColors } from '../utils/theme';
+import { ThemeColors, SOFT_BORDER } from '../utils/theme';
 import {
   fetchWeatherForecast,
   weatherIconAndLabel,
@@ -73,7 +73,7 @@ export function WeatherWidget({ colors }: { colors: ThemeColors }) {
             styles.chip,
             // Redesign: gedimmter Rand statt vollem colors.border, angeglichen
             // an styles.card in DashboardScreen.
-            { borderColor: colors.border + '55', backgroundColor: colors.surface, opacity: pressed ? 0.7 : 1 },
+            { borderColor: SOFT_BORDER, backgroundColor: colors.surface, opacity: pressed ? 0.7 : 1 },
           ]}
           hitSlop={6}
         >
@@ -92,7 +92,7 @@ export function WeatherWidget({ colors }: { colors: ThemeColors }) {
           onPress={() => setAdviceVisible(true)}
           style={({ pressed }) => [
             styles.clothingBtn,
-            { borderColor: colors.border + '55', backgroundColor: colors.surface, opacity: pressed ? 0.7 : 1 },
+            { borderColor: SOFT_BORDER, backgroundColor: colors.surface, opacity: pressed ? 0.7 : 1 },
           ]}
           hitSlop={6}
         >

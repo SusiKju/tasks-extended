@@ -22,7 +22,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { ThemeColors } from '../utils/theme';
+import { ThemeColors, SOFT_BORDER } from '../utils/theme';
 import { useFirebaseAuth } from '../hooks/useFirebaseAuth';
 import { useFamily } from '../hooks/useFamily';
 import {
@@ -232,21 +232,33 @@ function KachelModal({ visible, editing, onSave, onDelete, onClose, colors }: Mo
 
 // ─── Kachel ───────────────────────────────────────────────────────────────────
 
-function KachelCard({ kachel, onPress, size }: {
+// Redesign: Im kompakten Dashboard-Layout (einziger Einsatzort dieser
+// Komponente) trägt nicht mehr die Kachel-Fläche die vom User gewählte
+// Volltonfarbe, sondern nur noch das Icon – neutrale dunkle Fläche + dezenter
+// Rahmen, exakt wie Countdown-Kacheln daneben und wie im Redesign-Artefakt
+// ("Clean": Farbe sitzt im Icon, nicht in der Fläche). Icon-Form bleibt
+// weiterhin content-abhängig (detectIcon/kachel.emoji).
+const GEISTESBLITZ_ACCENT = '#A78BFA';
+
+function KachelCard({ kachel, onPress, size, colors, compact }: {
   kachel: GeistesKachel;
   onPress: () => void;
   size: number;
+  colors: ThemeColors;
+  compact?: boolean;
 }) {
   const iconName = (kachel.emoji as IoniconName) ?? detectIcon(kachel.text);
   return (
     <Pressable
       style={({ pressed }) => [
         s.card,
-        { width: size, height: size, backgroundColor: kachel.color, opacity: pressed ? 0.8 : 1 },
+        compact
+          ? { width: size, height: size, backgroundColor: colors.surface, borderWidth: 1, borderColor: SOFT_BORDER, opacity: pressed ? 0.8 : 1 }
+          : { width: size, height: size, backgroundColor: kachel.color, opacity: pressed ? 0.8 : 1 },
       ]}
       onPress={onPress}
     >
-      <Ionicons name={iconName} size={Math.round(size * 0.42)} color="#fff" />
+      <Ionicons name={iconName} size={Math.round(size * 0.42)} color={compact ? GEISTESBLITZ_ACCENT : '#fff'} />
     </Pressable>
   );
 }
@@ -312,7 +324,7 @@ export function GeistesKacheln({ colors, isDark, areaWidth, columns, compact = f
           <Pressable
             style={({ pressed }) => [
               s.addCard,
-              { width: tileSize, height: tileSize, borderColor: colors.border + '55', opacity: pressed ? 0.6 : 1 },
+              { width: tileSize, height: tileSize, borderColor: SOFT_BORDER, opacity: pressed ? 0.6 : 1 },
             ]}
             onPress={openNew}
             accessibilityLabel="Geistesblitz anlegen"
@@ -322,7 +334,7 @@ export function GeistesKacheln({ colors, isDark, areaWidth, columns, compact = f
         </View>
       ) : tiles.length === 0 ? (
         <Pressable
-          style={({ pressed }) => [s.empty, { borderColor: colors.border + '55', opacity: pressed ? 0.7 : 1 }]}
+          style={({ pressed }) => [s.empty, { borderColor: SOFT_BORDER, opacity: pressed ? 0.7 : 1 }]}
           onPress={openNew}
         >
           <Ionicons name="bulb-outline" size={20} color={colors.textMuted} />
@@ -331,12 +343,12 @@ export function GeistesKacheln({ colors, isDark, areaWidth, columns, compact = f
       ) : (
         <View style={s.grid}>
           {tiles.map((k) => (
-            <KachelCard key={k.id} kachel={k} onPress={() => openEdit(k)} size={tileSize} />
+            <KachelCard key={k.id} kachel={k} onPress={() => openEdit(k)} size={tileSize} colors={colors} compact={compact} />
           ))}
           <Pressable
             style={({ pressed }) => [
               s.addCard,
-              { width: tileSize, height: tileSize, borderColor: colors.border + '55', opacity: pressed ? 0.6 : 1 },
+              { width: tileSize, height: tileSize, borderColor: SOFT_BORDER, opacity: pressed ? 0.6 : 1 },
             ]}
             onPress={openNew}
           >

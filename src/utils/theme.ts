@@ -37,6 +37,14 @@ export interface ThemeColors {
 // Grund ruhig statt grell zu wirken. Opak, damit der Wert auch dort sauber
 // rendert, wo `border` als Füllung dient (Divider, Switch-Tracks).
 const CALM_BORDER = '#2A578C'; // = #4A9EFF * ~0.55, kühles Blau, dezent
+
+// Redesign (Dashboard-Kompakt-Grid): echtes neutrales Grau statt eines auf
+// Alpha gedimmten CALM_BORDER – ein blaues Blau bleibt auch bei geringer
+// Deckkraft auf Schwarz sichtbar blau, kein neutrales Grau. Entspricht
+// --app-border aus dem Redesign-Artefakt. Bewusst nicht als globaler
+// colors.border-Ersatz gedacht (das würde app-weit den kühlen Blauton
+// kippen), sondern gezielt dort importiert, wo das Redesign es vorsieht.
+export const SOFT_BORDER = '#242429';
 const COLORS: ThemeColors = {
   background:    '#000000',   // reines Schwarz
   surface:       '#0A0A0A',
