@@ -369,8 +369,10 @@ const s = StyleSheet.create({
   addBtnText: { fontSize: 11, fontWeight: '600' },
 
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  card: { borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  addCard: { borderRadius: 10, borderWidth: 1.5, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center', gap: 3 },
+  // Redesign: Radius an die Countdown-/Artefakt-Mini-Kachel angeglichen
+  // (14 statt 10) – wirkten nebeneinander sonst unterschiedlich rund.
+  card: { borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  addCard: { borderRadius: 14, borderWidth: 1.5, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center', gap: 3 },
 
   empty: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1.5, borderStyle: 'dashed', borderRadius: 12, padding: 16 },
   emptyText: { fontSize: 13 },

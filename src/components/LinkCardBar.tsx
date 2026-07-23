@@ -9,10 +9,15 @@
  * lädt sie ohnehin schon für andere Zwecke), Links holt sich die Komponente
  * weiter selbst per Subscription. Klick auf eine Kachel öffnet die URL bzw.
  * die Drive-Datei extern.
+ *
+ * Redesign: Pill-Chips (Icon + Text inline, ~34px hoch) statt der alten
+ * vertikalen 68px-Karte (großer Icon-Ring oben, Label darunter) – exakt wie
+ * im Redesign-Artefakt, damit die Zeile auf derselben Höhe sitzt wie die
+ * Fokus-Kacheln (`leading`-Slot, ebenfalls ~34px).
  */
 
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, Image } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ScrollView, Image, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ThemeColors } from '../utils/theme';
 import { useFirebaseAuth } from '../hooks/useFirebaseAuth';
@@ -20,10 +25,10 @@ import { useFamily } from '../hooks/useFamily';
 import { LinkItem, subscribeToLinks, openLink } from '../services/links';
 import { DriveFile } from '../services/googleDrive';
 import { LinkAvatar } from './LinkAvatar';
-import { Linking } from 'react-native';
 
 const DRIVE_COLOR = '#0F9D58';
 const DRIVE_MAX = 6;
+const SWATCH = 16;
 
 export function LinkCardBar({
   colors,
@@ -64,6 +69,11 @@ export function LinkCardBar({
   // Nur sichtbar, wenn es überhaupt etwas zu zeigen gibt.
   if (active.length === 0 && drive.length === 0 && !hasLeading) return null;
 
+  const chipStyle = ({ pressed }: { pressed: boolean }) => [
+    s.chip,
+    { borderColor: colors.border + '55', backgroundColor: colors.surface, opacity: pressed ? 0.7 : 1 },
+  ];
+
   return (
     <View style={s.section}>
       <View style={s.headerRow}>
@@ -74,41 +84,31 @@ export function LinkCardBar({
         {hasLeading && (
           <>
             {leading}
-            {(active.length > 0 || drive.length > 0) && <View style={s.divider} />}
+            {(active.length > 0 || drive.length > 0) && <View style={[s.divider, { backgroundColor: colors.border + '55' }]} />}
           </>
         )}
         {active.map((l) => (
-          <Pressable
-            key={l.id}
-            style={({ pressed }) => [s.card, { opacity: pressed ? 0.7 : 1 }]}
-            onPress={() => openLink(l.url)}
-          >
-            <LinkAvatar link={l} size={44} />
-            <Text style={[s.label, { color: colors.textSecondary }]} numberOfLines={1}>{l.title}</Text>
+          <Pressable key={l.id} style={chipStyle} onPress={() => openLink(l.url)}>
+            <LinkAvatar link={l} size={SWATCH} />
+            <Text style={[s.chipLabel, { color: colors.textSecondary }]} numberOfLines={1}>{l.title}</Text>
           </Pressable>
         ))}
         {drive.map((f) => {
           const isFolder = f.mimeType === 'application/vnd.google-apps.folder';
           return (
-            <Pressable
-              key={f.id}
-              style={({ pressed }) => [s.card, { opacity: pressed ? 0.7 : 1 }]}
-              onPress={() => f.webViewLink && Linking.openURL(f.webViewLink)}
-            >
-              <View style={[s.driveAvatar, { backgroundColor: colors.surfaceHigh, borderColor: colors.border + '55' }]}>
-                {f.iconLink ? (
-                  <Image source={{ uri: f.iconLink }} style={{ width: 20, height: 20 }} resizeMode="contain" />
-                ) : (
-                  <Ionicons name={isFolder ? 'folder' : 'document-text-outline'} size={18} color={DRIVE_COLOR} />
-                )}
-              </View>
-              <Text style={[s.label, { color: colors.textSecondary }]} numberOfLines={1}>{f.name}</Text>
+            <Pressable key={f.id} style={chipStyle} onPress={() => f.webViewLink && Linking.openURL(f.webViewLink)}>
+              {f.iconLink ? (
+                <Image source={{ uri: f.iconLink }} style={s.swatchImg} resizeMode="contain" />
+              ) : (
+                <Ionicons name={isFolder ? 'folder' : 'document-text-outline'} size={SWATCH} color={DRIVE_COLOR} />
+              )}
+              <Text style={[s.chipLabel, { color: colors.textSecondary }]} numberOfLines={1}>{f.name}</Text>
             </Pressable>
           );
         })}
         {driveOverflow > 0 && (
-          <View style={s.overflowCard}>
-            <Text style={[s.overflowText, { color: colors.textMuted }]}>+{driveOverflow}</Text>
+          <View style={[s.chip, { borderColor: colors.border + '55', backgroundColor: colors.surface }]}>
+            <Text style={[s.chipLabel, { color: colors.textMuted }]}>+{driveOverflow}</Text>
           </View>
         )}
       </ScrollView>
@@ -120,11 +120,12 @@ const s = StyleSheet.create({
   section: { paddingHorizontal: 16, gap: 10 },
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   headerTitle: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 16, paddingVertical: 2, paddingRight: 8 },
-  divider: { width: 1, alignSelf: 'stretch', backgroundColor: '#FFFFFF1A', marginVertical: 4 },
-  card: { alignItems: 'center', gap: 5, width: 68 },
-  driveAvatar: { width: 44, height: 44, borderRadius: 14, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-  label: { fontSize: 11, fontWeight: '600', textAlign: 'center' },
-  overflowCard: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', alignSelf: 'flex-start' },
-  overflowText: { fontSize: 13, fontWeight: '700' },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 2, paddingRight: 8 },
+  divider: { width: 1, alignSelf: 'stretch', marginVertical: 2 },
+  chip: {
+    flexDirection: 'row', alignItems: 'center', gap: 7,
+    borderWidth: 1, borderRadius: 999, paddingHorizontal: 13, paddingVertical: 8,
+  },
+  swatchImg: { width: SWATCH, height: SWATCH, borderRadius: 5 },
+  chipLabel: { fontSize: 12.5, fontWeight: '600' },
 });

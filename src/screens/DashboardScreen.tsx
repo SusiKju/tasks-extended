@@ -1237,7 +1237,7 @@ export function DashboardScreen() {
           showLinks={showBlock('links')}
           driveFavorites={showBlock('driveFavorites') ? driveFavorites : []}
           hasLeading={(settings.funTileThemes ?? []).length > 0}
-          leading={<FussballKachel iconSize={16} />}
+          leading={<FussballKachel iconSize={16} iconStyle={styles.focusChipTile} />}
         />
       )}
 
@@ -1469,6 +1469,11 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
     // Redesign: 24→18 – engerer, gleichmäßigerer Rhythmus zwischen den
     // Abschnitten, näher am Artefakt.
     content: { paddingTop: 16, paddingBottom: 48, gap: 18 },
+
+    // Fokus-Kacheln im Schnellzugriff etwas größer als der FussballKachel-
+    // Standard (30px), damit sie auf gleicher Höhe wie die neuen Pill-Chips
+    // (~34px) sitzen.
+    focusChipTile: { width: 34, height: 34, borderRadius: 11 },
 
     syncRow: {
       flexDirection: 'row',
