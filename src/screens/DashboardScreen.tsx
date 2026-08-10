@@ -29,7 +29,7 @@ import { listStarredDriveFiles, DriveFile } from '../services/googleDrive';
 import {
   ChildTask, subscribeToChildTasks,
 } from '../services/kinderTasks';
-import { AllowanceMonth, subscribeToAllowanceMonths, nextAllowanceMonth, formatEuro, formatMonthLabel, effectiveAllowance, setAllowanceOverride } from '../services/allowance';
+import { AllowanceMonth, subscribeToAllowanceMonths, monthKey, formatEuro, formatMonthLabel, effectiveAllowance, setAllowanceOverride } from '../services/allowance';
 import { useFamily } from '../hooks/useFamily';
 import { SharedNotepad } from '../components/SharedNotepad';
 import { GeistesKacheln } from '../components/GeistesKacheln';
@@ -381,20 +381,20 @@ export function DashboardScreen() {
     return () => unsubs.forEach((u) => u());
   }, [fid, familyChildren]);
 
-  // Kinder mit konfiguriertem Taschengeld, das für den jeweils nächsten
-  // fälligen Monat noch nicht bestätigt wurde. TE-170: gleiche
-  // "nächster fälliger Monat"-Logik wie im Kids-Tab (nextAllowanceMonth) –
-  // vorher verglich das Dashboard stur den laufenden Kalendermonat, sodass
-  // ein bereits für diesen Monat bestätigtes Kind bis Monatsende komplett
-  // aus dem Dashboard verschwand, obwohl der Kids-Tab den nächsten Monat
-  // schon korrekt als offen zeigte.
+  // Kinder mit konfiguriertem Taschengeld, das für den laufenden Kalendermonat
+  // noch nicht bestätigt wurde. TE-19: "offen" heißt fällig JETZT, nicht
+  // vorgezogen für den Folgemonat – der Kids-Tab darf mit nextAllowanceMonth
+  // weiterhin vorausschauend den nächsten Monat anzeigen, aber das Dashboard
+  // soll ein Kind erst ab dem 1. des Monats als offen listen, nicht schon
+  // im Voraus, sobald der laufende Monat bestätigt wurde.
   const dueMonthByChild = useMemo(() => {
+    const current = monthKey();
     const map: Record<string, string> = {};
     for (const c of familyChildren) {
-      map[c.id] = nextAllowanceMonth(allowanceByChild[c.id] ?? {});
+      map[c.id] = current;
     }
     return map;
-  }, [familyChildren, allowanceByChild]);
+  }, [familyChildren]);
   const openAllowanceChildren = useMemo(
     () => familyChildren.filter(
       (c) => (c.allowance ?? 0) > 0 && !allowanceByChild[c.id]?.[dueMonthByChild[c.id]]?.received
