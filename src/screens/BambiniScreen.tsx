@@ -95,6 +95,7 @@ export function BambiniScreen() {
   const [stoppedInput, setStoppedInput] = useState(false);
   const [parentInput, setParentInput] = useState('');
   const [lastNameInput, setLastNameInput] = useState('');
+  const [infoInput, setInfoInput] = useState('');
   const [showDatePicker, setShowDatePicker] = useState(false);
 
   const reload = useCallback(async () => {
@@ -139,13 +140,14 @@ export function BambiniScreen() {
   );
 
   const openNew = () => {
-    setEditing({ id: '', name: '', birthYear: 0, registeredSince: '', stopped: false, parentName: '', lastName: '' });
+    setEditing({ id: '', name: '', birthYear: 0, registeredSince: '', stopped: false, parentName: '', lastName: '', info: '' });
     setNameInput('');
     setYearInput('');
     setSinceInput('');
     setStoppedInput(false);
     setParentInput('');
     setLastNameInput('');
+    setInfoInput('');
   };
 
   const openEdit = (c: Child) => {
@@ -156,6 +158,7 @@ export function BambiniScreen() {
     setStoppedInput(c.stopped);
     setParentInput(c.parentName);
     setLastNameInput(c.lastName);
+    setInfoInput(c.info);
   };
 
   const closeModal = () => setEditing(null);
@@ -175,6 +178,7 @@ export function BambiniScreen() {
       stopped: stoppedInput,
       parentName: parentInput.trim(),
       lastName: lastNameInput.trim(),
+      info: infoInput.trim(),
     };
 
     if (editing && editing.id) {
@@ -315,6 +319,9 @@ export function BambiniScreen() {
                         <Text style={s.rowSub}>seit {formatDE(c.registeredSince)}</Text>
                       ) : null}
                     </View>
+                    {c.info ? (
+                      <Ionicons name="information-circle-outline" size={18} color={colors.textSecondary} accessibilityLabel="Info vorhanden" />
+                    ) : null}
                     {c.stopped ? <Text style={s.badgeStopped}>aufgehört</Text> : null}
                     <Text style={s.rowYear}>{c.birthYear || '—'}</Text>
                     <Pressable onPress={() => removeEntry(c)} hitSlop={8} style={s.rowDel} accessibilityLabel="Löschen">
@@ -393,6 +400,14 @@ export function BambiniScreen() {
               onChangeText={setLastNameInput}
               placeholder="Nachname"
               placeholderTextColor={colors.placeholder}
+            />
+            <TextInput
+              style={[s.input, s.inputMultiline]}
+              value={infoInput}
+              onChangeText={setInfoInput}
+              placeholder="Info (z. B. Allergie, Hinweis)"
+              placeholderTextColor={colors.placeholder}
+              multiline
             />
 
             <View style={s.cardActions}>
@@ -539,6 +554,7 @@ function makeStyles(c: ThemeColors) {
       color: c.text,
       fontSize: 15,
     },
+    inputMultiline: { minHeight: 60, textAlignVertical: 'top' },
     dateField: {
       flexDirection: 'row',
       alignItems: 'center',

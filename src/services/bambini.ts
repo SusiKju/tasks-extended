@@ -36,6 +36,8 @@ export interface Child {
   parentName: string;
   /** Nachname – optional ('') (TE-26). */
   lastName: string;
+  /** Freitext für zusätzliche Infos – optional ('') (TE-21). Befüllt → Icon in der Liste. */
+  info: string;
 }
 
 /** Quickfilter-Auswahl im Bambini-Tab (TE-20), pro User persistiert. */
@@ -63,6 +65,7 @@ function sanitizeChild(c: any): Child | null {
     stopped: !!c?.stopped,
     parentName: String(c?.parentName ?? ''),
     lastName: String(c?.lastName ?? ''),
+    info: String(c?.info ?? ''),
   };
 }
 
@@ -161,6 +164,7 @@ export async function migrateRosterToBambini(uid: string): Promise<void> {
         stopped: false,
         parentName: '',
         lastName: '',
+        info: '',
       });
     });
   });
