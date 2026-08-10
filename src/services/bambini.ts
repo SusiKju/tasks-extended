@@ -38,6 +38,14 @@ export interface Child {
   lastName: string;
 }
 
+/** Quickfilter-Auswahl im Bambini-Tab (TE-20), pro User persistiert. */
+export interface BambiniFilters {
+  /** Ausgewählte Jahrgänge (Mehrfachauswahl), leer = alle. */
+  years: number[];
+  /** null = alle, true = nur aufgehört, false = nur aktiv. */
+  stopped: boolean | null;
+}
+
 const makeId = (): string => String(uuid.v4());
 
 const bambiniDoc = (uid: string) => doc(db, 'bambiniByUser', uid);
@@ -82,6 +90,22 @@ export async function saveBambini(uid: string, children: Child[]): Promise<void>
     { children: clean, updatedAt: new Date().toISOString() },
     { merge: true },
   );
+}
+
+/** Quickfilter-Auswahl (TE-20) laden – liegt im selben Dokument wie die Kinder. */
+export async function loadBambiniFilters(uid: string): Promise<BambiniFilters> {
+  const snap = await getDoc(bambiniDoc(uid));
+  const raw = snap.exists() ? (snap.data() as any)?.filters : undefined;
+  const years = Array.isArray(raw?.years)
+    ? raw.years.filter((y: any) => Number.isFinite(y)).map((y: number) => Math.trunc(y))
+    : [];
+  const stopped = raw?.stopped === true ? true : raw?.stopped === false ? false : null;
+  return { years, stopped };
+}
+
+/** Quickfilter-Auswahl (TE-20) speichern. */
+export async function saveBambiniFilters(uid: string, filters: BambiniFilters): Promise<void> {
+  await setDoc(bambiniDoc(uid), { filters }, { merge: true });
 }
 
 /** Kinder eines Jahrgangs filtern (exakt bzw. ab Jahr). */

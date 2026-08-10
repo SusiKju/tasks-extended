@@ -7,7 +7,7 @@
  * Roster-Namen automatisch hierher migriert.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -32,6 +32,8 @@ import {
   loadBambini,
   saveBambini,
   migrateRosterToBambini,
+  loadBambiniFilters,
+  saveBambiniFilters,
 } from '../services/bambini';
 import { getJahrgangStatus, getBetreuungsZeitraum } from '../utils/bambiniSeason';
 
@@ -76,9 +78,14 @@ export function BambiniScreen() {
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
   // TE-99: Quickfilter unter der Suchleiste (Jahrgang, aufgehört/aktiv).
+  // TE-20: Jahrgang ist Mehrfachauswahl (mehrere Jahre gleichzeitig), pro User
+  // in Firestore gespeichert (siehe bambiniByUser/{uid}.filters).
   // stoppedFilter: null = alle, true = nur aufgehört, false = nur aktiv (nicht aufgehört).
-  const [yearFilter, setYearFilter] = useState<number | null>(null);
+  const [yearFilter, setYearFilter] = useState<number[]>([]);
   const [stoppedFilter, setStoppedFilter] = useState<boolean | null>(null);
+  // Erst nach dem initialen Laden aus Firestore speichern wir Änderungen zurück,
+  // sonst würde der leere Default-State die gespeicherte Auswahl überschreiben.
+  const filtersLoaded = useRef(false);
 
   // Modal-State: editing === null → zu; mit Child → bearbeiten; mit '' id → neu.
   const [editing, setEditing] = useState<Child | null>(null);
@@ -99,10 +106,14 @@ export function BambiniScreen() {
     setLoading(true);
     try {
       await migrateRosterToBambini(uid);
-      setChildren(await loadBambini(uid));
+      const [list, filters] = await Promise.all([loadBambini(uid), loadBambiniFilters(uid)]);
+      setChildren(list);
+      setYearFilter(filters.years);
+      setStoppedFilter(filters.stopped);
     } catch (e) {
       console.warn('Bambini laden fehlgeschlagen', e);
     } finally {
+      filtersLoaded.current = true;
       setLoading(false);
     }
   }, [uid]);
@@ -110,6 +121,14 @@ export function BambiniScreen() {
   useEffect(() => {
     reload();
   }, [reload]);
+
+  // TE-20: Filterwechsel in Firestore spiegeln (erst nach dem initialen Laden).
+  useEffect(() => {
+    if (!filtersLoaded.current || !uid) return;
+    saveBambiniFilters(uid, { years: yearFilter, stopped: stoppedFilter }).catch((e) =>
+      console.warn('Bambini-Filter speichern fehlgeschlagen', e),
+    );
+  }, [uid, yearFilter, stoppedFilter]);
 
   const persist = useCallback(
     (next: Child[]) => {
@@ -182,7 +201,7 @@ export function BambiniScreen() {
         String(c.birthYear).includes(q);
       if (!matchesQuery) return false;
     }
-    if (yearFilter !== null && c.birthYear !== yearFilter) return false;
+    if (yearFilter.length > 0 && !yearFilter.includes(c.birthYear)) return false;
     if (stoppedFilter !== null && c.stopped !== stoppedFilter) return false;
     return true;
   });
@@ -250,10 +269,12 @@ export function BambiniScreen() {
               {yearCounts.map(({ year }) => (
                 <Pressable
                   key={year}
-                  style={[s.filterChip, yearFilter === year && s.filterChipActive]}
-                  onPress={() => setYearFilter((v) => (v === year ? null : year))}
+                  style={[s.filterChip, yearFilter.includes(year) && s.filterChipActive]}
+                  onPress={() =>
+                    setYearFilter((v) => (v.includes(year) ? v.filter((y) => y !== year) : [...v, year]))
+                  }
                 >
-                  <Text style={[s.filterChipText, yearFilter === year && s.filterChipTextActive]}>
+                  <Text style={[s.filterChipText, yearFilter.includes(year) && s.filterChipTextActive]}>
                     {year || 'Ohne Jahrgang'}
                   </Text>
                 </Pressable>
@@ -261,7 +282,7 @@ export function BambiniScreen() {
             </ScrollView>
           ) : null}
 
-          {yearFilter !== null || stoppedFilter !== null ? (
+          {yearFilter.length > 0 || stoppedFilter !== null ? (
             <Text style={s.resultCount}>{filtered.length} Treffer</Text>
           ) : null}
 
