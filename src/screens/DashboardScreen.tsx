@@ -4,6 +4,7 @@ import {
   Text,
   ScrollView,
   Pressable,
+  TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
   TextInput,
@@ -31,7 +32,7 @@ import {
   ChildTask, subscribeToChildTasks,
 } from '../services/kinderTasks';
 import { AllowanceMonth, subscribeToAllowanceMonths, monthKey, formatEuro, formatMonthLabel, effectiveAllowance, setAllowanceOverride } from '../services/allowance';
-import { Match, subscribeToMatches, replaceMatches, fetchFussballDeMatches } from '../services/fussballDe';
+import { Match, Standing, subscribeToMatches, subscribeToTable } from '../services/fussballDe';
 import { useFamily } from '../hooks/useFamily';
 import { SharedNotepad } from '../components/SharedNotepad';
 import { GeistesKacheln } from '../components/GeistesKacheln';
@@ -382,9 +383,11 @@ export function DashboardScreen() {
     return () => unsubs.forEach((u) => u());
   }, [fid, familyChildren]);
 
-  // fussball.de-Spielplan pro Kind (Vereinsspiele, öffentlich, kein Login):
-  // Echtzeit-Listener wie bei den anderen Kind-Feldern, plus ein Sync beim
-  // Dashboard-Öffnen für alle Kinder mit hinterlegter Team-ID.
+  // fussball.de-Spielplan + Tabelle pro Kind (Vereinsspiele, öffentlich, kein
+  // Login). Die Daten selbst kommen NICHT per Live-fetch aus der App (fussball.de
+  // schickt kein CORS-Freigabe-Header, im Browser also blockiert) – ein
+  // GitHub-Actions-Cron (scripts/sync-fussball-de.mjs) holt sie serverseitig
+  // und schreibt sie nach Firestore. Hier wird nur mitgelesen.
   const [matchesByChild, setMatchesByChild] = useState<Record<string, Match[]>>({});
   useEffect(() => {
     if (!fid || familyChildren.length === 0) return;
@@ -395,24 +398,31 @@ export function DashboardScreen() {
     );
     return () => unsubs.forEach((u) => u());
   }, [fid, familyChildren]);
+
+  const [tableByChild, setTableByChild] = useState<Record<string, Standing[]>>({});
   useEffect(() => {
-    if (!fid) return;
-    for (const child of familyChildren) {
-      const teamId = settings.fussballDeTeamIds?.[child.id];
-      if (!teamId) continue;
-      fetchFussballDeMatches(teamId)
-        .then((matches) => replaceMatches(fid, child.id, matches))
-        .catch(() => {}); // still shows the last synced state via subscribeToMatches
-    }
-  }, [fid, familyChildren, settings.fussballDeTeamIds]);
+    if (!fid || familyChildren.length === 0) return;
+    const unsubs = familyChildren.map((child) =>
+      subscribeToTable(fid, child.id, (standings) =>
+        setTableByChild((prev) => ({ ...prev, [child.id]: standings }))
+      )
+    );
+    return () => unsubs.forEach((u) => u());
+  }, [fid, familyChildren]);
 
   const upcomingMatches = useMemo(() => {
     return familyChildren
       .flatMap((child) => (matchesByChild[child.id] ?? []).map((m) => ({ ...m, childId: child.id })))
       .filter((m) => m.date >= TODAY)
       .sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time))
-      .slice(0, 5);
+      .slice(0, 10);
   }, [familyChildren, matchesByChild]);
+
+  const fussballChildren = useMemo(
+    () => familyChildren.filter((c) => (tableByChild[c.id]?.length ?? 0) > 0),
+    [familyChildren, tableByChild]
+  );
+  const [fussballView, setFussballView] = useState<'termine' | 'tabelle'>('termine');
 
   // Kinder mit konfiguriertem Taschengeld, das für den laufenden Kalendermonat
   // noch nicht bestätigt wurde. TE-19: "offen" heißt fällig JETZT, nicht
@@ -1438,35 +1448,86 @@ export function DashboardScreen() {
         </View>
       )}
 
-      {showBlock('fussballTermine') && upcomingMatches.length > 0 && (
+      {showBlock('fussballTermine') && (upcomingMatches.length > 0 || fussballChildren.length > 0) && (
         <View style={styles.section}>
-          <SectionLabel title="Nächste Spiele" icon="football-outline" colors={colors} />
-          <View style={styles.card}>
-            {upcomingMatches.map((m, i) => (
-              <Pressable
-                key={m.link ?? `${m.childId}-${m.date}-${m.time}`}
-                onPress={() => m.link && Linking.openURL(m.link)}
-                style={[styles.kidRow, i < upcomingMatches.length - 1 && styles.rowDivider]}
-              >
-                <View style={[styles.kidAvatar, { backgroundColor: childColor(m.childId) }]}>
-                  <Text style={styles.kidAvatarText}>
-                    {childEmoji(m.childId) ?? childName(m.childId).charAt(0)}
-                  </Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.kidTaskText, { color: colors.text }]} numberOfLines={1}>
-                    {m.isHome ? `vs. ${m.away}` : `bei ${m.home}`}
-                  </Text>
-                  <Text style={{ fontSize: 11, color: colors.textMuted }} numberOfLines={1}>
-                    {m.competition}
-                  </Text>
-                </View>
-                <Text style={[styles.dueBadge, styles.dueBadgeOverdue]}>
-                  {format(new Date(m.date), 'dd.MM.')} · {m.time}
-                </Text>
-              </Pressable>
-            ))}
+          <SectionLabel title="Fußball" icon="football-outline" colors={colors} />
+          <View style={styles.viewToggle}>
+            <TouchableOpacity
+              style={[styles.viewToggleBtn, fussballView === 'termine' && styles.viewToggleBtnActive]}
+              onPress={() => setFussballView('termine')}
+            >
+              <Text style={[styles.viewToggleText, fussballView === 'termine' && styles.viewToggleTextActive]}>
+                Termine
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.viewToggleBtn, fussballView === 'tabelle' && styles.viewToggleBtnActive]}
+              onPress={() => setFussballView('tabelle')}
+            >
+              <Text style={[styles.viewToggleText, fussballView === 'tabelle' && styles.viewToggleTextActive]}>
+                Tabelle
+              </Text>
+            </TouchableOpacity>
           </View>
+
+          {fussballView === 'termine' ? (
+            <View style={styles.card}>
+              {upcomingMatches.length === 0 ? (
+                <Text style={{ padding: 12, fontSize: 13, color: colors.textMuted, fontStyle: 'italic' }}>
+                  Keine kommenden Spiele synchronisiert.
+                </Text>
+              ) : (
+                upcomingMatches.map((m, i) => (
+                  <Pressable
+                    key={m.link ?? `${m.childId}-${m.date}-${m.time}`}
+                    onPress={() => m.link && Linking.openURL(m.link)}
+                    style={[styles.kidRow, i < upcomingMatches.length - 1 && styles.rowDivider]}
+                  >
+                    <View style={[styles.kidAvatar, { backgroundColor: childColor(m.childId) }]}>
+                      <Text style={styles.kidAvatarText}>
+                        {childEmoji(m.childId) ?? childName(m.childId).charAt(0)}
+                      </Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.kidTaskText, { color: colors.text }]} numberOfLines={1}>
+                        {m.isHome ? `vs. ${m.away}` : `bei ${m.home}`}
+                      </Text>
+                      <Text style={{ fontSize: 11, color: colors.textMuted }} numberOfLines={1}>
+                        {m.competition}
+                      </Text>
+                    </View>
+                    <Text style={[styles.dueBadge, styles.dueBadgeOverdue]}>
+                      {format(new Date(m.date), 'dd.MM.')} · {m.time}
+                    </Text>
+                  </Pressable>
+                ))
+              )}
+            </View>
+          ) : (
+            fussballChildren.map((child) => (
+              <View key={child.id} style={[styles.card, { marginBottom: 8 }]}>
+                {fussballChildren.length > 1 && (
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textSecondary, padding: 10, paddingBottom: 0 }}>
+                    {childEmoji(child.id) ?? ''} {childName(child.id)}
+                  </Text>
+                )}
+                {(tableByChild[child.id] ?? []).map((s, i, arr) => (
+                  <View
+                    key={s.club}
+                    style={[styles.standingRow, i < arr.length - 1 && styles.rowDivider, s.isOwn && styles.standingRowOwn]}
+                  >
+                    <Text style={[styles.standingRank, { color: colors.textSecondary }]}>{s.rank}.</Text>
+                    <Text style={[styles.standingClub, { color: colors.text }, s.isOwn && { fontWeight: '800' }]} numberOfLines={1}>
+                      {s.club}
+                    </Text>
+                    <Text style={[styles.standingStats, { color: colors.textMuted }]}>{s.played} Sp.</Text>
+                    <Text style={[styles.standingStats, { color: colors.textMuted }]}>{s.goalsFor}:{s.goalsAgainst}</Text>
+                    <Text style={[styles.standingPoints, { color: colors.text }]}>{s.points}</Text>
+                  </View>
+                ))}
+              </View>
+            ))
+          )}
         </View>
       )}
 
@@ -1727,6 +1788,24 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
       paddingVertical: 10,
     },
     kidTaskText: { flex: 1, fontSize: 13, fontWeight: '500' },
+    // Fußball-Block: Termine/Tabelle-Umschalter (wie SchuleScreen Stundenplan/Noten)
+    viewToggle: {
+      flexDirection: 'row', gap: 6, marginBottom: 8,
+      backgroundColor: c.surfaceHigh, borderRadius: 10, padding: 3,
+    },
+    viewToggleBtn: { flex: 1, paddingVertical: 6, borderRadius: 8, alignItems: 'center' },
+    viewToggleBtnActive: { backgroundColor: c.accentNeon },
+    viewToggleText: { fontSize: 13, fontWeight: '700', color: c.textSecondary },
+    viewToggleTextActive: { color: c.accentFg },
+    standingRow: {
+      flexDirection: 'row', alignItems: 'center', gap: 8,
+      paddingHorizontal: 14, paddingVertical: 8,
+    },
+    standingRowOwn: { backgroundColor: c.surfaceHigh },
+    standingRank: { width: 20, fontSize: 12, fontWeight: '700' },
+    standingClub: { flex: 1, fontSize: 13 },
+    standingStats: { fontSize: 11, width: 44, textAlign: 'right' },
+    standingPoints: { fontSize: 13, fontWeight: '800', width: 24, textAlign: 'right' },
     // Taschengeld-Korrektur-Modal (TE-154)
     allowanceEditOverlay: {
       flex: 1, backgroundColor: 'rgba(0,0,0,0.55)',

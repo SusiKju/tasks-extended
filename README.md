@@ -55,6 +55,23 @@ Push nach `main` löst automatisch `.github/workflows/deploy.yml` aus: Web-Expor
 - `check-membership.mjs` — prüft Familien-/Gruppenmitgliedschaften in Firestore
 - `migrate-notes-to-firestore.mjs` — einmalige Migration alter Notizen nach Firestore
 - `migrate-to-family.mjs` — einmalige Migration auf das Familien-Datenmodell
+- `sync-fussball-de.mjs` — holt Spielplan + Tabelle von fussball.de für Kinder mit
+  hinterlegter Team-ID (Einstellungen → fussball.de) und schreibt sie nach Firestore.
+  Läuft alle paar Stunden automatisch über `.github/workflows/sync-fussball-de.yml`
+  (braucht das Repo-Secret `FIREBASE_SERVICE_ACCOUNT`, siehe unten).
 
 Diese Skripte benötigen `serviceAccount.json` (nicht versioniert, siehe `.gitignore`)
 und werden mit Node direkt ausgeführt, z. B. `node scripts/check-membership.mjs`.
+
+## fussball.de-Sync (Cron statt Live-Fetch)
+
+fussball.de schickt auf seinen Ajax-Endpunkten kein CORS-Freigabe-Header — ein
+direkter `fetch()` aus dem Browser (Web/PWA) ist dadurch blockiert, auch wenn der
+Endpunkt selbst öffentlich ist. Statt eines eigenen Proxy-Backends (hätte den
+kostenpflichtigen Firebase-Blaze-Tarif gebraucht) holt `scripts/sync-fussball-de.mjs`
+die Daten serverseitig per GitHub-Actions-Cron und schreibt sie direkt nach Firestore.
+Die App liest nur noch mit (`src/services/fussballDe.ts`).
+
+Damit der Cron läuft, einmalig als Repo-Secret hinterlegen:
+**GitHub → Repo → Settings → Secrets and variables → Actions → New repository secret**,
+Name `FIREBASE_SERVICE_ACCOUNT`, Wert = kompletter Inhalt von `serviceAccount.json`.
