@@ -11,6 +11,7 @@ import {
   Platform,
   Modal,
   Alert,
+  Linking,
   useWindowDimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -30,6 +31,7 @@ import {
   ChildTask, subscribeToChildTasks,
 } from '../services/kinderTasks';
 import { AllowanceMonth, subscribeToAllowanceMonths, monthKey, formatEuro, formatMonthLabel, effectiveAllowance, setAllowanceOverride } from '../services/allowance';
+import { Match, subscribeToMatches, replaceMatches, fetchFussballDeMatches } from '../services/fussballDe';
 import { useFamily } from '../hooks/useFamily';
 import { SharedNotepad } from '../components/SharedNotepad';
 import { GeistesKacheln } from '../components/GeistesKacheln';
@@ -379,6 +381,38 @@ export function DashboardScreen() {
     );
     return () => unsubs.forEach((u) => u());
   }, [fid, familyChildren]);
+
+  // fussball.de-Spielplan pro Kind (Vereinsspiele, öffentlich, kein Login):
+  // Echtzeit-Listener wie bei den anderen Kind-Feldern, plus ein Sync beim
+  // Dashboard-Öffnen für alle Kinder mit hinterlegter Team-ID.
+  const [matchesByChild, setMatchesByChild] = useState<Record<string, Match[]>>({});
+  useEffect(() => {
+    if (!fid || familyChildren.length === 0) return;
+    const unsubs = familyChildren.map((child) =>
+      subscribeToMatches(fid, child.id, (matches) =>
+        setMatchesByChild((prev) => ({ ...prev, [child.id]: matches }))
+      )
+    );
+    return () => unsubs.forEach((u) => u());
+  }, [fid, familyChildren]);
+  useEffect(() => {
+    if (!fid) return;
+    for (const child of familyChildren) {
+      const teamId = settings.fussballDeTeamIds?.[child.id];
+      if (!teamId) continue;
+      fetchFussballDeMatches(teamId)
+        .then((matches) => replaceMatches(fid, child.id, matches))
+        .catch(() => {}); // still shows the last synced state via subscribeToMatches
+    }
+  }, [fid, familyChildren, settings.fussballDeTeamIds]);
+
+  const upcomingMatches = useMemo(() => {
+    return familyChildren
+      .flatMap((child) => (matchesByChild[child.id] ?? []).map((m) => ({ ...m, childId: child.id })))
+      .filter((m) => m.date >= TODAY)
+      .sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time))
+      .slice(0, 5);
+  }, [familyChildren, matchesByChild]);
 
   // Kinder mit konfiguriertem Taschengeld, das für den laufenden Kalendermonat
   // noch nicht bestätigt wurde. TE-19: "offen" heißt fällig JETZT, nicht
@@ -1400,6 +1434,38 @@ export function DashboardScreen() {
                 </Pressable>
               );
             })}
+          </View>
+        </View>
+      )}
+
+      {showBlock('fussballTermine') && upcomingMatches.length > 0 && (
+        <View style={styles.section}>
+          <SectionLabel title="Nächste Spiele" icon="football-outline" colors={colors} />
+          <View style={styles.card}>
+            {upcomingMatches.map((m, i) => (
+              <Pressable
+                key={m.link ?? `${m.childId}-${m.date}-${m.time}`}
+                onPress={() => m.link && Linking.openURL(m.link)}
+                style={[styles.kidRow, i < upcomingMatches.length - 1 && styles.rowDivider]}
+              >
+                <View style={[styles.kidAvatar, { backgroundColor: childColor(m.childId) }]}>
+                  <Text style={styles.kidAvatarText}>
+                    {childEmoji(m.childId) ?? childName(m.childId).charAt(0)}
+                  </Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.kidTaskText, { color: colors.text }]} numberOfLines={1}>
+                    {m.isHome ? `vs. ${m.away}` : `bei ${m.home}`}
+                  </Text>
+                  <Text style={{ fontSize: 11, color: colors.textMuted }} numberOfLines={1}>
+                    {m.competition}
+                  </Text>
+                </View>
+                <Text style={[styles.dueBadge, styles.dueBadgeOverdue]}>
+                  {format(new Date(m.date), 'dd.MM.')} · {m.time}
+                </Text>
+              </Pressable>
+            ))}
           </View>
         </View>
       )}

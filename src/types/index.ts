@@ -102,6 +102,12 @@ export interface AppSettings {
    * gepflegt.
    */
   besteSchuleStudentIds: Partial<Record<string, string>>;
+  /**
+   * fussball.de-Anbindung: Team-ID der Vereinsmannschaft pro Kind (aus der
+   * öffentlichen Mannschafts-URL, kein Login nötig). Ein Kind mit gesetzter
+   * ID synct automatisch den Spielplan, alle anderen bleiben ohne Anzeige.
+   */
+  fussballDeTeamIds: Partial<Record<string, string>>;
 }
 
 /**
@@ -124,7 +130,8 @@ export type DashboardBlockKey =
   | 'sharedList'
   | 'kidsTasks'
   | 'allowance'
-  | 'mail';
+  | 'mail'
+  | 'fussballTermine';
 
 export const DASHBOARD_BLOCKS: { key: DashboardBlockKey; label: string; description: string }[] = [
   { key: 'birthdays',     label: 'Geburtstage',         description: 'Heutige Geburtstage ganz oben.' },
@@ -142,6 +149,7 @@ export const DASHBOARD_BLOCKS: { key: DashboardBlockKey; label: string; descript
   { key: 'kidsTasks',     label: 'Aufgaben der Kinder', description: 'Heutige Aufgaben aller Kinder.' },
   { key: 'allowance',     label: 'Taschengeld',         description: 'Kinder, deren Taschengeld für den laufenden Monat noch offen ist.' },
   { key: 'mail',          label: 'Posteingang',         description: 'Angepinnte und ungelesene Mails.' },
+  { key: 'fussballTermine', label: 'Fußballtermine',    description: 'Nächste Vereinsspiele der an fussball.de gekoppelten Kinder.' },
 ];
 
 /** TE-77: Default-Sichtbarkeit – alle Dashboard-Blöcke aktiv, außer 'feed' (neu, Opt-in). */

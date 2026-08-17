@@ -114,6 +114,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   dashboardBlocks: { ...DEFAULT_DASHBOARD_BLOCKS },
   besteSchuleToken: null,
   besteSchuleStudentIds: {},
+  fussballDeTeamIds: {},
 };
 
 export const useStore = create<TaskState>()(

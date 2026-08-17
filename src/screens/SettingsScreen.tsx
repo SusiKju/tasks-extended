@@ -36,6 +36,7 @@ import {
   setChildAllowance, setAllowanceOverride, subscribeToAllowanceMonths,
   monthKey, formatMonthLabel, AllowanceMonth,
 } from '../services/allowance';
+import { parseTeamIdFromUrl } from '../services/fussballDe';
 
 /** Eingabe-Toleranz: "5,50" → 5.5, leer → null, ungültig/negativ → null. */
 function parseAllowance(text: string): number | null {
@@ -755,6 +756,46 @@ export function SettingsScreen() {
                         })
                       }
                       placeholder="leer = manuell pflegen (kein Sync)"
+                      placeholderTextColor={colors.placeholder}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                    />
+                  </View>
+                ))
+              )}
+            </View>
+          </View>
+
+          {/* fussball.de-Anbindung: Vereinsspielplan pro Kind (öffentlich, kein Login nötig) */}
+          <View style={[styles.row, { gap: 8 }]}>
+            <Ionicons name="football-outline" size={20} color={colors.accentNeon} />
+            <View style={[styles.rowContent, { flex: 1 }]}>
+              <Text style={styles.rowTitle}>fussball.de</Text>
+              <Text style={styles.rowSubtitle}>
+                Mannschafts-URL von fussball.de einfügen, um den Spielplan zu synchronisieren. Öffentliche Daten, kein Login nötig.
+              </Text>
+
+              {familyChildren.length === 0 ? (
+                <Text style={[styles.rowSubtitle, { fontStyle: 'italic', marginTop: 10 }]}>
+                  Noch keine Kinder angelegt.
+                </Text>
+              ) : (
+                familyChildren.map((child) => (
+                  <View key={child.id} style={{ marginTop: 10 }}>
+                    <Text style={[styles.rowSubtitle, { marginBottom: 4 }]}>
+                      {child.emoji ? `${child.emoji} ` : ''}{child.name} · Mannschafts-URL
+                    </Text>
+                    <TextInput
+                      style={styles.settingInput}
+                      value={settings.fussballDeTeamIds?.[child.id] ?? ''}
+                      onChangeText={(v) => {
+                        const trimmed = v.trim();
+                        const teamId = trimmed === '' ? '' : (parseTeamIdFromUrl(trimmed) ?? trimmed);
+                        updateSettings({
+                          fussballDeTeamIds: { ...settings.fussballDeTeamIds, [child.id]: teamId },
+                        });
+                      }}
+                      placeholder="leer = kein Sync"
                       placeholderTextColor={colors.placeholder}
                       autoCapitalize="none"
                       autoCorrect={false}
