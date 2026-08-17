@@ -23,6 +23,10 @@ import {
   formatEuro, formatMonthLabel, effectiveAllowance,
 } from '../services/allowance';
 import { registerPushToken } from '../services/pushNotifications';
+import {
+  PERIODS, TimetableMap, subjectColor, key as timetableKey,
+  todayDayIndex, subscribeToTimetable,
+} from '../services/timetable';
 
 const FAMILY_ID_KEY = 'kinder_family_id';
 import { Platform } from 'react-native';
@@ -66,6 +70,7 @@ export default function KindScreen({ onExitChildMode }: Props) {
   const [familyChildren, setFamilyChildren] = useState<ChildConfig[]>([]);
   const [tasks, setTasks] = useState<ChildTask[]>([]);
   const [allowanceMonths, setAllowanceMonths] = useState<Record<string, AllowanceMonth>>({});
+  const [timetable, setTimetable] = useState<TimetableMap>({});
   const [historyVisible, setHistoryVisible] = useState(false);
   const [loading, setLoading] = useState(true);
   const [pinModalVisible, setPinModalVisible] = useState(false);
@@ -117,7 +122,8 @@ export default function KindScreen({ onExitChildMode }: Props) {
       setTimeout(() => setToast(false), 5000);
     });
     const unsubAllowance = subscribeToAllowanceMonths(familyId, childId, setAllowanceMonths);
-    return () => { unsubTasks(); unsubPush(); unsubAllowance(); };
+    const unsubTimetable = subscribeToTimetable(familyId, childId, setTimetable);
+    return () => { unsubTasks(); unsubPush(); unsubAllowance(); unsubTimetable(); };
   }, [childId, familyId]);
 
   // Schatzkiste-Animation auslösen, sobald eine Aufgabe NEU abgehakt wurde (TE-100)
@@ -221,6 +227,14 @@ export default function KindScreen({ onExitChildMode }: Props) {
   // Schatzkiste-Belohnung (TE-100)
   const chestStage = rewardStage(done, total);
 
+  // Heutiger Stundenplan
+  const todayIdx = todayDayIndex();
+  const todayLessons = todayIdx >= 0
+    ? PERIODS.filter((p) => !p.pause)
+        .map((p) => ({ p, entry: timetable[timetableKey(todayIdx, p.nr)] }))
+        .filter((x) => !!x.entry)
+    : [];
+
   // Taschengeld (TE-53/TE-54)
   const selectedChild = familyChildren.find((c) => c.id === childId);
   const thisMonthKey = monthKey();
@@ -253,6 +267,31 @@ export default function KindScreen({ onExitChildMode }: Props) {
           <Ionicons name="lock-closed-outline" size={14} color={colors.textMuted} />
         </TouchableOpacity>
       </View>
+
+      {/* Heute in der Schule – immer sichtbar, direkt unter dem Header */}
+      {todayIdx >= 0 && (
+        <View style={s.schoolCard}>
+          <Text style={s.schoolEmoji}>🏫</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={s.schoolLabel}>Heute in der Schule</Text>
+            {todayLessons.length === 0 ? (
+              <Text style={s.schoolHint}>Noch nichts eingetragen.</Text>
+            ) : (
+              <View style={s.schoolChipsRow}>
+                {todayLessons.map(({ p, entry }) => (
+                  <View
+                    key={String(p.nr)}
+                    style={[s.schoolChip, { borderColor: subjectColor(entry!.fach) }]}
+                  >
+                    <View style={[s.schoolDot, { backgroundColor: subjectColor(entry!.fach) }]} />
+                    <Text style={s.schoolChipText}>{entry!.fach}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
+        </View>
+      )}
 
       <ScrollView contentContainerStyle={s.list}>
         {tasks.length === 0 && (
@@ -466,6 +505,24 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
     progressTrack: { width: '100%', height: 12, borderRadius: 6, backgroundColor: colors.surfaceHigh, marginTop: 14, overflow: 'hidden' },
     progressFill: { height: '100%', borderRadius: 6, backgroundColor: colors.success },
     pinBtn: { position: 'absolute', top: 60, right: 20, padding: 8, opacity: 0.4 },
+    // Heute in der Schule
+    schoolCard: {
+      flexDirection: 'row', alignItems: 'flex-start', gap: 12,
+      marginHorizontal: 16, marginTop: 14, padding: 14,
+      backgroundColor: colors.surface, borderRadius: 18,
+      borderWidth: 1, borderColor: colors.border,
+    },
+    schoolEmoji: { fontSize: 26 },
+    schoolLabel: { fontSize: 13, fontWeight: '700', color: colors.textSecondary },
+    schoolHint: { fontSize: 13, color: colors.textMuted, marginTop: 4, fontStyle: 'italic' },
+    schoolChipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
+    schoolChip: {
+      flexDirection: 'row', alignItems: 'center', gap: 6,
+      paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999,
+      borderWidth: 1.5, backgroundColor: colors.surfaceHigh,
+    },
+    schoolDot: { width: 7, height: 7, borderRadius: 4 },
+    schoolChipText: { fontSize: 13, fontWeight: '700', color: colors.text },
     // Schatzkiste-Belohnung (TE-100)
     reward: {
       flexDirection: 'row', alignItems: 'center', gap: 16,

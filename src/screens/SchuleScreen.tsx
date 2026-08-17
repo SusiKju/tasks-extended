@@ -1,0 +1,340 @@
+/**
+ * SchuleScreen.tsx
+ * Eltern-Ansicht: Stundenplan pro Kind ansehen und pflegen. Mobile-first als
+ * Tagesansicht (heutiger Wochentag vorausgewählt) statt Wochenraster, damit
+ * auf dem Handy immer der relevante Tag im Fokus steht.
+ */
+
+import React, { useEffect, useState, useCallback } from 'react';
+import {
+  View, Text, StyleSheet, ScrollView, TouchableOpacity,
+  TextInput, Modal, Pressable,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from 'expo-router';
+import { useTheme, readableTextOn } from '../utils/theme';
+import { useFamily } from '../hooks/useFamily';
+import { useStore } from '../store';
+import {
+  PERIODS, DAY_NAMES, DAY_SHORT, subjectColor,
+  TimetableEntry, TimetableMap,
+  key, todayDayIndex, subscribeToTimetable, setTimetableEntry, replaceTimetable,
+} from '../services/timetable';
+import { fetchBesteSchuleTimetable } from '../services/besteSchule';
+
+type SyncState = { status: 'idle' | 'syncing' | 'done' | 'error'; message?: string };
+
+export default function SchuleScreen() {
+  const { colors } = useTheme();
+  const s = styles(colors);
+  const { familyId, children: familyChildren } = useFamily();
+  const fid = familyId ?? '';
+  const settings = useStore((st) => st.settings);
+
+  const [selectedChild, setSelectedChild] = useState('');
+  const [timetableByChild, setTimetableByChild] = useState<Record<string, TimetableMap>>({});
+  const [selectedDay, setSelectedDay] = useState(() => {
+    const t = todayDayIndex();
+    return t >= 0 ? t : 0;
+  });
+
+  // Bei jedem Öffnen des Tabs auf den heutigen Wochentag springen (auch wenn
+  // die Tab-Komponente seit dem letzten Besuch durchgehend gemountet blieb
+  // und der Tag inzwischen gewechselt hat, oder zuvor manuell umgeschaltet wurde).
+  useFocusEffect(
+    useCallback(() => {
+      const t = todayDayIndex();
+      setSelectedDay(t >= 0 ? t : 0);
+    }, [])
+  );
+  const [editing, setEditing] = useState<{ nr: number | string; slotKey: string } | null>(null);
+  const [fFach, setFFach] = useState('');
+  const [fRaum, setFRaum] = useState('');
+  const [fLehrer, setFLehrer] = useState('');
+
+  useEffect(() => {
+    if (familyChildren.length > 0 && !selectedChild) setSelectedChild(familyChildren[0].id);
+  }, [familyChildren, selectedChild]);
+
+  useEffect(() => {
+    if (!fid || familyChildren.length === 0) return;
+    const unsubs = familyChildren.map((child) =>
+      subscribeToTimetable(fid, child.id, (map) => {
+        setTimetableByChild((prev) => ({ ...prev, [child.id]: map }));
+      })
+    );
+    return () => unsubs.forEach((u) => u());
+  }, [fid, familyChildren]);
+
+  const timetable = timetableByChild[selectedChild] ?? {};
+  const todayIdx = todayDayIndex();
+  const linkedStudentId = settings.besteSchuleStudentIds?.[selectedChild];
+  const isLinked = !!linkedStudentId;
+
+  // Live-Sync mit beste.schule: bei jedem Öffnen des Tabs (Focus) neu holen,
+  // kein manuelles Aktualisieren nötig. Nur für Kinder mit hinterlegter
+  // Schüler-ID (Einstellungen) – alle anderen bleiben rein manuell gepflegt.
+  const [syncState, setSyncState] = useState<SyncState>({ status: 'idle' });
+  useFocusEffect(
+    useCallback(() => {
+      if (!isLinked || !fid || !selectedChild) return;
+      if (!settings.besteSchuleToken) {
+        setSyncState({ status: 'error', message: 'Kein beste.schule-Token hinterlegt (Einstellungen).' });
+        return;
+      }
+      let cancelled = false;
+      setSyncState({ status: 'syncing' });
+      fetchBesteSchuleTimetable(settings.besteSchuleToken, linkedStudentId!)
+        .then((map) => replaceTimetable(fid, selectedChild, map))
+        .then(() => { if (!cancelled) setSyncState({ status: 'done' }); })
+        .catch((e) => { if (!cancelled) setSyncState({ status: 'error', message: e?.message ?? String(e) }); });
+      return () => { cancelled = true; };
+    }, [isLinked, fid, selectedChild, settings.besteSchuleToken, linkedStudentId])
+  );
+
+  const openEditor = useCallback((nr: number | string, slotKey: string) => {
+    if (isLinked) return; // synchronisierte Kinder werden nicht manuell bearbeitet
+    const entry = timetable[slotKey];
+    setFFach(entry?.fach ?? '');
+    setFRaum(entry?.raum ?? '');
+    setFLehrer(entry?.lehrer ?? '');
+    setEditing({ nr, slotKey });
+  }, [timetable, isLinked]);
+
+  const closeEditor = useCallback(() => setEditing(null), []);
+
+  const handleSave = useCallback(async () => {
+    if (!editing || !fid || !selectedChild) return;
+    const fach = fFach.trim();
+    const entry: TimetableEntry | null = fach
+      ? { fach, raum: fRaum.trim(), lehrer: fLehrer.trim() }
+      : null;
+    await setTimetableEntry(fid, selectedChild, editing.slotKey, entry);
+    setEditing(null);
+  }, [editing, fid, selectedChild, fFach, fRaum, fLehrer]);
+
+  const handleClear = useCallback(async () => {
+    if (!editing || !fid || !selectedChild) return;
+    await setTimetableEntry(fid, selectedChild, editing.slotKey, null);
+    setEditing(null);
+  }, [editing, fid, selectedChild]);
+
+  return (
+    <ScrollView style={{ flex: 1, backgroundColor: colors.background }} contentContainerStyle={s.container}>
+      {/* Kind-Auswahl */}
+      <View style={s.childRow}>
+        {familyChildren.map((child) => {
+          const isSelected = child.id === selectedChild;
+          return (
+            <TouchableOpacity
+              key={child.id}
+              style={[s.childChip, isSelected && { backgroundColor: child.color }]}
+              onPress={() => setSelectedChild(child.id)}
+            >
+              <Text style={[s.childName, isSelected && { color: readableTextOn(child.color) }]}>
+                {child.emoji ? `${child.emoji} ` : ''}{child.name}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      {/* Tag-Auswahl – heutiger Wochentag vorausgewählt */}
+      <View style={s.dayRow}>
+        {DAY_SHORT.map((label, i) => {
+          const isToday = i === todayIdx;
+          const isSelected = i === selectedDay;
+          return (
+            <TouchableOpacity
+              key={label}
+              style={[s.dayChip, isSelected && s.dayChipActive, isToday && !isSelected && s.dayChipToday]}
+              onPress={() => setSelectedDay(i)}
+            >
+              <Text style={[s.dayChipText, isSelected && s.dayChipTextActive]}>{label}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+      <Text style={s.dayLabel}>
+        {DAY_NAMES[selectedDay]}{selectedDay === todayIdx ? ' · heute' : ''}
+      </Text>
+
+      {/* Sync-Status – nur für an beste.schule gekoppelte Kinder */}
+      {isLinked && (
+        <View style={[s.syncBanner, syncState.status === 'error' && s.syncBannerError]}>
+          <Ionicons
+            name={syncState.status === 'error' ? 'warning-outline' : syncState.status === 'syncing' ? 'sync-outline' : 'checkmark-circle-outline'}
+            size={14}
+            color={syncState.status === 'error' ? colors.danger : colors.textSecondary}
+          />
+          <Text style={[s.syncBannerText, syncState.status === 'error' && { color: colors.danger }]}>
+            {syncState.status === 'syncing' && 'Wird mit beste.schule synchronisiert…'}
+            {syncState.status === 'done' && 'Synchronisiert mit beste.schule'}
+            {syncState.status === 'error' && (syncState.message ?? 'Sync fehlgeschlagen')}
+            {syncState.status === 'idle' && 'Synchronisiert mit beste.schule'}
+          </Text>
+        </View>
+      )}
+
+      {/* Stunden des gewählten Tages */}
+      <View style={s.section}>
+        {PERIODS.map((p) => {
+          if (p.pause) {
+            return (
+              <View key={String(p.nr)} style={s.pauseRow}>
+                <Text style={s.pauseText}>{p.label} · {p.start}–{p.end}</Text>
+              </View>
+            );
+          }
+          const slotKey = key(selectedDay, p.nr);
+          const entry = timetable[slotKey];
+          return (
+            <TouchableOpacity
+              key={String(p.nr)}
+              style={s.lessonCard}
+              onPress={() => openEditor(p.nr, slotKey)}
+              activeOpacity={isLinked ? 1 : 0.7}
+              disabled={isLinked}
+            >
+              <View style={s.lessonTime}>
+                <Text style={s.lessonNr}>{p.nr}.</Text>
+                <Text style={s.lessonClock}>{p.start}</Text>
+              </View>
+              {entry ? (
+                <View style={s.lessonBody}>
+                  <View style={s.lessonHead}>
+                    <View style={[s.lessonDot, { backgroundColor: subjectColor(entry.fach) }]} />
+                    <Text style={s.lessonFach}>{entry.fach}</Text>
+                  </View>
+                  {(entry.raum || entry.lehrer) && (
+                    <Text style={s.lessonMeta}>
+                      {[entry.raum, entry.lehrer].filter(Boolean).join(' · ')}
+                    </Text>
+                  )}
+                </View>
+              ) : (
+                <View style={s.lessonBody}>
+                  <Text style={s.lessonEmpty}>{isLinked ? '–' : '+ Stunde eintragen'}</Text>
+                </View>
+              )}
+              {!isLinked && <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />}
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      {/* Editor-Modal */}
+      <Modal visible={!!editing} transparent animationType="fade">
+        <Pressable style={s.modalOverlay} onPress={closeEditor}>
+          <Pressable style={s.modalBox} onPress={() => {}}>
+            <Text style={s.modalTitle}>
+              {DAY_NAMES[selectedDay]} · {editing?.nr}. Stunde
+            </Text>
+            <TextInput
+              style={s.input}
+              value={fFach}
+              onChangeText={setFFach}
+              placeholder="Fach, z. B. Mathe"
+              placeholderTextColor={colors.placeholder}
+              autoFocus
+            />
+            <TextInput
+              style={s.input}
+              value={fRaum}
+              onChangeText={setFRaum}
+              placeholder="Raum (optional)"
+              placeholderTextColor={colors.placeholder}
+            />
+            <TextInput
+              style={s.input}
+              value={fLehrer}
+              onChangeText={setFLehrer}
+              placeholder="Lehrkraft (optional)"
+              placeholderTextColor={colors.placeholder}
+              returnKeyType="done"
+              onSubmitEditing={handleSave}
+            />
+            <View style={s.modalActions}>
+              <TouchableOpacity onPress={handleClear}>
+                <Text style={s.clearText}>Leeren</Text>
+              </TouchableOpacity>
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <TouchableOpacity style={s.cancelBtn} onPress={closeEditor}>
+                  <Text style={s.cancelBtnText}>Abbrechen</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={s.saveBtn} onPress={handleSave}>
+                  <Text style={s.saveBtnText}>Speichern</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+    </ScrollView>
+  );
+}
+
+const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
+  StyleSheet.create({
+    container: { padding: 16, gap: 4, paddingBottom: 40 },
+    // Kind-Auswahl
+    childRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 14 },
+    childChip: {
+      paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999,
+      backgroundColor: colors.surfaceHigh, borderWidth: 1, borderColor: colors.border,
+    },
+    childName: { fontSize: 14, fontWeight: '700', color: colors.text },
+    // Tag-Auswahl
+    dayRow: { flexDirection: 'row', gap: 6, marginBottom: 6 },
+    dayChip: {
+      flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center',
+      backgroundColor: colors.surfaceHigh, borderWidth: 1, borderColor: colors.border,
+    },
+    dayChipToday: { borderColor: colors.accentNeon },
+    dayChipActive: { backgroundColor: colors.accentNeon, borderColor: colors.accentNeon },
+    dayChipText: { fontSize: 13, fontWeight: '700', color: colors.textSecondary },
+    dayChipTextActive: { color: colors.accentFg },
+    dayLabel: { fontSize: 13, color: colors.textMuted, marginBottom: 14 },
+    // Sync-Status
+    syncBanner: {
+      flexDirection: 'row', alignItems: 'center', gap: 6,
+      marginBottom: 12, paddingHorizontal: 4,
+    },
+    syncBannerError: {},
+    syncBannerText: { fontSize: 12.5, color: colors.textSecondary },
+    // Stundenliste
+    section: { gap: 8 },
+    lessonCard: {
+      flexDirection: 'row', alignItems: 'center', gap: 12,
+      backgroundColor: colors.surface, borderRadius: 14, padding: 14,
+      borderWidth: 1, borderColor: colors.border,
+    },
+    lessonTime: { width: 46, alignItems: 'flex-start' },
+    lessonNr: { fontSize: 15, fontWeight: '800', color: colors.text },
+    lessonClock: { fontSize: 11, color: colors.textMuted, marginTop: 1 },
+    lessonBody: { flex: 1, minWidth: 0 },
+    lessonHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    lessonDot: { width: 9, height: 9, borderRadius: 5 },
+    lessonFach: { fontSize: 16, fontWeight: '700', color: colors.text },
+    lessonMeta: { fontSize: 12.5, color: colors.textMuted, marginTop: 2 },
+    lessonEmpty: { fontSize: 14, color: colors.textMuted, fontStyle: 'italic' },
+    pauseRow: { alignItems: 'center', paddingVertical: 2 },
+    pauseText: { fontSize: 11.5, color: colors.textMuted, fontStyle: 'italic' },
+    // Modal
+    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
+    modalBox: { backgroundColor: colors.surface, borderRadius: 20, padding: 22, width: 320, gap: 10 },
+    modalTitle: { fontSize: 16, fontWeight: '700', color: colors.text, marginBottom: 4 },
+    input: {
+      borderWidth: 1, borderColor: colors.border, borderRadius: 10,
+      paddingHorizontal: 12, paddingVertical: 10, fontSize: 15,
+      color: colors.text, backgroundColor: colors.inputBackground,
+    },
+    modalActions: {
+      flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8,
+    },
+    clearText: { fontSize: 13, fontWeight: '700', color: colors.danger, textDecorationLine: 'underline' },
+    cancelBtn: { paddingVertical: 10, paddingHorizontal: 14, borderRadius: 10, borderWidth: 1, borderColor: colors.border },
+    cancelBtnText: { fontSize: 14, fontWeight: '700', color: colors.textSecondary },
+    saveBtn: { paddingVertical: 10, paddingHorizontal: 14, borderRadius: 10, backgroundColor: colors.accentNeon },
+    saveBtnText: { fontSize: 14, fontWeight: '700', color: colors.accentFg },
+  });

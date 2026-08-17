@@ -99,6 +99,15 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="schule"
+        options={{
+          title: 'Schule',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="school-outline" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="bambini"
         options={{
           // href:null blendet den Tab aus (wie bei "groups"), solange Fußball

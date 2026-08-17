@@ -113,6 +113,8 @@ const DEFAULT_SETTINGS: AppSettings = {
   mailWindowDays: 7,
   parentPin: null,
   dashboardBlocks: { ...DEFAULT_DASHBOARD_BLOCKS },
+  besteSchuleToken: null,
+  besteSchuleStudentIds: {},
 };
 
 export const useStore = create<TaskState>()(

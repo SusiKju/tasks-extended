@@ -95,6 +95,18 @@ export interface AppSettings {
    * Siehe DASHBOARD_BLOCKS für Reihenfolge und Labels.
    */
   dashboardBlocks: Record<DashboardBlockKey, boolean>;
+  /**
+   * beste.schule-Anbindung: Zugriffstoken (Bearer), geräte-lokal wie die
+   * Google-Tokens – kein Firestore-Sync, kein Token-Sharing zwischen Geräten.
+   */
+  besteSchuleToken: string | null;
+  /**
+   * Schüler-ID bei beste.schule pro Kind (nicht geheim, daher normal
+   * synchronisiert wie childEmails). Ein Kind mit gesetzter ID synct
+   * automatisch beim Öffnen des Schule-Tabs, alle anderen bleiben manuell
+   * gepflegt.
+   */
+  besteSchuleStudentIds: Partial<Record<string, string>>;
 }
 
 /**

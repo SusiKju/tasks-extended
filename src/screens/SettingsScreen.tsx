@@ -95,6 +95,7 @@ export function SettingsScreen() {
   const [confirmLeave, setConfirmLeave] = useState(false);
   const [leavingFamily, setLeavingFamily] = useState(false);
   const [pinVisible, setPinVisible] = useState(false);
+  const [besteSchuleTokenVisible, setBesteSchuleTokenVisible] = useState(false);
 
   // Kind-Modal
   const [childModal, setChildModal] = useState<{
@@ -713,6 +714,63 @@ export function SettingsScreen() {
                   />
                 </Pressable>
               </View>
+            </View>
+          </View>
+
+          {/* beste.schule-Anbindung: Stundenplan-Live-Sync */}
+          <View style={[styles.row, { gap: 8 }]}>
+            <Ionicons name="school-outline" size={20} color={colors.accentNeon} />
+            <View style={[styles.rowContent, { flex: 1 }]}>
+              <Text style={styles.rowTitle}>beste.schule</Text>
+              <Text style={styles.rowSubtitle}>
+                Zugriffstoken für den automatischen Stundenplan-Sync. Nur auf diesem Gerät gespeichert.
+              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 }}>
+                <TextInput
+                  style={[styles.settingInput, { flex: 1 }]}
+                  value={settings.besteSchuleToken ?? ''}
+                  onChangeText={(v) => updateSettings({ besteSchuleToken: v.trim() === '' ? null : v.trim() })}
+                  placeholder="Bearer-Token"
+                  placeholderTextColor={colors.placeholder}
+                  secureTextEntry={!besteSchuleTokenVisible}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                <Pressable onPress={() => setBesteSchuleTokenVisible((v) => !v)} style={{ padding: 6 }}>
+                  <Ionicons
+                    name={besteSchuleTokenVisible ? 'eye-off-outline' : 'eye-outline'}
+                    size={20}
+                    color={colors.textSecondary}
+                  />
+                </Pressable>
+              </View>
+
+              {familyChildren.length === 0 ? (
+                <Text style={[styles.rowSubtitle, { fontStyle: 'italic', marginTop: 10 }]}>
+                  Noch keine Kinder angelegt.
+                </Text>
+              ) : (
+                familyChildren.map((child) => (
+                  <View key={child.id} style={{ marginTop: 10 }}>
+                    <Text style={[styles.rowSubtitle, { marginBottom: 4 }]}>
+                      {child.emoji ? `${child.emoji} ` : ''}{child.name} · Schüler-ID
+                    </Text>
+                    <TextInput
+                      style={styles.settingInput}
+                      value={settings.besteSchuleStudentIds?.[child.id] ?? ''}
+                      onChangeText={(v) =>
+                        updateSettings({
+                          besteSchuleStudentIds: { ...settings.besteSchuleStudentIds, [child.id]: v.trim() },
+                        })
+                      }
+                      placeholder="leer = manuell pflegen (kein Sync)"
+                      placeholderTextColor={colors.placeholder}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                    />
+                  </View>
+                ))
+              )}
             </View>
           </View>
 

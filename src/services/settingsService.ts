@@ -19,6 +19,9 @@ export const LOCAL_ONLY_SETTING_KEYS: (keyof AppSettings)[] = [
   'googleRefreshToken',
   'googleTokenExpiry',
   'googleClientId',
+  // beste.schule-Zugriffstoken: wie die Google-Tokens bewusst geräte-lokal
+  // (kein Firestore-Sync) – ein API-Token ist ein Geheimnis, kein Präferenzwert.
+  'besteSchuleToken',
 ];
 
 /** Entfernt Local-only- und undefined-Felder. Firebase 11 hängt bei undefined-Werten. */
