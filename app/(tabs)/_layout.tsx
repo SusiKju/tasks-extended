@@ -56,15 +56,8 @@ export default function TabsLayout() {
           ),
         }}
       />
-      <Tabs.Screen
-        name="notes"
-        options={{
-          title: 'Notizen',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="document-text-outline" size={size} color={color} />
-          ),
-        }}
-      />
+      {/* TE-23: kein eigener "Notizen"-Tab mehr — Inhalt erscheint jetzt
+          unterhalb der Task-Liste im Tasks-Tab. */}
       <Tabs.Screen
         name="links"
         options={{

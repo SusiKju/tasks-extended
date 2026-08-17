@@ -19,6 +19,7 @@ import { updateGoogleTask, listTaskLists } from '../services/googleCalendar';
 import { useGoogleTasksSync } from '../hooks/useGoogleTasksSync';
 import { Scratchpad } from '../components/Scratchpad';
 import { useScratchpad } from '../hooks/useScratchpad';
+import { NotesSection } from './NotesScreen';
 
 function confirmDelete(title: string, onConfirm: () => void) {
   if (Platform.OS === 'web') {
@@ -219,9 +220,9 @@ export function TaskListScreen() {
         </View>
 
         {/* ── Notizblock-Bereich ── */}
-        {/* TE-117: card streckt sich über den restlichen Platz, statt Leerraum
-            unterhalb der Karte als nackten Hintergrund stehen zu lassen. */}
-        <View style={[styles.groupCard, styles.groupCardGrow]}>
+        {/* TE-23: kein flex:1/groupCardGrow mehr – die Notizen-Card folgt jetzt
+            darunter, die Personal-Tasks-Card soll sie nicht mehr nach unten drücken. */}
+        <View style={styles.groupCard}>
           <View style={styles.groupHeader}>
             <Ionicons name="document-text-outline" size={18} color={colors.text} />
             <Text style={styles.groupTitle}>Personal Tasks</Text>
@@ -233,7 +234,7 @@ export function TaskListScreen() {
               <Ionicons name="add" size={26} color={isDark ? colors.accentNeon : '#fff'} />
             </TouchableOpacity>
           </View>
-          <View style={[styles.groupBody, styles.groupBodyGrow]}>
+          <View style={styles.groupBody}>
             <Scratchpad
               value={scratchpad}
               onChange={onScratchpadChange}
@@ -247,6 +248,9 @@ export function TaskListScreen() {
             />
           </View>
         </View>
+
+        {/* ── Notizen-Bereich (TE-23: ehemals eigener "Notizen"-Tab) ── */}
+        <NotesSection />
       </ScrollView>
 
       {hasSelection && (
@@ -345,8 +349,6 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
       backgroundColor: c.surfaceHigh,
     },
     groupBody: { padding: 12, gap: 8 },
-    groupCardGrow: { flex: 1 },
-    groupBodyGrow: { flex: 1 },
     groupTitle: { fontSize: 16, fontWeight: '700', color: c.text, flex: 1 },
     // TE-109: verschmolzene, gerahmte Liste (gleicher Look wie der Notizblock).
     mergedList: {

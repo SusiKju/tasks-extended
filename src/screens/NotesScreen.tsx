@@ -50,7 +50,10 @@ const COLUMNS = 3;
 const GRID_PADDING = 12;
 const GRID_GAP = 6;
 const SCREEN_WIDTH = Dimensions.get('window').width;
-const NOTE_WIDTH = (SCREEN_WIDTH - GRID_PADDING * 2 - GRID_GAP * (COLUMNS - 1)) / COLUMNS;
+// TE-23: eingebettet in die Tasks-Tab-Card (marginHorizontal: 12 auf beiden Seiten),
+// nicht mehr Vollbild — Kartenrand von der verfügbaren Breite abziehen.
+const CARD_INSET = 24;
+const NOTE_WIDTH = (SCREEN_WIDTH - CARD_INSET - GRID_PADDING * 2 - GRID_GAP * (COLUMNS - 1)) / COLUMNS;
 
 type SortOrder = 'newest' | 'oldest';
 
@@ -506,9 +509,9 @@ function QuickNotesSection({ notes, onAdd, onDelete, onToggleImportant, colors, 
   );
 }
 
-// ─── Notes Screen ─────────────────────────────────────────────────────────────
+// ─── Notes Section (TE-23: eingebettet unterhalb der Tasks-Liste im Tasks-Tab) ─
 
-export function NotesScreen() {
+export function NotesSection() {
   const { colors, isDark, mono } = useTheme();
   const styles = useMemo(() => makeStyles(colors, isDark), [colors, isDark]);
   const groups = useStore((s) => s.groups);
@@ -727,8 +730,15 @@ export function NotesScreen() {
   );
 
   return (
-    <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+    <View style={styles.embedCard}>
+      <View style={styles.embedHeader}>
+        <Ionicons name="document-text-outline" size={18} color={colors.text} />
+        <Text style={styles.embedTitle}>Notizen</Text>
+        <Pressable onPress={handleAdd} style={styles.embedAddBtn} hitSlop={4}>
+          <Ionicons name="add" size={26} color={isDark ? colors.accentNeon : '#fff'} />
+        </Pressable>
+      </View>
+      <View style={styles.embedBody}>
       {/* TE-148: Schnelle Notizen – eigener, simpler Abschnitt oberhalb der komplexen Notizen */}
       <QuickNotesSection
         notes={quickNotes}
@@ -738,10 +748,6 @@ export function NotesScreen() {
         colors={colors}
         styles={styles}
       />
-
-      {/* TE-148/TE-151: eigener Abschnitt „Notizen" für die komplexen Notizen –
-          klar abgesetzt vom Schnelle-Notizen-Block darüber. */}
-      <SectionHeader label="Notizen" colors={colors} />
 
       {/* Filter + sort bar */}
       <View style={styles.filterBar}>
@@ -828,11 +834,7 @@ export function NotesScreen() {
           )}
         </>
       )}
-      </ScrollView>
-
-      <Pressable style={[styles.fab, { backgroundColor: 'transparent' }]} onPress={handleAdd}>
-        <Ionicons name="add" size={28} color="#fff" />
-      </Pressable>
+      </View>
 
       <NoteModal
         visible={modalVisible}
@@ -854,7 +856,37 @@ export function NotesScreen() {
 
 function makeStyles(c: ThemeColors, isDark: boolean) {
   return StyleSheet.create({
-    container: { flex: 1, backgroundColor: c.background },
+    // TE-23: gleicher Box-Look wie die Tasks-/Personal-Tasks-Card im Tasks-Tab.
+    embedCard: {
+      marginHorizontal: 12,
+      marginTop: 10,
+      marginBottom: 2,
+      borderRadius: 14,
+      backgroundColor: c.surface,
+      borderWidth: 1,
+      borderColor: c.border,
+      overflow: 'hidden',
+    },
+    embedHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      borderBottomWidth: 1,
+      borderBottomColor: c.border,
+      backgroundColor: c.surfaceHigh,
+    },
+    embedTitle: { fontSize: 16, fontWeight: '700', color: c.text, flex: 1 },
+    embedAddBtn: {
+      width: 44, height: 44, borderRadius: 22,
+      alignItems: 'center', justifyContent: 'center',
+      backgroundColor: isDark ? 'transparent' : c.accent,
+      borderWidth: isDark ? 1.5 : 0,
+      borderColor: c.accentNeon,
+      ...(isDark ? neonGlow(c.accentNeon, 'hard') : {}),
+    },
+    embedBody: { padding: 12, gap: 8 },
     // TE-148: Schnelle Notizen
     quickSection: { paddingTop: 4, paddingBottom: 14 },
     quickCard: {
@@ -913,7 +945,6 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
       borderWidth: 1, borderColor: c.border,
     },
     groupFilterText: { fontSize: 13, fontWeight: '500' },
-    scrollContent: { paddingTop: 4, paddingBottom: 100 },
     grid: { paddingHorizontal: GRID_PADDING, gap: GRID_GAP },
     gridRow: { flexDirection: 'row', gap: GRID_GAP, marginBottom: 0 },
     noteCard: {
@@ -986,20 +1017,13 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
       borderRadius: 8, marginTop: 8,
     },
     noteGroupText: { fontSize: 11, color: '#fff', fontWeight: '600' },
+    // TE-23: eingebettet statt Vollbild — kein großer Leerraum mehr nötig.
     empty: {
-      flex: 1, alignItems: 'center', justifyContent: 'center',
-      gap: 8, paddingHorizontal: 40, marginTop: 80,
+      alignItems: 'center', justifyContent: 'center',
+      gap: 8, paddingHorizontal: 24, paddingVertical: 24,
     },
     emptyTitle: { fontSize: 17, fontWeight: '600', marginTop: 12 },
     emptySubtitle: { fontSize: 14, textAlign: 'center', lineHeight: 20 },
-    fab: {
-      position: 'absolute', bottom: 28, right: 20,
-      width: 56, height: 56, borderRadius: 28,
-      alignItems: 'center', justifyContent: 'center',
-      borderWidth: 1.5,
-      borderColor: c.accentNeon,
-      ...neonGlow(c.accentNeon, 'hard'),
-    },
     modalContainer: { flex: 1 },
     modalHeader: {
       flexDirection: 'row', alignItems: 'center',

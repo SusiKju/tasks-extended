@@ -1012,7 +1012,7 @@ export function DashboardScreen() {
               {showBlock('quickNotes') && importantQuickNotes.slice(0, 6).map((n) => (
                 <Pressable
                   key={`qn-${n.id}`}
-                  onPress={() => router.push('/(tabs)/notes' as any)}
+                  onPress={() => router.push('/(tabs)/tasks' as any)}
                   style={({ pressed }) => [styles.dezentRow, styles.rowDivider, { opacity: pressed ? 0.6 : 1 }]}
                 >
                   <View style={[styles.dezentBullet, { backgroundColor: C.important }]} />
