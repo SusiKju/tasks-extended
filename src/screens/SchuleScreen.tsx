@@ -86,6 +86,15 @@ export default function SchuleScreen() {
   const linkedStudentId = settings.besteSchuleStudentIds?.[selectedChild];
   const isLinked = !!linkedStudentId;
 
+  // Bei synchronisierten Kindern (read-only) leere Zeilen am Tagesende weglassen
+  // – nichts zum Antippen/Eintragen, also keine Zeile wert. Bei manuell
+  // gepflegten Kindern bleiben alle Stunden sichtbar (Tippen legt eine an).
+  const lastFilledIdx = PERIODS.reduce((last, p, idx) => {
+    if (p.pause) return last;
+    return timetable[key(selectedDay, p.nr)] ? idx : last;
+  }, -1);
+  const visiblePeriods = isLinked ? PERIODS.slice(0, lastFilledIdx + 1) : PERIODS;
+
   // Live-Sync mit beste.schule: bei jedem Öffnen des Tabs (Focus) neu holen,
   // kein manuelles Aktualisieren nötig. Nur für Kinder mit hinterlegter
   // Schüler-ID (Einstellungen) – alle anderen bleiben rein manuell gepflegt.
@@ -176,23 +185,6 @@ export default function SchuleScreen() {
         </View>
       )}
 
-      {/* Sync-Status – nur für an beste.schule gekoppelte Kinder */}
-      {isLinked && (
-        <View style={[s.syncBanner, syncState.status === 'error' && s.syncBannerError]}>
-          <Ionicons
-            name={syncState.status === 'error' ? 'warning-outline' : syncState.status === 'syncing' ? 'sync-outline' : 'checkmark-circle-outline'}
-            size={14}
-            color={syncState.status === 'error' ? colors.danger : colors.textSecondary}
-          />
-          <Text style={[s.syncBannerText, syncState.status === 'error' && { color: colors.danger }]}>
-            {syncState.status === 'syncing' && 'Wird mit beste.schule synchronisiert…'}
-            {syncState.status === 'done' && 'Synchronisiert mit beste.schule'}
-            {syncState.status === 'error' && (syncState.message ?? 'Sync fehlgeschlagen')}
-            {syncState.status === 'idle' && 'Synchronisiert mit beste.schule'}
-          </Text>
-        </View>
-      )}
-
       {view === 'noten' ? (
         <View style={s.section}>
           {Object.keys(grades).length === 0 ? (
@@ -246,7 +238,10 @@ export default function SchuleScreen() {
 
       {/* Stunden des gewählten Tages */}
       <View style={s.section}>
-        {PERIODS.map((p) => {
+        {isLinked && visiblePeriods.length === 0 && (
+          <Text style={s.lessonEmpty}>Heute keine Schule.</Text>
+        )}
+        {visiblePeriods.map((p) => {
           if (p.pause) {
             return (
               <View key={String(p.nr)} style={s.pauseRow}>
@@ -291,6 +286,23 @@ export default function SchuleScreen() {
         })}
       </View>
       </>
+      )}
+
+      {/* Sync-Status – nur für an beste.schule gekoppelte Kinder, ganz unten */}
+      {isLinked && (
+        <View style={[s.syncBanner, syncState.status === 'error' && s.syncBannerError]}>
+          <Ionicons
+            name={syncState.status === 'error' ? 'warning-outline' : syncState.status === 'syncing' ? 'sync-outline' : 'checkmark-circle-outline'}
+            size={14}
+            color={syncState.status === 'error' ? colors.danger : colors.textSecondary}
+          />
+          <Text style={[s.syncBannerText, syncState.status === 'error' && { color: colors.danger }]}>
+            {syncState.status === 'syncing' && 'Wird mit beste.schule synchronisiert…'}
+            {syncState.status === 'done' && 'Synchronisiert mit beste.schule'}
+            {syncState.status === 'error' && (syncState.message ?? 'Sync fehlgeschlagen')}
+            {syncState.status === 'idle' && 'Synchronisiert mit beste.schule'}
+          </Text>
+        </View>
       )}
 
       {/* Editor-Modal */}
@@ -346,38 +358,38 @@ export default function SchuleScreen() {
 
 const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
   StyleSheet.create({
-    container: { padding: 16, gap: 4, paddingBottom: 40 },
+    container: { padding: 14, gap: 4, paddingBottom: 24 },
     // Kind-Auswahl
-    childRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 14 },
+    childRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 },
     childChip: {
-      paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999,
+      paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999,
       backgroundColor: colors.surfaceHigh, borderWidth: 1, borderColor: colors.border,
     },
-    childName: { fontSize: 14, fontWeight: '700', color: colors.text },
+    childName: { fontSize: 13, fontWeight: '700', color: colors.text },
     // Tag-Auswahl
-    dayRow: { flexDirection: 'row', gap: 6, marginBottom: 6 },
+    dayRow: { flexDirection: 'row', gap: 5, marginBottom: 4 },
     dayChip: {
-      flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center',
+      flex: 1, paddingVertical: 7, borderRadius: 9, alignItems: 'center',
       backgroundColor: colors.surfaceHigh, borderWidth: 1, borderColor: colors.border,
     },
     dayChipToday: { borderColor: colors.accentNeon },
     dayChipActive: { backgroundColor: colors.accentNeon, borderColor: colors.accentNeon },
-    dayChipText: { fontSize: 13, fontWeight: '700', color: colors.textSecondary },
+    dayChipText: { fontSize: 12.5, fontWeight: '700', color: colors.textSecondary },
     dayChipTextActive: { color: colors.accentFg },
-    dayLabel: { fontSize: 13, color: colors.textMuted, marginBottom: 14 },
+    dayLabel: { fontSize: 12, color: colors.textMuted, marginBottom: 6 },
     // Sync-Status
     syncBanner: {
       flexDirection: 'row', alignItems: 'center', gap: 6,
-      marginBottom: 12, paddingHorizontal: 4,
+      marginTop: 10, paddingHorizontal: 4,
     },
     syncBannerError: {},
     syncBannerText: { fontSize: 12.5, color: colors.textSecondary },
     // Stundenplan/Noten-Umschalter
     viewToggle: {
-      flexDirection: 'row', gap: 6, marginBottom: 12,
+      flexDirection: 'row', gap: 6, marginBottom: 8,
       backgroundColor: colors.surfaceHigh, borderRadius: 10, padding: 3,
     },
-    viewToggleBtn: { flex: 1, paddingVertical: 8, borderRadius: 8, alignItems: 'center' },
+    viewToggleBtn: { flex: 1, paddingVertical: 6, borderRadius: 8, alignItems: 'center' },
     viewToggleBtnActive: { backgroundColor: colors.accentNeon },
     viewToggleText: { fontSize: 13, fontWeight: '700', color: colors.textSecondary },
     viewToggleTextActive: { color: colors.accentFg },
@@ -396,23 +408,23 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
     gradeChipText: { fontSize: 14, fontWeight: '800', color: colors.text },
     gradeChipMeta: { fontSize: 11, color: colors.textMuted },
     // Stundenliste
-    section: { gap: 8 },
+    section: { gap: 5 },
     lessonCard: {
-      flexDirection: 'row', alignItems: 'center', gap: 12,
-      backgroundColor: colors.surface, borderRadius: 14, padding: 14,
+      flexDirection: 'row', alignItems: 'center', gap: 10,
+      backgroundColor: colors.surface, borderRadius: 12, paddingVertical: 8, paddingHorizontal: 12,
       borderWidth: 1, borderColor: colors.border,
     },
-    lessonTime: { width: 46, alignItems: 'flex-start' },
-    lessonNr: { fontSize: 15, fontWeight: '800', color: colors.text },
-    lessonClock: { fontSize: 11, color: colors.textMuted, marginTop: 1 },
+    lessonTime: { width: 40, alignItems: 'flex-start' },
+    lessonNr: { fontSize: 14, fontWeight: '800', color: colors.text },
+    lessonClock: { fontSize: 10, color: colors.textMuted },
     lessonBody: { flex: 1, minWidth: 0 },
-    lessonHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-    lessonDot: { width: 9, height: 9, borderRadius: 5 },
-    lessonFach: { fontSize: 16, fontWeight: '700', color: colors.text },
-    lessonMeta: { fontSize: 12.5, color: colors.textMuted, marginTop: 2 },
-    lessonEmpty: { fontSize: 14, color: colors.textMuted, fontStyle: 'italic' },
-    pauseRow: { alignItems: 'center', paddingVertical: 2 },
-    pauseText: { fontSize: 11.5, color: colors.textMuted, fontStyle: 'italic' },
+    lessonHead: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+    lessonDot: { width: 8, height: 8, borderRadius: 4 },
+    lessonFach: { fontSize: 14.5, fontWeight: '700', color: colors.text },
+    lessonMeta: { fontSize: 11.5, color: colors.textMuted },
+    lessonEmpty: { fontSize: 13, color: colors.textMuted, fontStyle: 'italic' },
+    pauseRow: { alignItems: 'center', paddingVertical: 0 },
+    pauseText: { fontSize: 11, color: colors.textMuted, fontStyle: 'italic' },
     // Modal
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
     modalBox: { backgroundColor: colors.surface, borderRadius: 20, padding: 22, width: 320, gap: 10 },
