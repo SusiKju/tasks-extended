@@ -1,19 +1,14 @@
 /**
  * FussballKachel.tsx
  *
- * Fokus-Kachel(n) als kleine Icons – inline rechts in der Geistesblitze-Zeile
- * (nicht fixiert/sticky). In den Settings werden ein oder mehrere Themen
- * aktiviert (funTileThemes); pro Thema erscheint ein Icon. Klick öffnet einen
- * fast-fullscreen Notizdialog des jeweiligen Themas mit füllendem 2×2-Raster
- * aus vier editierbaren Notizabschnitten.
+ * Fußball-Notizdialog, fast-fullscreen mit füllendem 2×2-Raster aus vier
+ * editierbaren Notizabschnitten (Spielfeld-Optik als dekorativer Hintergrund).
+ * Ursprünglich eine wählbare "Fokus-Kachel" mit mehreren Themen (Yoga/Garten);
+ * die Dashboard/Settings-Auswahl wurde entfernt, das Thema ist jetzt fest auf
+ * "fussball" verdrahtet und wird nur noch über `forceTheme` im Bambini-Tab
+ * geöffnet (TE-87).
  *
- * Das Thema bestimmt Icon-/Kachelfarbe und das komplette Dialog-Styling inkl.
- * dekorativem Hintergrund:
- *   - fussball → Spielfeld
- *   - yoga     → konzentrische Zen-Ringe
- *   - garten   → Gartenbeete + Sonne
- *
- * Bewusster Farbtupfer im sonst strikt schwarz-weißen App-Theme (TE-7/TE-10/TE-14).
+ * Bewusster Farbtupfer im sonst strikt schwarz-weißen App-Theme (TE-7/TE-10).
  */
 
 import React, { useState, useCallback, useRef } from 'react';
@@ -32,7 +27,6 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFirebaseAuth } from '../hooks/useFirebaseAuth';
-import { useStore } from '../store';
 import { FunTileTheme } from '../types';
 import {
   FussballAbschnitt,
@@ -392,78 +386,25 @@ export const FUN_THEMES: Record<FunTileTheme, FunThemeCfg> = {
     fgMuted: '#A7C8AB',
     placeholder: 'Freitext oder Liste\n- Spieler 1\n- Spieler 2',
   },
-  yoga: {
-    label: 'Yoga',
-    title: 'Yoga-Notizen',
-    icon: 'flower',
-    tile: '#7E6BD6',
-    dialogBg: '#241A33',
-    cellBg: 'rgba(58,44,84,0.78)',
-    line: '#5B4A86',
-    chalk: 'rgba(240,235,250,0.26)',
-    fg: '#F4F1FB',
-    fgMuted: '#BCAFD6',
-    placeholder: 'Freitext oder Liste\n- Asana 1\n- Atemübung',
-  },
-  garten: {
-    label: 'Garten',
-    title: 'Garten-Notizen',
-    icon: 'leaf',
-    tile: '#7CB342',
-    dialogBg: '#1C2912',
-    cellBg: 'rgba(44,58,28,0.78)',
-    line: '#4E6B30',
-    chalk: 'rgba(238,247,228,0.28)',
-    fg: '#F1F7EA',
-    fgMuted: '#B6CBA0',
-    placeholder: 'Freitext oder Liste\n- Tomaten säen\n- Beet gießen',
-  },
 };
 
-// ─── Dekorativer Hintergrund je Thema ──────────────────────────────────────────
+// ─── Dekorativer Hintergrund (Spielfeld) ───────────────────────────────────────
 
-function ThemeBackground({ theme, chalk }: { theme: FunTileTheme; chalk: string }) {
-  if (theme === 'fussball') {
-    return (
-      <View style={s.bgLayer} pointerEvents="none">
-        <View style={[s.halfLine, { borderColor: chalk }]} />
-        <View style={[s.centerCircle, { borderColor: chalk }]} />
-        <View style={[s.centerSpot, { backgroundColor: chalk }]} />
-        <View style={[s.penaltyBox, s.penaltyTop, { borderColor: chalk }]} />
-        <View style={[s.goalBox, s.goalTop, { borderColor: chalk }]} />
-        <View style={[s.penaltyBox, s.penaltyBottom, { borderColor: chalk }]} />
-        <View style={[s.goalBox, s.goalBottom, { borderColor: chalk }]} />
-      </View>
-    );
-  }
-  if (theme === 'yoga') {
-    return (
-      <View style={s.bgLayer} pointerEvents="none">
-        {[220, 150, 80].map((d) => (
-          <View
-            key={d}
-            style={[s.ring, { width: d, height: d, borderRadius: d / 2, marginLeft: -d / 2, marginTop: -d / 2, borderColor: chalk }]}
-          />
-        ))}
-        <View style={[s.centerSpot, { backgroundColor: chalk }]} />
-      </View>
-    );
-  }
-  // garten: Beete (horizontale Reihen) + Sonne
+function ThemeBackground({ chalk }: { chalk: string }) {
   return (
     <View style={s.bgLayer} pointerEvents="none">
-      {['16%', '34%', '52%', '70%', '88%'].map((top) => (
-        <View key={top} style={[s.gardenRow, { top: top as any, borderColor: chalk }]} />
-      ))}
-      <View style={[s.sun, { borderColor: chalk }]} />
+      <View style={[s.halfLine, { borderColor: chalk }]} />
+      <View style={[s.centerCircle, { borderColor: chalk }]} />
+      <View style={[s.centerSpot, { backgroundColor: chalk }]} />
+      <View style={[s.penaltyBox, s.penaltyTop, { borderColor: chalk }]} />
+      <View style={[s.goalBox, s.goalTop, { borderColor: chalk }]} />
+      <View style={[s.penaltyBox, s.penaltyBottom, { borderColor: chalk }]} />
+      <View style={[s.goalBox, s.goalBottom, { borderColor: chalk }]} />
     </View>
   );
 }
 
 // ─── Hauptkomponente ───────────────────────────────────────────────────────────
-
-/** Reihenfolge der Icons folgt der festen Themen-Reihenfolge, nicht der Auswahl. */
-const THEME_ORDER: FunTileTheme[] = ['fussball', 'yoga', 'garten'];
 
 interface FussballKachelProps {
   /**
@@ -479,9 +420,6 @@ interface FussballKachelProps {
 
 export function FussballKachel({ forceTheme, iconStyle, iconSize = 18 }: FussballKachelProps = {}) {
   const { user } = useFirebaseAuth();
-  // Defensive Defaults: alt persistierte Stände kennen das Array evtl. noch
-  // nicht (Migration v18).
-  const themes = useStore((st) => st.settings.funTileThemes) ?? [];
   const uid = user?.uid ?? '';
 
   const [openTheme, setOpenTheme] = useState<FunTileTheme | null>(null);
@@ -546,9 +484,9 @@ export function FussballKachel({ forceTheme, iconStyle, iconSize = 18 }: Fussbal
     );
   }, [uid, openTheme, draft]);
 
-  // Nur die in den Settings ausgewählten Themen, in fester Reihenfolge –
-  // außer forceTheme erzwingt genau ein Thema (TE-87).
-  const activeThemes = forceTheme ? [forceTheme] : THEME_ORDER.filter((t) => themes.includes(t));
+  // Nur forceTheme öffnet die Kachel (TE-87) – die Dashboard/Settings-Auswahl
+  // mehrerer Themen wurde entfernt.
+  const activeThemes = forceTheme ? [forceTheme] : [];
   if (activeThemes.length === 0) return null;
 
   const cfg = openTheme ? (FUN_THEMES[openTheme] ?? FUN_THEMES.fussball) : null;
@@ -597,7 +535,7 @@ export function FussballKachel({ forceTheme, iconStyle, iconSize = 18 }: Fussbal
 
               {/* Dekorativer Hintergrund + füllendes 2×2-Raster */}
               <View style={s.body}>
-                <ThemeBackground theme={openTheme} chalk={cfg.chalk} />
+                <ThemeBackground chalk={cfg.chalk} />
 
                 <View style={s.grid}>
                   {[[0, 1], [2, 3]].map((rowIdx) => (
@@ -730,13 +668,6 @@ const s = StyleSheet.create({
   goalBox: { position: 'absolute', left: '36%', right: '36%', height: '6%', borderWidth: 2 },
   goalTop: { top: 0, borderTopWidth: 0 },
   goalBottom: { bottom: 0, borderBottomWidth: 0 },
-
-  // ── Yoga: konzentrische Ringe (zentriert via left/top 50% + neg. margin) ──
-  ring: { position: 'absolute', left: '50%', top: '50%', borderWidth: 2 },
-
-  // ── Garten: Beet-Reihen + Sonne ──
-  gardenRow: { position: 'absolute', left: 0, right: 0, borderTopWidth: 1.5, borderStyle: 'dashed' },
-  sun: { position: 'absolute', top: 14, right: 14, width: 46, height: 46, borderRadius: 23, borderWidth: 2 },
 
   // ── 2×2-Raster, füllt den ganzen body ──
   grid: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, gap: 10 },

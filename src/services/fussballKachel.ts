@@ -1,14 +1,18 @@
 /**
  * fussballKachel.ts
  *
- * Persistente, nicht löschbare Fokus-Kachel pro User in Firestore.
- * Pfad: focusTilesByUser/{uid}/themes/{theme}
+ * Persistente, nicht löschbare Fußball-Notiz-Kachel pro User in Firestore.
+ * Pfad: focusTilesByUser/{uid}/themes/fussball
  *
  * Strikt privat pro User – bewusst NICHT unter families/, damit die Daten
  * weder mit der Familie geteilt werden noch eine Familienmitgliedschaft
- * voraussetzen. Es gibt genau EINE Kachel je User und Thema (kein Hinzufügen/
- * Löschen). Jedes Thema (fussball/yoga/garten) hat ein eigenes Dokument mit
- * vier unabhängigen Notizabschnitten (2×2-Raster) und eigenen Default-Titeln.
+ * voraussetzen. Es gibt genau EIN Dokument mit vier unabhängigen
+ * Notizabschnitten (2×2-Raster: Roster, Nominierung, Trainingsideen).
+ *
+ * Ursprünglich Teil eines Mehrthemen-Systems (Fokus-Kachel: Yoga/Garten);
+ * diese Themen wurden entfernt, `FunTileTheme` ist jetzt auf 'fussball'
+ * verengt. Die Firestore-Struktur (Pfadsegment `themes/{theme}`) blieb
+ * unverändert, um bestehende Nutzerdaten nicht zu migrieren.
  */
 
 import { db } from './firebase';
@@ -116,18 +120,6 @@ const DEFAULT_TITLES_BY_THEME: Record<FunTileTheme, Omit<FussballAbschnitt, 'ent
     { title: 'ab 2020', body: '' },
     { title: 'Trainingsideen', body: '' },
     { title: 'Turniere', body: '' },
-  ],
-  yoga: [
-    { title: 'Morgen-Flow', body: '' },
-    { title: 'Atemübungen', body: '' },
-    { title: 'Lieblings-Asanas', body: '' },
-    { title: 'Ziele', body: '' },
-  ],
-  garten: [
-    { title: 'Aussaat', body: '' },
-    { title: 'Gießplan', body: '' },
-    { title: 'Ernte', body: '' },
-    { title: 'Besorgungen', body: '' },
   ],
 };
 

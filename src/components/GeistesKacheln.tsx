@@ -32,7 +32,6 @@ import {
   updateGeistesKachel,
   deleteGeistesKachel,
 } from '../services/geistesKacheln';
-import { FussballKachel } from './FussballKachel';
 
 // ─── Typen ────────────────────────────────────────────────────────────────────
 
@@ -308,11 +307,6 @@ export function GeistesKacheln({ colors, isDark, areaWidth, columns, compact = f
           <Ionicons name="bulb-outline" size={13} color={colors.textMuted} />
           <Text style={[s.headerTitle, { color: colors.textSecondary }]}>GEISTESBLITZE</Text>
         </View>
-        {/* TE-14: Fokus-Kachel-Icons rechtsbündig in derselben Zeile (nicht sticky).
-            TE-153: In der schmalen Dashboard-Spalte (compact) wird die Fokus-Kachel
-            NICHT hier gerendert, sondern als fixierter Button rechts-mittig am
-            Viewport (siehe DashboardScreen). */}
-        {!compact && <FussballKachel iconSize={18} />}
       </View>
 
       {tiles.length === 0 && compact ? (

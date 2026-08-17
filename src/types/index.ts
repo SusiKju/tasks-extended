@@ -77,11 +77,6 @@ export interface AppSettings {
   /** Anzeigename für die geteilte Notizliste (TE-121), z. B. "Matthias" oder "Sabine". */
   myName: string | null;
   /**
-   * TE-10/TE-14: aktive Themen der Fokus-Kachel (Mehrfachauswahl). Pro Thema
-   * erscheint ein Icon in der Geistesblitze-Zeile. Leeres Array = keine Kachel.
-   */
-  funTileThemes: FunTileTheme[];
-  /**
    * TE-37/TE-43: Zeitfenster für den Mail-Tab in Tagen. Mails älter als N Tage
    * werden ausgeblendet. Default 7. Angepinnte Mails (TE-38) ignorieren dieses
    * Fenster. Erlaubte Werte: siehe MAIL_WINDOW_OPTIONS.
@@ -159,8 +154,9 @@ export const DEFAULT_DASHBOARD_BLOCKS: Record<DashboardBlockKey, boolean> =
 /** TE-37/TE-43: Auswählbare Zeitfenster (in Tagen) für den Mail-Tab. */
 export const MAIL_WINDOW_OPTIONS = [3, 7, 14, 30, 75] as const;
 
-/** Themen der Fokus-Kachel (TE-10). */
-export type FunTileTheme = 'fussball' | 'yoga' | 'garten';
+/** Einziges verbliebenes Thema der Fokus-Kachel – nur noch für den erzwungenen
+ *  Fußball-Notizdialog im Bambini-Tab (Yoga/Garten entfernt). */
+export type FunTileTheme = 'fussball';
 
 export interface NoteChecklistItem {
   text: string;

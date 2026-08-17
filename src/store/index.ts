@@ -109,7 +109,6 @@ const DEFAULT_SETTINGS: AppSettings = {
   selectedCalendarIds: [],
   childEmails: {},
   myName: null,
-  funTileThemes: [],
   mailWindowDays: 7,
   parentPin: null,
   dashboardBlocks: { ...DEFAULT_DASHBOARD_BLOCKS },
@@ -286,7 +285,7 @@ export const useStore = create<TaskState>()(
     }),
     {
       name: 'tasks-extended-store',
-      version: 25,
+      version: 26,
       migrate: (persistedState: any, version: number) => {
         if (version < 1 && persistedState?.tasks) {
           persistedState.tasks = persistedState.tasks.map((t: any) => ({
@@ -421,6 +420,11 @@ export const useStore = create<TaskState>()(
         if (version < 25 && persistedState?.settings) {
           // Neon Mono entfernt – nur noch das ruhige Schwarz-Weiß-Theme, keine Auswahl mehr.
           delete persistedState.settings.theme;
+        }
+        if (version < 26 && persistedState?.settings) {
+          // Fokus-Kacheln vom Dashboard entfernt (Fußball/Yoga/Garten-Auswahl) –
+          // Fußball bleibt nur noch fest verdrahtet im Bambini-Tab.
+          delete persistedState.settings.funTileThemes;
         }
         return persistedState;
       },

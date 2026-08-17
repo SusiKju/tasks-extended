@@ -16,16 +16,7 @@ import { Clipboard } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useStore } from '../store';
 import { useTheme, ThemeColors, neonGlow } from '../utils/theme';
-import { FunTileTheme, MAIL_WINDOW_OPTIONS, DASHBOARD_BLOCKS, DEFAULT_DASHBOARD_BLOCKS } from '../types';
-import { FUN_THEMES } from '../components/FussballKachel';
-
-// Fokus-Kachel-Themen (TE-10) – Reihenfolge wie in FUN_THEMES definiert.
-const FUN_TILE_OPTIONS = (Object.keys(FUN_THEMES) as FunTileTheme[]).map((key) => ({
-  key,
-  label: FUN_THEMES[key].label,
-  color: FUN_THEMES[key].tile,
-  icon: FUN_THEMES[key].icon,
-}));
+import { MAIL_WINDOW_OPTIONS, DASHBOARD_BLOCKS, DEFAULT_DASHBOARD_BLOCKS } from '../types';
 
 import {
   signInWithGoogle,
@@ -870,39 +861,6 @@ export function SettingsScreen() {
       </Modal>
 
 
-      {/* Fokus-Kachel (TE-10/TE-14) – Mehrfachauswahl */}
-      <View style={styles.section}>
-        <Text style={styles.sectionHeader}>Fokus-Kachel</Text>
-        <Text style={[styles.rowSubtitle, { paddingHorizontal: 4, marginBottom: 6 }]}>
-          Ein oder mehrere Themen wählen – pro Thema erscheint ein Icon neben den Geistesblitzen.
-        </Text>
-        {FUN_TILE_OPTIONS.map((opt) => {
-          const selected = settings.funTileThemes ?? [];
-          const active = selected.includes(opt.key);
-          return (
-            <Pressable
-              key={opt.key}
-              style={({ pressed }) => [styles.themeRow, active && styles.themeRowActive, pressed && { opacity: 0.85 }]}
-              onPress={() => updateSettings({
-                funTileThemes: active
-                  ? selected.filter((t) => t !== opt.key)
-                  : [...selected, opt.key],
-              })}
-            >
-              <View style={[styles.themePreview, { backgroundColor: opt.color, borderColor: opt.color, alignItems: 'center', paddingLeft: 0 }]}>
-                <Ionicons name={opt.icon} size={18} color="#FFFFFF" />
-              </View>
-              <View style={styles.rowContent}>
-                <Text style={styles.rowTitle}>{opt.label}</Text>
-              </View>
-              {active
-                ? <Ionicons name="checkmark-circle" size={22} color={colors.accentNeon} />
-                : <Ionicons name="ellipse-outline" size={22} color={colors.textMuted} />}
-            </Pressable>
-          );
-        })}
-      </View>
-
       {/* E-Mail (TE-37) */}
       <View style={styles.section}>
         <Text style={styles.sectionHeader}>E-Mail</Text>
@@ -1018,16 +976,6 @@ function makeStyles(c: ThemeColors) {
     themeRowActive: {
       borderColor: c.accentNeon,
       borderWidth: 1.5,
-    },
-    themePreview: {
-      width: 44,
-      height: 32,
-      borderRadius: 8,
-      borderWidth: 1,
-      justifyContent: 'center',
-      alignItems: 'flex-start',
-      paddingLeft: 6,
-      gap: 4,
     },
     row: {
       flexDirection: 'row',

@@ -12,8 +12,7 @@
  *
  * Redesign: Pill-Chips (Icon + Text inline, ~34px hoch) statt der alten
  * vertikalen 68px-Karte (großer Icon-Ring oben, Label darunter) – exakt wie
- * im Redesign-Artefakt, damit die Zeile auf derselben Höhe sitzt wie die
- * Fokus-Kacheln (`leading`-Slot, ebenfalls ~34px).
+ * im Redesign-Artefakt.
  */
 
 import React, { useState, useEffect } from 'react';
@@ -34,21 +33,12 @@ export function LinkCardBar({
   colors,
   showLinks = true,
   driveFavorites = [],
-  leading,
-  hasLeading = false,
 }: {
   colors: ThemeColors;
   /** Steuert nur den Links-Teil (Dashboard-Block-Toggle) – Drive-Favoriten
    *  werden schon vom Aufrufer leer übergeben, wenn deaktiviert. */
   showLinks?: boolean;
   driveFavorites?: DriveFile[];
-  /** Fokus-Kacheln (Fußball/Yoga/Garten) – rendern als erste Elemente in
-   *  DERSELBEN scrollenden Zeile, nicht als eigene Reihe darüber (Redesign-
-   *  Vorgabe: "an den Anfang", innerhalb von Schnellzugriff, nicht davor). */
-  leading?: React.ReactNode;
-  /** Ob `leading` überhaupt etwas rendert (FussballKachel kann intern null
-   *  liefern, das weiß der Aufrufer über settings.funTileThemes vorab). */
-  hasLeading?: boolean;
 }) {
   const { user } = useFirebaseAuth();
   const { familyId } = useFamily();
@@ -67,7 +57,7 @@ export function LinkCardBar({
   const driveOverflow = driveFavorites.length - drive.length;
 
   // Nur sichtbar, wenn es überhaupt etwas zu zeigen gibt.
-  if (active.length === 0 && drive.length === 0 && !hasLeading) return null;
+  if (active.length === 0 && drive.length === 0) return null;
 
   const chipStyle = ({ pressed }: { pressed: boolean }) => [
     s.chip,
@@ -81,12 +71,6 @@ export function LinkCardBar({
         <Text style={[s.headerTitle, { color: colors.textSecondary }]}>SCHNELLZUGRIFF</Text>
       </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.row}>
-        {hasLeading && (
-          <>
-            {leading}
-            {(active.length > 0 || drive.length > 0) && <View style={[s.divider, { backgroundColor: SOFT_BORDER }]} />}
-          </>
-        )}
         {active.map((l) => (
           <Pressable key={l.id} style={chipStyle} onPress={() => openLink(l.url)}>
             <LinkAvatar link={l} size={SWATCH} />
@@ -121,7 +105,6 @@ const s = StyleSheet.create({
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   headerTitle: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 2, paddingRight: 8 },
-  divider: { width: 1, alignSelf: 'stretch', marginVertical: 2 },
   chip: {
     flexDirection: 'row', alignItems: 'center', gap: 7,
     borderWidth: 1, borderRadius: 999, paddingHorizontal: 13, paddingVertical: 8,

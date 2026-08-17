@@ -37,7 +37,6 @@ import { LinkCardBar } from '../components/LinkCardBar';
 import { WeatherWidget } from '../components/WeatherWidget';
 import { GoogleConnectBanner } from '../components/GoogleConnectBanner';
 import { CountdownStrip } from '../components/CountdownStrip';
-import { FussballKachel } from '../components/FussballKachel';
 import { FeedBlock, FeedItem } from '../components/FeedBlock';
 import { subscribeToFeedOrder, saveFeedOrder, FeedOrder } from '../services/feedOrderService';
 import { subscribeToFeedHighlight, saveFeedHighlight } from '../services/feedHighlightService';
@@ -1223,21 +1222,13 @@ export function DashboardScreen() {
         </View>
       )}
 
-      {/* ── Schnellzugriff (privat): Fokus-Kacheln + Links + Drive-Favoriten
-          (TE-168) in EINER gemeinsamen, horizontal scrollenden Zeile.
-          Vorher standen die Fokus-Kacheln als eigene Reihe ÜBER Schnellzugriff
-          (sah aus wie ein eigener Abschnitt) statt als erste Elemente IN der
-          Zeile selbst – das war nicht das, was gezeigt wurde. Jetzt läuft
-          FussballKachel als `leading`-Slot direkt in LinkCardBars ScrollView,
-          mit einem dünnen Trenner vor den gelabelten Chips. Überschreibt
-          bewusst die TE-161-Entscheidung fürs umbrechende Links-Grid. ── */}
-      {(showBlock('links') || showBlock('driveFavorites') || (settings.funTileThemes ?? []).length > 0) && (
+      {/* ── Schnellzugriff (privat): Links + Drive-Favoriten (TE-168) in einer
+          gemeinsamen, horizontal scrollenden Zeile. ── */}
+      {(showBlock('links') || showBlock('driveFavorites')) && (
         <LinkCardBar
           colors={colors}
           showLinks={showBlock('links')}
           driveFavorites={showBlock('driveFavorites') ? driveFavorites : []}
-          hasLeading={(settings.funTileThemes ?? []).length > 0}
-          leading={<FussballKachel iconSize={16} iconStyle={styles.focusChipTile} />}
         />
       )}
 
@@ -1469,11 +1460,6 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
     // Redesign: 24→18 – engerer, gleichmäßigerer Rhythmus zwischen den
     // Abschnitten, näher am Artefakt.
     content: { paddingTop: 16, paddingBottom: 48, gap: 18 },
-
-    // Fokus-Kacheln im Schnellzugriff etwas größer als der FussballKachel-
-    // Standard (30px), damit sie auf gleicher Höhe wie die neuen Pill-Chips
-    // (~34px) sitzen.
-    focusChipTile: { width: 34, height: 34, borderRadius: 11 },
 
     syncRow: {
       flexDirection: 'row',
