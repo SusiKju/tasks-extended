@@ -111,13 +111,13 @@ export async function saveBambiniFilters(uid: string, filters: BambiniFilters): 
   await setDoc(bambiniDoc(uid), { filters }, { merge: true });
 }
 
-/** Kinder eines Jahrgangs filtern (exakt bzw. ab Jahr). */
+/** Kinder eines Jahrgangs filtern (exakt bzw. ab Jahr), ohne aufgehörte. */
 export function childrenForJahrgang(
   children: Child[],
   sel: { year: number; mode: 'exact' | 'from' },
 ): Child[] {
-  return children.filter((c) =>
-    sel.mode === 'from' ? c.birthYear >= sel.year : c.birthYear === sel.year,
+  return children.filter(
+    (c) => !c.stopped && (sel.mode === 'from' ? c.birthYear >= sel.year : c.birthYear === sel.year),
   );
 }
 
