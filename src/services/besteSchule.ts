@@ -18,6 +18,7 @@
  */
 
 import { TimetableMap, key as slotKey } from './timetable';
+import { GradeEntry, GradesMap } from './grades';
 
 const API_BASE = 'https://beste.schule/api';
 
@@ -90,4 +91,44 @@ export async function fetchBesteSchuleTimetable(token: string, studentId: string
     }
   }
   return map;
+}
+
+interface RawSubject {
+  id: number;
+  name: string;
+}
+
+/**
+ * ACHTUNG: Lennys Schuljahr hat gerade erst begonnen, `grades` war zum
+ * Zeitpunkt der Implementierung leer – das Feld-Mapping einer einzelnen Note
+ * (value/type/date) ist daher unverifiziert (bestes Wissen aus dem Muster
+ * der übrigen Endpunkte). `raw` wird immer mitgespeichert, damit bei falscher
+ * Zuordnung nichts verloren geht und wir es nachträglich korrigieren können.
+ */
+function mapGrade(raw: any): GradeEntry {
+  const value = String(raw?.value ?? raw?.grade ?? raw?.note ?? raw?.mark ?? '?');
+  const type = raw?.type?.name ?? raw?.type ?? raw?.kind ?? undefined;
+  const date = raw?.date ?? raw?.given_at ?? raw?.created_at ?? undefined;
+  return { value, type, date, raw };
+}
+
+/** Holt den aktuellen Notenstand eines Schülers, gruppiert nach Fach. */
+export async function fetchBesteSchuleGrades(token: string, studentId: string): Promise<GradesMap> {
+  const res = await fetch(
+    `${API_BASE}/students/${encodeURIComponent(studentId)}?include=grades,subjects`,
+    { headers: authHeaders(token) },
+  );
+  if (!res.ok) throw new BesteSchuleError(`beste.schule (Noten): HTTP ${res.status}`);
+  const json = await res.json();
+  const subjects: RawSubject[] = json.data?.subjects ?? [];
+  const gradesRaw: any[] = json.data?.grades ?? [];
+
+  const bySubject: GradesMap = {};
+  for (const s of subjects) bySubject[s.name] = [];
+  for (const g of gradesRaw) {
+    const subjectName = g?.subject?.name ?? subjects.find((s) => s.id === g?.subject_id)?.name ?? 'Sonstiges';
+    if (!bySubject[subjectName]) bySubject[subjectName] = [];
+    bySubject[subjectName].push(mapGrade(g));
+  }
+  return bySubject;
 }

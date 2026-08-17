@@ -20,9 +20,11 @@ import {
   TimetableEntry, TimetableMap,
   key, todayDayIndex, subscribeToTimetable, setTimetableEntry, replaceTimetable,
 } from '../services/timetable';
-import { fetchBesteSchuleTimetable } from '../services/besteSchule';
+import { GradesMap, subscribeToGrades, replaceGrades } from '../services/grades';
+import { fetchBesteSchuleTimetable, fetchBesteSchuleGrades } from '../services/besteSchule';
 
 type SyncState = { status: 'idle' | 'syncing' | 'done' | 'error'; message?: string };
+type ScreenView = 'plan' | 'noten';
 
 export default function SchuleScreen() {
   const { colors } = useTheme();
@@ -32,7 +34,9 @@ export default function SchuleScreen() {
   const settings = useStore((st) => st.settings);
 
   const [selectedChild, setSelectedChild] = useState('');
+  const [view, setView] = useState<ScreenView>('plan');
   const [timetableByChild, setTimetableByChild] = useState<Record<string, TimetableMap>>({});
+  const [gradesByChild, setGradesByChild] = useState<Record<string, GradesMap>>({});
   const [selectedDay, setSelectedDay] = useState(() => {
     const t = todayDayIndex();
     return t >= 0 ? t : 0;
@@ -66,7 +70,18 @@ export default function SchuleScreen() {
     return () => unsubs.forEach((u) => u());
   }, [fid, familyChildren]);
 
+  useEffect(() => {
+    if (!fid || familyChildren.length === 0) return;
+    const unsubs = familyChildren.map((child) =>
+      subscribeToGrades(fid, child.id, (map) => {
+        setGradesByChild((prev) => ({ ...prev, [child.id]: map }));
+      })
+    );
+    return () => unsubs.forEach((u) => u());
+  }, [fid, familyChildren]);
+
   const timetable = timetableByChild[selectedChild] ?? {};
+  const grades = gradesByChild[selectedChild] ?? {};
   const todayIdx = todayDayIndex();
   const linkedStudentId = settings.besteSchuleStudentIds?.[selectedChild];
   const isLinked = !!linkedStudentId;
@@ -84,8 +99,12 @@ export default function SchuleScreen() {
       }
       let cancelled = false;
       setSyncState({ status: 'syncing' });
-      fetchBesteSchuleTimetable(settings.besteSchuleToken, linkedStudentId!)
-        .then((map) => replaceTimetable(fid, selectedChild, map))
+      Promise.all([
+        fetchBesteSchuleTimetable(settings.besteSchuleToken, linkedStudentId!)
+          .then((map) => replaceTimetable(fid, selectedChild, map)),
+        fetchBesteSchuleGrades(settings.besteSchuleToken, linkedStudentId!)
+          .then((map) => replaceGrades(fid, selectedChild, map)),
+      ])
         .then(() => { if (!cancelled) setSyncState({ status: 'done' }); })
         .catch((e) => { if (!cancelled) setSyncState({ status: 'error', message: e?.message ?? String(e) }); });
       return () => { cancelled = true; };
@@ -139,6 +158,72 @@ export default function SchuleScreen() {
         })}
       </View>
 
+      {/* Ansicht umschalten – nur relevant für synchronisierte Kinder (Noten kommen nur von dort) */}
+      {isLinked && (
+        <View style={s.viewToggle}>
+          <TouchableOpacity
+            style={[s.viewToggleBtn, view === 'plan' && s.viewToggleBtnActive]}
+            onPress={() => setView('plan')}
+          >
+            <Text style={[s.viewToggleText, view === 'plan' && s.viewToggleTextActive]}>Stundenplan</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[s.viewToggleBtn, view === 'noten' && s.viewToggleBtnActive]}
+            onPress={() => setView('noten')}
+          >
+            <Text style={[s.viewToggleText, view === 'noten' && s.viewToggleTextActive]}>Noten</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Sync-Status – nur für an beste.schule gekoppelte Kinder */}
+      {isLinked && (
+        <View style={[s.syncBanner, syncState.status === 'error' && s.syncBannerError]}>
+          <Ionicons
+            name={syncState.status === 'error' ? 'warning-outline' : syncState.status === 'syncing' ? 'sync-outline' : 'checkmark-circle-outline'}
+            size={14}
+            color={syncState.status === 'error' ? colors.danger : colors.textSecondary}
+          />
+          <Text style={[s.syncBannerText, syncState.status === 'error' && { color: colors.danger }]}>
+            {syncState.status === 'syncing' && 'Wird mit beste.schule synchronisiert…'}
+            {syncState.status === 'done' && 'Synchronisiert mit beste.schule'}
+            {syncState.status === 'error' && (syncState.message ?? 'Sync fehlgeschlagen')}
+            {syncState.status === 'idle' && 'Synchronisiert mit beste.schule'}
+          </Text>
+        </View>
+      )}
+
+      {view === 'noten' ? (
+        <View style={s.section}>
+          {Object.keys(grades).length === 0 ? (
+            <Text style={s.lessonEmpty}>Noch keine Fächer synchronisiert.</Text>
+          ) : (
+            Object.entries(grades)
+              .sort(([a], [b]) => a.localeCompare(b, 'de'))
+              .map(([fach, entries]) => (
+                <View key={fach} style={s.gradeCard}>
+                  <View style={s.gradeHead}>
+                    <View style={[s.lessonDot, { backgroundColor: subjectColor(fach) }]} />
+                    <Text style={s.lessonFach}>{fach}</Text>
+                  </View>
+                  {entries.length === 0 ? (
+                    <Text style={s.lessonEmpty}>Keine Noten erteilt.</Text>
+                  ) : (
+                    <View style={s.gradeChipsRow}>
+                      {entries.map((g, i) => (
+                        <View key={i} style={s.gradeChip}>
+                          <Text style={s.gradeChipText}>{g.value}</Text>
+                          {g.type && <Text style={s.gradeChipMeta}>{g.type}</Text>}
+                        </View>
+                      ))}
+                    </View>
+                  )}
+                </View>
+              ))
+          )}
+        </View>
+      ) : (
+      <>
       {/* Tag-Auswahl – heutiger Wochentag vorausgewählt */}
       <View style={s.dayRow}>
         {DAY_SHORT.map((label, i) => {
@@ -158,23 +243,6 @@ export default function SchuleScreen() {
       <Text style={s.dayLabel}>
         {DAY_NAMES[selectedDay]}{selectedDay === todayIdx ? ' · heute' : ''}
       </Text>
-
-      {/* Sync-Status – nur für an beste.schule gekoppelte Kinder */}
-      {isLinked && (
-        <View style={[s.syncBanner, syncState.status === 'error' && s.syncBannerError]}>
-          <Ionicons
-            name={syncState.status === 'error' ? 'warning-outline' : syncState.status === 'syncing' ? 'sync-outline' : 'checkmark-circle-outline'}
-            size={14}
-            color={syncState.status === 'error' ? colors.danger : colors.textSecondary}
-          />
-          <Text style={[s.syncBannerText, syncState.status === 'error' && { color: colors.danger }]}>
-            {syncState.status === 'syncing' && 'Wird mit beste.schule synchronisiert…'}
-            {syncState.status === 'done' && 'Synchronisiert mit beste.schule'}
-            {syncState.status === 'error' && (syncState.message ?? 'Sync fehlgeschlagen')}
-            {syncState.status === 'idle' && 'Synchronisiert mit beste.schule'}
-          </Text>
-        </View>
-      )}
 
       {/* Stunden des gewählten Tages */}
       <View style={s.section}>
@@ -222,6 +290,8 @@ export default function SchuleScreen() {
           );
         })}
       </View>
+      </>
+      )}
 
       {/* Editor-Modal */}
       <Modal visible={!!editing} transparent animationType="fade">
@@ -302,6 +372,29 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
     },
     syncBannerError: {},
     syncBannerText: { fontSize: 12.5, color: colors.textSecondary },
+    // Stundenplan/Noten-Umschalter
+    viewToggle: {
+      flexDirection: 'row', gap: 6, marginBottom: 12,
+      backgroundColor: colors.surfaceHigh, borderRadius: 10, padding: 3,
+    },
+    viewToggleBtn: { flex: 1, paddingVertical: 8, borderRadius: 8, alignItems: 'center' },
+    viewToggleBtnActive: { backgroundColor: colors.accentNeon },
+    viewToggleText: { fontSize: 13, fontWeight: '700', color: colors.textSecondary },
+    viewToggleTextActive: { color: colors.accentFg },
+    // Noten
+    gradeCard: {
+      backgroundColor: colors.surface, borderRadius: 14, padding: 14,
+      borderWidth: 1, borderColor: colors.border, marginBottom: 8,
+    },
+    gradeHead: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
+    gradeChipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+    gradeChip: {
+      flexDirection: 'row', alignItems: 'baseline', gap: 4,
+      paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999,
+      backgroundColor: colors.surfaceHigh, borderWidth: 1, borderColor: colors.border,
+    },
+    gradeChipText: { fontSize: 14, fontWeight: '800', color: colors.text },
+    gradeChipMeta: { fontSize: 11, color: colors.textMuted },
     // Stundenliste
     section: { gap: 8 },
     lessonCard: {
