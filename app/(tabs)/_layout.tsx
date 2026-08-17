@@ -1,5 +1,6 @@
 import React from 'react';
 import { Tabs } from 'expo-router';
+import { Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, neonGlow } from '../../src/utils/theme';
 
@@ -102,6 +103,12 @@ export default function TabsLayout() {
           title: 'Bambini',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="football-outline" size={size} color={color} />
+          ),
+          // Trainer-seit-Info neben dem Titel.
+          headerRight: () => (
+            <Text style={{ color: colors.textSecondary, fontSize: 12, marginRight: 16 }}>
+              Trainer seit 28.08.2024
+            </Text>
           ),
         }}
       />
