@@ -12,6 +12,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
+import { format, parseISO, isToday, isTomorrow } from 'date-fns';
+import { de } from 'date-fns/locale';
 import { useTheme, readableTextOn } from '../utils/theme';
 import { useFamily } from '../hooks/useFamily';
 import { useStore } from '../store';
@@ -21,10 +23,20 @@ import {
   key, todayDayIndex, subscribeToTimetable, setTimetableEntry, replaceTimetable,
 } from '../services/timetable';
 import { GradesMap, subscribeToGrades, replaceGrades } from '../services/grades';
-import { fetchBesteSchuleTimetable, fetchBesteSchuleGrades } from '../services/besteSchule';
+import { JournalData, subscribeToJournal, replaceJournal } from '../services/journal';
+import { fetchBesteSchuleTimetable, fetchBesteSchuleGrades, fetchBesteSchuleJournal } from '../services/besteSchule';
 
 type SyncState = { status: 'idle' | 'syncing' | 'done' | 'error'; message?: string };
-type ScreenView = 'plan' | 'noten';
+type ScreenView = 'plan' | 'noten' | 'klassenbuch';
+
+const EMPTY_JOURNAL: JournalData = { homework: [], substitutions: [] };
+
+function journalDayLabel(iso: string): string {
+  const d = parseISO(iso);
+  if (isToday(d)) return 'Heute';
+  if (isTomorrow(d)) return 'Morgen';
+  return format(d, 'EEEE, dd.MM.', { locale: de });
+}
 
 export default function SchuleScreen() {
   const { colors } = useTheme();
@@ -37,6 +49,7 @@ export default function SchuleScreen() {
   const [view, setView] = useState<ScreenView>('plan');
   const [timetableByChild, setTimetableByChild] = useState<Record<string, TimetableMap>>({});
   const [gradesByChild, setGradesByChild] = useState<Record<string, GradesMap>>({});
+  const [journalByChild, setJournalByChild] = useState<Record<string, JournalData>>({});
   const [selectedDay, setSelectedDay] = useState(() => {
     const t = todayDayIndex();
     return t >= 0 ? t : 0;
@@ -80,8 +93,19 @@ export default function SchuleScreen() {
     return () => unsubs.forEach((u) => u());
   }, [fid, familyChildren]);
 
+  useEffect(() => {
+    if (!fid || familyChildren.length === 0) return;
+    const unsubs = familyChildren.map((child) =>
+      subscribeToJournal(fid, child.id, (data) => {
+        setJournalByChild((prev) => ({ ...prev, [child.id]: data }));
+      })
+    );
+    return () => unsubs.forEach((u) => u());
+  }, [fid, familyChildren]);
+
   const timetable = timetableByChild[selectedChild] ?? {};
   const grades = gradesByChild[selectedChild] ?? {};
+  const journal = journalByChild[selectedChild] ?? EMPTY_JOURNAL;
   const todayIdx = todayDayIndex();
   const linkedStudentId = settings.besteSchuleStudentIds?.[selectedChild];
   const isLinked = !!linkedStudentId;
@@ -113,6 +137,8 @@ export default function SchuleScreen() {
           .then((map) => replaceTimetable(fid, selectedChild, map)),
         fetchBesteSchuleGrades(settings.besteSchuleToken, linkedStudentId!)
           .then((map) => replaceGrades(fid, selectedChild, map)),
+        fetchBesteSchuleJournal(settings.besteSchuleToken, linkedStudentId!)
+          .then((data) => replaceJournal(fid, selectedChild, data)),
       ])
         .then(() => { if (!cancelled) setSyncState({ status: 'done' }); })
         .catch((e) => { if (!cancelled) setSyncState({ status: 'error', message: e?.message ?? String(e) }); });
@@ -182,10 +208,57 @@ export default function SchuleScreen() {
           >
             <Text style={[s.viewToggleText, view === 'noten' && s.viewToggleTextActive]}>Noten</Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            style={[s.viewToggleBtn, view === 'klassenbuch' && s.viewToggleBtnActive]}
+            onPress={() => setView('klassenbuch')}
+          >
+            <Text style={[s.viewToggleText, view === 'klassenbuch' && s.viewToggleTextActive]}>Klassenbuch</Text>
+          </TouchableOpacity>
         </View>
       )}
 
-      {view === 'noten' ? (
+      {view === 'klassenbuch' ? (
+        <View style={s.section}>
+          <Text style={s.klassenbuchTitle}>Vertretungen</Text>
+          {journal.substitutions.length === 0 ? (
+            <Text style={s.lessonEmpty}>Keine Vertretungen bekannt.</Text>
+          ) : (
+            journal.substitutions.map((n, i) => (
+              <View key={i} style={s.journalRow}>
+                <Text style={s.journalDate}>{journalDayLabel(n.date)}</Text>
+                <View style={s.journalBody}>
+                  {n.fach && (
+                    <View style={s.lessonHead}>
+                      <View style={[s.lessonDot, { backgroundColor: subjectColor(n.fach) }]} />
+                      <Text style={s.lessonFach}>{n.fach}</Text>
+                    </View>
+                  )}
+                  <Text style={s.journalText}>{n.text}</Text>
+                </View>
+              </View>
+            ))
+          )}
+          <Text style={[s.klassenbuchTitle, { marginTop: 14 }]}>Hausaufgaben</Text>
+          {journal.homework.length === 0 ? (
+            <Text style={s.lessonEmpty}>Keine offenen Hausaufgaben.</Text>
+          ) : (
+            journal.homework.map((n, i) => (
+              <View key={i} style={s.journalRow}>
+                <Text style={s.journalDate}>{journalDayLabel(n.date)}</Text>
+                <View style={s.journalBody}>
+                  {n.fach && (
+                    <View style={s.lessonHead}>
+                      <View style={[s.lessonDot, { backgroundColor: subjectColor(n.fach) }]} />
+                      <Text style={s.lessonFach}>{n.fach}</Text>
+                    </View>
+                  )}
+                  <Text style={s.journalText}>{n.text}</Text>
+                </View>
+              </View>
+            ))
+          )}
+        </View>
+      ) : view === 'noten' ? (
         <View style={s.section}>
           {Object.keys(grades).length === 0 ? (
             <Text style={s.lessonEmpty}>Noch keine Fächer synchronisiert.</Text>
@@ -425,6 +498,16 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
     lessonEmpty: { fontSize: 13, color: colors.textMuted, fontStyle: 'italic' },
     pauseRow: { alignItems: 'center', paddingVertical: 0 },
     pauseText: { fontSize: 11, color: colors.textMuted, fontStyle: 'italic' },
+    // Klassenbuch
+    klassenbuchTitle: { fontSize: 13, fontWeight: '700', color: colors.textSecondary, marginBottom: 2 },
+    journalRow: {
+      flexDirection: 'row', gap: 10,
+      backgroundColor: colors.surface, borderRadius: 12, paddingVertical: 8, paddingHorizontal: 12,
+      borderWidth: 1, borderColor: colors.border,
+    },
+    journalDate: { width: 80, fontSize: 11.5, color: colors.textMuted, paddingTop: 1 },
+    journalBody: { flex: 1, minWidth: 0, gap: 3 },
+    journalText: { fontSize: 13, color: colors.text },
     // Modal
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
     modalBox: { backgroundColor: colors.surface, borderRadius: 20, padding: 22, width: 320, gap: 10 },

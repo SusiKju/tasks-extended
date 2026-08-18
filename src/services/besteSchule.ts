@@ -15,10 +15,28 @@
  *
  * Kein JSON:API-Format (kein data[]/attributes/included) – schlichtes
  * verschachteltes JSON.
+ *
+ * Klassenbuch (Hausaufgaben/Vertretungen), Netzwerk-Mitschnitt 2026-08-18:
+ *
+ *   GET /api/journal/lessons?interpolate=true&include=notes.type,day
+ *       &filter[range]={von},{bis}&filter[student]={id}
+ *     -> { data: [{ day: {date}, status: 'initial'|'hold'|'canceled',
+ *          source: 'journal'|'substitutionplan', subject: {name}|null,
+ *          group: {name}|null, notes: [{ description, type: {local_id} }] }] }
+ *     Hausaufgaben stecken als Notiz mit type.local_id "HAU" an der Stunde,
+ *     an der sie eingetragen wurden (kein separates Fälligkeitsdatum).
+ *     status "canceled" + source "substitutionplan" = Stunde fällt aus.
+ *
+ *   GET /api/journal/days?interpolate=true&include=notes.type
+ *       &filter[range]={von},{bis}&filter[student]={id}
+ *     -> { data: [{ date, notes: [{ description, source: 'substitutionplan' }] }] }
+ *     Ganztägige Vertretungsplan-Hinweise ohne Fachbezug (z.B. "Bitte
+ *     Sonderplan beachten.").
  */
 
 import { TimetableMap, key as slotKey } from './timetable';
 import { GradeEntry, GradesMap } from './grades';
+import { JournalNote, JournalData } from './journal';
 
 const API_BASE = 'https://beste.schule/api';
 
@@ -134,4 +152,89 @@ export async function fetchBesteSchuleGrades(token: string, studentId: string): 
     bySubject[subjectName].push(mapGrade(g));
   }
   return bySubject;
+}
+
+interface RawJournalNote {
+  description?: string | null;
+  type?: { local_id?: string } | null;
+}
+
+interface RawJournalLesson {
+  day?: { date?: string } | null;
+  status?: string;
+  subject?: { name?: string; local_id?: string } | null;
+  group?: { name?: string; local_id?: string } | null;
+  notes?: RawJournalNote[];
+}
+
+interface RawJournalDay {
+  date?: string;
+  id?: string;
+  notes?: (RawJournalNote & { source?: string })[];
+}
+
+/**
+ * Holt Hausaufgaben und Vertretungen der nächsten 10 Tage. Kein Archiv:
+ * die Range startet heute, Vergangenes wird nie angefragt.
+ */
+export async function fetchBesteSchuleJournal(token: string, studentId: string): Promise<JournalData> {
+  const today = new Date();
+  const until = new Date(today.getTime() + 10 * 24 * 60 * 60 * 1000);
+  const range = `${today.toISOString().slice(0, 10)},${until.toISOString().slice(0, 10)}`;
+  const qs = (include: string) =>
+    new URLSearchParams({ interpolate: 'true', include, 'filter[range]': range, 'filter[student]': studentId }).toString();
+
+  const [lessonsRes, daysRes] = await Promise.all([
+    fetch(`${API_BASE}/journal/lessons?${qs('notes.type,day')}`, { headers: authHeaders(token) }),
+    fetch(`${API_BASE}/journal/days?${qs('notes.type')}`, { headers: authHeaders(token) }),
+  ]);
+  if (!lessonsRes.ok) throw new BesteSchuleError(`beste.schule (Klassenbuch): HTTP ${lessonsRes.status}`);
+  if (!daysRes.ok) throw new BesteSchuleError(`beste.schule (Klassenbuch): HTTP ${daysRes.status}`);
+  const lessonsJson = await lessonsRes.json();
+  const daysJson = await daysRes.json();
+
+  const homework: JournalNote[] = [];
+  const substitutions: JournalNote[] = [];
+
+  const lessons: RawJournalLesson[] = lessonsJson.data ?? [];
+  for (const lesson of lessons) {
+    const date = lesson.day?.date;
+    if (!date) continue;
+    const fach = lesson.subject?.name ?? lesson.subject?.local_id ?? lesson.group?.name ?? lesson.group?.local_id ?? null;
+    for (const note of lesson.notes ?? []) {
+      if (note.type?.local_id === 'HAU' && note.description) {
+        homework.push({ date, fach, text: note.description });
+      }
+    }
+    if (lesson.status === 'canceled' && fach) {
+      substitutions.push({ date, fach, text: 'Fällt aus' });
+    }
+  }
+
+  const days: RawJournalDay[] = daysJson.data ?? [];
+  for (const day of days) {
+    const date = day.date ?? day.id;
+    if (!date) continue;
+    for (const note of day.notes ?? []) {
+      if (note.source === 'substitutionplan' && note.description) {
+        substitutions.push({ date, fach: null, text: note.description });
+      }
+    }
+  }
+
+  // Doppelstunden tragen dieselbe Hausaufgabe/denselben Ausfall an jeder
+  // beteiligten Periode ein – als Liste soll das nur einmal auftauchen.
+  const dedupe = (notes: JournalNote[]) => {
+    const seen = new Set<string>();
+    return notes.filter((n) => {
+      const dupeKey = `${n.date}|${n.fach}|${n.text}`;
+      if (seen.has(dupeKey)) return false;
+      seen.add(dupeKey);
+      return true;
+    });
+  };
+
+  const homeworkUnique = dedupe(homework).sort((a, b) => a.date.localeCompare(b.date));
+  const substitutionsUnique = dedupe(substitutions).sort((a, b) => a.date.localeCompare(b.date));
+  return { homework: homeworkUnique, substitutions: substitutionsUnique };
 }
