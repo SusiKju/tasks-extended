@@ -38,6 +38,9 @@ interface RawLesson {
   weekday: number; // 1=Montag..5=Freitag
   nr: number;
   subject?: { name?: string; local_id?: string } | null;
+  // Kurs-Stunden (z.B. Sport-Gruppen wie "7SPO14m") tragen kein `subject`
+  // (immer null), sondern nur eine `group` mit dem Kurskürzel als Namen.
+  group?: { name?: string; local_id?: string } | null;
   rooms?: { local_id?: string }[];
   teachers?: { local_id?: string; name?: string }[];
 }
@@ -56,7 +59,7 @@ function mapLesson(lesson: RawLesson): { slotKey: string; fach: string; raum: st
   const dayIdx = Number(lesson.weekday) - 1; // 1-5 -> 0-4
   if (!Number.isFinite(dayIdx) || dayIdx < 0 || dayIdx > 4) return null;
   if (lesson.nr == null) return null;
-  const fach = lesson.subject?.name ?? lesson.subject?.local_id;
+  const fach = lesson.subject?.name ?? lesson.subject?.local_id ?? lesson.group?.name ?? lesson.group?.local_id;
   if (!fach) return null;
   const raum = (lesson.rooms ?? []).map((r) => r.local_id).filter(Boolean).join(', ');
   const lehrer = (lesson.teachers ?? []).map((t) => t.local_id ?? t.name).filter(Boolean).join(', ');
