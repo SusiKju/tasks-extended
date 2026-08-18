@@ -1496,7 +1496,7 @@ export function DashboardScreen() {
                         {m.competition}
                       </Text>
                     </View>
-                    <Text style={[styles.dueBadge, styles.dueBadgeOverdue]}>
+                    <Text style={[styles.dueBadge, { color: colors.text }]}>
                       {format(new Date(m.date), 'dd.MM.')} · {m.time}
                     </Text>
                   </Pressable>
