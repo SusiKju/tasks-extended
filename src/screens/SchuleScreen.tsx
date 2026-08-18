@@ -205,7 +205,7 @@ export default function SchuleScreen() {
                       {entries.map((g, i) => (
                         <View key={i} style={s.gradeChip}>
                           <Text style={s.gradeChipText}>{g.value}</Text>
-                          {g.type && <Text style={s.gradeChipMeta}>{g.type}</Text>}
+                          {!!g.type && <Text style={s.gradeChipMeta}>{g.type}</Text>}
                         </View>
                       ))}
                     </View>
@@ -269,7 +269,7 @@ export default function SchuleScreen() {
                     <View style={[s.lessonDot, { backgroundColor: subjectColor(entry.fach) }]} />
                     <Text style={s.lessonFach}>{entry.fach}</Text>
                   </View>
-                  {(entry.raum || entry.lehrer) && (
+                  {!!(entry.raum || entry.lehrer) && (
                     <Text style={s.lessonMeta}>
                       {[entry.raum, entry.lehrer].filter(Boolean).join(' · ')}
                     </Text>
