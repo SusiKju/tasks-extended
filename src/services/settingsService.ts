@@ -1,12 +1,16 @@
 /**
  * settingsService.ts
  *
- * App-Settings pro User in Firestore (TE-49).
- * Pfad: families/{familyId}/settingsByUser/{uid}
+ * App-Settings der ganzen Familie in Firestore (TE-49, family-weit seit TE-42).
+ * Pfad: families/{familyId}/config/settings – ein gemeinsames Dokument, damit
+ * z.B. besteSchuleStudentIds/fussballDeTeamIds für alle Familienmitglieder
+ * gelten (nicht nur für den, der sie eingetragen hat).
  *
  * Synchronisiert wird nur das Präferenz-Subset von AppSettings. Volatile
- * Auth-/Session-Felder (Google-Token, Client-ID) bleiben geräte-lokal –
- * ein Sync würde zwischen Geräten Token-Races erzeugen.
+ * Auth-/Session-Felder (Google-Token, Client-ID) UND der beste.schule-Token
+ * bleiben geräte-lokal – ein Sync würde zwischen Geräten Token-Races bzw.
+ * ein family-weit lesbares Secret erzeugen (bewusste Entscheidung, siehe
+ * LOCAL_ONLY_SETTING_KEYS).
  */
 
 import { db } from './firebase';
@@ -36,16 +40,15 @@ function toSyncable(settings: AppSettings): Partial<AppSettings> {
 }
 
 /**
- * Abonniert die synchronisierten Settings des Users in Echtzeit.
+ * Abonniert die synchronisierten Settings der Familie in Echtzeit.
  * Der Callback erhält nur das Sync-Subset (ohne Local-only-Felder); existiert
  * noch kein Dokument, wird er nicht aufgerufen.
  */
 export function subscribeToSettings(
   familyId: string,
-  uid: string,
   callback: (settings: Partial<AppSettings>) => void,
 ): () => void {
-  const ref = doc(db, 'families', familyId, 'settingsByUser', uid);
+  const ref = doc(db, 'families', familyId, 'config', 'settings');
   return onSnapshot(
     ref,
     (snap) => {
@@ -59,9 +62,8 @@ export function subscribeToSettings(
 /** Schreibt das synchronisierbare Settings-Subset (merge) nach Firestore. */
 export async function saveSettings(
   familyId: string,
-  uid: string,
   settings: AppSettings,
 ): Promise<void> {
-  const ref = doc(db, 'families', familyId, 'settingsByUser', uid);
+  const ref = doc(db, 'families', familyId, 'config', 'settings');
   await setDoc(ref, { ...toSyncable(settings), updatedAt: new Date().toISOString() }, { merge: true });
 }
