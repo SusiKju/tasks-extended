@@ -340,14 +340,20 @@ export function BambiniScreen() {
                         <Text style={s.rowSub}>seit {formatDE(c.registeredSince)}</Text>
                       ) : null}
                     </View>
-                    {c.whatsapp ? (
-                      <Ionicons name="logo-whatsapp" size={18} color={colors.textSecondary} accessibilityLabel="In WhatsApp-Gruppe" />
-                    ) : null}
-                    {c.info ? (
-                      <Ionicons name="information-circle-outline" size={18} color={colors.textSecondary} accessibilityLabel="Info vorhanden" />
-                    ) : null}
-                    {tier ? <Text style={s.badgeNeu}>neu</Text> : null}
-                    {c.stopped ? <Text style={s.badgeStopped}>aufgehört</Text> : null}
+                    <View style={s.iconSlot}>
+                      {c.whatsapp ? (
+                        <Ionicons name="logo-whatsapp" size={18} color={colors.textSecondary} accessibilityLabel="In WhatsApp-Gruppe" />
+                      ) : null}
+                    </View>
+                    <View style={s.iconSlot}>
+                      {c.info ? (
+                        <Ionicons name="information-circle-outline" size={18} color={colors.textSecondary} accessibilityLabel="Info vorhanden" />
+                      ) : null}
+                    </View>
+                    <View style={s.badgeSlot}>
+                      {tier ? <Text style={s.badgeNeu}>neu</Text> : null}
+                      {c.stopped ? <Text style={s.badgeStopped}>aufgehört</Text> : null}
+                    </View>
                     <Text style={s.rowYear}>{c.birthYear || '—'}</Text>
                     <Pressable onPress={() => removeEntry(c)} hitSlop={8} style={s.rowDel} accessibilityLabel="Löschen">
                       <Ionicons name="trash-outline" size={18} color={colors.textSecondary} />
@@ -531,6 +537,10 @@ function makeStyles(c: ThemeColors) {
     rowMain: { flex: 1 },
     rowName: { color: c.text, fontSize: 15, fontWeight: '600' },
     rowNameStopped: { textDecorationLine: 'line-through', color: c.textSecondary },
+    // Feste Spaltenbreite pro Icon/Badge, sonst rutscht die Spalte je nach Zeile
+    // (nicht jedes Kind hat WhatsApp/Info/Badge) hin und her ("Treppeneffekt").
+    iconSlot: { width: 18, alignItems: 'center' },
+    badgeSlot: { width: 62, alignItems: 'flex-start' },
     rowSub: { color: c.textSecondary, fontSize: 11, marginTop: 1 },
     badgeStopped: {
       color: c.warningFg,
