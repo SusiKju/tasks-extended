@@ -34,6 +34,7 @@ import {
   migrateRosterToBambini,
   loadBambiniFilters,
   saveBambiniFilters,
+  makeId,
 } from '../services/bambini';
 import { getJahrgangStatus, getBetreuungsZeitraum } from '../utils/bambiniSeason';
 
@@ -184,7 +185,7 @@ export function BambiniScreen() {
     if (editing && editing.id) {
       persist(children.map((c) => (c.id === editing.id ? { ...c, ...patch } : c)));
     } else {
-      persist([...children, { id: '', ...patch }]);
+      persist([...children, { id: makeId(), ...patch }]);
     }
     closeModal();
   };

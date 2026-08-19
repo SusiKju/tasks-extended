@@ -48,7 +48,7 @@ export interface BambiniFilters {
   stopped: boolean | null;
 }
 
-const makeId = (): string => String(uuid.v4());
+export const makeId = (): string => String(uuid.v4());
 
 const bambiniDoc = (uid: string) => doc(db, 'bambiniByUser', uid);
 
