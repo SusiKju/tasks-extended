@@ -333,12 +333,13 @@ export function BambiniScreen() {
                     <View style={s.rowMain}>
                       <Text style={[s.rowName, c.stopped && s.rowNameStopped]} numberOfLines={1}>{c.name}</Text>
                       {c.registeredSince ? (
-                        <Text style={s.rowSub}>seit {formatDE(c.registeredSince)}{tier ? ' · neu' : ''}</Text>
+                        <Text style={s.rowSub}>seit {formatDE(c.registeredSince)}</Text>
                       ) : null}
                     </View>
                     {c.info ? (
                       <Ionicons name="information-circle-outline" size={18} color={colors.textSecondary} accessibilityLabel="Info vorhanden" />
                     ) : null}
+                    {tier ? <Text style={s.badgeNeu}>neu</Text> : null}
                     {c.stopped ? <Text style={s.badgeStopped}>aufgehört</Text> : null}
                     <Text style={s.rowYear}>{c.birthYear || '—'}</Text>
                     <Pressable onPress={() => removeEntry(c)} hitSlop={8} style={s.rowDel} accessibilityLabel="Löschen">
@@ -518,6 +519,16 @@ function makeStyles(c: ThemeColors) {
     badgeStopped: {
       color: c.warningFg,
       backgroundColor: c.warning,
+      fontSize: 10,
+      fontWeight: '700',
+      overflow: 'hidden',
+      borderRadius: 6,
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+    },
+    badgeNeu: {
+      color: c.accentFg,
+      backgroundColor: c.accent,
       fontSize: 10,
       fontWeight: '700',
       overflow: 'hidden',
