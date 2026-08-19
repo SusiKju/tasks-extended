@@ -39,6 +39,8 @@ export interface Child {
   lastName: string;
   /** Freitext für zusätzliche Infos – optional ('') (TE-21). Befüllt → Icon in der Liste. */
   info: string;
+  /** In der WhatsApp-Gruppe der Eltern (TE-35). */
+  whatsapp: boolean;
 }
 
 /** Quickfilter-Auswahl im Bambini-Tab (TE-20), pro User persistiert. */
@@ -86,6 +88,7 @@ function sanitizeChild(c: any): Child | null {
     parentName: String(c?.parentName ?? ''),
     lastName: String(c?.lastName ?? ''),
     info: String(c?.info ?? ''),
+    whatsapp: !!c?.whatsapp,
   };
 }
 
@@ -185,6 +188,7 @@ export async function migrateRosterToBambini(uid: string): Promise<void> {
         parentName: '',
         lastName: '',
         info: '',
+        whatsapp: false,
       });
     });
   });

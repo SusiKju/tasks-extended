@@ -102,6 +102,7 @@ export function BambiniScreen() {
   const [parentInput, setParentInput] = useState('');
   const [lastNameInput, setLastNameInput] = useState('');
   const [infoInput, setInfoInput] = useState('');
+  const [whatsappInput, setWhatsappInput] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
 
   const reload = useCallback(async () => {
@@ -146,7 +147,7 @@ export function BambiniScreen() {
   );
 
   const openNew = () => {
-    setEditing({ id: '', name: '', birthYear: 0, registeredSince: '', stopped: false, parentName: '', lastName: '', info: '' });
+    setEditing({ id: '', name: '', birthYear: 0, registeredSince: '', stopped: false, parentName: '', lastName: '', info: '', whatsapp: false });
     setNameInput('');
     setYearInput('');
     setSinceInput('');
@@ -154,6 +155,7 @@ export function BambiniScreen() {
     setParentInput('');
     setLastNameInput('');
     setInfoInput('');
+    setWhatsappInput(false);
   };
 
   const openEdit = (c: Child) => {
@@ -165,6 +167,7 @@ export function BambiniScreen() {
     setParentInput(c.parentName);
     setLastNameInput(c.lastName);
     setInfoInput(c.info);
+    setWhatsappInput(c.whatsapp);
   };
 
   const closeModal = () => setEditing(null);
@@ -185,6 +188,7 @@ export function BambiniScreen() {
       parentName: parentInput.trim(),
       lastName: lastNameInput.trim(),
       info: infoInput.trim(),
+      whatsapp: whatsappInput,
     };
 
     if (editing && editing.id) {
@@ -336,6 +340,9 @@ export function BambiniScreen() {
                         <Text style={s.rowSub}>seit {formatDE(c.registeredSince)}</Text>
                       ) : null}
                     </View>
+                    {c.whatsapp ? (
+                      <Ionicons name="logo-whatsapp" size={18} color={colors.textSecondary} accessibilityLabel="In WhatsApp-Gruppe" />
+                    ) : null}
                     {c.info ? (
                       <Ionicons name="information-circle-outline" size={18} color={colors.textSecondary} accessibilityLabel="Info vorhanden" />
                     ) : null}
@@ -404,6 +411,15 @@ export function BambiniScreen() {
                 color={stoppedInput ? colors.accent : colors.textSecondary}
               />
               <Text style={[s.checkLabel, { color: colors.text }]}>Hat aufgehört</Text>
+            </Pressable>
+
+            <Pressable style={s.checkRow} onPress={() => setWhatsappInput((v) => !v)}>
+              <Ionicons
+                name={whatsappInput ? 'checkbox' : 'square-outline'}
+                size={22}
+                color={whatsappInput ? colors.accent : colors.textSecondary}
+              />
+              <Text style={[s.checkLabel, { color: colors.text }]}>In WhatsApp-Gruppe</Text>
             </Pressable>
 
             <TextInput
