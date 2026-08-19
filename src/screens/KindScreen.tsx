@@ -278,15 +278,17 @@ export default function KindScreen({ onExitChildMode }: Props) {
               <Text style={s.schoolHint}>Noch nichts eingetragen.</Text>
             ) : (
               <View style={s.schoolChipsRow}>
-                {todayLessons.map(({ p, entry }) => (
-                  <View
-                    key={String(p.nr)}
-                    style={[s.schoolChip, { borderColor: subjectColor(entry!.fach) }]}
-                  >
-                    <View style={[s.schoolDot, { backgroundColor: subjectColor(entry!.fach) }]} />
-                    <Text style={s.schoolChipText}>{entry!.fach}</Text>
-                  </View>
-                ))}
+                {todayLessons.map(({ p, entry }) => {
+                  const chipColor = entry!.pause ? colors.warning : subjectColor(entry!.fach);
+                  return (
+                    <View key={String(p.nr)} style={[s.schoolChip, { borderColor: chipColor }]}>
+                      <View style={[s.schoolDot, { backgroundColor: chipColor }]} />
+                      <Text style={[s.schoolChipText, entry!.pause && { color: colors.warning, fontStyle: 'italic' }]}>
+                        {entry!.fach}
+                      </Text>
+                    </View>
+                  );
+                })}
               </View>
             )}
           </View>

@@ -327,7 +327,7 @@ export default function SchuleScreen() {
           return (
             <TouchableOpacity
               key={String(p.nr)}
-              style={s.lessonCard}
+              style={[s.lessonCard, entry?.pause && s.lessonCardPause]}
               onPress={() => openEditor(p.nr, slotKey)}
               activeOpacity={isLinked ? 1 : 0.7}
               disabled={isLinked}
@@ -339,8 +339,8 @@ export default function SchuleScreen() {
               {entry ? (
                 <View style={s.lessonBody}>
                   <View style={s.lessonHead}>
-                    <View style={[s.lessonDot, { backgroundColor: subjectColor(entry.fach) }]} />
-                    <Text style={s.lessonFach}>{entry.fach}</Text>
+                    <View style={[s.lessonDot, { backgroundColor: entry.pause ? colors.warning : subjectColor(entry.fach) }]} />
+                    <Text style={[s.lessonFach, entry.pause && s.lessonFachPause]}>{entry.fach}</Text>
                   </View>
                   {!!(entry.raum || entry.lehrer) && (
                     <Text style={s.lessonMeta}>
@@ -496,6 +496,8 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
     lessonFach: { fontSize: 14.5, fontWeight: '700', color: colors.text },
     lessonMeta: { fontSize: 11.5, color: colors.textMuted },
     lessonEmpty: { fontSize: 13, color: colors.textMuted, fontStyle: 'italic' },
+    lessonCardPause: { borderColor: colors.warning },
+    lessonFachPause: { color: colors.warning, fontStyle: 'italic' },
     pauseRow: { alignItems: 'center', paddingVertical: 0 },
     pauseText: { fontSize: 11, color: colors.textMuted, fontStyle: 'italic' },
     // Klassenbuch

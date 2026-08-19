@@ -73,7 +73,12 @@ function pickActiveTimeTable(list: TimeTableListItem[]): TimeTableListItem | nul
   return started[0] ?? list[0] ?? null;
 }
 
-function mapLesson(lesson: RawLesson): { slotKey: string; fach: string; raum: string; lehrer: string } | null {
+// beste.schule trägt die Mittags-/Essenspause als Lektion ohne echtes Fach ein –
+// subject/group tragen wörtlich den Kursnamen "07/1" der Aufsichtsgruppe
+// (Netzwerk-Mitschnitt, 2026-08-19, per Screenshot bestätigt).
+const MITTAGSPAUSE_CODE = '07/1';
+
+function mapLesson(lesson: RawLesson): { slotKey: string; fach: string; raum: string; lehrer: string; pause?: boolean } | null {
   const dayIdx = Number(lesson.weekday) - 1; // 1-5 -> 0-4
   if (!Number.isFinite(dayIdx) || dayIdx < 0 || dayIdx > 4) return null;
   if (lesson.nr == null) return null;
@@ -81,7 +86,14 @@ function mapLesson(lesson: RawLesson): { slotKey: string; fach: string; raum: st
   if (!fach) return null;
   const raum = (lesson.rooms ?? []).map((r) => r.local_id).filter(Boolean).join(', ');
   const lehrer = (lesson.teachers ?? []).map((t) => t.local_id ?? t.name).filter(Boolean).join(', ');
-  return { slotKey: slotKey(dayIdx, String(lesson.nr)), fach: String(fach), raum, lehrer };
+  const pause = String(fach) === MITTAGSPAUSE_CODE;
+  return {
+    slotKey: slotKey(dayIdx, String(lesson.nr)),
+    fach: pause ? 'Mittagspause' : String(fach),
+    raum,
+    lehrer,
+    ...(pause ? { pause: true } : {}),
+  };
 }
 
 /** Holt den aktuellen Stundenplan eines Schülers frisch von beste.schule. */
@@ -108,7 +120,12 @@ export async function fetchBesteSchuleTimetable(token: string, studentId: string
     // Fächer je Woche) – wir zeigen nur die erste gefundene Belegung.
     // ponytail: kein A/B-Umschalten, bei Bedarf später nachrüsten.
     if (!map[mapped.slotKey]) {
-      map[mapped.slotKey] = { fach: mapped.fach, raum: mapped.raum, lehrer: mapped.lehrer };
+      map[mapped.slotKey] = {
+        fach: mapped.fach,
+        raum: mapped.raum,
+        lehrer: mapped.lehrer,
+        ...(mapped.pause ? { pause: true } : {}),
+      };
     }
   }
   return map;

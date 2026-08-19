@@ -16,6 +16,8 @@ export interface TimetableEntry {
   fach: string;
   raum: string;
   lehrer: string;
+  /** Mittags-/Essenspause statt Unterricht (siehe besteSchule.ts, Code "07/1"). */
+  pause?: boolean;
 }
 
 /** Key = "Tag-Stunde", Tag 1=Montag..5=Freitag, Stunde = Period.nr. */
@@ -84,7 +86,12 @@ function childDoc(familyId: string, childId: string) {
 function sanitizeEntry(raw: any): TimetableEntry | null {
   const fach = String(raw?.fach ?? '').trim();
   if (!fach) return null;
-  return { fach, raum: String(raw?.raum ?? ''), lehrer: String(raw?.lehrer ?? '') };
+  return {
+    fach,
+    raum: String(raw?.raum ?? ''),
+    lehrer: String(raw?.lehrer ?? ''),
+    ...(raw?.pause === true ? { pause: true } : {}),
+  };
 }
 
 function sanitizeMap(raw: any): TimetableMap {
