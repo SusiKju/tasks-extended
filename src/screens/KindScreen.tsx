@@ -29,6 +29,7 @@ import {
 } from '../services/timetable';
 import SchuleScreen from './SchuleScreen';
 import { BambiniScreen } from './BambiniScreen';
+import { Match, subscribeToMatches } from '../services/fussballDe';
 
 const FAMILY_ID_KEY = 'kinder_family_id';
 import { Platform } from 'react-native';
@@ -73,6 +74,7 @@ export default function KindScreen({ onExitChildMode }: Props) {
   const [tasks, setTasks] = useState<ChildTask[]>([]);
   const [allowanceMonths, setAllowanceMonths] = useState<Record<string, AllowanceMonth>>({});
   const [timetable, setTimetable] = useState<TimetableMap>({});
+  const [matches, setMatches] = useState<Match[]>([]);
   const [historyVisible, setHistoryVisible] = useState(false);
   const [loading, setLoading] = useState(true);
   const [pinModalVisible, setPinModalVisible] = useState(false);
@@ -126,7 +128,8 @@ export default function KindScreen({ onExitChildMode }: Props) {
     });
     const unsubAllowance = subscribeToAllowanceMonths(familyId, childId, setAllowanceMonths);
     const unsubTimetable = subscribeToTimetable(familyId, childId, setTimetable);
-    return () => { unsubTasks(); unsubPush(); unsubAllowance(); unsubTimetable(); };
+    const unsubMatches = subscribeToMatches(familyId, childId, setMatches);
+    return () => { unsubTasks(); unsubPush(); unsubAllowance(); unsubTimetable(); unsubMatches(); };
   }, [childId, familyId]);
 
   // Schatzkiste-Animation auslösen, sobald eine Aufgabe NEU abgehakt wurde (TE-100)
@@ -254,6 +257,12 @@ export default function KindScreen({ onExitChildMode }: Props) {
         .filter((x) => !!x.entry)
     : [];
 
+  // Nächste Vereinsspiele (fussball.de, TE-39)
+  const upcomingMatches = matches
+    .filter((m) => m.date >= TODAY)
+    .sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time))
+    .slice(0, 3);
+
   // Taschengeld (TE-53/TE-54)
   const selectedChild = familyChildren.find((c) => c.id === childId);
   const thisMonthKey = monthKey();
@@ -321,6 +330,21 @@ export default function KindScreen({ onExitChildMode }: Props) {
                 })}
               </View>
             )}
+          </View>
+        </View>
+      )}
+
+      {/* Nächste Vereinsspiele (fussball.de, TE-39) */}
+      {upcomingMatches.length > 0 && (
+        <View style={s.schoolCard}>
+          <Text style={s.schoolEmoji}>⚽</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={s.schoolLabel}>Nächste Spiele</Text>
+            {upcomingMatches.map((m) => (
+              <Text key={`${m.date}-${m.time}`} style={s.matchRow}>
+                {format(new Date(m.date), 'dd.MM.')} · {m.time} — {m.isHome ? `vs. ${m.away}` : `bei ${m.home}`}
+              </Text>
+            ))}
           </View>
         </View>
       )}
@@ -571,6 +595,7 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
     },
     schoolDot: { width: 7, height: 7, borderRadius: 4 },
     schoolChipText: { fontSize: 13, fontWeight: '700', color: colors.text },
+    matchRow: { fontSize: 14, fontWeight: '600', color: colors.text, marginTop: 6 },
     // Schatzkiste-Belohnung (TE-100)
     reward: {
       flexDirection: 'row', alignItems: 'center', gap: 16,
