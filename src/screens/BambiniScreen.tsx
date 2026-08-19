@@ -35,7 +35,12 @@ import {
   loadBambiniFilters,
   saveBambiniFilters,
   makeId,
+  neuTier,
+  NeuTier,
 } from '../services/bambini';
+
+/** Deckkraft des linken Hervorhebungs-Rands je Tier – frischer = kräftiger. */
+const NEU_TIER_ALPHA: Record<NeuTier, string> = { 2: 'FF', 4: 'B3', 8: '80', 16: '4D' };
 import { getJahrgangStatus, getBetreuungsZeitraum } from '../utils/bambiniSeason';
 
 /** ISO 'YYYY-MM-DD' → 'DD.MM.YYYY' (string-basiert, ohne Zeitzonen-Fallen). */
@@ -312,12 +317,23 @@ export function BambiniScreen() {
                     <Text style={s.groupHint}>betreut {zeitraum.von}–{zeitraum.bis}</Text>
                   ) : null}
                 </View>
-                {g.items.map((c) => (
-                  <Pressable key={c.id} style={[s.row, status === 'aktiv' && s.rowActive, gewechselt && s.rowMoved]} onPress={() => openEdit(c)}>
+                {g.items.map((c) => {
+                  const tier = c.stopped ? null : neuTier(c.registeredSince);
+                  return (
+                  <Pressable
+                    key={c.id}
+                    style={[
+                      s.row,
+                      status === 'aktiv' && s.rowActive,
+                      gewechselt && s.rowMoved,
+                      tier ? { borderLeftWidth: 4, borderLeftColor: colors.accent + NEU_TIER_ALPHA[tier] } : null,
+                    ]}
+                    onPress={() => openEdit(c)}
+                  >
                     <View style={s.rowMain}>
                       <Text style={[s.rowName, c.stopped && s.rowNameStopped]} numberOfLines={1}>{c.name}</Text>
                       {c.registeredSince ? (
-                        <Text style={s.rowSub}>seit {formatDE(c.registeredSince)}</Text>
+                        <Text style={s.rowSub}>seit {formatDE(c.registeredSince)}{tier ? ' · neu' : ''}</Text>
                       ) : null}
                     </View>
                     {c.info ? (
@@ -329,7 +345,8 @@ export function BambiniScreen() {
                       <Ionicons name="trash-outline" size={18} color={colors.textSecondary} />
                     </Pressable>
                   </Pressable>
-                  ))}
+                  );
+                })}
                 </View>
                 );
               })
