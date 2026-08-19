@@ -27,6 +27,8 @@ import {
   PERIODS, TimetableMap, subjectColor, key as timetableKey,
   todayDayIndex, subscribeToTimetable,
 } from '../services/timetable';
+import SchuleScreen from './SchuleScreen';
+import { BambiniScreen } from './BambiniScreen';
 
 const FAMILY_ID_KEY = 'kinder_family_id';
 import { Platform } from 'react-native';
@@ -78,6 +80,7 @@ export default function KindScreen({ onExitChildMode }: Props) {
   const [pinError, setPinError] = useState(false);
   const [notifPermission, setNotifPermission] = useState<'granted' | 'denied' | 'default' | 'unsupported'>('unsupported');
   const [toast, setToast] = useState(false);
+  const [view, setView] = useState<'tasks' | 'schule' | 'bambini'>('tasks');
 
   // Schatzkiste-Animation (TE-100)
   const chestScale = useRef(new Animated.Value(1)).current;
@@ -212,6 +215,22 @@ export default function KindScreen({ onExitChildMode }: Props) {
     );
   }
 
+  // ── Schule / Bambini: volle Eltern-Screens, per Zurück-Leiste eingebettet ──
+  if (view === 'schule' || view === 'bambini') {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.background }}>
+        <View style={s.subHeader}>
+          <TouchableOpacity style={s.subHeaderBack} onPress={() => setView('tasks')} hitSlop={8}>
+            <Ionicons name="chevron-back" size={22} color={colors.text} />
+            <Text style={s.subHeaderBackText}>Zurück</Text>
+          </TouchableOpacity>
+          <Text style={s.subHeaderTitle}>{view === 'schule' ? '🏫 Schule' : '⚽ Bambini'}</Text>
+        </View>
+        {view === 'schule' ? <SchuleScreen /> : <BambiniScreen />}
+      </View>
+    );
+  }
+
   // ── Aufgabenliste ────────────────────────────────────────────────────────
   const total = tasks.length;
   const done = tasks.filter((t) => t.done).length;
@@ -266,6 +285,17 @@ export default function KindScreen({ onExitChildMode }: Props) {
         <TouchableOpacity style={s.pinBtn} onPress={() => setPinModalVisible(true)}>
           <Ionicons name="lock-closed-outline" size={14} color={colors.textMuted} />
         </TouchableOpacity>
+        {/* Schule / Bambini – volle Ansicht wie im Eltern-Modus (TE-38) */}
+        <View style={s.navRow}>
+          <TouchableOpacity style={s.navBtn} onPress={() => setView('schule')}>
+            <Ionicons name="school-outline" size={18} color={colors.text} />
+            <Text style={s.navBtnText}>Schule</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={s.navBtn} onPress={() => setView('bambini')}>
+            <Ionicons name="football-outline" size={18} color={colors.text} />
+            <Text style={s.navBtnText}>Bambini</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Heute in der Schule – immer sichtbar, direkt unter dem Header */}
@@ -507,6 +537,22 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
     progressTrack: { width: '100%', height: 12, borderRadius: 6, backgroundColor: colors.surfaceHigh, marginTop: 14, overflow: 'hidden' },
     progressFill: { height: '100%', borderRadius: 6, backgroundColor: colors.success },
     pinBtn: { position: 'absolute', top: 60, right: 20, padding: 8, opacity: 0.4 },
+    // Schule / Bambini Navigation (TE-38)
+    navRow: { flexDirection: 'row', gap: 10, marginTop: 16 },
+    navBtn: {
+      flexDirection: 'row', alignItems: 'center', gap: 6,
+      paddingHorizontal: 14, paddingVertical: 8, borderRadius: 14,
+      backgroundColor: colors.surfaceHigh, borderWidth: 1, borderColor: colors.border,
+    },
+    navBtnText: { fontSize: 14, fontWeight: '700', color: colors.text },
+    subHeader: {
+      flexDirection: 'row', alignItems: 'center', gap: 12,
+      padding: 16, paddingTop: 56, backgroundColor: colors.surface,
+      borderBottomWidth: 1, borderColor: colors.border,
+    },
+    subHeaderBack: { flexDirection: 'row', alignItems: 'center' },
+    subHeaderBackText: { fontSize: 15, fontWeight: '600', color: colors.text },
+    subHeaderTitle: { fontSize: 18, fontWeight: '800', color: colors.text },
     // Heute in der Schule
     schoolCard: {
       flexDirection: 'row', alignItems: 'flex-start', gap: 12,
