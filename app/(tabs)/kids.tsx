@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  TextInput, Alert, ActivityIndicator, RefreshControl, Modal, Pressable, Platform,
+  TextInput, Alert, ActivityIndicator, RefreshControl, Modal, Pressable, Platform, Linking,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -43,6 +43,7 @@ import {
   formatEuro, formatMonthLabel, nextAllowanceMonth, effectiveAllowance,
 } from '../../src/services/allowance';
 import { sendTaskMailToChild as sendTaskMailCore } from '../../src/services/taskMail';
+import { Match, subscribeToMatches } from '../../src/services/fussballDe';
 import uuid from 'react-native-uuid';
 import { format } from 'date-fns';
 
@@ -80,6 +81,7 @@ export default function KinderScreen() {
   const { settings } = useStore();
   const [selectedChild, setSelectedChild] = useState<string>('');
   const [tasksByChild, setTasksByChild] = useState<Record<string, ChildTask[]>>({});
+  const [matchesByChild, setMatchesByChild] = useState<Record<string, Match[]>>({});
   // Taschengeld-Verlauf pro Kind, echtzeit-synchron mit der Kinder-App (TE-72).
   const [allowanceByChild, setAllowanceByChild] = useState<Record<string, Record<string, AllowanceMonth>>>({});
   const [newTaskTitle, setNewTaskTitle] = useState('');
@@ -135,6 +137,19 @@ export default function KinderScreen() {
     const unsubs = familyChildren.map((child) =>
       subscribeToAllowanceMonths(fid, child.id, (months) => {
         setAllowanceByChild((prev) => ({ ...prev, [child.id]: months }));
+      })
+    );
+    return () => unsubs.forEach((u) => u());
+  }, [fid, familyChildren]);
+
+  // Fußball-Termine (TE-48): vom Dashboard hierher verschoben, pro Kind statt
+  // aggregiert über alle Kinder — Daten kommen weiterhin nur per Firestore-
+  // Listener rein, Sync läuft serverseitig (scripts/sync-fussball-de.mjs).
+  useEffect(() => {
+    if (!fid || familyChildren.length === 0) return;
+    const unsubs = familyChildren.map((child) =>
+      subscribeToMatches(fid, child.id, (matches) => {
+        setMatchesByChild((prev) => ({ ...prev, [child.id]: matches }));
       })
     );
     return () => unsubs.forEach((u) => u());
@@ -466,6 +481,11 @@ export default function KinderScreen() {
     (sum, [, m]) => sum + (m.received ? m.amount : 0), 0);
   const nextAllowance = nextAllowanceMonth(allowanceMonths);
   const nextAllowanceReceived = allowanceMonths[nextAllowance]?.received ?? false;
+
+  // Kommende Spiele des ausgewählten Kindes (TE-48).
+  const upcomingMatches = (matchesByChild[selectedChild] ?? [])
+    .filter((m) => m.date >= TODAY)
+    .sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
 
   // Teilnehmer-Kürzel einer Gruppenaufgabe (TE-113/TE-114): bevorzugt die auf der
   // Aufgabe gespeicherte Teilnehmerliste; Fallback (Alt-Aufgaben ohne groupChildren)
@@ -912,6 +932,28 @@ export default function KinderScreen() {
             </View>
             );
           })
+        )}
+      </View>
+
+      {/* Fußball-Termine (TE-48) — vom Dashboard hierher verschoben */}
+      <View style={s.section}>
+        <Text style={s.sectionTitle}>⚽ Nächste Spiele — {childName(selectedChild)}</Text>
+        {upcomingMatches.length === 0 ? (
+          <Text style={s.empty}>Keine kommenden Spiele synchronisiert.</Text>
+        ) : (
+          upcomingMatches.map((m) => (
+            <Pressable
+              key={m.link ?? `${m.date}-${m.time}`}
+              onPress={() => m.link && Linking.openURL(m.link)}
+              style={s.allowanceRow}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={s.allowanceMonth}>{m.isHome ? `vs. ${m.away}` : `bei ${m.home}`}</Text>
+                <Text style={s.allowanceConfirmed}>{m.competition}</Text>
+              </View>
+              <Text style={s.allowanceAmount}>{format(new Date(m.date), 'dd.MM.')} · {m.time}</Text>
+            </Pressable>
+          ))
         )}
       </View>
 

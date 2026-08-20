@@ -130,8 +130,7 @@ export type DashboardBlockKey =
   | 'sharedList'
   | 'kidsTasks'
   | 'allowance'
-  | 'mail'
-  | 'fussballTermine';
+  | 'mail';
 
 export const DASHBOARD_BLOCKS: { key: DashboardBlockKey; label: string; description: string }[] = [
   { key: 'birthdays',     label: 'Geburtstage',         description: 'Heutige Geburtstage ganz oben.' },
@@ -149,7 +148,6 @@ export const DASHBOARD_BLOCKS: { key: DashboardBlockKey; label: string; descript
   { key: 'kidsTasks',     label: 'Aufgaben der Kinder', description: 'Heutige Aufgaben aller Kinder.' },
   { key: 'allowance',     label: 'Taschengeld',         description: 'Kinder, deren Taschengeld für den laufenden Monat noch offen ist.' },
   { key: 'mail',          label: 'Posteingang',         description: 'Angepinnte und ungelesene Mails.' },
-  { key: 'fussballTermine', label: 'Fußballtermine',    description: 'Nächste Vereinsspiele der an fussball.de gekoppelten Kinder.' },
 ];
 
 /** TE-77: Default-Sichtbarkeit – alle Dashboard-Blöcke aktiv, außer 'feed' (neu, Opt-in). */
