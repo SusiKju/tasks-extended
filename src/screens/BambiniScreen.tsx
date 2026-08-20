@@ -20,6 +20,7 @@ import {
   Alert,
   Platform,
   KeyboardAvoidingView,
+  Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, ThemeColors } from '../utils/theme';
@@ -400,6 +401,20 @@ export function BambiniScreen() {
                 );
               })
             )}
+
+            {/* TE-47: Beitragshöhe aus der Beitragsordnung 2026 (serkowitzer-fsv.de),
+                Link führt zur Dokumente-Seite (Mitgliedsantrag, Beitragsordnung). */}
+            <Pressable
+              style={s.beitragCard}
+              onPress={() => Linking.openURL('https://serkowitzer-fsv.de/dokumente/')}
+            >
+              <Ionicons name="document-text-outline" size={18} color={colors.textSecondary} />
+              <View style={s.rowMain}>
+                <Text style={s.beitragTitle}>Beitrag G-Jugend (Bambini): 70,00 € / Jahr · 35,00 € / Halbjahr</Text>
+                <Text style={s.beitragSub}>Beitragsordnung 2026 · Mitgliedsantrag unter serkowitzer-fsv.de/dokumente</Text>
+              </View>
+              <Ionicons name="open-outline" size={16} color={colors.textSecondary} />
+            </Pressable>
           </ScrollView>
         </>
       )}
@@ -586,6 +601,21 @@ function makeStyles(c: ThemeColors) {
     filterChipActive: { backgroundColor: c.accent, borderColor: c.accent },
     filterChipText: { color: c.textSecondary, fontSize: 13, fontWeight: '600' },
     filterChipTextActive: { color: c.accentFg },
+
+    beitragCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      backgroundColor: c.surface,
+      borderWidth: 1,
+      borderColor: c.border,
+      borderRadius: 10,
+      paddingVertical: 10,
+      paddingHorizontal: 12,
+      marginTop: 6,
+    },
+    beitragTitle: { color: c.text, fontSize: 13, fontWeight: '600' },
+    beitragSub: { color: c.textSecondary, fontSize: 11, marginTop: 2 },
 
     group: { marginBottom: 16 },
     groupTitleRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 6 },
