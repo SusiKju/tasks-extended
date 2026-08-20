@@ -43,6 +43,9 @@ import {
 
 /** Deckkraft des linken Hervorhebungs-Rands je Tier – frischer = kräftiger. */
 const NEU_TIER_ALPHA: Record<NeuTier, string> = { 2: 'FF', 4: 'B3', 8: '80', 16: '4D' };
+
+/** Bewusst nicht über colors.danger (wird in mono() vergraut) – wie NotesScreen IMPORTANT_RED. */
+const NOT_ANGEMELDET_RED = '#EF4444';
 import { getJahrgangStatus, getBetreuungsZeitraum } from '../utils/bambiniSeason';
 
 /** ISO 'YYYY-MM-DD' → 'DD.MM.YYYY' (string-basiert, ohne Zeitzonen-Fallen). */
@@ -105,6 +108,7 @@ export function BambiniScreen() {
   const [lastNameInput, setLastNameInput] = useState('');
   const [infoInput, setInfoInput] = useState('');
   const [whatsappInput, setWhatsappInput] = useState(false);
+  const [vereinAngemeldetInput, setVereinAngemeldetInput] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
 
   // TE-44: freie Notizen (Trainingsideen o. Ä.), gleiches Auto-Save-Verhalten
@@ -170,7 +174,7 @@ export function BambiniScreen() {
   );
 
   const openNew = () => {
-    setEditing({ id: '', name: '', birthYear: 0, registeredSince: '', stopped: false, parentName: '', lastName: '', info: '', whatsapp: false });
+    setEditing({ id: '', name: '', birthYear: 0, registeredSince: '', stopped: false, parentName: '', lastName: '', info: '', whatsapp: false, vereinAngemeldet: false });
     setNameInput('');
     setYearInput('');
     setSinceInput('');
@@ -179,6 +183,7 @@ export function BambiniScreen() {
     setLastNameInput('');
     setInfoInput('');
     setWhatsappInput(false);
+    setVereinAngemeldetInput(false);
   };
 
   const openEdit = (c: Child) => {
@@ -191,6 +196,7 @@ export function BambiniScreen() {
     setLastNameInput(c.lastName);
     setInfoInput(c.info);
     setWhatsappInput(c.whatsapp);
+    setVereinAngemeldetInput(c.vereinAngemeldet);
   };
 
   const closeModal = () => setEditing(null);
@@ -212,6 +218,7 @@ export function BambiniScreen() {
       lastName: lastNameInput.trim(),
       info: infoInput.trim(),
       whatsapp: whatsappInput,
+      vereinAngemeldet: vereinAngemeldetInput,
     };
 
     if (editing && editing.id) {
@@ -369,6 +376,11 @@ export function BambiniScreen() {
                       ) : null}
                     </View>
                     <View style={s.iconSlot}>
+                      {!c.vereinAngemeldet ? (
+                        <Ionicons name="ellipse" size={10} color={NOT_ANGEMELDET_RED} accessibilityLabel="Nicht im Verein angemeldet" />
+                      ) : null}
+                    </View>
+                    <View style={s.iconSlot}>
                       {c.info ? (
                         <Ionicons name="information-circle-outline" size={18} color={colors.textSecondary} accessibilityLabel="Info vorhanden" />
                       ) : null}
@@ -454,6 +466,15 @@ export function BambiniScreen() {
                 color={whatsappInput ? colors.accent : colors.textSecondary}
               />
               <Text style={[s.checkLabel, { color: colors.text }]}>In WhatsApp-Gruppe</Text>
+            </Pressable>
+
+            <Pressable style={s.checkRow} onPress={() => setVereinAngemeldetInput((v) => !v)}>
+              <Ionicons
+                name={vereinAngemeldetInput ? 'checkbox' : 'square-outline'}
+                size={22}
+                color={vereinAngemeldetInput ? colors.accent : colors.textSecondary}
+              />
+              <Text style={[s.checkLabel, { color: colors.text }]}>Im Verein angemeldet</Text>
             </Pressable>
 
             <TextInput
