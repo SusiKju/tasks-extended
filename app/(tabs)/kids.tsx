@@ -935,13 +935,12 @@ export default function KinderScreen() {
         )}
       </View>
 
-      {/* Fußball-Termine (TE-48) — vom Dashboard hierher verschoben */}
+      {/* Fußball-Termine (TE-48) — vom Dashboard hierher verschoben, nur wenn
+          welche da sind: kein Team konfiguriert/keine Spiele → kein leerer Block */}
+      {upcomingMatches.length > 0 && (
       <View style={s.section}>
         <Text style={s.sectionTitle}>⚽ Nächste Spiele — {childName(selectedChild)}</Text>
-        {upcomingMatches.length === 0 ? (
-          <Text style={s.empty}>Keine kommenden Spiele synchronisiert.</Text>
-        ) : (
-          upcomingMatches.map((m) => (
+        {upcomingMatches.map((m) => (
             <Pressable
               key={m.link ?? `${m.date}-${m.time}`}
               onPress={() => m.link && Linking.openURL(m.link)}
@@ -953,9 +952,9 @@ export default function KinderScreen() {
               </View>
               <Text style={s.allowanceAmount}>{format(new Date(m.date), 'dd.MM.')} · {m.time}</Text>
             </Pressable>
-          ))
-        )}
+        ))}
       </View>
+      )}
 
         </>
       )}
