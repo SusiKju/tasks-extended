@@ -23,7 +23,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, ThemeColors } from '../utils/theme';
-import { useFirebaseAuth } from '../hooks/useFirebaseAuth';
+import { useFamily } from '../hooks/useFamily';
 import { DatePickerModal } from '../components/DatePickerModal';
 import { FussballKachel } from '../components/FussballKachel';
 import { SearchInput } from '../components/SearchInput';
@@ -76,16 +76,16 @@ function confirmDelete(name: string, onConfirm: () => void) {
 
 export function BambiniScreen() {
   const { colors } = useTheme();
-  const { user } = useFirebaseAuth();
-  const uid = user?.uid ?? '';
+  const { familyId } = useFamily();
+  const fid = familyId ?? '';
   const s = makeStyles(colors);
 
   const [children, setChildren] = useState<Child[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
   // TE-99: Quickfilter unter der Suchleiste (Jahrgang, aufgehört/aktiv).
-  // TE-20: Jahrgang ist Mehrfachauswahl (mehrere Jahre gleichzeitig), pro User
-  // in Firestore gespeichert (siehe bambiniByUser/{uid}.filters).
+  // TE-20: Jahrgang ist Mehrfachauswahl (mehrere Jahre gleichzeitig), family-weit
+  // in Firestore gespeichert (siehe families/{familyId}/config/bambini.filters).
   // stoppedFilter: null = alle, true = nur aufgehört, false = nur aktiv (nicht aufgehört).
   const [yearFilter, setYearFilter] = useState<number[]>([]);
   const [stoppedFilter, setStoppedFilter] = useState<boolean | null>(null);
@@ -106,15 +106,15 @@ export function BambiniScreen() {
   const [showDatePicker, setShowDatePicker] = useState(false);
 
   const reload = useCallback(async () => {
-    if (!uid) {
+    if (!fid) {
       setChildren([]);
       setLoading(false);
       return;
     }
     setLoading(true);
     try {
-      await migrateRosterToBambini(uid);
-      const [list, filters] = await Promise.all([loadBambini(uid), loadBambiniFilters(uid)]);
+      await migrateRosterToBambini(fid);
+      const [list, filters] = await Promise.all([loadBambini(fid), loadBambiniFilters(fid)]);
       setChildren(list);
       setYearFilter(filters.years);
       setStoppedFilter(filters.stopped);
@@ -124,7 +124,7 @@ export function BambiniScreen() {
       filtersLoaded.current = true;
       setLoading(false);
     }
-  }, [uid]);
+  }, [fid]);
 
   useEffect(() => {
     reload();
@@ -132,18 +132,18 @@ export function BambiniScreen() {
 
   // TE-20: Filterwechsel in Firestore spiegeln (erst nach dem initialen Laden).
   useEffect(() => {
-    if (!filtersLoaded.current || !uid) return;
-    saveBambiniFilters(uid, { years: yearFilter, stopped: stoppedFilter }).catch((e) =>
+    if (!filtersLoaded.current || !fid) return;
+    saveBambiniFilters(fid, { years: yearFilter, stopped: stoppedFilter }).catch((e) =>
       console.warn('Bambini-Filter speichern fehlgeschlagen', e),
     );
-  }, [uid, yearFilter, stoppedFilter]);
+  }, [fid, yearFilter, stoppedFilter]);
 
   const persist = useCallback(
     (next: Child[]) => {
       setChildren(next);
-      if (uid) saveBambini(uid, next).catch((e) => console.warn('Bambini speichern fehlgeschlagen', e));
+      if (fid) saveBambini(fid, next).catch((e) => console.warn('Bambini speichern fehlgeschlagen', e));
     },
-    [uid],
+    [fid],
   );
 
   const openNew = () => {

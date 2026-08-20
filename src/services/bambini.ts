@@ -1,13 +1,16 @@
 /**
  * bambini.ts
  *
- * Zentrale Kinder-Registry pro User (TE-18) in Firestore.
- * Pfad: bambiniByUser/{uid} (ein Dokument mit einem `children`-Array).
+ * Zentrale Kinder-Registry der Familie (TE-18, family-weit seit TE-43) in
+ * Firestore. Pfad: families/{familyId}/config/bambini (ein Dokument mit
+ * einem `children`-Array).
  *
- * Strikt privat pro User – wie die Fokus-Kachel (focusTilesByUser) bewusst
- * NICHT unter families/. Jedes Kind trägt nur Name und Geburtsjahr. Die
- * Fußball-Notizen zeigen daraus jahrgangsweise gefilterte Ansichten
- * (siehe FussballKachel + JahrgangSel).
+ * War ursprünglich strikt privat pro User (`bambiniByUser/{uid}`, wie die
+ * Fokus-Kachel), auf Familien-Basis umgestellt damit alle Familienmitglieder
+ * (z.B. Lenny mit eigenem Account) dieselben Daten sehen wie der Trainer.
+ * Jedes Kind trägt nur Name und Geburtsjahr. Die Fußball-Notizen zeigen
+ * daraus jahrgangsweise gefilterte Ansichten (siehe FussballKachel +
+ * JahrgangSel).
  */
 
 import uuid from 'react-native-uuid';
@@ -72,7 +75,7 @@ export function neuTier(registeredSince: string, now: Date = new Date()): NeuTie
   return NEU_TIER_WEEKS.find((max) => weeks <= max) ?? null;
 }
 
-const bambiniDoc = (uid: string) => doc(db, 'bambiniByUser', uid);
+const bambiniDoc = (familyId: string) => doc(db, 'families', familyId, 'config', 'bambini');
 
 /** Firestore-sicheres, defensives Kind. Liefert null, wenn kein Name vorhanden. */
 function sanitizeChild(c: any): Child | null {
@@ -100,27 +103,27 @@ function sortChildren(list: Child[]): Child[] {
   return [...list].sort((a, b) => b.birthYear - a.birthYear || a.name.localeCompare(b.name, 'de'));
 }
 
-export async function loadBambini(uid: string): Promise<Child[]> {
-  const snap = await getDoc(bambiniDoc(uid));
+export async function loadBambini(familyId: string): Promise<Child[]> {
+  const snap = await getDoc(bambiniDoc(familyId));
   const raw = snap.exists() ? snap.data() : undefined;
   const list = Array.isArray(raw?.children) ? raw!.children : [];
   return sortChildren(list.map(sanitizeChild).filter((c: Child | null): c is Child => c !== null));
 }
 
-export async function saveBambini(uid: string, children: Child[]): Promise<void> {
+export async function saveBambini(familyId: string, children: Child[]): Promise<void> {
   const clean = sortChildren(
     children.map(sanitizeChild).filter((c: Child | null): c is Child => c !== null),
   );
   await setDoc(
-    bambiniDoc(uid),
+    bambiniDoc(familyId),
     { children: clean, updatedAt: new Date().toISOString() },
     { merge: true },
   );
 }
 
 /** Quickfilter-Auswahl (TE-20) laden – liegt im selben Dokument wie die Kinder. */
-export async function loadBambiniFilters(uid: string): Promise<BambiniFilters> {
-  const snap = await getDoc(bambiniDoc(uid));
+export async function loadBambiniFilters(familyId: string): Promise<BambiniFilters> {
+  const snap = await getDoc(bambiniDoc(familyId));
   const raw = snap.exists() ? (snap.data() as any)?.filters : undefined;
   const years = Array.isArray(raw?.years)
     ? raw.years.filter((y: any) => Number.isFinite(y)).map((y: number) => Math.trunc(y))
@@ -130,8 +133,8 @@ export async function loadBambiniFilters(uid: string): Promise<BambiniFilters> {
 }
 
 /** Quickfilter-Auswahl (TE-20) speichern. */
-export async function saveBambiniFilters(uid: string, filters: BambiniFilters): Promise<void> {
-  await setDoc(bambiniDoc(uid), { filters }, { merge: true });
+export async function saveBambiniFilters(familyId: string, filters: BambiniFilters): Promise<void> {
+  await setDoc(bambiniDoc(familyId), { filters }, { merge: true });
 }
 
 /** Kinder eines Jahrgangs filtern (exakt bzw. ab Jahr), ohne aufgehörte. */
@@ -160,12 +163,12 @@ function yearFromISO(iso: string): number {
  * Idempotent: läuft nur, solange `rosterMigrated` false ist. Bestehende Kinder
  * werden anhand Name+Jahr dedupliziert.
  */
-export async function migrateRosterToBambini(uid: string): Promise<void> {
-  if (!uid) return;
-  const kachel = await loadFussballKachel(uid, ROSTER_THEME);
+export async function migrateRosterToBambini(familyId: string): Promise<void> {
+  if (!familyId) return;
+  const kachel = await loadFussballKachel(familyId, ROSTER_THEME);
   if (kachel.rosterMigrated) return;
 
-  const existing = await loadBambini(uid);
+  const existing = await loadBambini(familyId);
   const seen = new Set(existing.map((c) => `${c.name.toLowerCase()}|${c.birthYear}`));
   const added: Child[] = [];
 
@@ -197,7 +200,7 @@ export async function migrateRosterToBambini(uid: string): Promise<void> {
   // Aufrufer-catch ab, BEVOR wir die Kachel als migriert markieren – die alten
   // Roster-Einträge bleiben dann als Quelle erhalten und die Migration läuft
   // beim nächsten Mal erneut.
-  if (added.length > 0) await saveBambini(uid, [...existing, ...added]);
+  if (added.length > 0) await saveBambini(familyId, [...existing, ...added]);
 
   // Jahrgang-Auswahl auf den bisherigen Stand setzen und Migration markieren.
   // Die Roster-Einträge werden bewusst NICHT gelöscht – sie dienen als
@@ -206,5 +209,5 @@ export async function migrateRosterToBambini(uid: string): Promise<void> {
   const sections = kachel.sections.map((sec, i) =>
     ROSTER_FIELDS.includes(i) ? { ...sec, jahrgang: sec.jahrgang ?? defaultJahrgang(i) } : sec,
   );
-  await saveFussballKachel(uid, ROSTER_THEME, sections, { rosterMigrated: true });
+  await saveFussballKachel(familyId, ROSTER_THEME, sections, { rosterMigrated: true });
 }

@@ -1,18 +1,15 @@
 /**
  * fussballKachel.ts
  *
- * Persistente, nicht löschbare Fußball-Notiz-Kachel pro User in Firestore.
- * Pfad: focusTilesByUser/{uid}/themes/fussball
+ * Persistente, nicht löschbare Fußball-Notiz-Kachel der Familie in Firestore.
+ * Pfad: families/{familyId}/config/focusTile-{theme} (family-weit seit TE-43).
  *
- * Strikt privat pro User – bewusst NICHT unter families/, damit die Daten
- * weder mit der Familie geteilt werden noch eine Familienmitgliedschaft
- * voraussetzen. Es gibt genau EIN Dokument mit vier unabhängigen
- * Notizabschnitten (2×2-Raster: Roster, Nominierung, Trainingsideen).
- *
- * Ursprünglich Teil eines Mehrthemen-Systems (Fokus-Kachel: Yoga/Garten);
- * diese Themen wurden entfernt, `FunTileTheme` ist jetzt auf 'fussball'
- * verengt. Die Firestore-Struktur (Pfadsegment `themes/{theme}`) blieb
- * unverändert, um bestehende Nutzerdaten nicht zu migrieren.
+ * War ursprünglich strikt privat pro User (`focusTilesByUser/{uid}/themes/…`,
+ * wie die generische Fokus-Kachel TE-7/10/12). `FunTileTheme` ist inzwischen
+ * auf 'fussball' verengt (die anderen Themen Yoga/Garten wurden entfernt) und
+ * wird ausschließlich aus dem Bambini-Tab heraus verwendet – deshalb auf
+ * Familien-Basis umgestellt, damit alle Familienmitglieder (z.B. Lenny mit
+ * eigenem Account) dieselben Notizen sehen wie der Trainer.
  */
 
 import { db } from './firebase';
@@ -130,8 +127,8 @@ export function defaultSections(theme: FunTileTheme): FussballAbschnitt[] {
   }));
 }
 
-const kachelDoc = (uid: string, theme: FunTileTheme) =>
-  doc(db, 'focusTilesByUser', uid, 'themes', theme);
+const kachelDoc = (familyId: string, theme: FunTileTheme) =>
+  doc(db, 'families', familyId, 'config', `focusTile-${theme}`);
 
 /**
  * Coerce a possibly-partial / legacy roster entry to the all-string shape
@@ -232,10 +229,10 @@ function normalize(theme: FunTileTheme, sections?: FussballAbschnitt[]): Fussbal
  * Abschnitte – auch wenn das Dokument noch nicht existiert.
  */
 export async function loadFussballKachel(
-  uid: string,
+  familyId: string,
   theme: FunTileTheme,
 ): Promise<FussballKachelData> {
-  const snap = await getDoc(kachelDoc(uid, theme));
+  const snap = await getDoc(kachelDoc(familyId, theme));
   const raw = snap.exists() ? (snap.data() as FussballKachelData) : undefined;
   return { sections: normalize(theme, raw?.sections), rosterMigrated: !!raw?.rosterMigrated };
 }
@@ -245,7 +242,7 @@ export async function loadFussballKachel(
  * bleibt erhalten, wenn nicht explizit überschrieben (TE-18).
  */
 export async function saveFussballKachel(
-  uid: string,
+  familyId: string,
   theme: FunTileTheme,
   sections: FussballAbschnitt[],
   opts?: { rosterMigrated?: boolean },
@@ -255,5 +252,5 @@ export async function saveFussballKachel(
     updatedAt: new Date().toISOString(),
   };
   if (opts?.rosterMigrated !== undefined) payload.rosterMigrated = opts.rosterMigrated;
-  await setDoc(kachelDoc(uid, theme), payload, { merge: true });
+  await setDoc(kachelDoc(familyId, theme), payload, { merge: true });
 }

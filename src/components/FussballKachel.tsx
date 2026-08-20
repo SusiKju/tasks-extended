@@ -26,7 +26,7 @@ import {
   ViewStyle,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useFirebaseAuth } from '../hooks/useFirebaseAuth';
+import { useFamily } from '../hooks/useFamily';
 import { FunTileTheme } from '../types';
 import {
   FussballAbschnitt,
@@ -419,8 +419,8 @@ interface FussballKachelProps {
 }
 
 export function FussballKachel({ forceTheme, iconStyle, iconSize = 18 }: FussballKachelProps = {}) {
-  const { user } = useFirebaseAuth();
-  const uid = user?.uid ?? '';
+  const { familyId } = useFamily();
+  const fid = familyId ?? '';
 
   const [openTheme, setOpenTheme] = useState<FunTileTheme | null>(null);
   const [draft, setDraft] = useState<FussballAbschnitt[]>([]);
@@ -435,14 +435,14 @@ export function FussballKachel({ forceTheme, iconStyle, iconSize = 18 }: Fussbal
     setDraft(defaultSections(theme));
     setChildren([]);
     setOpenTheme(theme);
-    if (!uid) return;
+    if (!fid) return;
     // Erst alte Roster-Einträge migrieren, dann Kachel + Kinder laden (TE-18).
     (async () => {
       try {
-        await migrateRosterToBambini(uid);
+        await migrateRosterToBambini(fid);
         const [data, kids] = await Promise.all([
-          loadFussballKachel(uid, theme),
-          loadBambini(uid),
+          loadFussballKachel(fid, theme),
+          loadBambini(fid),
         ]);
         if (!editedRef.current) setDraft(data.sections);
         setChildren(kids);
@@ -450,7 +450,7 @@ export function FussballKachel({ forceTheme, iconStyle, iconSize = 18 }: Fussbal
         console.warn('FussballKachel laden fehlgeschlagen', e);
       }
     })();
-  }, [uid]);
+  }, [fid]);
 
   const patchDraft = useCallback((i: number, patch: Partial<FussballAbschnitt>) => {
     editedRef.current = true;
@@ -478,11 +478,11 @@ export function FussballKachel({ forceTheme, iconStyle, iconSize = 18 }: Fussbal
   const handleSave = useCallback(() => {
     const theme = openTheme;
     setOpenTheme(null);
-    if (!uid || !theme) return;
-    saveFussballKachel(uid, theme, draft).catch((e) =>
+    if (!fid || !theme) return;
+    saveFussballKachel(fid, theme, draft).catch((e) =>
       console.warn('saveFussballKachel failed', e),
     );
-  }, [uid, openTheme, draft]);
+  }, [fid, openTheme, draft]);
 
   // Nur forceTheme öffnet die Kachel (TE-87) – die Dashboard/Settings-Auswahl
   // mehrerer Themen wurde entfernt.
