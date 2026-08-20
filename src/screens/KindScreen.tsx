@@ -349,7 +349,7 @@ export default function KindScreen({ onExitChildMode }: Props) {
         </View>
       )}
 
-      <ScrollView contentContainerStyle={s.list}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={s.list}>
         {tasks.length === 0 && (
           <Text style={s.empty}>Heute keine Aufgaben 🎉</Text>
         )}
