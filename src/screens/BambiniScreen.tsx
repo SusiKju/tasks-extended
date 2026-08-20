@@ -415,6 +415,18 @@ export function BambiniScreen() {
               </View>
               <Ionicons name="open-outline" size={16} color={colors.textSecondary} />
             </Pressable>
+
+            <Pressable
+              style={s.beitragCard}
+              onPress={() => Linking.openURL('https://serkowitzer-fsv.de/g-junioren/#')}
+            >
+              <Ionicons name="football-outline" size={18} color={colors.textSecondary} />
+              <View style={s.rowMain}>
+                <Text style={s.beitragTitle}>G-Junioren auf serkowitzer-fsv.de</Text>
+                <Text style={s.beitragSub}>Vereinsseite der G-Jugend</Text>
+              </View>
+              <Ionicons name="open-outline" size={16} color={colors.textSecondary} />
+            </Pressable>
           </ScrollView>
         </>
       )}
