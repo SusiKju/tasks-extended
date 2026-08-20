@@ -34,6 +34,8 @@ import {
   migrateRosterToBambini,
   loadBambiniFilters,
   saveBambiniFilters,
+  loadBambiniNotizen,
+  saveBambiniNotizen,
   makeId,
   neuTier,
   NeuTier,
@@ -104,6 +106,27 @@ export function BambiniScreen() {
   const [infoInput, setInfoInput] = useState('');
   const [whatsappInput, setWhatsappInput] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
+
+  // TE-44: freie Notizen (Trainingsideen o. Ä.), gleiches Auto-Save-Verhalten
+  // wie der Fußball-Notizdialog – Schließen speichert im Hintergrund.
+  const [notizenOpen, setNotizenOpen] = useState(false);
+  const [notizenDraft, setNotizenDraft] = useState('');
+  const notizenEditedRef = useRef(false);
+
+  const openNotizen = useCallback(() => {
+    notizenEditedRef.current = false;
+    setNotizenDraft('');
+    setNotizenOpen(true);
+    if (!fid) return;
+    loadBambiniNotizen(fid)
+      .then((text) => { if (!notizenEditedRef.current) setNotizenDraft(text); })
+      .catch((e) => console.warn('Bambini-Notizen laden fehlgeschlagen', e));
+  }, [fid]);
+
+  const closeNotizen = useCallback(() => {
+    setNotizenOpen(false);
+    if (fid) saveBambiniNotizen(fid, notizenDraft).catch((e) => console.warn('Bambini-Notizen speichern fehlgeschlagen', e));
+  }, [fid, notizenDraft]);
 
   const reload = useCallback(async () => {
     if (!fid) {
@@ -372,6 +395,11 @@ export function BambiniScreen() {
       {/* TE-87: gleiches Icon/gleiche Aktion wie das Fußball-Icon auf dem Dashboard. */}
       <FussballKachel forceTheme="fussball" iconStyle={s.fabFussball} iconSize={26} />
 
+      {/* TE-44: dritter FAB für freie Notizen (Trainingsideen o. Ä.). */}
+      <Pressable style={s.fabNotizen} onPress={openNotizen} accessibilityLabel="Notizen öffnen">
+        <Ionicons name="document-text" size={24} color="#3A2E00" />
+      </Pressable>
+
       <Pressable style={s.fab} onPress={openNew} accessibilityLabel="Kind hinzufügen">
         <Ionicons name="add" size={28} color={colors.accentFg} />
       </Pressable>
@@ -459,6 +487,30 @@ export function BambiniScreen() {
                 <Text style={[s.btnText, { color: colors.accentFg }]}>Speichern</Text>
               </Pressable>
             </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      <Modal visible={notizenOpen} transparent animationType="fade" onRequestClose={closeNotizen}>
+        <KeyboardAvoidingView style={s.overlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <View style={[s.card, s.notizenCard]}>
+            <View style={s.notizenHeader}>
+              <Ionicons name="document-text" size={18} color="#F2C518" />
+              <Text style={[s.cardTitle, s.notizenTitle]}>Notizen</Text>
+              <Pressable onPress={closeNotizen} hitSlop={12} accessibilityLabel="Schließen">
+                <Ionicons name="close" size={22} color={colors.textSecondary} />
+              </Pressable>
+            </View>
+            <TextInput
+              style={[s.input, s.notizenInput]}
+              value={notizenDraft}
+              onChangeText={(t) => { notizenEditedRef.current = true; setNotizenDraft(t); }}
+              placeholder="Trainingsideen, Hinweise, …"
+              placeholderTextColor={colors.placeholder}
+              multiline
+              textAlignVertical="top"
+              autoFocus
+            />
           </View>
         </KeyboardAvoidingView>
       </Modal>
@@ -596,9 +648,31 @@ function makeStyles(c: ThemeColors) {
       elevation: 6,
     },
 
+    // TE-44: dritter FAB links neben Fußball-Icon, öffnet den Notizen-Dialog.
+    fabNotizen: {
+      position: 'absolute',
+      right: 154,
+      bottom: 24,
+      width: 56,
+      height: 56,
+      borderRadius: 28,
+      backgroundColor: '#F2C518',
+      alignItems: 'center',
+      justifyContent: 'center',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.3,
+      shadowRadius: 6,
+      elevation: 6,
+    },
+
     overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center', padding: 24 },
     card: { width: '100%', maxWidth: 360, backgroundColor: c.surface, borderRadius: 16, borderWidth: 1, borderColor: c.border, padding: 18, gap: 12 },
     cardTitle: { color: c.text, fontSize: 17, fontWeight: '700' },
+    notizenCard: { maxWidth: 420, height: '70%' },
+    notizenHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    notizenTitle: { flex: 1 },
+    notizenInput: { flex: 1, fontSize: 15, lineHeight: 21 },
     input: {
       backgroundColor: c.inputBackground,
       borderWidth: 1,

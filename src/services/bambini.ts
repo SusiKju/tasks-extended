@@ -137,6 +137,18 @@ export async function saveBambiniFilters(familyId: string, filters: BambiniFilte
   await setDoc(bambiniDoc(familyId), { filters }, { merge: true });
 }
 
+/** Freitext-Notizen (TE-44) laden – liegt im selben Dokument wie die Kinder. */
+export async function loadBambiniNotizen(familyId: string): Promise<string> {
+  const snap = await getDoc(bambiniDoc(familyId));
+  const raw = snap.exists() ? (snap.data() as any)?.notizen : undefined;
+  return typeof raw === 'string' ? raw : '';
+}
+
+/** Freitext-Notizen (TE-44) speichern, z. B. Trainingsideen. */
+export async function saveBambiniNotizen(familyId: string, notizen: string): Promise<void> {
+  await setDoc(bambiniDoc(familyId), { notizen }, { merge: true });
+}
+
 /** Kinder eines Jahrgangs filtern (exakt bzw. ab Jahr), ohne aufgehörte. */
 export function childrenForJahrgang(
   children: Child[],
