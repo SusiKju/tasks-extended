@@ -19,8 +19,9 @@ import { useFamily } from '../hooks/useFamily';
 import { useStore } from '../store';
 import {
   PERIODS, DAY_NAMES, DAY_SHORT, subjectColor,
-  TimetableEntry, TimetableMap,
+  TimetableEntry, TimetableMap, PeriodTimesMap,
   key, todayDayIndex, subscribeToTimetable, setTimetableEntry, replaceTimetable,
+  applyPeriodTimes, subscribeToPeriodTimes, setPeriodTime,
 } from '../services/timetable';
 import { GradesMap, subscribeToGrades, replaceGrades } from '../services/grades';
 import { JournalData, subscribeToJournal, replaceJournal } from '../services/journal';
@@ -48,6 +49,7 @@ export default function SchuleScreen() {
   const [selectedChild, setSelectedChild] = useState('');
   const [view, setView] = useState<ScreenView>('plan');
   const [timetableByChild, setTimetableByChild] = useState<Record<string, TimetableMap>>({});
+  const [periodTimesByChild, setPeriodTimesByChild] = useState<Record<string, PeriodTimesMap>>({});
   const [gradesByChild, setGradesByChild] = useState<Record<string, GradesMap>>({});
   const [journalByChild, setJournalByChild] = useState<Record<string, JournalData>>({});
   const [selectedDay, setSelectedDay] = useState(() => {
@@ -68,6 +70,7 @@ export default function SchuleScreen() {
   const [fFach, setFFach] = useState('');
   const [fRaum, setFRaum] = useState('');
   const [fLehrer, setFLehrer] = useState('');
+  const [editingTime, setEditingTime] = useState<{ nr: number | string; start: string; end: string } | null>(null);
 
   useEffect(() => {
     if (familyChildren.length > 0 && !selectedChild) setSelectedChild(familyChildren[0].id);
@@ -78,6 +81,16 @@ export default function SchuleScreen() {
     const unsubs = familyChildren.map((child) =>
       subscribeToTimetable(fid, child.id, (map) => {
         setTimetableByChild((prev) => ({ ...prev, [child.id]: map }));
+      })
+    );
+    return () => unsubs.forEach((u) => u());
+  }, [fid, familyChildren]);
+
+  useEffect(() => {
+    if (!fid || familyChildren.length === 0) return;
+    const unsubs = familyChildren.map((child) =>
+      subscribeToPeriodTimes(fid, child.id, (map) => {
+        setPeriodTimesByChild((prev) => ({ ...prev, [child.id]: map }));
       })
     );
     return () => unsubs.forEach((u) => u());
@@ -110,14 +123,19 @@ export default function SchuleScreen() {
   const linkedStudentId = settings.besteSchuleStudentIds?.[selectedChild];
   const isLinked = !!linkedStudentId;
 
+  // Zeiten/Pausen sind bei beste.schule-Kindern durch den Sync vorgegeben;
+  // manuell gepflegte Kinder (andere Schule, andere Taktung) können sie
+  // pro Stunde überschreiben (periodTimesByChild), sonst gilt der Default.
+  const periods = isLinked ? PERIODS : applyPeriodTimes(PERIODS, periodTimesByChild[selectedChild] ?? {});
+
   // Bei synchronisierten Kindern (read-only) leere Zeilen am Tagesende weglassen
   // – nichts zum Antippen/Eintragen, also keine Zeile wert. Bei manuell
   // gepflegten Kindern bleiben alle Stunden sichtbar (Tippen legt eine an).
-  const lastFilledIdx = PERIODS.reduce((last, p, idx) => {
+  const lastFilledIdx = periods.reduce((last, p, idx) => {
     if (p.pause) return last;
     return timetable[key(selectedDay, p.nr)] ? idx : last;
   }, -1);
-  const visiblePeriods = isLinked ? PERIODS.slice(0, lastFilledIdx + 1) : PERIODS;
+  const visiblePeriods = isLinked ? periods.slice(0, lastFilledIdx + 1) : periods;
 
   // Live-Sync mit beste.schule: bei jedem Öffnen des Tabs (Focus) neu holen,
   // kein manuelles Aktualisieren nötig. Nur für Kinder mit hinterlegter
@@ -172,6 +190,29 @@ export default function SchuleScreen() {
     await setTimetableEntry(fid, selectedChild, editing.slotKey, null);
     setEditing(null);
   }, [editing, fid, selectedChild]);
+
+  const openTimeEditor = useCallback((nr: number | string, start: string, end: string) => {
+    if (isLinked) return; // Zeiten von beste.schule-Kindern kommen aus dem Sync
+    setEditingTime({ nr, start, end });
+  }, [isLinked]);
+
+  const closeTimeEditor = useCallback(() => setEditingTime(null), []);
+
+  const timeValid = !!editingTime
+    && /^([01]\d|2[0-3]):[0-5]\d$/.test(editingTime.start)
+    && /^([01]\d|2[0-3]):[0-5]\d$/.test(editingTime.end);
+
+  const handleSaveTime = useCallback(async () => {
+    if (!editingTime || !fid || !selectedChild || !timeValid) return;
+    await setPeriodTime(fid, selectedChild, editingTime.nr, editingTime.start, editingTime.end);
+    setEditingTime(null);
+  }, [editingTime, fid, selectedChild, timeValid]);
+
+  const handleResetTime = useCallback(async () => {
+    if (!editingTime || !fid || !selectedChild) return;
+    await setPeriodTime(fid, selectedChild, editingTime.nr, '', '');
+    setEditingTime(null);
+  }, [editingTime, fid, selectedChild]);
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.background }} contentContainerStyle={s.container}>
@@ -317,9 +358,16 @@ export default function SchuleScreen() {
         {visiblePeriods.map((p) => {
           if (p.pause) {
             return (
-              <View key={String(p.nr)} style={s.pauseRow}>
+              <TouchableOpacity
+                key={String(p.nr)}
+                style={s.pauseRow}
+                onPress={() => openTimeEditor(p.nr, p.start, p.end)}
+                activeOpacity={isLinked ? 1 : 0.6}
+                disabled={isLinked}
+              >
                 <Text style={s.pauseText}>{p.label} · {p.start}–{p.end}</Text>
-              </View>
+                {!isLinked && <Ionicons name="pencil-outline" size={11} color={colors.textMuted} />}
+              </TouchableOpacity>
             );
           }
           const slotKey = key(selectedDay, p.nr);
@@ -334,7 +382,13 @@ export default function SchuleScreen() {
             >
               <View style={s.lessonTime}>
                 <Text style={s.lessonNr}>{p.nr}.</Text>
-                <Text style={s.lessonClock}>{p.start}</Text>
+                {isLinked ? (
+                  <Text style={s.lessonClock}>{p.start}</Text>
+                ) : (
+                  <TouchableOpacity onPress={() => openTimeEditor(p.nr, p.start, p.end)} hitSlop={8}>
+                    <Text style={[s.lessonClock, s.lessonClockEditable]}>{p.start}</Text>
+                  </TouchableOpacity>
+                )}
               </View>
               {entry ? (
                 <View style={s.lessonBody}>
@@ -425,6 +479,53 @@ export default function SchuleScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* Zeit-Editor-Modal – nur für manuell gepflegte Kinder */}
+      <Modal visible={!!editingTime} transparent animationType="fade">
+        <Pressable style={s.modalOverlay} onPress={closeTimeEditor}>
+          <Pressable style={s.modalBox} onPress={() => {}}>
+            <Text style={s.modalTitle}>Uhrzeit ändern</Text>
+            <TextInput
+              style={s.input}
+              value={editingTime?.start ?? ''}
+              onChangeText={(v) => setEditingTime((cur) => cur && { ...cur, start: v })}
+              placeholder="Start (HH:MM)"
+              placeholderTextColor={colors.placeholder}
+              keyboardType="numbers-and-punctuation"
+              maxLength={5}
+              autoFocus
+            />
+            <TextInput
+              style={s.input}
+              value={editingTime?.end ?? ''}
+              onChangeText={(v) => setEditingTime((cur) => cur && { ...cur, end: v })}
+              placeholder="Ende (HH:MM)"
+              placeholderTextColor={colors.placeholder}
+              keyboardType="numbers-and-punctuation"
+              maxLength={5}
+              returnKeyType="done"
+              onSubmitEditing={handleSaveTime}
+            />
+            <View style={s.modalActions}>
+              <TouchableOpacity onPress={handleResetTime}>
+                <Text style={s.clearText}>Zurücksetzen</Text>
+              </TouchableOpacity>
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <TouchableOpacity style={s.cancelBtn} onPress={closeTimeEditor}>
+                  <Text style={s.cancelBtnText}>Abbrechen</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[s.saveBtn, !timeValid && { opacity: 0.4 }]}
+                  onPress={handleSaveTime}
+                  disabled={!timeValid}
+                >
+                  <Text style={s.saveBtnText}>Speichern</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </ScrollView>
   );
 }
@@ -490,6 +591,7 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
     lessonTime: { width: 40, alignItems: 'flex-start' },
     lessonNr: { fontSize: 14, fontWeight: '800', color: colors.text },
     lessonClock: { fontSize: 10, color: colors.textMuted },
+    lessonClockEditable: { textDecorationLine: 'underline', textDecorationStyle: 'dotted' },
     lessonBody: { flex: 1, minWidth: 0 },
     lessonHead: { flexDirection: 'row', alignItems: 'center', gap: 7 },
     lessonDot: { width: 8, height: 8, borderRadius: 4 },
@@ -498,7 +600,7 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
     lessonEmpty: { fontSize: 13, color: colors.textMuted, fontStyle: 'italic' },
     lessonCardPause: { borderColor: colors.warning },
     lessonFachPause: { color: colors.warning, fontStyle: 'italic' },
-    pauseRow: { alignItems: 'center', paddingVertical: 0 },
+    pauseRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 4, paddingVertical: 0 },
     pauseText: { fontSize: 11, color: colors.textMuted, fontStyle: 'italic' },
     // Klassenbuch
     klassenbuchTitle: { fontSize: 13, fontWeight: '700', color: colors.textSecondary, marginBottom: 2 },

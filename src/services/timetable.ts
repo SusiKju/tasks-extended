@@ -73,6 +73,65 @@ export function key(dayIdx: number, nr: number | string): string {
   return `${dayIdx + 1}-${nr}`;
 }
 
+/** Pro-Kind-Override der Uhrzeiten aus PERIODS, Key = Period.nr als String.
+ * Nur relevant für manuell gepflegte Kinder (keine beste.schule-Anbindung) –
+ * deren Zeiten/Pausen weichen von der Schule des Sync-Kindes ab. */
+export type PeriodTimesMap = Record<string, { start: string; end: string }>;
+
+function sanitizeTime(v: any): string {
+  const s = String(v ?? '').trim();
+  return /^([01]\d|2[0-3]):[0-5]\d$/.test(s) ? s : '';
+}
+
+function sanitizePeriodTimes(raw: any): PeriodTimesMap {
+  const out: PeriodTimesMap = {};
+  if (raw && typeof raw === 'object') {
+    for (const [k, v] of Object.entries(raw)) {
+      const start = sanitizeTime((v as any)?.start);
+      const end = sanitizeTime((v as any)?.end);
+      if (start && end) out[k] = { start, end };
+    }
+  }
+  return out;
+}
+
+/** Wendet gespeicherte Zeit-Overrides auf die Default-Periods an. */
+export function applyPeriodTimes(periods: Period[], overrides: PeriodTimesMap): Period[] {
+  return periods.map((p) => {
+    const o = overrides[String(p.nr)];
+    return o ? { ...p, start: o.start, end: o.end } : p;
+  });
+}
+
+/** Echtzeit-Listener auf die Zeit-Overrides eines Kindes. */
+export function subscribeToPeriodTimes(
+  familyId: string,
+  childId: string,
+  onChange: (map: PeriodTimesMap) => void,
+): Unsubscribe {
+  return onSnapshot(
+    childDoc(familyId, childId),
+    (snap) => onChange(sanitizePeriodTimes(snap.data()?.periodTimes)),
+    () => onChange({}),
+  );
+}
+
+/** Setzt (oder löscht mit start/end='') die Uhrzeit einer Stunde/Pause. */
+export async function setPeriodTime(
+  familyId: string,
+  childId: string,
+  nr: number | string,
+  start: string,
+  end: string,
+): Promise<void> {
+  const valid = sanitizeTime(start) && sanitizeTime(end);
+  await setDoc(
+    childDoc(familyId, childId),
+    { periodTimes: { [String(nr)]: valid ? { start, end } : null } },
+    { merge: true },
+  );
+}
+
 /** Heutiger Wochentag als Index 0-4 (Mo-Fr), -1 am Wochenende. */
 export function todayDayIndex(): number {
   const day = new Date().getDay(); // 0=So .. 6=Sa
