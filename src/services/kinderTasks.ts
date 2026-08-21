@@ -93,6 +93,9 @@ export interface ChildTask {
    *  gilt erst als verdient, wenn das Kind die Aufgabe abgehakt hat UND die Eltern
    *  sie anschließend freigeben (TE-61). */
   rewardReleased?: boolean;
+  /** false = Aufgabe wurde abgehakt, aber noch nicht von den Eltern zur Kenntnis
+   *  genommen (Punkt im Kind-Chip in der Kinder-Ansicht). true/undefined = gesehen. */
+  seenByParent?: boolean;
 }
 
 // ─── Belohnungspakete (TE-101 → TE-61) ───────────────────────────────────────
@@ -254,6 +257,8 @@ export async function toggleTask(
     done,
     completedAt: done ? new Date().toISOString() : null,
     rejected: false,
+    // Abhaken macht die Aufgabe für die Eltern "ungesehen" (Punkt im Kind-Chip).
+    seenByParent: !done,
   });
   await logActivity(familyId, childId, {
     action: done ? 'completed' : 'reopened',
@@ -285,6 +290,13 @@ export async function rejectTask(
     actor: 'parent',
     at: new Date().toISOString(),
   });
+}
+
+/** Eltern haben die abgehakten Aufgaben gesehen (Punkt im Kind-Chip verschwindet). */
+export async function markChildTasksSeen(familyId: string, childId: string, taskIds: string[]): Promise<void> {
+  await Promise.all(
+    taskIds.map((id) => updateDoc(taskDoc(familyId, childId, id), { seenByParent: true }))
+  );
 }
 
 // ─── History (Eltern) ────────────────────────────────────────────────────────

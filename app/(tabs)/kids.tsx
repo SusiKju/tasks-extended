@@ -33,7 +33,7 @@ import {
   ActivityEntry, ActivityAction,
   ChildReward, RewardType, REWARD_TYPES,
   subscribeToChildTasks, addTask, updateTask, deleteTask, deleteCompletedTasks, rejectTask,
-  releaseTaskReward,
+  releaseTaskReward, markChildTasksSeen,
   getActivityLog,
   getEmailReminderConfig, setEmailReminderConfig,
 } from '../../src/services/kinderTasks';
@@ -595,12 +595,19 @@ export default function KinderScreen() {
             const childTaskList = tasksByChild[child.id] ?? [];
             const childDone = childTaskList.filter((t) => t.done).length;
             const isSelected = child.id === selectedChild;
+            const unseenIds = childTaskList
+              .filter((t) => t.done && t.seenByParent === false)
+              .map((t) => t.id);
             return (
               <TouchableOpacity
                 key={child.id}
                 style={[s.childChip, isSelected && { backgroundColor: colors.accentNeon }]}
-                onPress={() => setSelectedChild(child.id)}
+                onPress={() => {
+                  setSelectedChild(child.id);
+                  if (unseenIds.length > 0) markChildTasksSeen(fid, child.id, unseenIds).catch(() => {});
+                }}
               >
+                {unseenIds.length > 0 && <View style={s.childUnseenDot} />}
                 <Text style={[s.childName, isSelected && { color: '#000' }]}>
                   {child.emoji ? `${child.emoji} ` : ''}{child.name}
                 </Text>
@@ -1064,6 +1071,27 @@ export default function KinderScreen() {
                             </Text>
                           </View>
                           <Text style={s.historyTime}>{time}</Text>
+                          {e.action === 'completed' && (
+                            <TouchableOpacity
+                              onPress={() => {
+                                crossAlert(
+                                  'Aufgabe reaktivieren?',
+                                  'Sie wird wieder auf „offen" gesetzt und beim Kind rot angezeigt.',
+                                  async () => {
+                                    try {
+                                      await rejectTask(fid, historyChild!, e.taskId, { title: e.taskTitle });
+                                      if (historyChild) handleOpenHistory(historyChild);
+                                    } catch (err: any) {
+                                      crossInfo('Fehler', err?.message ?? String(err));
+                                    }
+                                  }
+                                );
+                              }}
+                              hitSlop={8}
+                            >
+                              <Ionicons name="arrow-undo-circle-outline" size={20} color={colors.accentNeon} />
+                            </TouchableOpacity>
+                          )}
                         </View>
                       </View>
                     );
@@ -1192,6 +1220,14 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
       flex: 1, alignItems: 'center', paddingVertical: 10,
       borderRadius: 12, backgroundColor: colors.surface,
       borderWidth: 1, borderColor: colors.border,
+      position: 'relative',
+    },
+    // Bewusst festes Rot statt colors.danger: im Mono-Theme ist danger weiß
+    // (siehe theme.ts), dieser Hinweis muss aber wie das Wichtig-Flag immer rot bleiben.
+    childUnseenDot: {
+      position: 'absolute', top: 6, right: 6,
+      width: 9, height: 9, borderRadius: 5, backgroundColor: '#FF3B30',
+      borderWidth: 1, borderColor: colors.background,
     },
     childName: { fontSize: 14, fontWeight: '700', color: colors.text },
     childProgress: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
