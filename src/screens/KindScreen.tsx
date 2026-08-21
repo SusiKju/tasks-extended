@@ -280,6 +280,7 @@ export default function KindScreen({ onExitChildMode }: Props) {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1 }}>
       {/* Header */}
       <View style={s.header}>
         <Text style={s.headerEmoji}>{headerEmoji}</Text>
@@ -349,7 +350,7 @@ export default function KindScreen({ onExitChildMode }: Props) {
         </View>
       )}
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={s.list}>
+      <View style={s.list}>
         {tasks.length === 0 && (
           <Text style={s.empty}>Heute keine Aufgaben 🎉</Text>
         )}
@@ -405,7 +406,7 @@ export default function KindScreen({ onExitChildMode }: Props) {
             </View>
           </TouchableOpacity>
         ))}
-      </ScrollView>
+      </View>
 
       {/* Schatzkiste-Belohnung (TE-100) – generischer Tagesfortschritt */}
       <View style={[s.reward, chestStage.full && s.rewardFull]}>
@@ -484,6 +485,7 @@ export default function KindScreen({ onExitChildMode }: Props) {
           <Text style={[s.notifBannerText, { color: colors.dangerFg }]}>Benachrichtigungen blockiert — in Browser-Einstellungen erlauben</Text>
         </View>
       )}
+      </ScrollView>
 
       {/* Taschengeld-Verlauf (TE-54) */}
       <Modal visible={historyVisible} transparent animationType="fade">
