@@ -3,9 +3,14 @@ import { Tabs } from 'expo-router';
 import { Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, neonGlow } from '../../src/utils/theme';
+import { useStore } from '../../src/store';
+import { DEFAULT_VISIBLE_TABS, TabKey } from '../../src/types';
 
 export default function TabsLayout() {
   const { colors, isDark } = useTheme();
+  const visibleTabs = useStore((s) => s.settings.visibleTabs ?? DEFAULT_VISIBLE_TABS);
+  // TE-49: Elternteil kann Tabs zwischen Dashboard und Settings einzeln ausblenden.
+  const hrefFor = (key: TabKey) => (visibleTabs[key] === false ? null : undefined);
 
   return (
     <Tabs
@@ -48,6 +53,7 @@ export default function TabsLayout() {
         name="tasks"
         options={{
           title: 'Tasks',
+          href: hrefFor('tasks'),
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="checkmark-circle-outline" size={size} color={color} />
           ),
@@ -59,6 +65,7 @@ export default function TabsLayout() {
         name="links"
         options={{
           title: 'Links',
+          href: hrefFor('links'),
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="link-outline" size={size} color={color} />
           ),
@@ -74,6 +81,7 @@ export default function TabsLayout() {
         name="mail"
         options={{
           title: 'Mail',
+          href: hrefFor('mail'),
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="mail-outline" size={size} color={color} />
           ),
@@ -83,6 +91,7 @@ export default function TabsLayout() {
         name="kids"
         options={{
           title: 'Kinder',
+          href: hrefFor('kids'),
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="people-outline" size={size} color={color} />
           ),
@@ -92,6 +101,7 @@ export default function TabsLayout() {
         name="schule"
         options={{
           title: 'Schule',
+          href: hrefFor('schule'),
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="school-outline" size={size} color={color} />
           ),
@@ -101,6 +111,7 @@ export default function TabsLayout() {
         name="bambini"
         options={{
           title: 'Bambini',
+          href: hrefFor('bambini'),
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="football-outline" size={size} color={color} />
           ),

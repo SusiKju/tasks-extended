@@ -26,6 +26,9 @@ export const LOCAL_ONLY_SETTING_KEYS: (keyof AppSettings)[] = [
   // beste.schule-Zugriffstoken: wie die Google-Tokens bewusst geräte-lokal
   // (kein Firestore-Sync) – ein API-Token ist ein Geheimnis, kein Präferenzwert.
   'besteSchuleToken',
+  // TE-49: Tab-Sichtbarkeit ist bewusst pro Elternteil/Gerät gedacht (z.B.
+  // braucht nicht jeder Elternteil den Bambini-Tab) – kein Familien-Sync.
+  'visibleTabs',
 ];
 
 /** Entfernt Local-only- und undefined-Felder. Firebase 11 hängt bei undefined-Werten. */

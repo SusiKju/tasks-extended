@@ -16,7 +16,7 @@ import { Clipboard } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useStore } from '../store';
 import { useTheme, ThemeColors, neonGlow } from '../utils/theme';
-import { MAIL_WINDOW_OPTIONS, DASHBOARD_BLOCKS, DEFAULT_DASHBOARD_BLOCKS } from '../types';
+import { MAIL_WINDOW_OPTIONS, DASHBOARD_BLOCKS, DEFAULT_DASHBOARD_BLOCKS, TOGGLEABLE_TABS, DEFAULT_VISIBLE_TABS } from '../types';
 
 import {
   signInWithGoogle,
@@ -958,6 +958,38 @@ export function SettingsScreen() {
               <View style={styles.rowContent}>
                 <Text style={styles.rowTitle}>{block.label}</Text>
                 <Text style={styles.rowSubtitle}>{block.description}</Text>
+              </View>
+              {active
+                ? <Ionicons name="checkmark-circle" size={22} color={colors.accentNeon} />
+                : <Ionicons name="ellipse-outline" size={22} color={colors.textMuted} />}
+            </Pressable>
+          );
+        })}
+      </View>
+
+      {/* Sichtbare Tabs (TE-49) */}
+      <View style={styles.section}>
+        <Text style={styles.sectionHeader}>Tabs</Text>
+        <Text style={[styles.rowSubtitle, { paddingHorizontal: 4, marginBottom: 6 }]}>
+          Welche Tabs zwischen Dashboard und Settings angezeigt werden.
+        </Text>
+        {TOGGLEABLE_TABS.map((tab) => {
+          const active = (settings.visibleTabs ?? DEFAULT_VISIBLE_TABS)[tab.key] !== false;
+          return (
+            <Pressable
+              key={tab.key}
+              style={({ pressed }) => [styles.themeRow, active && styles.themeRowActive, pressed && { opacity: 0.85 }]}
+              onPress={() => updateSettings({
+                visibleTabs: {
+                  ...DEFAULT_VISIBLE_TABS,
+                  ...settings.visibleTabs,
+                  [tab.key]: !active,
+                },
+              })}
+            >
+              <View style={styles.rowContent}>
+                <Text style={styles.rowTitle}>{tab.label}</Text>
+                <Text style={styles.rowSubtitle}>{tab.description}</Text>
               </View>
               {active
                 ? <Ionicons name="checkmark-circle" size={22} color={colors.accentNeon} />

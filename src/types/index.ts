@@ -91,6 +91,12 @@ export interface AppSettings {
    */
   dashboardBlocks: Record<DashboardBlockKey, boolean>;
   /**
+   * TE-49: Sichtbarkeit der Tabs zwischen Dashboard und Settings, pro
+   * Elternteil/Gerät (geräte-lokal, kein Familien-Sync – siehe
+   * LOCAL_ONLY_SETTING_KEYS). Fehlt ein Key, gilt er als sichtbar.
+   */
+  visibleTabs: Record<TabKey, boolean>;
+  /**
    * beste.schule-Anbindung: Zugriffstoken (Bearer), geräte-lokal wie die
    * Google-Tokens – kein Firestore-Sync, kein Token-Sharing zwischen Geräten.
    */
@@ -155,6 +161,28 @@ export const DEFAULT_DASHBOARD_BLOCKS: Record<DashboardBlockKey, boolean> =
   DASHBOARD_BLOCKS.reduce(
     (acc, b) => { acc[b.key] = b.key !== 'feed'; return acc; },
     {} as Record<DashboardBlockKey, boolean>
+  );
+
+/**
+ * TE-49: Vom Elternteil ein-/ausschaltbare Tabs zwischen Dashboard und
+ * Settings (die beiden Anker-Tabs selbst sind nicht abschaltbar).
+ */
+export type TabKey = 'tasks' | 'links' | 'mail' | 'kids' | 'schule' | 'bambini';
+
+export const TOGGLEABLE_TABS: { key: TabKey; label: string; description: string }[] = [
+  { key: 'tasks',   label: 'Tasks',   description: 'Aufgabenliste.' },
+  { key: 'links',   label: 'Links',   description: 'Schnellleiste mit Links.' },
+  { key: 'mail',    label: 'Mail',    description: 'Posteingang.' },
+  { key: 'kids',    label: 'Kinder',  description: 'Kinder-Übersicht mit Taschengeld und Aufgaben.' },
+  { key: 'schule',  label: 'Schule',  description: 'beste.schule-Anbindung.' },
+  { key: 'bambini', label: 'Bambini', description: 'Fußball-Training.' },
+];
+
+/** Default: alle Tabs sichtbar (kein Verhaltensunterschied für Bestandsnutzer). */
+export const DEFAULT_VISIBLE_TABS: Record<TabKey, boolean> =
+  TOGGLEABLE_TABS.reduce(
+    (acc, t) => { acc[t.key] = true; return acc; },
+    {} as Record<TabKey, boolean>
   );
 
 /** TE-37/TE-43: Auswählbare Zeitfenster (in Tagen) für den Mail-Tab. */

@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Task, Group, AppSettings, Attachment, Note, Birthday, Countdown, DEFAULT_DASHBOARD_BLOCKS } from '../types';
+import { Task, Group, AppSettings, Attachment, Note, Birthday, Countdown, DEFAULT_DASHBOARD_BLOCKS, DEFAULT_VISIBLE_TABS } from '../types';
 
 interface TaskState {
   _hydrated?: boolean;
@@ -112,6 +112,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   mailWindowDays: 7,
   parentPin: null,
   dashboardBlocks: { ...DEFAULT_DASHBOARD_BLOCKS },
+  visibleTabs: { ...DEFAULT_VISIBLE_TABS },
   besteSchuleToken: null,
   besteSchuleStudentIds: {},
   fussballDeTeamIds: {},
@@ -286,7 +287,7 @@ export const useStore = create<TaskState>()(
     }),
     {
       name: 'tasks-extended-store',
-      version: 26,
+      version: 27,
       migrate: (persistedState: any, version: number) => {
         if (version < 1 && persistedState?.tasks) {
           persistedState.tasks = persistedState.tasks.map((t: any) => ({
@@ -426,6 +427,11 @@ export const useStore = create<TaskState>()(
           // Fokus-Kacheln vom Dashboard entfernt (Fußball/Yoga/Garten-Auswahl) –
           // Fußball bleibt nur noch fest verdrahtet im Bambini-Tab.
           delete persistedState.settings.funTileThemes;
+        }
+        if (version < 27 && persistedState?.settings) {
+          // TE-49: Ein-/ausschaltbare Tabs pro Elternteil – Default: alle sichtbar.
+          persistedState.settings.visibleTabs =
+            persistedState.settings.visibleTabs ?? { ...DEFAULT_VISIBLE_TABS };
         }
         return persistedState;
       },
