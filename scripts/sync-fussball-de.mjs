@@ -64,20 +64,32 @@ function extractLink(chunk) {
 function parseMatchplan(html, teamId) {
   const chunks = html.split('<tr class="row-headline visible-small">').slice(1);
   const matches = [];
+  const indexByLink = new Map();
   for (const chunk of chunks) {
     const headline = extractHeadline(chunk);
     const names = extractClubNames(chunk);
     if (!headline || !names) continue;
     const teamIds = extractTeamIds(chunk);
-    matches.push({
+    const link = extractLink(chunk);
+    const match = {
       ...headline,
       home: names[0],
       away: names[1],
       // ponytail: falls die team-id-Extraktion mal leer läuft, nehmen wir
       // "Heimspiel" an (steht in der HTML-Reihenfolge zuerst) statt zu verwerfen.
       isHome: teamIds[0] ? teamIds[0] === teamId : true,
-      link: extractLink(chunk),
-    });
+      link,
+    };
+    // fussball.de listet dasselbe Spiel teils zweifach mit unterschiedlichem
+    // Termin – bei einer Spielverlegung bleibt ein Eintrag mit dem alten
+    // Termin stehen, der spätere Eintrag im HTML trägt den aktuellen. Also
+    // per Link entdoppeln und dabei den späteren (aktuellen) behalten.
+    if (link && indexByLink.has(link)) {
+      matches[indexByLink.get(link)] = match;
+    } else {
+      if (link) indexByLink.set(link, matches.length);
+      matches.push(match);
+    }
   }
   return matches;
 }
