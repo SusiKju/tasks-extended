@@ -29,7 +29,7 @@ import {
 } from '../services/timetable';
 import SchuleScreen from './SchuleScreen';
 import { BambiniScreen } from './BambiniScreen';
-import { Match, subscribeToMatches } from '../services/fussballDe';
+import { Match, Standing, subscribeToMatches, subscribeToTable } from '../services/fussballDe';
 
 const FAMILY_ID_KEY = 'kinder_family_id';
 import { Platform } from 'react-native';
@@ -75,6 +75,7 @@ export default function KindScreen({ onExitChildMode }: Props) {
   const [allowanceMonths, setAllowanceMonths] = useState<Record<string, AllowanceMonth>>({});
   const [timetable, setTimetable] = useState<TimetableMap>({});
   const [matches, setMatches] = useState<Match[]>([]);
+  const [standings, setStandings] = useState<Standing[]>([]);
   const [historyVisible, setHistoryVisible] = useState(false);
   const [loading, setLoading] = useState(true);
   const [pinModalVisible, setPinModalVisible] = useState(false);
@@ -129,7 +130,8 @@ export default function KindScreen({ onExitChildMode }: Props) {
     const unsubAllowance = subscribeToAllowanceMonths(familyId, childId, setAllowanceMonths);
     const unsubTimetable = subscribeToTimetable(familyId, childId, setTimetable);
     const unsubMatches = subscribeToMatches(familyId, childId, setMatches);
-    return () => { unsubTasks(); unsubPush(); unsubAllowance(); unsubTimetable(); unsubMatches(); };
+    const unsubTable = subscribeToTable(familyId, childId, setStandings);
+    return () => { unsubTasks(); unsubPush(); unsubAllowance(); unsubTimetable(); unsubMatches(); unsubTable(); };
   }, [childId, familyId]);
 
   // Schatzkiste-Animation auslösen, sobald eine Aufgabe NEU abgehakt wurde (TE-100)
@@ -345,6 +347,30 @@ export default function KindScreen({ onExitChildMode }: Props) {
               <Text key={`${m.date}-${m.time}`} style={s.matchRow}>
                 {format(new Date(m.date), 'dd.MM.')} · {m.time} — {m.isHome ? `vs. ${m.away}` : `bei ${m.home}`}
               </Text>
+            ))}
+          </View>
+        </View>
+      )}
+
+      {/* Tabelle (fussball.de) */}
+      {standings.length > 0 && (
+        <View style={s.schoolCard}>
+          <Text style={s.schoolEmoji}>🏆</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={s.schoolLabel}>Tabelle</Text>
+            <View style={s.tableRow}>
+              <Text style={s.tableCellRank} />
+              <Text style={s.tableCellClub} />
+              <Text style={s.tableCellNum}>Sp</Text>
+              <Text style={s.tableCellNum}>Pkt</Text>
+            </View>
+            {standings.map((row) => (
+              <View key={row.rank} style={s.tableRow}>
+                <Text style={[s.tableCellRank, row.isOwn && s.tableRowOwn]}>{row.rank}.</Text>
+                <Text style={[s.tableCellClub, row.isOwn && s.tableRowOwn]} numberOfLines={1}>{row.club}</Text>
+                <Text style={[s.tableCellNum, row.isOwn && s.tableRowOwn]}>{row.played}</Text>
+                <Text style={[s.tableCellNum, s.tableCellPoints, row.isOwn && s.tableRowOwn]}>{row.points}</Text>
+              </View>
             ))}
           </View>
         </View>
@@ -598,6 +624,12 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
     schoolDot: { width: 7, height: 7, borderRadius: 4 },
     schoolChipText: { fontSize: 13, fontWeight: '700', color: colors.text },
     matchRow: { fontSize: 14, fontWeight: '600', color: colors.text, marginTop: 6 },
+    tableRow: { flexDirection: 'row', alignItems: 'center', marginTop: 6, gap: 6 },
+    tableCellRank: { fontSize: 13, color: colors.textSecondary, width: 22 },
+    tableCellClub: { fontSize: 13, color: colors.text, flex: 1 },
+    tableCellNum: { fontSize: 13, color: colors.textSecondary, width: 24, textAlign: 'right' },
+    tableCellPoints: { fontWeight: '700', color: colors.text },
+    tableRowOwn: { fontWeight: '800', color: colors.accent },
     // Schatzkiste-Belohnung (TE-100)
     reward: {
       flexDirection: 'row', alignItems: 'center', gap: 16,
