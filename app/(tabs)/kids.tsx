@@ -43,7 +43,7 @@ import {
   formatEuro, formatMonthLabel, nextAllowanceMonth, effectiveAllowance,
 } from '../../src/services/allowance';
 import { sendTaskMailToChild as sendTaskMailCore } from '../../src/services/taskMail';
-import { Match, subscribeToMatches } from '../../src/services/fussballDe';
+import { Match, Standing, subscribeToMatches, subscribeToTable } from '../../src/services/fussballDe';
 import uuid from 'react-native-uuid';
 import { format } from 'date-fns';
 
@@ -82,6 +82,8 @@ export default function KinderScreen() {
   const [selectedChild, setSelectedChild] = useState<string>('');
   const [tasksByChild, setTasksByChild] = useState<Record<string, ChildTask[]>>({});
   const [matchesByChild, setMatchesByChild] = useState<Record<string, Match[]>>({});
+  const [tableByChild, setTableByChild] = useState<Record<string, Standing[]>>({});
+  const [matchView, setMatchView] = useState<'spiele' | 'tabelle'>('spiele');
   // Taschengeld-Verlauf pro Kind, echtzeit-synchron mit der Kinder-App (TE-72).
   const [allowanceByChild, setAllowanceByChild] = useState<Record<string, Record<string, AllowanceMonth>>>({});
   const [newTaskTitle, setNewTaskTitle] = useState('');
@@ -150,6 +152,16 @@ export default function KinderScreen() {
     const unsubs = familyChildren.map((child) =>
       subscribeToMatches(fid, child.id, (matches) => {
         setMatchesByChild((prev) => ({ ...prev, [child.id]: matches }));
+      })
+    );
+    return () => unsubs.forEach((u) => u());
+  }, [fid, familyChildren]);
+
+  useEffect(() => {
+    if (!fid || familyChildren.length === 0) return;
+    const unsubs = familyChildren.map((child) =>
+      subscribeToTable(fid, child.id, (standings) => {
+        setTableByChild((prev) => ({ ...prev, [child.id]: standings }));
       })
     );
     return () => unsubs.forEach((u) => u());
@@ -486,6 +498,7 @@ export default function KinderScreen() {
   const upcomingMatches = (matchesByChild[selectedChild] ?? [])
     .filter((m) => m.date >= TODAY)
     .sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
+  const standings = tableByChild[selectedChild] ?? [];
 
   // Teilnehmer-Kürzel einer Gruppenaufgabe (TE-113/TE-114): bevorzugt die auf der
   // Aufgabe gespeicherte Teilnehmerliste; Fallback (Alt-Aufgaben ohne groupChildren)
@@ -942,12 +955,27 @@ export default function KinderScreen() {
         )}
       </View>
 
-      {/* Fußball-Termine (TE-48) — vom Dashboard hierher verschoben, nur wenn
-          welche da sind: kein Team konfiguriert/keine Spiele → kein leerer Block */}
-      {upcomingMatches.length > 0 && (
+      {/* Fußball: Spiele + Tabelle (TE-48/TE-53) — nur wenn welche da sind:
+          kein Team konfiguriert/keine Daten → kein leerer Block */}
+      {(upcomingMatches.length > 0 || standings.length > 0) && (
       <View style={s.section}>
-        <Text style={s.sectionTitle}>⚽ Nächste Spiele — {childName(selectedChild)}</Text>
-        {upcomingMatches.map((m) => (
+        <Text style={s.sectionTitle}>⚽ Fußball — {childName(selectedChild)}</Text>
+        <View style={s.matchToggle}>
+          <TouchableOpacity
+            style={[s.matchToggleBtn, matchView === 'spiele' && s.matchToggleBtnActive]}
+            onPress={() => setMatchView('spiele')}
+          >
+            <Text style={[s.matchToggleText, matchView === 'spiele' && s.matchToggleTextActive]}>Spiele</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[s.matchToggleBtn, matchView === 'tabelle' && s.matchToggleBtnActive]}
+            onPress={() => setMatchView('tabelle')}
+          >
+            <Text style={[s.matchToggleText, matchView === 'tabelle' && s.matchToggleTextActive]}>Tabelle</Text>
+          </TouchableOpacity>
+        </View>
+        {matchView === 'spiele' ? (
+          upcomingMatches.map((m) => (
             <Pressable
               key={m.link ?? `${m.date}-${m.time}`}
               onPress={() => m.link && Linking.openURL(m.link)}
@@ -959,7 +987,17 @@ export default function KinderScreen() {
               </View>
               <Text style={s.allowanceAmount}>{format(new Date(m.date), 'dd.MM.')} · {m.time}</Text>
             </Pressable>
-        ))}
+          ))
+        ) : (
+          standings.map((row) => (
+            <View key={row.club} style={s.standingRow}>
+              <Text style={[s.standingRank, row.isOwn && s.standingOwn]}>{row.rank}.</Text>
+              <Text style={[s.standingClub, row.isOwn && s.standingOwn]} numberOfLines={1}>{row.club}</Text>
+              <Text style={[s.standingStats, row.isOwn && s.standingOwn]}>{row.played} Sp.</Text>
+              <Text style={[s.standingPoints, row.isOwn && s.standingOwn]}>{row.points}</Text>
+            </View>
+          ))
+        )}
       </View>
       )}
 
@@ -1236,6 +1274,22 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
       borderWidth: 1, borderColor: colors.border, gap: 8,
     },
     sectionTitle: { fontSize: 14, fontWeight: '700', color: colors.text },
+    // Spiele/Tabelle-Umschalter im Fußball-Block (TE-53), gleiches Muster wie
+    // SchuleScreens Stundenplan/Noten-Umschalter.
+    matchToggle: {
+      flexDirection: 'row', gap: 6,
+      backgroundColor: colors.surfaceHigh, borderRadius: 10, padding: 3,
+    },
+    matchToggleBtn: { flex: 1, paddingVertical: 6, borderRadius: 8, alignItems: 'center' },
+    matchToggleBtnActive: { backgroundColor: colors.accentNeon },
+    matchToggleText: { fontSize: 13, fontWeight: '700', color: colors.textSecondary },
+    matchToggleTextActive: { color: colors.accentFg },
+    standingRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 },
+    standingRank: { width: 22, fontSize: 13, color: colors.textSecondary },
+    standingClub: { flex: 1, fontSize: 13, color: colors.text },
+    standingStats: { fontSize: 12, color: colors.textSecondary, width: 44, textAlign: 'right' },
+    standingPoints: { fontSize: 13, fontWeight: '700', color: colors.text, width: 24, textAlign: 'right' },
+    standingOwn: { fontWeight: '800', color: colors.accentNeon },
     inputRow: { flexDirection: 'row', gap: 8 },
     // Top-Modus-Umschalter (TE-56): Einzelne | Gruppe — steuert die ganze Seite
     topToggle: {

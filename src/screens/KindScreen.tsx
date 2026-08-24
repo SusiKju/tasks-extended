@@ -365,7 +365,7 @@ export default function KindScreen({ onExitChildMode }: Props) {
               <Text style={s.tableCellNum}>Pkt</Text>
             </View>
             {standings.map((row) => (
-              <View key={row.rank} style={s.tableRow}>
+              <View key={row.club} style={s.tableRow}>
                 <Text style={[s.tableCellRank, row.isOwn && s.tableRowOwn]}>{row.rank}.</Text>
                 <Text style={[s.tableCellClub, row.isOwn && s.tableRowOwn]} numberOfLines={1}>{row.club}</Text>
                 <Text style={[s.tableCellNum, row.isOwn && s.tableRowOwn]}>{row.played}</Text>
