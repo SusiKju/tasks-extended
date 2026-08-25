@@ -26,7 +26,10 @@ service cloud.firestore {
     // Jeder eingeloggte User darf einen Code lesen (zum Beitreten).
     // Erstellt wird der Code nur beim createFamily – kein direktes Schreiben durch User.
     match /familyCodes/{code} {
-      allow read: if isSignedIn();
+      // Einzelnen Code nachschlagen ja – ganze Tabelle auflisten nein (sonst
+      // kann jeder eingeloggte User alle familyId aller Familien einsammeln).
+      allow get: if isSignedIn();
+      allow list: if false;
       allow create: if isSignedIn();
       allow update, delete: if false; // Codes sind unveränderlich
     }
@@ -44,8 +47,20 @@ service cloud.firestore {
       match /members/{uid} {
         // Mitglieder lesen alle; User darf eigenes Dokument lesen (z.B. beim Beitreten prüfen)
         allow read: if isFamilyMember(familyId) || (isSignedIn() && request.auth.uid == uid);
-        // Mitglied darf sich selbst hinzufügen (joinFamily) und entfernen (leaveFamily)
-        allow create: if isSignedIn() && request.auth.uid == uid;
+        // Selbst-Eintrag erlaubt für:
+        //  a) den Familien-Gründer beim Anlegen (createFamily)
+        //  b) einen Beitritt (joinFamilyWithCode), NUR wenn der mitgeschickte
+        //     joinCode tatsächlich zu dieser familyId gehört – verhindert,
+        //     dass jemand ohne gültigen Code direkt einen Mitglieds-Eintrag
+        //     in eine beliebige familyId schreibt.
+        allow create: if isSignedIn() && request.auth.uid == uid
+            && (
+              get(/databases/$(database)/documents/families/$(familyId)).data.createdByUid == request.auth.uid
+              || (
+                request.resource.data.joinCode is string
+                && get(/databases/$(database)/documents/familyCodes/$(request.resource.data.joinCode)).data.familyId == familyId
+              )
+            );
         allow delete: if isSignedIn() && request.auth.uid == uid;
         allow update: if isFamilyMember(familyId) || (isSignedIn() && request.auth.uid == uid);
       }

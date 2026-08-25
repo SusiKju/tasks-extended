@@ -33,6 +33,13 @@ export interface FamilyMember {
   displayName: string;
   email: string;
   joinedAt: string;
+  /**
+   * Beitrittscode, mit dem dieses Mitglied beigetreten ist. Wird von der
+   * Firestore-Regel geprüft (Code muss wirklich zu dieser familyId gehören),
+   * damit niemand ohne Code direkt einen Mitglieds-Eintrag anlegen kann.
+   * Beim Familien-Gründer nicht gesetzt.
+   */
+  joinCode?: string;
 }
 
 export interface FamilyMeta {
@@ -162,14 +169,16 @@ export async function joinFamilyWithCode(user: User, code: string): Promise<stri
   }
   const { familyId } = codeSnap.data() as { familyId: string };
 
-  // Direkt setDoc – kein vorheriges getDoc nötig (vermeidet Berechtigungsfehler vor dem Beitreten)
-  // Firestore-Regel: create erlaubt wenn request.auth.uid == uid (bereits Mitglied → update via Regel)
+  // joinCode wird mitgeschrieben, damit die Firestore-Regel gegenprüfen kann,
+  // dass dieser Code wirklich zu familyId gehört (verhindert Beitritt ohne
+  // gültigen Code direkt per SDK-Write).
   await setDoc(memberDoc(familyId, user.uid), {
     uid: user.uid,
     role: 'parent',
     displayName: user.displayName ?? user.email ?? 'Elternteil',
     email: user.email ?? '',
     joinedAt: new Date().toISOString(),
+    joinCode: normalised,
   } satisfies FamilyMember);
 
   return familyId;
