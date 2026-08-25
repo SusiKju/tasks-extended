@@ -60,7 +60,10 @@ interface RawLesson {
   // (immer null), sondern nur eine `group` mit dem Kurskürzel als Namen.
   group?: { name?: string; local_id?: string } | null;
   rooms?: { local_id?: string }[];
-  teachers?: { local_id?: string; name?: string }[];
+  // ACHTUNG: forename (Vorname) ist unverifiziert (kein Netzwerk-Mitschnitt
+  // mit gesetztem Vornamen bisher) – Annahme nach dem Muster anderer
+  // beste.schule-Ressourcen. Fällt still auf local_id zurück, falls falsch.
+  teachers?: { local_id?: string; name?: string; forename?: string }[];
 }
 
 /** Wählt den zum heutigen Datum passenden Stundenplan (mehrere Halbjahres-Pläne möglich). */
@@ -85,7 +88,10 @@ function mapLesson(lesson: RawLesson): { slotKey: string; fach: string; raum: st
   const fach = lesson.subject?.name ?? lesson.subject?.local_id ?? lesson.group?.name ?? lesson.group?.local_id;
   if (!fach) return null;
   const raum = (lesson.rooms ?? []).map((r) => r.local_id).filter(Boolean).join(', ');
-  const lehrer = (lesson.teachers ?? []).map((t) => t.local_id ?? t.name).filter(Boolean).join(', ');
+  const lehrer = (lesson.teachers ?? [])
+    .map((t) => [t.forename, t.name].filter(Boolean).join(' ') || t.local_id)
+    .filter(Boolean)
+    .join(', ');
   const pause = String(fach) === MITTAGSPAUSE_CODE;
   return {
     slotKey: slotKey(dayIdx, String(lesson.nr)),

@@ -118,6 +118,19 @@ export default function SchuleScreen() {
 
   const timetable = timetableByChild[selectedChild] ?? {};
   const grades = gradesByChild[selectedChild] ?? {};
+  // Lehrer je Fach aus dem Stundenplan ableiten statt neu abzufragen – die
+  // "lehrer"-Spalte pro Slot ist schon da (besteSchule.ts), nur noch nie
+  // pro Fach gruppiert dargestellt.
+  const teachersByFach = React.useMemo(() => {
+    const map: Record<string, Set<string>> = {};
+    for (const entry of Object.values(timetable)) {
+      if (!entry.lehrer) continue;
+      for (const name of entry.lehrer.split(',').map((s) => s.trim()).filter(Boolean)) {
+        (map[entry.fach] ??= new Set()).add(name);
+      }
+    }
+    return map;
+  }, [timetable]);
   const journal = journalByChild[selectedChild] ?? EMPTY_JOURNAL;
   const todayIdx = todayDayIndex();
   const linkedStudentId = settings.besteSchuleStudentIds?.[selectedChild];
@@ -312,6 +325,9 @@ export default function SchuleScreen() {
                     <View style={[s.lessonDot, { backgroundColor: subjectColor(fach) }]} />
                     <Text style={s.lessonFach}>{fach}</Text>
                   </View>
+                  {!!teachersByFach[fach]?.size && (
+                    <Text style={s.gradeTeachers}>{[...teachersByFach[fach]].join(', ')}</Text>
+                  )}
                   {entries.length === 0 ? (
                     <Text style={s.lessonEmpty}>Keine Noten erteilt.</Text>
                   ) : (
@@ -573,6 +589,7 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
       borderWidth: 1, borderColor: colors.border, marginBottom: 8,
     },
     gradeHead: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
+    gradeTeachers: { fontSize: 11.5, color: colors.textMuted, marginBottom: 6 },
     gradeChipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
     gradeChip: {
       flexDirection: 'row', alignItems: 'baseline', gap: 4,
