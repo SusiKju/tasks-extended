@@ -415,6 +415,7 @@ export default function SchuleScreen() {
   // zurückhaltenden Link ganz unten auf der Seite, nicht hier oben.
   const [factsListOpen, setFactsListOpen] = useState(false);
   const factLine = infoFacts.map((f) => (f.value ? `${f.label}: ${f.value}` : f.label)).join('  ·  ');
+  const firstPhoneFact = infoFacts.find((f) => isPhoneNumber(f.value));
 
   // Eintrags-Strom für manuell gepflegte Kinder (Hannes/Emil im Klassenbuch,
   // Liddy als einziger Inhalt ohne Schulpflicht) – identische Darstellung.
@@ -580,9 +581,20 @@ export default function SchuleScreen() {
           kein Umbruch – Einträge durch " · " getrennt. Nur sichtbar, wenn
           welche gepflegt sind; bearbeitet wird ganz unten auf der Seite. */}
       {!!factLine && (
-        <Text style={s.factLine} numberOfLines={1} ellipsizeMode="tail">
-          {factLine}
-        </Text>
+        <View style={s.factLineRow}>
+          <Text style={s.factLine} numberOfLines={1} ellipsizeMode="tail">
+            {factLine}
+          </Text>
+          {!!firstPhoneFact && (
+            <TouchableOpacity
+              onPress={() => Linking.openURL(`tel:${firstPhoneFact.value.replace(/[\s()/-]/g, '')}`)}
+              hitSlop={10}
+              accessibilityLabel="Anrufen"
+            >
+              <Ionicons name="call-outline" size={13} color={colors.textMuted} />
+            </TouchableOpacity>
+          )}
+        </View>
       )}
 
       {/* Kindergarten-Kinder: kein Umschalter, nur der manuelle Eintrags-
@@ -1167,9 +1179,12 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
     factText: { fontSize: 13, color: colors.text, flex: 1 },
     factLabel: { fontWeight: '700', color: colors.textSecondary },
     // Dezente Einzeiler-Zusammenfassung oben rechts, kein Rahmen/Umbruch.
+    factLineRow: {
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end',
+      gap: 5, marginBottom: 8,
+    },
     factLine: {
-      fontSize: 11, color: colors.textMuted, textAlign: 'right',
-      marginBottom: 8,
+      flexShrink: 1, fontSize: 11, color: colors.textMuted, textAlign: 'right',
     },
     // Zurückhaltender Link ganz unten zum Bearbeiten der Kontakte/Kurzinfos.
     factsFooter: {
