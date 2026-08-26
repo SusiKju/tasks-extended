@@ -348,21 +348,34 @@ export default function SchuleScreen() {
   const manualKlassenbuchContent = (
     <View style={s.section}>
       <View style={s.listCard}>
+        {/* Aufgaben linksbündig (Haken links, Text folgt), Info-Einträge
+            rechtsbündig (Text rechtsbündig, Icon am rechten Rand) – Ausrichtung
+            selbst macht den Unterschied zwischen "abhakbar" und "nur Info" sichtbar. */}
         {openItems.map((item) => (
           <TouchableOpacity key={item.id} style={s.listRow} onPress={() => openEditItem(item)}>
             {item.isInfo ? (
-              <Ionicons name="information-circle-outline" size={18} color={colors.textMuted} />
+              <>
+                <View style={s.journalBody}>
+                  <Text style={[s.journalText, s.textRight]}>{item.title}</Text>
+                  <Text style={[s.lessonMeta, s.textRight]}>
+                    {[item.date && journalDayLabel(item.date), item.notes, editedLabel(item)].filter(Boolean).join(' · ')}
+                  </Text>
+                </View>
+                <Ionicons name="information-circle-outline" size={18} color={colors.textMuted} />
+              </>
             ) : (
-              <TouchableOpacity onPress={() => toggleItemDone(item)} hitSlop={10}>
-                <Ionicons name="square-outline" size={18} color={colors.textMuted} />
-              </TouchableOpacity>
+              <>
+                <TouchableOpacity onPress={() => toggleItemDone(item)} hitSlop={10}>
+                  <Ionicons name="square-outline" size={18} color={colors.textMuted} />
+                </TouchableOpacity>
+                <View style={s.journalBody}>
+                  <Text style={s.journalText}>{item.title}</Text>
+                  <Text style={s.lessonMeta}>
+                    {[item.date && journalDayLabel(item.date), item.notes, editedLabel(item)].filter(Boolean).join(' · ')}
+                  </Text>
+                </View>
+              </>
             )}
-            <View style={s.journalBody}>
-              <Text style={s.journalText}>{item.title}</Text>
-              <Text style={s.lessonMeta}>
-                {[item.date && journalDayLabel(item.date), item.notes, editedLabel(item)].filter(Boolean).join(' · ')}
-              </Text>
-            </View>
           </TouchableOpacity>
         ))}
         {/* Direkt unter dem letzten Eintrag antippbar, statt eines separaten
@@ -958,6 +971,7 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
     journalDate: { width: 80, fontSize: 11.5, color: colors.textMuted, paddingTop: 1 },
     journalBody: { flex: 1, minWidth: 0 },
     journalText: { fontSize: 13, color: colors.text },
+    textRight: { textAlign: 'right' },
     // Modal
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
     modalBox: { backgroundColor: colors.surface, borderRadius: 20, padding: 22, width: 320, gap: 10 },
