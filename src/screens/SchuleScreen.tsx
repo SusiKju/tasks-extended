@@ -410,12 +410,23 @@ export default function SchuleScreen() {
     setEditingFact(null);
   }, [fid, selectedChild, infoFactsByChild, editingFact]);
 
+  // Reihenfolge der Kontakte & Kurzinfos per Pfeiltasten – Position tauschen,
+  // Array-Reihenfolge in Firestore ist selbst die Sortierung (kein order-Feld
+  // nötig).
+  const moveFact = useCallback(async (index: number, dir: -1 | 1) => {
+    if (!fid || !selectedChild) return;
+    const list = infoFactsByChild[selectedChild] ?? [];
+    const target = index + dir;
+    if (target < 0 || target >= list.length) return;
+    const next = [...list];
+    [next[index], next[target]] = [next[target], next[index]];
+    await saveInfoFacts(fid, selectedChild, next);
+  }, [fid, selectedChild, infoFactsByChild]);
+
   // Kontakte & Kurzinfos: dezente, einzeilige Zusammenfassung oben rechts
   // (nur wenn welche gepflegt sind) – Bearbeiten passiert über den
   // zurückhaltenden Link ganz unten auf der Seite, nicht hier oben.
   const [factsListOpen, setFactsListOpen] = useState(false);
-  const factLine = infoFacts.map((f) => (f.value ? `${f.label}: ${f.value}` : f.label)).join('  ·  ');
-  const firstPhoneFact = infoFacts.find((f) => isPhoneNumber(f.value));
 
   // Eintrags-Strom für manuell gepflegte Kinder (Hannes/Emil im Klassenbuch,
   // Liddy als einziger Inhalt ohne Schulpflicht) – identische Darstellung.
@@ -577,23 +588,28 @@ export default function SchuleScreen() {
         })}
       </View>
 
-      {/* Kontakte & Kurzinfos: eine dezente Zeile oben rechts, kein Rahmen,
-          kein Umbruch – Einträge durch " · " getrennt. Nur sichtbar, wenn
-          welche gepflegt sind; bearbeitet wird ganz unten auf der Seite. */}
-      {!!factLine && (
+      {/* Kontakte & Kurzinfos: eine dezente Zeile oben rechts, kein Rahmen –
+          Einträge durch " · " getrennt, jede Telefonnummer bekommt ihr
+          eigenes Anruf-Icon direkt dahinter (es kann mehrere geben, z. B.
+          Sekretariat UND Hort). Nur sichtbar, wenn welche gepflegt sind;
+          bearbeitet/sortiert wird ganz unten auf der Seite. */}
+      {infoFacts.length > 0 && (
         <View style={s.factLineRow}>
-          <Text style={s.factLine} numberOfLines={1} ellipsizeMode="tail">
-            {factLine}
-          </Text>
-          {!!firstPhoneFact && (
-            <TouchableOpacity
-              onPress={() => Linking.openURL(`tel:${firstPhoneFact.value.replace(/[\s()/-]/g, '')}`)}
-              hitSlop={10}
-              accessibilityLabel="Anrufen"
-            >
-              <Ionicons name="call-outline" size={13} color={colors.textMuted} />
-            </TouchableOpacity>
-          )}
+          {infoFacts.map((f, i) => (
+            <React.Fragment key={f.id}>
+              {i > 0 && <Text style={s.factLine}>{'  ·  '}</Text>}
+              <Text style={s.factLine}>{f.value ? `${f.label}: ${f.value}` : f.label}</Text>
+              {isPhoneNumber(f.value) && (
+                <TouchableOpacity
+                  onPress={() => Linking.openURL(`tel:${f.value.replace(/[\s()/-]/g, '')}`)}
+                  hitSlop={10}
+                  accessibilityLabel="Anrufen"
+                >
+                  <Ionicons name="call-outline" size={13} color={colors.textMuted} />
+                </TouchableOpacity>
+              )}
+            </React.Fragment>
+          ))}
         </View>
       )}
 
@@ -977,15 +993,24 @@ export default function SchuleScreen() {
               <Text style={s.lessonEmpty}>Noch nichts eingetragen.</Text>
             ) : (
               <View style={s.listCard}>
-                {infoFacts.map((fact) => (
-                  <TouchableOpacity
-                    key={fact.id}
-                    style={s.listRow}
-                    onPress={() => { setFactsListOpen(false); openEditFact(fact); }}
-                  >
-                    <Text style={s.factText} numberOfLines={1}>
-                      <Text style={s.factLabel}>{fact.label}</Text>{fact.value ? `  ${fact.value}` : ''}
-                    </Text>
+                {infoFacts.map((fact, i) => (
+                  <View key={fact.id} style={s.listRow}>
+                    <View style={s.moveCol}>
+                      <Pressable onPress={() => moveFact(i, -1)} disabled={i === 0} hitSlop={6} style={s.moveBtn}>
+                        <Ionicons name="chevron-up" size={16} color={i === 0 ? colors.border : colors.textSecondary} />
+                      </Pressable>
+                      <Pressable onPress={() => moveFact(i, 1)} disabled={i === infoFacts.length - 1} hitSlop={6} style={s.moveBtn}>
+                        <Ionicons name="chevron-down" size={16} color={i === infoFacts.length - 1 ? colors.border : colors.textSecondary} />
+                      </Pressable>
+                    </View>
+                    <TouchableOpacity
+                      style={s.factRowMain}
+                      onPress={() => { setFactsListOpen(false); openEditFact(fact); }}
+                    >
+                      <Text style={s.factText} numberOfLines={1}>
+                        <Text style={s.factLabel}>{fact.label}</Text>{fact.value ? `  ${fact.value}` : ''}
+                      </Text>
+                    </TouchableOpacity>
                     {isPhoneNumber(fact.value) && (
                       <TouchableOpacity
                         onPress={() => Linking.openURL(`tel:${fact.value.replace(/[\s()/-]/g, '')}`)}
@@ -995,7 +1020,7 @@ export default function SchuleScreen() {
                         <Ionicons name="call-outline" size={16} color={colors.accentNeon} />
                       </TouchableOpacity>
                     )}
-                  </TouchableOpacity>
+                  </View>
                 ))}
               </View>
             )}
@@ -1178,14 +1203,17 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
     // Kontakte & Kurzinfos: eine Zeile, Bezeichnung fett+gedimmt, Wert normal.
     factText: { fontSize: 13, color: colors.text, flex: 1 },
     factLabel: { fontWeight: '700', color: colors.textSecondary },
-    // Dezente Einzeiler-Zusammenfassung oben rechts, kein Rahmen/Umbruch.
+    factRowMain: { flex: 1 },
+    moveCol: { justifyContent: 'center', marginRight: 2 },
+    moveBtn: { paddingHorizontal: 2, paddingVertical: 1 },
+    // Dezente Zusammenfassung oben rechts, kein Rahmen – bricht bei mehreren
+    // Einträgen (inkl. Anruf-Icons) auf eine zweite Zeile um statt sie
+    // abzuschneiden.
     factLineRow: {
-      flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end',
-      gap: 5, marginBottom: 8,
+      flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center',
+      justifyContent: 'flex-end', gap: 3, marginBottom: 8,
     },
-    factLine: {
-      flexShrink: 1, fontSize: 11, color: colors.textMuted, textAlign: 'right',
-    },
+    factLine: { fontSize: 11, color: colors.textMuted },
     // Zurückhaltender Link ganz unten zum Bearbeiten der Kontakte/Kurzinfos.
     factsFooter: {
       flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5,
