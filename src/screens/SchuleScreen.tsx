@@ -27,14 +27,26 @@ import { GradesMap, subscribeToGrades, replaceGrades } from '../services/grades'
 import { JournalData, subscribeToJournal, replaceJournal } from '../services/journal';
 import { fetchBesteSchuleTimetable, fetchBesteSchuleGrades, fetchBesteSchuleJournal } from '../services/besteSchule';
 import {
-  HomeworkEntry, SchoolInfoEntry, SchoolEventEntry, makeId,
-  subscribeToHomework, saveHomework,
-  subscribeToSchoolInfos, saveSchoolInfos,
-  subscribeToSchoolEvents, saveSchoolEvents,
+  SchoolItem, SchoolItemType, makeId,
+  subscribeToSchoolItems, saveSchoolItems, nextOrder, moveItem,
 } from '../services/schoolManual';
 
 type SyncState = { status: 'idle' | 'syncing' | 'done' | 'error'; message?: string };
-type ScreenView = 'plan' | 'noten' | 'klassenbuch' | 'hausaufgaben' | 'infos' | 'termine';
+type ScreenView = 'plan' | 'noten' | 'klassenbuch';
+
+const ITEM_ICON: Record<SchoolItemType, keyof typeof Ionicons.glyphMap> = {
+  homework: 'book-outline',
+  info: 'information-circle-outline',
+  event: 'calendar-outline',
+};
+const ITEM_LABEL: Record<SchoolItemType, string> = {
+  homework: 'Hausaufgabe', info: 'Info', event: 'Termin',
+};
+// "Neue Hausaufgabe"/"Neue Info", aber "Neuer Termin" (der Termin) – eigener
+// Artikel statt pauschal "Neue X".
+const ITEM_LABEL_NEW: Record<SchoolItemType, string> = {
+  homework: 'Neue Hausaufgabe', info: 'Neue Info', event: 'Neuer Termin',
+};
 
 const EMPTY_JOURNAL: JournalData = { homework: [], substitutions: [] };
 
@@ -58,9 +70,7 @@ export default function SchuleScreen() {
   const [periodTimesByChild, setPeriodTimesByChild] = useState<Record<string, PeriodTimesMap>>({});
   const [gradesByChild, setGradesByChild] = useState<Record<string, GradesMap>>({});
   const [journalByChild, setJournalByChild] = useState<Record<string, JournalData>>({});
-  const [homeworkByChild, setHomeworkByChild] = useState<Record<string, HomeworkEntry[]>>({});
-  const [schoolInfosByChild, setSchoolInfosByChild] = useState<Record<string, SchoolInfoEntry[]>>({});
-  const [schoolEventsByChild, setSchoolEventsByChild] = useState<Record<string, SchoolEventEntry[]>>({});
+  const [schoolItemsByChild, setSchoolItemsByChild] = useState<Record<string, SchoolItem[]>>({});
   const [selectedDay, setSelectedDay] = useState(() => {
     const t = todayDayIndex();
     return t >= 0 ? t : 0;
@@ -132,28 +142,8 @@ export default function SchuleScreen() {
   useEffect(() => {
     if (!fid || familyChildren.length === 0) return;
     const unsubs = familyChildren.map((child) =>
-      subscribeToHomework(fid, child.id, (list) => {
-        setHomeworkByChild((prev) => ({ ...prev, [child.id]: list }));
-      })
-    );
-    return () => unsubs.forEach((u) => u());
-  }, [fid, familyChildren]);
-
-  useEffect(() => {
-    if (!fid || familyChildren.length === 0) return;
-    const unsubs = familyChildren.map((child) =>
-      subscribeToSchoolInfos(fid, child.id, (list) => {
-        setSchoolInfosByChild((prev) => ({ ...prev, [child.id]: list }));
-      })
-    );
-    return () => unsubs.forEach((u) => u());
-  }, [fid, familyChildren]);
-
-  useEffect(() => {
-    if (!fid || familyChildren.length === 0) return;
-    const unsubs = familyChildren.map((child) =>
-      subscribeToSchoolEvents(fid, child.id, (list) => {
-        setSchoolEventsByChild((prev) => ({ ...prev, [child.id]: list }));
+      subscribeToSchoolItems(fid, child.id, (list) => {
+        setSchoolItemsByChild((prev) => ({ ...prev, [child.id]: list }));
       })
     );
     return () => unsubs.forEach((u) => u());
@@ -175,15 +165,16 @@ export default function SchuleScreen() {
     return map;
   }, [timetable]);
   const journal = journalByChild[selectedChild] ?? EMPTY_JOURNAL;
-  const homework = homeworkByChild[selectedChild] ?? [];
-  const schoolInfos = schoolInfosByChild[selectedChild] ?? [];
-  const schoolEvents = schoolEventsByChild[selectedChild] ?? [];
-  const todayISO = format(new Date(), 'yyyy-MM-dd');
-  const upcomingEvents = React.useMemo(
-    () => schoolEvents
-      .filter((e) => e.date >= todayISO)
-      .sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time)),
-    [schoolEvents, todayISO]
+  const schoolItems = schoolItemsByChild[selectedChild] ?? [];
+  const openItems = React.useMemo(
+    () => schoolItems.filter((i) => !i.done).sort((a, b) => a.order - b.order),
+    [schoolItems]
+  );
+  const historyItems = React.useMemo(
+    () => schoolItems
+      .filter((i) => i.done)
+      .sort((a, b) => (b.completedAt ?? b.createdAt).localeCompare(a.completedAt ?? a.createdAt)),
+    [schoolItems]
   );
   const todayIdx = todayDayIndex();
   const linkedStudentId = settings.besteSchuleStudentIds?.[selectedChild];
@@ -280,116 +271,82 @@ export default function SchuleScreen() {
     setEditingTime(null);
   }, [editingTime, fid, selectedChild]);
 
-  // ── Hausaufgaben (manuell gepflegte Kinder) ─────────────────────────────
-  const [editingHomework, setEditingHomework] = useState<HomeworkEntry | 'new' | null>(null);
+  // ── Klassenbuch, manuell gepflegte Kinder: ein Eintrags-Strom aus
+  // Hausaufgaben/Infos/Terminen, per "+"-Menü angelegt, per Pfeil-Buttons
+  // selbst sortiert, beim Abhaken in die History verschoben. ─────────────
+  const [typePickerOpen, setTypePickerOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<SchoolItem | 'new' | null>(null);
+  const [newItemType, setNewItemType] = useState<SchoolItemType>('homework');
   const [hwSubject, setHwSubject] = useState('');
   const [hwText, setHwText] = useState('');
-
-  const openNewHomework = useCallback(() => {
-    setHwSubject(''); setHwText(''); setEditingHomework('new');
-  }, []);
-  const openEditHomework = useCallback((h: HomeworkEntry) => {
-    setHwSubject(h.subject); setHwText(h.text); setEditingHomework(h);
-  }, []);
-  const closeHomeworkEditor = useCallback(() => setEditingHomework(null), []);
-
-  const handleSaveHomework = useCallback(async () => {
-    if (!fid || !selectedChild || !editingHomework) return;
-    const text = hwText.trim();
-    if (!text) return;
-    const list = homeworkByChild[selectedChild] ?? [];
-    const next = editingHomework === 'new'
-      ? [...list, { id: makeId(), subject: hwSubject.trim(), text, done: false, createdAt: new Date().toISOString() }]
-      : list.map((h) => h.id === (editingHomework as HomeworkEntry).id ? { ...h, subject: hwSubject.trim(), text } : h);
-    await saveHomework(fid, selectedChild, next);
-    setEditingHomework(null);
-  }, [fid, selectedChild, homeworkByChild, editingHomework, hwSubject, hwText]);
-
-  const handleDeleteHomework = useCallback(async () => {
-    if (!fid || !selectedChild || !editingHomework || editingHomework === 'new') return;
-    const list = homeworkByChild[selectedChild] ?? [];
-    await saveHomework(fid, selectedChild, list.filter((h) => h.id !== (editingHomework as HomeworkEntry).id));
-    setEditingHomework(null);
-  }, [fid, selectedChild, homeworkByChild, editingHomework]);
-
-  const toggleHomeworkDone = useCallback(async (h: HomeworkEntry) => {
-    if (!fid || !selectedChild) return;
-    const list = homeworkByChild[selectedChild] ?? [];
-    await saveHomework(fid, selectedChild, list.map((x) => x.id === h.id ? { ...x, done: !x.done } : x));
-  }, [fid, selectedChild, homeworkByChild]);
-
-  // ── Infos (manuell gepflegte Kinder) ────────────────────────────────────
-  const [editingInfo, setEditingInfo] = useState<SchoolInfoEntry | 'new' | null>(null);
   const [infoText, setInfoText] = useState('');
-  const [infoPinned, setInfoPinned] = useState(false);
-
-  const openNewInfo = useCallback(() => {
-    setInfoText(''); setInfoPinned(false); setEditingInfo('new');
-  }, []);
-  const openEditInfo = useCallback((i: SchoolInfoEntry) => {
-    setInfoText(i.text); setInfoPinned(i.pinned); setEditingInfo(i);
-  }, []);
-  const closeInfoEditor = useCallback(() => setEditingInfo(null), []);
-
-  const handleSaveInfo = useCallback(async () => {
-    if (!fid || !selectedChild || !editingInfo) return;
-    const text = infoText.trim();
-    if (!text) return;
-    const list = schoolInfosByChild[selectedChild] ?? [];
-    const next = editingInfo === 'new'
-      ? [...list, { id: makeId(), text, pinned: infoPinned, createdAt: new Date().toISOString() }]
-      : list.map((i) => i.id === (editingInfo as SchoolInfoEntry).id ? { ...i, text, pinned: infoPinned } : i);
-    await saveSchoolInfos(fid, selectedChild, next);
-    setEditingInfo(null);
-  }, [fid, selectedChild, schoolInfosByChild, editingInfo, infoText, infoPinned]);
-
-  const handleDeleteInfo = useCallback(async () => {
-    if (!fid || !selectedChild || !editingInfo || editingInfo === 'new') return;
-    const list = schoolInfosByChild[selectedChild] ?? [];
-    await saveSchoolInfos(fid, selectedChild, list.filter((i) => i.id !== (editingInfo as SchoolInfoEntry).id));
-    setEditingInfo(null);
-  }, [fid, selectedChild, schoolInfosByChild, editingInfo]);
-
-  // ── Termine (manuell gepflegte Kinder) ──────────────────────────────────
-  const [editingEvent, setEditingEvent] = useState<SchoolEventEntry | 'new' | null>(null);
   const [evTitle, setEvTitle] = useState('');
   const [evDate, setEvDate] = useState('');
   const [evTime, setEvTime] = useState('');
   const [evLocation, setEvLocation] = useState('');
   const [evNotes, setEvNotes] = useState('');
 
-  const openNewEvent = useCallback(() => {
-    setEvTitle(''); setEvDate(''); setEvTime(''); setEvLocation(''); setEvNotes(''); setEditingEvent('new');
+  const itemType: SchoolItemType = editingItem === 'new' ? newItemType : editingItem?.type ?? 'homework';
+
+  const pickType = useCallback((type: SchoolItemType) => {
+    setTypePickerOpen(false);
+    setNewItemType(type);
+    setHwSubject(''); setHwText('');
+    setInfoText('');
+    setEvTitle(''); setEvDate(''); setEvTime(''); setEvLocation(''); setEvNotes('');
+    setEditingItem('new');
   }, []);
-  const openEditEvent = useCallback((e: SchoolEventEntry) => {
-    setEvTitle(e.title); setEvDate(e.date); setEvTime(e.time);
-    setEvLocation(e.location); setEvNotes(e.notes); setEditingEvent(e);
+
+  const openEditItem = useCallback((item: SchoolItem) => {
+    if (item.type === 'homework') { setHwSubject(item.subject); setHwText(item.text); }
+    else if (item.type === 'info') { setInfoText(item.text); }
+    else { setEvTitle(item.title); setEvDate(item.date); setEvTime(item.time); setEvLocation(item.location); setEvNotes(item.notes); }
+    setEditingItem(item);
   }, []);
-  const closeEventEditor = useCallback(() => setEditingEvent(null), []);
 
-  const eventValid = evTitle.trim().length > 0 && /^\d{4}-\d{2}-\d{2}$/.test(evDate)
-    && (evTime === '' || /^([01]\d|2[0-3]):[0-5]\d$/.test(evTime));
+  const closeItemEditor = useCallback(() => setEditingItem(null), []);
 
-  const handleSaveEvent = useCallback(async () => {
-    if (!fid || !selectedChild || !editingEvent || !eventValid) return;
-    const list = schoolEventsByChild[selectedChild] ?? [];
-    const entry = {
-      title: evTitle.trim(), date: evDate, time: evTime.trim(),
-      location: evLocation.trim(), notes: evNotes.trim(),
-    };
-    const next = editingEvent === 'new'
-      ? [...list, { id: makeId(), ...entry, createdAt: new Date().toISOString() }]
-      : list.map((e) => e.id === (editingEvent as SchoolEventEntry).id ? { ...e, ...entry } : e);
-    await saveSchoolEvents(fid, selectedChild, next);
-    setEditingEvent(null);
-  }, [fid, selectedChild, schoolEventsByChild, editingEvent, eventValid, evTitle, evDate, evTime, evLocation, evNotes]);
+  const itemValid = itemType === 'homework' ? hwText.trim().length > 0
+    : itemType === 'info' ? infoText.trim().length > 0
+    : evTitle.trim().length > 0 && (evDate === '' || /^\d{4}-\d{2}-\d{2}$/.test(evDate))
+      && (evTime === '' || /^([01]\d|2[0-3]):[0-5]\d$/.test(evTime));
 
-  const handleDeleteEvent = useCallback(async () => {
-    if (!fid || !selectedChild || !editingEvent || editingEvent === 'new') return;
-    const list = schoolEventsByChild[selectedChild] ?? [];
-    await saveSchoolEvents(fid, selectedChild, list.filter((e) => e.id !== (editingEvent as SchoolEventEntry).id));
-    setEditingEvent(null);
-  }, [fid, selectedChild, schoolEventsByChild, editingEvent]);
+  const handleSaveItem = useCallback(async () => {
+    if (!fid || !selectedChild || !editingItem || !itemValid) return;
+    const list = schoolItemsByChild[selectedChild] ?? [];
+    const base = editingItem === 'new'
+      ? { id: makeId(), done: false, order: nextOrder(list), createdAt: new Date().toISOString(), completedAt: null }
+      : editingItem;
+    const item: SchoolItem =
+      itemType === 'homework' ? { ...base, type: 'homework', subject: hwSubject.trim(), text: hwText.trim() }
+      : itemType === 'info' ? { ...base, type: 'info', text: infoText.trim() }
+      : { ...base, type: 'event', title: evTitle.trim(), date: evDate.trim(), time: evTime.trim(), location: evLocation.trim(), notes: evNotes.trim() };
+    const next = editingItem === 'new' ? [...list, item] : list.map((i) => i.id === item.id ? item : i);
+    await saveSchoolItems(fid, selectedChild, next);
+    setEditingItem(null);
+  }, [fid, selectedChild, schoolItemsByChild, editingItem, itemValid, itemType, hwSubject, hwText, infoText, evTitle, evDate, evTime, evLocation, evNotes]);
+
+  const handleDeleteItem = useCallback(async () => {
+    if (!fid || !selectedChild || !editingItem || editingItem === 'new') return;
+    const list = schoolItemsByChild[selectedChild] ?? [];
+    await saveSchoolItems(fid, selectedChild, list.filter((i) => i.id !== (editingItem as SchoolItem).id));
+    setEditingItem(null);
+  }, [fid, selectedChild, schoolItemsByChild, editingItem]);
+
+  const toggleItemDone = useCallback(async (item: SchoolItem) => {
+    if (!fid || !selectedChild) return;
+    const list = schoolItemsByChild[selectedChild] ?? [];
+    const next = list.map((i) => i.id === item.id
+      ? { ...i, done: !i.done, completedAt: i.done ? null : new Date().toISOString() }
+      : i);
+    await saveSchoolItems(fid, selectedChild, next);
+  }, [fid, selectedChild, schoolItemsByChild]);
+
+  const handleMoveItem = useCallback(async (id: string, dir: 'up' | 'down') => {
+    if (!fid || !selectedChild) return;
+    const list = schoolItemsByChild[selectedChild] ?? [];
+    await saveSchoolItems(fid, selectedChild, moveItem(list, id, dir));
+  }, [fid, selectedChild, schoolItemsByChild]);
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.background }} contentContainerStyle={s.container}>
@@ -411,60 +368,34 @@ export default function SchuleScreen() {
         })}
       </View>
 
-      {/* Ansicht umschalten: synchronisierte Kinder sehen Noten/Klassenbuch
-          (read-only aus beste.schule), manuell gepflegte Kinder stattdessen
-          Hausaufgaben/Infos/Termine zum eigenen Pflegen (reine Elternsache). */}
-      {isLinked ? (
-        <View style={s.viewToggle}>
-          <TouchableOpacity
-            style={[s.viewToggleBtn, view === 'plan' && s.viewToggleBtnActive]}
-            onPress={() => setView('plan')}
-          >
-            <Text style={[s.viewToggleText, view === 'plan' && s.viewToggleTextActive]}>Stundenplan</Text>
-          </TouchableOpacity>
+      {/* Ansicht umschalten: synchronisierte Kinder bekommen zusätzlich Noten
+          (read-only aus beste.schule). Das Klassenbuch selbst zeigt für
+          manuell gepflegte Kinder einen eigenen, editierbaren Inhalt (s. u.). */}
+      <View style={s.viewToggle}>
+        <TouchableOpacity
+          style={[s.viewToggleBtn, view === 'plan' && s.viewToggleBtnActive]}
+          onPress={() => setView('plan')}
+        >
+          <Text style={[s.viewToggleText, view === 'plan' && s.viewToggleTextActive]}>Stundenplan</Text>
+        </TouchableOpacity>
+        {isLinked && (
           <TouchableOpacity
             style={[s.viewToggleBtn, view === 'noten' && s.viewToggleBtnActive]}
             onPress={() => setView('noten')}
           >
             <Text style={[s.viewToggleText, view === 'noten' && s.viewToggleTextActive]}>Noten</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={[s.viewToggleBtn, view === 'klassenbuch' && s.viewToggleBtnActive]}
-            onPress={() => setView('klassenbuch')}
-          >
-            <Text style={[s.viewToggleText, view === 'klassenbuch' && s.viewToggleTextActive]}>Klassenbuch</Text>
-          </TouchableOpacity>
-        </View>
-      ) : (
-        <View style={s.viewToggle}>
-          <TouchableOpacity
-            style={[s.viewToggleBtn, view === 'plan' && s.viewToggleBtnActive]}
-            onPress={() => setView('plan')}
-          >
-            <Text style={[s.viewToggleText, view === 'plan' && s.viewToggleTextActive]}>Stundenplan</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[s.viewToggleBtn, view === 'hausaufgaben' && s.viewToggleBtnActive]}
-            onPress={() => setView('hausaufgaben')}
-          >
-            <Text style={[s.viewToggleText, view === 'hausaufgaben' && s.viewToggleTextActive]}>Hausaufgaben</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[s.viewToggleBtn, view === 'infos' && s.viewToggleBtnActive]}
-            onPress={() => setView('infos')}
-          >
-            <Text style={[s.viewToggleText, view === 'infos' && s.viewToggleTextActive]}>Infos</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[s.viewToggleBtn, view === 'termine' && s.viewToggleBtnActive]}
-            onPress={() => setView('termine')}
-          >
-            <Text style={[s.viewToggleText, view === 'termine' && s.viewToggleTextActive]}>Termine</Text>
-          </TouchableOpacity>
-        </View>
-      )}
+        )}
+        <TouchableOpacity
+          style={[s.viewToggleBtn, view === 'klassenbuch' && s.viewToggleBtnActive]}
+          onPress={() => setView('klassenbuch')}
+        >
+          <Text style={[s.viewToggleText, view === 'klassenbuch' && s.viewToggleTextActive]}>Klassenbuch</Text>
+        </TouchableOpacity>
+      </View>
 
       {view === 'klassenbuch' ? (
+        isLinked ? (
         <View style={s.section}>
           <Text style={s.klassenbuchTitle}>Vertretungen</Text>
           {journal.substitutions.length === 0 ? (
@@ -505,6 +436,86 @@ export default function SchuleScreen() {
             ))
           )}
         </View>
+        ) : (
+        <View style={s.section}>
+          <View style={s.sectionHeadRow}>
+            <Text style={s.klassenbuchTitle}>Klassenbuch</Text>
+            <TouchableOpacity onPress={() => setTypePickerOpen(true)} hitSlop={8}>
+              <Ionicons name="add-circle-outline" size={22} color={colors.accentNeon} />
+            </TouchableOpacity>
+          </View>
+          {openItems.length === 0 ? (
+            <Text style={s.lessonEmpty}>Noch nichts eingetragen.</Text>
+          ) : (
+            openItems.map((item, idx) => (
+              <TouchableOpacity key={item.id} style={s.journalRow} onPress={() => openEditItem(item)}>
+                <TouchableOpacity onPress={() => toggleItemDone(item)} hitSlop={8}>
+                  <Ionicons name="square-outline" size={20} color={colors.textMuted} />
+                </TouchableOpacity>
+                <Ionicons name={ITEM_ICON[item.type]} size={16} color={colors.textMuted} style={s.itemTypeIcon} />
+                <View style={s.journalBody}>
+                  {item.type === 'homework' && (
+                    <>
+                      {!!item.subject && (
+                        <View style={s.lessonHead}>
+                          <View style={[s.lessonDot, { backgroundColor: subjectColor(item.subject) }]} />
+                          <Text style={s.lessonFach}>{item.subject}</Text>
+                        </View>
+                      )}
+                      <Text style={s.journalText}>{item.text}</Text>
+                    </>
+                  )}
+                  {item.type === 'info' && <Text style={s.journalText}>{item.text}</Text>}
+                  {item.type === 'event' && (
+                    <>
+                      <Text style={s.journalText}>{item.title}</Text>
+                      {!!(item.date || item.location) && (
+                        <Text style={s.lessonMeta}>
+                          {[item.date && journalDayLabel(item.date), item.time, item.location].filter(Boolean).join(' · ')}
+                        </Text>
+                      )}
+                    </>
+                  )}
+                </View>
+                <View style={s.moveCol}>
+                  <TouchableOpacity
+                    onPress={() => handleMoveItem(item.id, 'up')}
+                    disabled={idx === 0}
+                    hitSlop={6}
+                  >
+                    <Ionicons name="chevron-up" size={16} color={idx === 0 ? colors.border : colors.textMuted} />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => handleMoveItem(item.id, 'down')}
+                    disabled={idx === openItems.length - 1}
+                    hitSlop={6}
+                  >
+                    <Ionicons name="chevron-down" size={16} color={idx === openItems.length - 1 ? colors.border : colors.textMuted} />
+                  </TouchableOpacity>
+                </View>
+              </TouchableOpacity>
+            ))
+          )}
+          {historyItems.length > 0 && (
+            <>
+              <Text style={[s.klassenbuchTitle, { marginTop: 14 }]}>Erledigt</Text>
+              {historyItems.map((item) => (
+                <TouchableOpacity key={item.id} style={s.journalRow} onPress={() => openEditItem(item)}>
+                  <TouchableOpacity onPress={() => toggleItemDone(item)} hitSlop={8}>
+                    <Ionicons name="checkbox" size={20} color={colors.accentNeon} />
+                  </TouchableOpacity>
+                  <Ionicons name={ITEM_ICON[item.type]} size={16} color={colors.textMuted} style={s.itemTypeIcon} />
+                  <View style={s.journalBody}>
+                    <Text style={[s.journalText, s.journalTextDone]}>
+                      {item.type === 'event' ? item.title : item.text}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </>
+          )}
+        </View>
+        )
       ) : view === 'noten' ? (
         <View style={s.section}>
           {Object.keys(grades).length === 0 ? (
@@ -535,88 +546,6 @@ export default function SchuleScreen() {
                   )}
                 </View>
               ))
-          )}
-        </View>
-      ) : view === 'hausaufgaben' ? (
-        <View style={s.section}>
-          <View style={s.sectionHeadRow}>
-            <Text style={s.klassenbuchTitle}>Hausaufgaben</Text>
-            <TouchableOpacity onPress={openNewHomework} hitSlop={8}>
-              <Ionicons name="add-circle-outline" size={22} color={colors.accentNeon} />
-            </TouchableOpacity>
-          </View>
-          {homework.length === 0 ? (
-            <Text style={s.lessonEmpty}>Keine Hausaufgaben eingetragen.</Text>
-          ) : (
-            [...homework]
-              .sort((a, b) => Number(a.done) - Number(b.done) || b.createdAt.localeCompare(a.createdAt))
-              .map((h) => (
-                <TouchableOpacity key={h.id} style={s.journalRow} onPress={() => openEditHomework(h)}>
-                  <TouchableOpacity onPress={() => toggleHomeworkDone(h)} hitSlop={8}>
-                    <Ionicons
-                      name={h.done ? 'checkbox' : 'square-outline'}
-                      size={20}
-                      color={h.done ? colors.accentNeon : colors.textMuted}
-                    />
-                  </TouchableOpacity>
-                  <View style={s.journalBody}>
-                    {!!h.subject && (
-                      <View style={s.lessonHead}>
-                        <View style={[s.lessonDot, { backgroundColor: subjectColor(h.subject) }]} />
-                        <Text style={s.lessonFach}>{h.subject}</Text>
-                      </View>
-                    )}
-                    <Text style={[s.journalText, h.done && s.journalTextDone]}>{h.text}</Text>
-                  </View>
-                </TouchableOpacity>
-              ))
-          )}
-        </View>
-      ) : view === 'infos' ? (
-        <View style={s.section}>
-          <View style={s.sectionHeadRow}>
-            <Text style={s.klassenbuchTitle}>Infos</Text>
-            <TouchableOpacity onPress={openNewInfo} hitSlop={8}>
-              <Ionicons name="add-circle-outline" size={22} color={colors.accentNeon} />
-            </TouchableOpacity>
-          </View>
-          {schoolInfos.length === 0 ? (
-            <Text style={s.lessonEmpty}>Keine Infos eingetragen.</Text>
-          ) : (
-            [...schoolInfos]
-              .sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.createdAt.localeCompare(a.createdAt))
-              .map((i) => (
-                <TouchableOpacity key={i.id} style={s.journalRow} onPress={() => openEditInfo(i)}>
-                  <View style={s.journalBody}>
-                    <Text style={s.journalText}>{i.text}</Text>
-                  </View>
-                  {i.pinned && <Ionicons name="pin" size={14} color={colors.accentNeon} />}
-                </TouchableOpacity>
-              ))
-          )}
-        </View>
-      ) : view === 'termine' ? (
-        <View style={s.section}>
-          <View style={s.sectionHeadRow}>
-            <Text style={s.klassenbuchTitle}>Termine</Text>
-            <TouchableOpacity onPress={openNewEvent} hitSlop={8}>
-              <Ionicons name="add-circle-outline" size={22} color={colors.accentNeon} />
-            </TouchableOpacity>
-          </View>
-          {upcomingEvents.length === 0 ? (
-            <Text style={s.lessonEmpty}>Keine Termine eingetragen.</Text>
-          ) : (
-            upcomingEvents.map((ev) => (
-              <TouchableOpacity key={ev.id} style={s.journalRow} onPress={() => openEditEvent(ev)}>
-                <Text style={[s.journalDate, { width: 96 }]}>
-                  {journalDayLabel(ev.date)}{ev.time ? ` · ${ev.time}` : ''}
-                </Text>
-                <View style={s.journalBody}>
-                  <Text style={s.journalText}>{ev.title}</Text>
-                  {!!ev.location && <Text style={s.lessonMeta}>{ev.location}</Text>}
-                </View>
-              </TouchableOpacity>
-            ))
           )}
         </View>
       ) : (
@@ -818,155 +747,127 @@ export default function SchuleScreen() {
         </Pressable>
       </Modal>
 
-      {/* Hausaufgaben-Editor-Modal */}
-      <Modal visible={!!editingHomework} transparent animationType="fade">
-        <Pressable style={s.modalOverlay} onPress={closeHomeworkEditor}>
+      {/* Typ-Auswahl-Modal – welche Art Eintrag soll neu angelegt werden? */}
+      <Modal visible={typePickerOpen} transparent animationType="fade">
+        <Pressable style={s.modalOverlay} onPress={() => setTypePickerOpen(false)}>
           <Pressable style={s.modalBox} onPress={() => {}}>
-            <Text style={s.modalTitle}>{editingHomework === 'new' ? 'Neue Hausaufgabe' : 'Hausaufgabe bearbeiten'}</Text>
-            <TextInput
-              style={s.input}
-              value={hwSubject}
-              onChangeText={setHwSubject}
-              placeholder="Fach (optional)"
-              placeholderTextColor={colors.placeholder}
-            />
-            <TextInput
-              style={s.input}
-              value={hwText}
-              onChangeText={setHwText}
-              placeholder="Was ist zu tun?"
-              placeholderTextColor={colors.placeholder}
-              autoFocus
-              multiline
-              returnKeyType="done"
-            />
-            <View style={s.modalActions}>
-              {editingHomework !== 'new' && (
-                <TouchableOpacity onPress={handleDeleteHomework}>
-                  <Text style={s.clearText}>Löschen</Text>
-                </TouchableOpacity>
-              )}
-              <View style={{ flexDirection: 'row', gap: 10, marginLeft: 'auto' }}>
-                <TouchableOpacity style={s.cancelBtn} onPress={closeHomeworkEditor}>
-                  <Text style={s.cancelBtnText}>Abbrechen</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[s.saveBtn, !hwText.trim() && { opacity: 0.4 }]}
-                  onPress={handleSaveHomework}
-                  disabled={!hwText.trim()}
-                >
-                  <Text style={s.saveBtnText}>Speichern</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
+            <Text style={s.modalTitle}>Was möchtest du eintragen?</Text>
+            {(['homework', 'info', 'event'] as SchoolItemType[]).map((type) => (
+              <TouchableOpacity key={type} style={s.typeOption} onPress={() => pickType(type)}>
+                <Ionicons name={ITEM_ICON[type]} size={20} color={colors.accentNeon} />
+                <Text style={s.typeOptionText}>{ITEM_LABEL[type]}</Text>
+                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+              </TouchableOpacity>
+            ))}
           </Pressable>
         </Pressable>
       </Modal>
 
-      {/* Info-Editor-Modal */}
-      <Modal visible={!!editingInfo} transparent animationType="fade">
-        <Pressable style={s.modalOverlay} onPress={closeInfoEditor}>
+      {/* Eintrags-Editor-Modal – Felder je nach Typ (Hausaufgabe/Info/Termin) */}
+      <Modal visible={!!editingItem} transparent animationType="fade">
+        <Pressable style={s.modalOverlay} onPress={closeItemEditor}>
           <Pressable style={s.modalBox} onPress={() => {}}>
-            <Text style={s.modalTitle}>{editingInfo === 'new' ? 'Neue Info' : 'Info bearbeiten'}</Text>
-            <TextInput
-              style={s.input}
-              value={infoText}
-              onChangeText={setInfoText}
-              placeholder="z. B. Klassenlehrerin: Frau Kohl"
-              placeholderTextColor={colors.placeholder}
-              autoFocus
-              multiline
-            />
-            <TouchableOpacity style={s.pinRow} onPress={() => setInfoPinned((p) => !p)}>
-              <Ionicons name={infoPinned ? 'checkbox' : 'square-outline'} size={18} color={infoPinned ? colors.accentNeon : colors.textMuted} />
-              <Text style={s.pinRowText}>Oben anpinnen</Text>
-            </TouchableOpacity>
-            <View style={s.modalActions}>
-              {editingInfo !== 'new' && (
-                <TouchableOpacity onPress={handleDeleteInfo}>
-                  <Text style={s.clearText}>Löschen</Text>
-                </TouchableOpacity>
-              )}
-              <View style={{ flexDirection: 'row', gap: 10, marginLeft: 'auto' }}>
-                <TouchableOpacity style={s.cancelBtn} onPress={closeInfoEditor}>
-                  <Text style={s.cancelBtnText}>Abbrechen</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[s.saveBtn, !infoText.trim() && { opacity: 0.4 }]}
-                  onPress={handleSaveInfo}
-                  disabled={!infoText.trim()}
-                >
-                  <Text style={s.saveBtnText}>Speichern</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
+            <Text style={s.modalTitle}>
+              {editingItem === 'new' ? ITEM_LABEL_NEW[itemType] : `${ITEM_LABEL[itemType]} bearbeiten`}
+            </Text>
 
-      {/* Termin-Editor-Modal */}
-      <Modal visible={!!editingEvent} transparent animationType="fade">
-        <Pressable style={s.modalOverlay} onPress={closeEventEditor}>
-          <Pressable style={s.modalBox} onPress={() => {}}>
-            <Text style={s.modalTitle}>{editingEvent === 'new' ? 'Neuer Termin' : 'Termin bearbeiten'}</Text>
-            <TextInput
-              style={s.input}
-              value={evTitle}
-              onChangeText={setEvTitle}
-              placeholder="Titel, z. B. Museumsbesuch"
-              placeholderTextColor={colors.placeholder}
-              autoFocus
-            />
-            <View style={{ flexDirection: 'row', gap: 8 }}>
+            {itemType === 'homework' && (
+              <>
+                <TextInput
+                  style={s.input}
+                  value={hwSubject}
+                  onChangeText={setHwSubject}
+                  placeholder="Fach (optional)"
+                  placeholderTextColor={colors.placeholder}
+                />
+                <TextInput
+                  style={s.input}
+                  value={hwText}
+                  onChangeText={setHwText}
+                  placeholder="Was ist zu tun?"
+                  placeholderTextColor={colors.placeholder}
+                  autoFocus
+                  multiline
+                  returnKeyType="done"
+                />
+              </>
+            )}
+
+            {itemType === 'info' && (
               <TextInput
-                style={[s.input, { flex: 1 }]}
-                value={evDate}
-                onChangeText={setEvDate}
-                placeholder="Datum (JJJJ-MM-TT)"
+                style={s.input}
+                value={infoText}
+                onChangeText={setInfoText}
+                placeholder="z. B. Klassenlehrerin: Frau Kohl"
                 placeholderTextColor={colors.placeholder}
-                keyboardType="numbers-and-punctuation"
-                maxLength={10}
+                autoFocus
+                multiline
               />
-              <TextInput
-                style={[s.input, { width: 90 }]}
-                value={evTime}
-                onChangeText={setEvTime}
-                placeholder="HH:MM"
-                placeholderTextColor={colors.placeholder}
-                keyboardType="numbers-and-punctuation"
-                maxLength={5}
-              />
-            </View>
-            <TextInput
-              style={s.input}
-              value={evLocation}
-              onChangeText={setEvLocation}
-              placeholder="Ort (optional)"
-              placeholderTextColor={colors.placeholder}
-            />
-            <TextInput
-              style={s.input}
-              value={evNotes}
-              onChangeText={setEvNotes}
-              placeholder="Notiz (optional)"
-              placeholderTextColor={colors.placeholder}
-              multiline
-              returnKeyType="done"
-            />
+            )}
+
+            {itemType === 'event' && (
+              <>
+                <TextInput
+                  style={s.input}
+                  value={evTitle}
+                  onChangeText={setEvTitle}
+                  placeholder="Titel, z. B. Museumsbesuch"
+                  placeholderTextColor={colors.placeholder}
+                  autoFocus
+                />
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <TextInput
+                    style={[s.input, { flex: 1 }]}
+                    value={evDate}
+                    onChangeText={setEvDate}
+                    placeholder="Datum (JJJJ-MM-TT)"
+                    placeholderTextColor={colors.placeholder}
+                    keyboardType="numbers-and-punctuation"
+                    maxLength={10}
+                  />
+                  <TextInput
+                    style={[s.input, { width: 90 }]}
+                    value={evTime}
+                    onChangeText={setEvTime}
+                    placeholder="HH:MM"
+                    placeholderTextColor={colors.placeholder}
+                    keyboardType="numbers-and-punctuation"
+                    maxLength={5}
+                  />
+                </View>
+                <TextInput
+                  style={s.input}
+                  value={evLocation}
+                  onChangeText={setEvLocation}
+                  placeholder="Ort (optional)"
+                  placeholderTextColor={colors.placeholder}
+                />
+                <TextInput
+                  style={s.input}
+                  value={evNotes}
+                  onChangeText={setEvNotes}
+                  placeholder="Notiz (optional)"
+                  placeholderTextColor={colors.placeholder}
+                  multiline
+                  returnKeyType="done"
+                />
+              </>
+            )}
+
             <View style={s.modalActions}>
-              {editingEvent !== 'new' && (
-                <TouchableOpacity onPress={handleDeleteEvent}>
+              {editingItem !== 'new' && (
+                <TouchableOpacity onPress={handleDeleteItem}>
                   <Text style={s.clearText}>Löschen</Text>
                 </TouchableOpacity>
               )}
               <View style={{ flexDirection: 'row', gap: 10, marginLeft: 'auto' }}>
-                <TouchableOpacity style={s.cancelBtn} onPress={closeEventEditor}>
+                <TouchableOpacity style={s.cancelBtn} onPress={closeItemEditor}>
                   <Text style={s.cancelBtnText}>Abbrechen</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[s.saveBtn, !eventValid && { opacity: 0.4 }]}
-                  onPress={handleSaveEvent}
-                  disabled={!eventValid}
+                  style={[s.saveBtn, !itemValid && { opacity: 0.4 }]}
+                  onPress={handleSaveItem}
+                  disabled={!itemValid}
                 >
                   <Text style={s.saveBtnText}>Speichern</Text>
                 </TouchableOpacity>
@@ -1052,12 +953,18 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
     lessonFachPause: { color: colors.warning, fontStyle: 'italic' },
     pauseRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 4, paddingVertical: 0 },
     pauseText: { fontSize: 11, color: colors.textMuted, fontStyle: 'italic' },
-    // Klassenbuch / manuelle Listen (Hausaufgaben, Infos, Termine)
+    // Klassenbuch / manuelles Klassenbuch (Hausaufgaben, Infos, Termine gemischt)
     sectionHeadRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     klassenbuchTitle: { fontSize: 13, fontWeight: '700', color: colors.textSecondary, marginBottom: 2 },
     journalTextDone: { textDecorationLine: 'line-through', color: colors.textMuted },
-    pinRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 2 },
-    pinRowText: { fontSize: 13.5, color: colors.textSecondary },
+    itemTypeIcon: { marginTop: 1 },
+    moveCol: { justifyContent: 'center', gap: 2 },
+    typeOption: {
+      flexDirection: 'row', alignItems: 'center', gap: 10,
+      paddingVertical: 12, paddingHorizontal: 4,
+      borderBottomWidth: 1, borderBottomColor: colors.border,
+    },
+    typeOptionText: { flex: 1, fontSize: 15, fontWeight: '600', color: colors.text },
     journalRow: {
       flexDirection: 'row', gap: 10,
       backgroundColor: colors.surface, borderRadius: 12, paddingVertical: 8, paddingHorizontal: 12,
