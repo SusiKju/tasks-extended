@@ -140,6 +140,7 @@ export type DashboardBlockKey =
   | 'countdowns'
   | 'calendar'
   | 'sharedList'
+  | 'schoolTasks'
   | 'kidsTasks'
   | 'allowance'
   | 'mail';
@@ -157,6 +158,7 @@ export const DASHBOARD_BLOCKS: { key: DashboardBlockKey; label: string; descript
   { key: 'countdowns',    label: 'Countdowns',          description: 'Countdowns bis zu Ereignissen.' },
   { key: 'calendar',      label: 'Termine',             description: 'Heutige Kalender-Termine.' },
   { key: 'sharedList',    label: 'Geteilte Liste',      description: 'Gemeinsame Notiz-/Einkaufsliste.' },
+  { key: 'schoolTasks',   label: 'Schulaufgaben',       description: 'Manuell im Klassenbuch angelegte Aufgaben aller Kinder (ohne Info-Einträge).' },
   { key: 'kidsTasks',     label: 'Aufgaben der Kinder', description: 'Heutige Aufgaben aller Kinder.' },
   { key: 'allowance',     label: 'Taschengeld',         description: 'Kinder, deren Taschengeld für den laufenden Monat noch offen ist.' },
   { key: 'mail',          label: 'Posteingang',         description: 'Angepinnte und ungelesene Mails.' },

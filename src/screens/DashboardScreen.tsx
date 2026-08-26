@@ -31,6 +31,7 @@ import { listStarredDriveFiles, DriveFile } from '../services/googleDrive';
 import {
   ChildTask, subscribeToChildTasks,
 } from '../services/kinderTasks';
+import { SchoolItem, subscribeToSchoolItems } from '../services/schoolManual';
 import { AllowanceMonth, subscribeToAllowanceMonths, monthKey, formatEuro, formatMonthLabel, effectiveAllowance, setAllowanceOverride } from '../services/allowance';
 import { useFamily } from '../hooks/useFamily';
 import { SharedNotepad } from '../components/SharedNotepad';
@@ -369,6 +370,20 @@ export function DashboardScreen() {
     return () => unsubs.forEach((u) => u());
   }, [fid, familyChildren]);
 
+  // Manuell im Klassenbuch angelegte Aufgaben aller Kinder – ein Echtzeit-
+  // Listener pro Kind, analog zu den Kinder-Aufgaben oben. Nur echte Aufgaben
+  // (isInfo === false), offen und nicht gelöscht.
+  const [schoolItemsByChild, setSchoolItemsByChild] = useState<Record<string, SchoolItem[]>>({});
+  useEffect(() => {
+    if (!fid || familyChildren.length === 0) return;
+    const unsubs = familyChildren.map((child) =>
+      subscribeToSchoolItems(fid, child.id, (items) =>
+        setSchoolItemsByChild((prev) => ({ ...prev, [child.id]: items }))
+      )
+    );
+    return () => unsubs.forEach((u) => u());
+  }, [fid, familyChildren]);
+
   // Taschengeld-Status pro Kind (TE-78): ein Echtzeit-Listener pro Kind, analog
   // zu den Kinder-Aufgaben oben.
   const [allowanceByChild, setAllowanceByChild] = useState<Record<string, Record<string, AllowanceMonth>>>({});
@@ -600,6 +615,24 @@ export function DashboardScreen() {
   const childrenWithTasks = useMemo(
     () => familyChildren.filter((c) => (individualByChild[c.id]?.length ?? 0) > 0).map((c) => c.id),
     [individualByChild, familyChildren]
+  );
+
+  // Offene, echte Aufgaben aus dem manuellen Klassenbuch je Kind – Info-
+  // Einträge, abgehakte und gelöschte bleiben außen vor. Neueste zuerst,
+  // gleiche Sortierung wie im Klassenbuch selbst (SchuleScreen).
+  const schoolTasksByChild = useMemo(() => {
+    const out: Record<string, SchoolItem[]> = {};
+    for (const child of familyChildren) {
+      out[child.id] = (schoolItemsByChild[child.id] ?? [])
+        .filter((i) => !i.isInfo && !i.done && !i.deletedAt)
+        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    }
+    return out;
+  }, [schoolItemsByChild, familyChildren]);
+
+  const childrenWithSchoolTasks = useMemo(
+    () => familyChildren.filter((c) => (schoolTasksByChild[c.id]?.length ?? 0) > 0).map((c) => c.id),
+    [schoolTasksByChild, familyChildren]
   );
 
   // TE-138: Tasks-Gruppierung fürs Dashboard entfernt – Tasks erscheinen nur
@@ -1244,6 +1277,59 @@ export function DashboardScreen() {
       {/* ── Geteilte Liste (TE-121, geteilt): bewusst auffällig gestaltete Card, ── */}
       {/* damit z. B. eine gemeinsame Einkaufsliste mit dem Partner sofort ins Auge fällt. */}
       {showBlock('sharedList') && <SharedNotepad colors={colors} isDark={isDark} />}
+
+      {/* ── Schulaufgaben: manuell im Klassenbuch angelegte Aufgaben aller
+          Kinder (SchuleScreen), ohne Info-Einträge. Steht bewusst über
+          "Aufgaben der Kinder" – gleicher flacher Card-Stil. ── */}
+      {showBlock('schoolTasks') && childrenWithSchoolTasks.length > 0 && (
+        <View style={styles.section}>
+          <SectionLabel
+            title="Schulaufgaben"
+            icon="book-outline"
+            onMore={() => router.push('/(tabs)/schule' as any)}
+            colors={colors}
+          />
+          <View style={styles.card}>
+            {childrenWithSchoolTasks.map((childId) => {
+              const list = schoolTasksByChild[childId];
+              return (
+                <React.Fragment key={childId}>
+                  <View style={[styles.kidHeaderRow, styles.rowDivider]}>
+                    <View style={[styles.kidAvatar, { backgroundColor: childColor(childId) }]}>
+                      <Text style={styles.kidAvatarText}>
+                        {childEmoji(childId) ?? childName(childId).charAt(0)}
+                      </Text>
+                    </View>
+                    <Text style={[styles.kidHeaderText, { color: colors.textMuted }]}>
+                      {childName(childId)}
+                    </Text>
+                  </View>
+                  {list.map((item) => {
+                    const due = taskDue(item.date || null);
+                    return (
+                      <Pressable
+                        key={item.id}
+                        onPress={() => router.push('/(tabs)/schule' as any)}
+                        style={({ pressed }) => [styles.kidRow, styles.rowDivider, { opacity: pressed ? 0.6 : 1 }]}
+                      >
+                        <Ionicons name="square-outline" size={18} color={colors.textMuted} />
+                        <Text style={[styles.kidTaskText, { color: colors.text }]} numberOfLines={1}>
+                          {item.title}
+                        </Text>
+                        {due && (
+                          <Text style={[styles.dueBadge, due.overdue && styles.dueBadgeOverdue]}>
+                            {due.label}
+                          </Text>
+                        )}
+                      </Pressable>
+                    );
+                  })}
+                </React.Fragment>
+              );
+            })}
+          </View>
+        </View>
+      )}
 
       {/* ── Aufgaben der Kinder (TE-110/TE-115, geteilt) ── */}
       {showBlock('kidsTasks') && (childrenWithTasks.length > 0 || groupTasks.length > 0) && (
