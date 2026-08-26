@@ -29,6 +29,7 @@ import { fetchBesteSchuleTimetable, fetchBesteSchuleGrades, fetchBesteSchuleJour
 import {
   SchoolItem, makeId,
   subscribeToSchoolItems, saveSchoolItems,
+  ChildInfoFact, subscribeToInfoFacts, saveInfoFacts,
 } from '../services/schoolManual';
 import { DatePickerModal } from '../components/DatePickerModal';
 
@@ -67,6 +68,7 @@ export default function SchuleScreen() {
   const [gradesByChild, setGradesByChild] = useState<Record<string, GradesMap>>({});
   const [journalByChild, setJournalByChild] = useState<Record<string, JournalData>>({});
   const [schoolItemsByChild, setSchoolItemsByChild] = useState<Record<string, SchoolItem[]>>({});
+  const [infoFactsByChild, setInfoFactsByChild] = useState<Record<string, ChildInfoFact[]>>({});
   const [selectedDay, setSelectedDay] = useState(() => {
     const t = todayDayIndex();
     return t >= 0 ? t : 0;
@@ -156,6 +158,16 @@ export default function SchuleScreen() {
     return () => unsubs.forEach((u) => u());
   }, [fid, familyChildren]);
 
+  useEffect(() => {
+    if (!fid || familyChildren.length === 0) return;
+    const unsubs = familyChildren.map((child) =>
+      subscribeToInfoFacts(fid, child.id, (list) => {
+        setInfoFactsByChild((prev) => ({ ...prev, [child.id]: list }));
+      })
+    );
+    return () => unsubs.forEach((u) => u());
+  }, [fid, familyChildren]);
+
   const timetable = timetableByChild[selectedChild] ?? {};
   const grades = gradesByChild[selectedChild] ?? {};
   // Lehrer je Fach aus dem Stundenplan ableiten statt neu abzufragen – die
@@ -172,6 +184,7 @@ export default function SchuleScreen() {
     return map;
   }, [timetable]);
   const journal = journalByChild[selectedChild] ?? EMPTY_JOURNAL;
+  const infoFacts = infoFactsByChild[selectedChild] ?? [];
   const schoolItems = schoolItemsByChild[selectedChild] ?? [];
   const openItems = React.useMemo(
     () => schoolItems.filter((i) => !i.done && !i.deletedAt).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
@@ -352,6 +365,62 @@ export default function SchuleScreen() {
     await saveSchoolItems(fid, selectedChild, next);
   }, [fid, selectedChild, schoolItemsByChild]);
 
+  // ── Kontakte & Kurzinfos (Klassenlehrer, Horterzieher, Telefonnummern, …):
+  // schlanke Label/Wert-Zeilen oberhalb von allem anderen, für jedes Kind
+  // gleich – unabhängig von Sync-Status oder Kindergarten. ──────────────────
+  const [editingFact, setEditingFact] = useState<ChildInfoFact | 'new' | null>(null);
+  const [factLabel, setFactLabel] = useState('');
+  const [factValue, setFactValue] = useState('');
+
+  const openNewFact = useCallback(() => {
+    setFactLabel(''); setFactValue(''); setEditingFact('new');
+  }, []);
+
+  const openEditFact = useCallback((fact: ChildInfoFact) => {
+    setFactLabel(fact.label); setFactValue(fact.value); setEditingFact(fact);
+  }, []);
+
+  const closeFactEditor = useCallback(() => setEditingFact(null), []);
+
+  const factValid = factLabel.trim().length > 0 && factValue.trim().length > 0;
+
+  const handleSaveFact = useCallback(async () => {
+    if (!fid || !selectedChild || !editingFact || !factValid) return;
+    const list = infoFactsByChild[selectedChild] ?? [];
+    const fact: ChildInfoFact = editingFact === 'new'
+      ? { id: makeId(), label: factLabel.trim(), value: factValue.trim() }
+      : { ...editingFact, label: factLabel.trim(), value: factValue.trim() };
+    const next = editingFact === 'new' ? [...list, fact] : list.map((f) => f.id === fact.id ? fact : f);
+    await saveInfoFacts(fid, selectedChild, next);
+    setEditingFact(null);
+  }, [fid, selectedChild, infoFactsByChild, editingFact, factValid, factLabel, factValue]);
+
+  const handleDeleteFact = useCallback(async () => {
+    if (!fid || !selectedChild || !editingFact || editingFact === 'new') return;
+    const list = infoFactsByChild[selectedChild] ?? [];
+    await saveInfoFacts(fid, selectedChild, list.filter((f) => f.id !== (editingFact as ChildInfoFact).id));
+    setEditingFact(null);
+  }, [fid, selectedChild, infoFactsByChild, editingFact]);
+
+  // Schlanke Kontakt-/Info-Zeilen, für jedes Kind oberhalb von allem anderen.
+  const infoFactsContent = (
+    <View style={s.section}>
+      <View style={s.listCard}>
+        {infoFacts.map((fact) => (
+          <TouchableOpacity key={fact.id} style={s.listRow} onPress={() => openEditFact(fact)}>
+            <Text style={s.factText} numberOfLines={1}>
+              <Text style={s.factLabel}>{fact.label}</Text>{'  '}{fact.value}
+            </Text>
+          </TouchableOpacity>
+        ))}
+        <TouchableOpacity style={s.listRow} onPress={openNewFact}>
+          <Ionicons name="add" size={16} color={colors.textMuted} />
+          <Text style={[s.lessonEmpty, { flex: 1 }]}>Info hinzufügen</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
   // Eintrags-Strom für manuell gepflegte Kinder (Hannes/Emil im Klassenbuch,
   // Liddy als einziger Inhalt ohne Schulpflicht) – identische Darstellung.
   // Abgehakte/gelöschte Einträge tauchen hier NICHT mehr auf, nur noch im
@@ -511,6 +580,10 @@ export default function SchuleScreen() {
           );
         })}
       </View>
+
+      {/* Kontakte & Kurzinfos: für jedes Kind gleich, ganz oben, unabhängig
+          von Sync-Status/Kindergarten. */}
+      {infoFactsContent}
 
       {/* Kindergarten-Kinder: kein Umschalter, nur der manuelle Eintrags-
           Strom. Hannes/Emil (manuell, aber schulpflichtig): Klassenbuch und
@@ -874,6 +947,51 @@ export default function SchuleScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* Kontakt-/Info-Editor-Modal – Label frei wählbar (z. B. "Klassenlehrer",
+          "Hort-Tel."), kein festes Feld-Set. */}
+      <Modal visible={!!editingFact} transparent animationType="fade">
+        <Pressable style={s.modalOverlay} onPress={closeFactEditor}>
+          <Pressable style={s.modalBox} onPress={() => {}}>
+            <Text style={s.modalTitle}>{editingFact === 'new' ? 'Neue Info' : 'Info bearbeiten'}</Text>
+            <TextInput
+              style={s.input}
+              value={factLabel}
+              onChangeText={setFactLabel}
+              placeholder="Bezeichnung, z. B. Klassenlehrer"
+              placeholderTextColor={colors.placeholder}
+              autoFocus
+            />
+            <TextInput
+              style={s.input}
+              value={factValue}
+              onChangeText={setFactValue}
+              placeholder="Wert, z. B. Frau Kohl"
+              placeholderTextColor={colors.placeholder}
+              returnKeyType="done"
+            />
+            <View style={s.modalActions}>
+              {editingFact !== 'new' && (
+                <TouchableOpacity onPress={handleDeleteFact}>
+                  <Text style={s.clearText}>Löschen</Text>
+                </TouchableOpacity>
+              )}
+              <View style={{ flexDirection: 'row', gap: 10, marginLeft: 'auto' }}>
+                <TouchableOpacity style={s.cancelBtn} onPress={closeFactEditor}>
+                  <Text style={s.cancelBtnText}>Abbrechen</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[s.saveBtn, !factValid && { opacity: 0.4 }]}
+                  onPress={handleSaveFact}
+                  disabled={!factValid}
+                >
+                  <Text style={s.saveBtnText}>Speichern</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -983,6 +1101,9 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
     journalBody: { flex: 1, minWidth: 0 },
     journalText: { fontSize: 13, color: colors.text },
     textRight: { textAlign: 'right' },
+    // Kontakte & Kurzinfos: eine Zeile, Bezeichnung fett+gedimmt, Wert normal.
+    factText: { fontSize: 13, color: colors.text, flex: 1 },
+    factLabel: { fontWeight: '700', color: colors.textSecondary },
     // Modal
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
     modalBox: { backgroundColor: colors.surface, borderRadius: 20, padding: 22, width: 320, gap: 10 },

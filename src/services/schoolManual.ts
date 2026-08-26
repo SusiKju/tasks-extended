@@ -105,3 +105,46 @@ export async function saveSchoolItems(familyId: string, childId: string, list: S
     await setDoc(ref, { schoolItems: clean }, { merge: true });
   }
 }
+
+// ── Kontakte & Kurzinfos (Klassenlehrer, Horterzieher, Telefonnummern, …) ────
+// Bewusst getrennt vom Eintrags-Strom oben: feste, schlanke Referenz-Zeilen
+// statt Einträge in einer nach Aktualität sortierten, wachsenden Liste – frei
+// benennbare Label/Wert-Paare, kein Datum, kein Abhaken, kein Verlauf nötig.
+
+export interface ChildInfoFact {
+  id: string;
+  label: string;
+  value: string;
+}
+
+function sanitizeFact(raw: any): ChildInfoFact | null {
+  const label = String(raw?.label ?? '').trim();
+  const value = String(raw?.value ?? '').trim();
+  if (!label || !value) return null;
+  return { id: String(raw?.id ?? '') || makeId(), label, value };
+}
+
+function sanitizeFacts(raw: any): ChildInfoFact[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map(sanitizeFact).filter((f): f is ChildInfoFact => f !== null);
+}
+
+export function subscribeToInfoFacts(
+  familyId: string, childId: string, onChange: (list: ChildInfoFact[]) => void,
+): Unsubscribe {
+  return onSnapshot(
+    childDoc(familyId, childId),
+    (snap) => onChange(sanitizeFacts(snap.data()?.infoFacts)),
+    () => onChange([]),
+  );
+}
+
+export async function saveInfoFacts(familyId: string, childId: string, list: ChildInfoFact[]): Promise<void> {
+  const ref = childDoc(familyId, childId);
+  const clean = sanitizeFacts(list);
+  try {
+    await updateDoc(ref, { infoFacts: clean });
+  } catch {
+    await setDoc(ref, { infoFacts: clean }, { merge: true });
+  }
+}
