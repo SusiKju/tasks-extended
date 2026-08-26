@@ -347,12 +347,6 @@ export default function SchuleScreen() {
   // Verlauf-Dialog (weniger präsent, aber wiederherstellbar).
   const manualKlassenbuchContent = (
     <View style={s.section}>
-      <View style={s.klassenbuchHeaderRow}>
-        <TouchableOpacity style={s.historyBtn} onPress={() => setHistoryOpen(true)}>
-          <Ionicons name="time-outline" size={14} color={colors.accentNeon} />
-          <Text style={s.historyBtnText}>Verlauf</Text>
-        </TouchableOpacity>
-      </View>
       <View style={s.listCard}>
         {openItems.map((item) => (
           <TouchableOpacity key={item.id} style={s.listRow} onPress={() => openEditItem(item)}>
@@ -372,10 +366,14 @@ export default function SchuleScreen() {
           </TouchableOpacity>
         ))}
         {/* Direkt unter dem letzten Eintrag antippbar, statt eines separaten
-            Buttons – gleiches Muster wie "+ Stunde eintragen" im Stundenplan. */}
+            Buttons – gleiches Muster wie "+ Stunde eintragen" im Stundenplan.
+            Verlauf-Icon sitzt am selben Zeilenende, innerhalb der Karte. */}
         <TouchableOpacity style={s.listRow} onPress={openNewItem}>
           <Ionicons name="add" size={18} color={colors.textMuted} />
-          <Text style={s.lessonEmpty}>Eintrag hinzufügen</Text>
+          <Text style={[s.lessonEmpty, { flex: 1 }]}>Eintrag hinzufügen</Text>
+          <TouchableOpacity onPress={() => setHistoryOpen(true)} hitSlop={10} accessibilityLabel="Verlauf">
+            <Ionicons name="time-outline" size={18} color={colors.textMuted} />
+          </TouchableOpacity>
         </TouchableOpacity>
       </View>
     </View>
@@ -506,6 +504,10 @@ export default function SchuleScreen() {
         </>
       ) : (
       <>
+      {/* Eigene, manuell gepflegte Einträge stehen für Lenny wie bei den
+          anderen Kindern oben in der Hauptübersicht, unabhängig vom
+          gewählten Reiter – darunter folgt der Rest aus beste.schule. */}
+      {manualKlassenbuchContent}
       <View style={s.viewToggle}>
         <TouchableOpacity
           style={[s.viewToggleBtn, view === 'plan' && s.viewToggleBtnActive]}
@@ -529,12 +531,7 @@ export default function SchuleScreen() {
 
       {view === 'klassenbuch' ? (
         <View style={s.section}>
-          {/* Eigene, manuell gepflegte Einträge oberhalb der synchronisierten
-              beste.schule-Daten – wie bei den anderen Kindern, nur zusätzlich
-              statt anstelle des Sync-Inhalts. */}
-          <Text style={s.klassenbuchTitle}>Eigene Einträge</Text>
-          {manualKlassenbuchContent}
-          <Text style={[s.klassenbuchTitle, { marginTop: 14 }]}>Vertretungen</Text>
+          <Text style={s.klassenbuchTitle}>Vertretungen</Text>
           {journal.substitutions.length === 0 ? (
             <Text style={s.lessonEmpty}>Keine Vertretungen bekannt.</Text>
           ) : (
@@ -933,15 +930,6 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
     pauseText: { fontSize: 11, color: colors.textMuted, fontStyle: 'italic' },
     // Klassenbuch / manuelles Klassenbuch (Aufgaben + Infos gemischt)
     klassenbuchTitle: { fontSize: 13, fontWeight: '700', color: colors.textSecondary, marginBottom: 2 },
-    // Öffnet den Verlauf-Dialog (abgehakte/gelöschte Einträge) – gleiche
-    // Optik wie der "Verlauf"-Button im Kinder-Tab.
-    klassenbuchHeaderRow: { flexDirection: 'row', justifyContent: 'flex-end' },
-    historyBtn: {
-      flexDirection: 'row', alignItems: 'center', gap: 4,
-      borderWidth: 1, borderColor: colors.accentNeon, borderRadius: 8,
-      paddingHorizontal: 10, paddingVertical: 5,
-    },
-    historyBtnText: { fontSize: 12, fontWeight: '700', color: colors.accentNeon },
     // Klare Abhebung zum Stundenplan darunter, wenn beides ohne Tab auf
     // einer Seite steht (Hannes/Emil).
     stundenplanDivider: {
