@@ -806,6 +806,44 @@ export function SettingsScreen() {
             </View>
           </View>
 
+          {/* Kindergarten-Kinder: kein Stundenplan/Klassenbuch im Schule-Tab,
+              nur der manuelle Eintrags-Strom (Infos/Termine/Aufgaben). */}
+          <View style={[styles.row, { gap: 8 }]}>
+            <Ionicons name="happy-outline" size={20} color={colors.accentNeon} />
+            <View style={[styles.rowContent, { flex: 1 }]}>
+              <Text style={styles.rowTitle}>Kindergarten</Text>
+              <Text style={styles.rowSubtitle}>
+                Für Kinder ohne Schulpflicht: kein Stundenplan/Klassenbuch im Schule-Tab, nur Infos, Termine und Aufgaben zum manuellen Pflegen.
+              </Text>
+
+              {familyChildren.length === 0 ? (
+                <Text style={[styles.rowSubtitle, { fontStyle: 'italic', marginTop: 10 }]}>
+                  Noch keine Kinder angelegt.
+                </Text>
+              ) : (
+                familyChildren.map((child) => {
+                  const active = !!settings.kindergartenChildIds?.[child.id];
+                  return (
+                    <Pressable
+                      key={child.id}
+                      style={({ pressed }) => [styles.themeRow, active && styles.themeRowActive, pressed && { opacity: 0.85 }, { marginTop: 8 }]}
+                      onPress={() => updateSettings({
+                        kindergartenChildIds: { ...settings.kindergartenChildIds, [child.id]: !active },
+                      })}
+                    >
+                      <View style={styles.rowContent}>
+                        <Text style={styles.rowTitle}>{child.emoji ? `${child.emoji} ` : ''}{child.name}</Text>
+                      </View>
+                      {active
+                        ? <Ionicons name="checkmark-circle" size={22} color={colors.accentNeon} />
+                        : <Ionicons name="ellipse-outline" size={22} color={colors.textMuted} />}
+                    </Pressable>
+                  );
+                })
+              )}
+            </View>
+          </View>
+
           {/* Familie verlassen */}
           {confirmLeave ? (
             <View style={styles.confirmRow}>

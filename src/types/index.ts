@@ -114,6 +114,12 @@ export interface AppSettings {
    * ID synct automatisch den Spielplan, alle anderen bleiben ohne Anzeige.
    */
   fussballDeTeamIds: Partial<Record<string, string>>;
+  /**
+   * Kinder ohne Schulpflicht (z. B. Kindergarten): true = im Schule-Tab kein
+   * Stundenplan/Klassenbuch, nur der manuelle Eintrags-Strom (Hausaufgaben/
+   * Infos/Termine als Aufgaben gedacht).
+   */
+  kindergartenChildIds: Partial<Record<string, boolean>>;
 }
 
 /**

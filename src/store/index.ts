@@ -116,6 +116,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   besteSchuleToken: null,
   besteSchuleStudentIds: {},
   fussballDeTeamIds: {},
+  kindergartenChildIds: {},
 };
 
 export const useStore = create<TaskState>()(

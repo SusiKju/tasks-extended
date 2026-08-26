@@ -179,6 +179,10 @@ export default function SchuleScreen() {
   const todayIdx = todayDayIndex();
   const linkedStudentId = settings.besteSchuleStudentIds?.[selectedChild];
   const isLinked = !!linkedStudentId;
+  // Kindergarten-Kinder (TE-Settings "Kindergarten"): kein Stundenplan/
+  // Klassenbuch-Umschalter, nur der manuelle Eintrags-Strom.
+  const isKindergarten = !!settings.kindergartenChildIds?.[selectedChild];
+  const showManualList = isKindergarten || (view === 'klassenbuch' && !isLinked);
 
   // Zeiten/Pausen sind bei beste.schule-Kindern durch den Sync vorgegeben;
   // manuell gepflegte Kinder (andere Schule, andere Taktung) können sie
@@ -272,9 +276,8 @@ export default function SchuleScreen() {
   }, [editingTime, fid, selectedChild]);
 
   // ── Klassenbuch, manuell gepflegte Kinder: ein Eintrags-Strom aus
-  // Hausaufgaben/Infos/Terminen, per "+"-Menü angelegt, per Pfeil-Buttons
-  // selbst sortiert, beim Abhaken in die History verschoben. ─────────────
-  const [typePickerOpen, setTypePickerOpen] = useState(false);
+  // Hausaufgaben/Infos/Terminen, per FAB direkt nach Typ angelegt, per
+  // Pfeil-Buttons selbst sortiert, beim Abhaken in die History verschoben. ──
   const [editingItem, setEditingItem] = useState<SchoolItem | 'new' | null>(null);
   const [newItemType, setNewItemType] = useState<SchoolItemType>('homework');
   const [hwSubject, setHwSubject] = useState('');
@@ -289,7 +292,6 @@ export default function SchuleScreen() {
   const itemType: SchoolItemType = editingItem === 'new' ? newItemType : editingItem?.type ?? 'homework';
 
   const pickType = useCallback((type: SchoolItemType) => {
-    setTypePickerOpen(false);
     setNewItemType(type);
     setHwSubject(''); setHwText('');
     setInfoText('');
@@ -348,8 +350,86 @@ export default function SchuleScreen() {
     await saveSchoolItems(fid, selectedChild, moveItem(list, id, dir));
   }, [fid, selectedChild, schoolItemsByChild]);
 
+  // Eintrags-Strom für manuell gepflegte Kinder (Hannes/Emil im Klassenbuch,
+  // Liddy als einziger Inhalt ohne Schulpflicht) – identische Darstellung.
+  const manualKlassenbuchContent = (
+    <View style={s.section}>
+      {openItems.length === 0 ? (
+        <Text style={s.lessonEmpty}>Noch nichts eingetragen.</Text>
+      ) : (
+        openItems.map((item, idx) => (
+          <TouchableOpacity key={item.id} style={s.journalRow} onPress={() => openEditItem(item)}>
+            <TouchableOpacity onPress={() => toggleItemDone(item)} hitSlop={8}>
+              <Ionicons name="square-outline" size={20} color={colors.textMuted} />
+            </TouchableOpacity>
+            <Ionicons name={ITEM_ICON[item.type]} size={16} color={colors.textMuted} style={s.itemTypeIcon} />
+            <View style={s.journalBody}>
+              {item.type === 'homework' && (
+                <>
+                  {!!item.subject && (
+                    <View style={s.lessonHead}>
+                      <View style={[s.lessonDot, { backgroundColor: subjectColor(item.subject) }]} />
+                      <Text style={s.lessonFach}>{item.subject}</Text>
+                    </View>
+                  )}
+                  <Text style={s.journalText}>{item.text}</Text>
+                </>
+              )}
+              {item.type === 'info' && <Text style={s.journalText}>{item.text}</Text>}
+              {item.type === 'event' && (
+                <>
+                  <Text style={s.journalText}>{item.title}</Text>
+                  {!!(item.date || item.location) && (
+                    <Text style={s.lessonMeta}>
+                      {[item.date && journalDayLabel(item.date), item.time, item.location].filter(Boolean).join(' · ')}
+                    </Text>
+                  )}
+                </>
+              )}
+            </View>
+            <View style={s.moveCol}>
+              <TouchableOpacity
+                onPress={() => handleMoveItem(item.id, 'up')}
+                disabled={idx === 0}
+                hitSlop={6}
+              >
+                <Ionicons name="chevron-up" size={16} color={idx === 0 ? colors.border : colors.textMuted} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => handleMoveItem(item.id, 'down')}
+                disabled={idx === openItems.length - 1}
+                hitSlop={6}
+              >
+                <Ionicons name="chevron-down" size={16} color={idx === openItems.length - 1 ? colors.border : colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        ))
+      )}
+      {historyItems.length > 0 && (
+        <>
+          <Text style={[s.klassenbuchTitle, { marginTop: 14 }]}>Erledigt</Text>
+          {historyItems.map((item) => (
+            <TouchableOpacity key={item.id} style={s.journalRow} onPress={() => openEditItem(item)}>
+              <TouchableOpacity onPress={() => toggleItemDone(item)} hitSlop={8}>
+                <Ionicons name="checkbox" size={20} color={colors.accentNeon} />
+              </TouchableOpacity>
+              <Ionicons name={ITEM_ICON[item.type]} size={16} color={colors.textMuted} style={s.itemTypeIcon} />
+              <View style={s.journalBody}>
+                <Text style={[s.journalText, s.journalTextDone]}>
+                  {item.type === 'event' ? item.title : item.text}
+                </Text>
+              </View>
+            </TouchableOpacity>
+          ))}
+        </>
+      )}
+    </View>
+  );
+
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: colors.background }} contentContainerStyle={s.container}>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={s.container}>
       {/* Kind-Auswahl */}
       <View style={s.childRow}>
         {familyChildren.map((child) => {
@@ -368,9 +448,13 @@ export default function SchuleScreen() {
         })}
       </View>
 
-      {/* Ansicht umschalten: synchronisierte Kinder bekommen zusätzlich Noten
-          (read-only aus beste.schule). Das Klassenbuch selbst zeigt für
-          manuell gepflegte Kinder einen eigenen, editierbaren Inhalt (s. u.). */}
+      {/* Kindergarten-Kinder (keine Schulpflicht): kein Umschalter, nur der
+          manuelle Eintrags-Strom. Alle anderen Kinder bekommen den üblichen
+          Stundenplan/Noten/Klassenbuch-Umschalter. */}
+      {isKindergarten ? (
+        manualKlassenbuchContent
+      ) : (
+      <>
       <View style={s.viewToggle}>
         <TouchableOpacity
           style={[s.viewToggleBtn, view === 'plan' && s.viewToggleBtnActive]}
@@ -436,86 +520,7 @@ export default function SchuleScreen() {
             ))
           )}
         </View>
-        ) : (
-        <View style={s.section}>
-          <View style={s.sectionHeadRow}>
-            <Text style={s.klassenbuchTitle}>Klassenbuch</Text>
-            <TouchableOpacity onPress={() => setTypePickerOpen(true)} hitSlop={8}>
-              <Ionicons name="add-circle-outline" size={22} color={colors.accentNeon} />
-            </TouchableOpacity>
-          </View>
-          {openItems.length === 0 ? (
-            <Text style={s.lessonEmpty}>Noch nichts eingetragen.</Text>
-          ) : (
-            openItems.map((item, idx) => (
-              <TouchableOpacity key={item.id} style={s.journalRow} onPress={() => openEditItem(item)}>
-                <TouchableOpacity onPress={() => toggleItemDone(item)} hitSlop={8}>
-                  <Ionicons name="square-outline" size={20} color={colors.textMuted} />
-                </TouchableOpacity>
-                <Ionicons name={ITEM_ICON[item.type]} size={16} color={colors.textMuted} style={s.itemTypeIcon} />
-                <View style={s.journalBody}>
-                  {item.type === 'homework' && (
-                    <>
-                      {!!item.subject && (
-                        <View style={s.lessonHead}>
-                          <View style={[s.lessonDot, { backgroundColor: subjectColor(item.subject) }]} />
-                          <Text style={s.lessonFach}>{item.subject}</Text>
-                        </View>
-                      )}
-                      <Text style={s.journalText}>{item.text}</Text>
-                    </>
-                  )}
-                  {item.type === 'info' && <Text style={s.journalText}>{item.text}</Text>}
-                  {item.type === 'event' && (
-                    <>
-                      <Text style={s.journalText}>{item.title}</Text>
-                      {!!(item.date || item.location) && (
-                        <Text style={s.lessonMeta}>
-                          {[item.date && journalDayLabel(item.date), item.time, item.location].filter(Boolean).join(' · ')}
-                        </Text>
-                      )}
-                    </>
-                  )}
-                </View>
-                <View style={s.moveCol}>
-                  <TouchableOpacity
-                    onPress={() => handleMoveItem(item.id, 'up')}
-                    disabled={idx === 0}
-                    hitSlop={6}
-                  >
-                    <Ionicons name="chevron-up" size={16} color={idx === 0 ? colors.border : colors.textMuted} />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => handleMoveItem(item.id, 'down')}
-                    disabled={idx === openItems.length - 1}
-                    hitSlop={6}
-                  >
-                    <Ionicons name="chevron-down" size={16} color={idx === openItems.length - 1 ? colors.border : colors.textMuted} />
-                  </TouchableOpacity>
-                </View>
-              </TouchableOpacity>
-            ))
-          )}
-          {historyItems.length > 0 && (
-            <>
-              <Text style={[s.klassenbuchTitle, { marginTop: 14 }]}>Erledigt</Text>
-              {historyItems.map((item) => (
-                <TouchableOpacity key={item.id} style={s.journalRow} onPress={() => openEditItem(item)}>
-                  <TouchableOpacity onPress={() => toggleItemDone(item)} hitSlop={8}>
-                    <Ionicons name="checkbox" size={20} color={colors.accentNeon} />
-                  </TouchableOpacity>
-                  <Ionicons name={ITEM_ICON[item.type]} size={16} color={colors.textMuted} style={s.itemTypeIcon} />
-                  <View style={s.journalBody}>
-                    <Text style={[s.journalText, s.journalTextDone]}>
-                      {item.type === 'event' ? item.title : item.text}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              ))}
-            </>
-          )}
-        </View>
-        )
+        ) : manualKlassenbuchContent
       ) : view === 'noten' ? (
         <View style={s.section}>
           {Object.keys(grades).length === 0 ? (
@@ -634,6 +639,8 @@ export default function SchuleScreen() {
       </View>
       </>
       )}
+      </>
+      )}
 
       {/* Sync-Status – nur für an beste.schule gekoppelte Kinder, ganz unten */}
       {isLinked && (
@@ -651,6 +658,23 @@ export default function SchuleScreen() {
           </Text>
         </View>
       )}
+    </ScrollView>
+
+    {/* Drei FABs statt "+"-Menü: legen direkt den jeweiligen Typ an, gleiche
+        Position/Optik wie die FABs im Bambini-Tab (unten rechts, gestaffelt). */}
+    {showManualList && (
+      <>
+        <Pressable style={s.fabTermin} onPress={() => pickType('event')} accessibilityLabel="Termin hinzufügen">
+          <Ionicons name="calendar" size={24} color={colors.accentFg} />
+        </Pressable>
+        <Pressable style={s.fabInfo} onPress={() => pickType('info')} accessibilityLabel="Info hinzufügen">
+          <Ionicons name="information-circle" size={24} color={colors.accentFg} />
+        </Pressable>
+        <Pressable style={s.fabHomework} onPress={() => pickType('homework')} accessibilityLabel="Hausaufgabe hinzufügen">
+          <Ionicons name="book" size={22} color={colors.accentFg} />
+        </Pressable>
+      </>
+    )}
 
       {/* Editor-Modal */}
       <Modal visible={!!editing} transparent animationType="fade">
@@ -743,22 +767,6 @@ export default function SchuleScreen() {
                 </TouchableOpacity>
               </View>
             </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
-
-      {/* Typ-Auswahl-Modal – welche Art Eintrag soll neu angelegt werden? */}
-      <Modal visible={typePickerOpen} transparent animationType="fade">
-        <Pressable style={s.modalOverlay} onPress={() => setTypePickerOpen(false)}>
-          <Pressable style={s.modalBox} onPress={() => {}}>
-            <Text style={s.modalTitle}>Was möchtest du eintragen?</Text>
-            {(['homework', 'info', 'event'] as SchoolItemType[]).map((type) => (
-              <TouchableOpacity key={type} style={s.typeOption} onPress={() => pickType(type)}>
-                <Ionicons name={ITEM_ICON[type]} size={20} color={colors.accentNeon} />
-                <Text style={s.typeOptionText}>{ITEM_LABEL[type]}</Text>
-                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-              </TouchableOpacity>
-            ))}
           </Pressable>
         </Pressable>
       </Modal>
@@ -876,13 +884,15 @@ export default function SchuleScreen() {
           </Pressable>
         </Pressable>
       </Modal>
-    </ScrollView>
+    </View>
   );
 }
 
 const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
   StyleSheet.create({
-    container: { padding: 14, gap: 4, paddingBottom: 24 },
+    // paddingBottom groß genug, damit die drei FABs unten rechts (Klassenbuch-
+    // Ansichten) nicht die letzten Einträge verdecken.
+    container: { padding: 14, gap: 4, paddingBottom: 96 },
     // Kind-Auswahl
     childRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 },
     childChip: {
@@ -954,17 +964,30 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
     pauseRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 4, paddingVertical: 0 },
     pauseText: { fontSize: 11, color: colors.textMuted, fontStyle: 'italic' },
     // Klassenbuch / manuelles Klassenbuch (Hausaufgaben, Infos, Termine gemischt)
-    sectionHeadRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     klassenbuchTitle: { fontSize: 13, fontWeight: '700', color: colors.textSecondary, marginBottom: 2 },
     journalTextDone: { textDecorationLine: 'line-through', color: colors.textMuted },
     itemTypeIcon: { marginTop: 1 },
     moveCol: { justifyContent: 'center', gap: 2 },
-    typeOption: {
-      flexDirection: 'row', alignItems: 'center', gap: 10,
-      paddingVertical: 12, paddingHorizontal: 4,
-      borderBottomWidth: 1, borderBottomColor: colors.border,
+    // Drei FABs zum direkten Anlegen je Typ – gleiche Optik/Position wie im
+    // Bambini-Tab (unten rechts, 56px, gestaffelt um 68px).
+    fabHomework: {
+      position: 'absolute', right: 18, bottom: 24,
+      width: 56, height: 56, borderRadius: 28,
+      backgroundColor: colors.accentNeon, alignItems: 'center', justifyContent: 'center',
+      shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 6, elevation: 6,
     },
-    typeOptionText: { flex: 1, fontSize: 15, fontWeight: '600', color: colors.text },
+    fabInfo: {
+      position: 'absolute', right: 86, bottom: 24,
+      width: 56, height: 56, borderRadius: 28,
+      backgroundColor: colors.accentNeon, alignItems: 'center', justifyContent: 'center',
+      shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 6, elevation: 6,
+    },
+    fabTermin: {
+      position: 'absolute', right: 154, bottom: 24,
+      width: 56, height: 56, borderRadius: 28,
+      backgroundColor: colors.accentNeon, alignItems: 'center', justifyContent: 'center',
+      shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 6, elevation: 6,
+    },
     journalRow: {
       flexDirection: 'row', gap: 10,
       backgroundColor: colors.surface, borderRadius: 12, paddingVertical: 8, paddingHorizontal: 12,
