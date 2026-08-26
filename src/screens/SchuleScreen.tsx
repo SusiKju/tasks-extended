@@ -182,7 +182,7 @@ export default function SchuleScreen() {
   // Kindergarten-Kinder (TE-Settings "Kindergarten"): kein Stundenplan/
   // Klassenbuch-Umschalter, nur der manuelle Eintrags-Strom.
   const isKindergarten = !!settings.kindergartenChildIds?.[selectedChild];
-  const showManualList = isKindergarten || (view === 'klassenbuch' && !isLinked);
+  const showManualList = isKindergarten || !isLinked;
 
   // Zeiten/Pausen sind bei beste.schule-Kindern durch den Sync vorgegeben;
   // manuell gepflegte Kinder (andere Schule, andere Taktung) können sie
@@ -427,135 +427,11 @@ export default function SchuleScreen() {
     </View>
   );
 
-  return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
-    <ScrollView style={{ flex: 1 }} contentContainerStyle={s.container}>
-      {/* Kind-Auswahl */}
-      <View style={s.childRow}>
-        {familyChildren.map((child) => {
-          const isSelected = child.id === selectedChild;
-          return (
-            <TouchableOpacity
-              key={child.id}
-              style={[s.childChip, isSelected && { backgroundColor: child.color }]}
-              onPress={() => setSelectedChild(child.id)}
-            >
-              <Text style={[s.childName, isSelected && { color: readableTextOn(child.color) }]}>
-                {child.emoji ? `${child.emoji} ` : ''}{child.name}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-
-      {/* Kindergarten-Kinder (keine Schulpflicht): kein Umschalter, nur der
-          manuelle Eintrags-Strom. Alle anderen Kinder bekommen den üblichen
-          Stundenplan/Noten/Klassenbuch-Umschalter. */}
-      {isKindergarten ? (
-        manualKlassenbuchContent
-      ) : (
-      <>
-      <View style={s.viewToggle}>
-        <TouchableOpacity
-          style={[s.viewToggleBtn, view === 'plan' && s.viewToggleBtnActive]}
-          onPress={() => setView('plan')}
-        >
-          <Text style={[s.viewToggleText, view === 'plan' && s.viewToggleTextActive]}>Stundenplan</Text>
-        </TouchableOpacity>
-        {isLinked && (
-          <TouchableOpacity
-            style={[s.viewToggleBtn, view === 'noten' && s.viewToggleBtnActive]}
-            onPress={() => setView('noten')}
-          >
-            <Text style={[s.viewToggleText, view === 'noten' && s.viewToggleTextActive]}>Noten</Text>
-          </TouchableOpacity>
-        )}
-        <TouchableOpacity
-          style={[s.viewToggleBtn, view === 'klassenbuch' && s.viewToggleBtnActive]}
-          onPress={() => setView('klassenbuch')}
-        >
-          <Text style={[s.viewToggleText, view === 'klassenbuch' && s.viewToggleTextActive]}>Klassenbuch</Text>
-        </TouchableOpacity>
-      </View>
-
-      {view === 'klassenbuch' ? (
-        isLinked ? (
-        <View style={s.section}>
-          <Text style={s.klassenbuchTitle}>Vertretungen</Text>
-          {journal.substitutions.length === 0 ? (
-            <Text style={s.lessonEmpty}>Keine Vertretungen bekannt.</Text>
-          ) : (
-            journal.substitutions.map((n, i) => (
-              <View key={i} style={s.journalRow}>
-                <Text style={s.journalDate}>{journalDayLabel(n.date)}</Text>
-                <View style={s.journalBody}>
-                  {n.fach && (
-                    <View style={s.lessonHead}>
-                      <View style={[s.lessonDot, { backgroundColor: subjectColor(n.fach) }]} />
-                      <Text style={s.lessonFach}>{n.fach}</Text>
-                    </View>
-                  )}
-                  <Text style={s.journalText}>{n.text}</Text>
-                </View>
-              </View>
-            ))
-          )}
-          <Text style={[s.klassenbuchTitle, { marginTop: 14 }]}>Hausaufgaben</Text>
-          {journal.homework.length === 0 ? (
-            <Text style={s.lessonEmpty}>Keine offenen Hausaufgaben.</Text>
-          ) : (
-            journal.homework.map((n, i) => (
-              <View key={i} style={s.journalRow}>
-                <Text style={s.journalDate}>{journalDayLabel(n.date)}</Text>
-                <View style={s.journalBody}>
-                  {n.fach && (
-                    <View style={s.lessonHead}>
-                      <View style={[s.lessonDot, { backgroundColor: subjectColor(n.fach) }]} />
-                      <Text style={s.lessonFach}>{n.fach}</Text>
-                    </View>
-                  )}
-                  <Text style={s.journalText}>{n.text}</Text>
-                </View>
-              </View>
-            ))
-          )}
-        </View>
-        ) : manualKlassenbuchContent
-      ) : view === 'noten' ? (
-        <View style={s.section}>
-          {Object.keys(grades).length === 0 ? (
-            <Text style={s.lessonEmpty}>Noch keine Fächer synchronisiert.</Text>
-          ) : (
-            Object.entries(grades)
-              .sort(([a], [b]) => a.localeCompare(b, 'de'))
-              .map(([fach, entries]) => (
-                <View key={fach} style={s.gradeCard}>
-                  <View style={s.gradeHead}>
-                    <View style={[s.lessonDot, { backgroundColor: subjectColor(fach) }]} />
-                    <Text style={s.lessonFach}>{fach}</Text>
-                  </View>
-                  {!!teachersByFach[fach]?.size && (
-                    <Text style={s.gradeTeachers}>{[...teachersByFach[fach]].join(', ')}</Text>
-                  )}
-                  {entries.length === 0 ? (
-                    <Text style={s.lessonEmpty}>Keine Noten erteilt.</Text>
-                  ) : (
-                    <View style={s.gradeChipsRow}>
-                      {entries.map((g, i) => (
-                        <View key={i} style={s.gradeChip}>
-                          <Text style={s.gradeChipText}>{g.value}</Text>
-                          {!!g.type && <Text style={s.gradeChipMeta}>{g.type}</Text>}
-                        </View>
-                      ))}
-                    </View>
-                  )}
-                </View>
-              ))
-          )}
-        </View>
-      ) : (
-      <>
-      {/* Tag-Auswahl – heutiger Wochentag vorausgewählt */}
+  // Tag-Auswahl + Stundenplan des gewählten Tages – für Lenny hinter dem
+  // Stundenplan-Reiter, für Hannes/Emil direkt unter dem Klassenbuch auf
+  // derselben Seite (kein Tab mehr).
+  const stundenplanContent = (
+    <>
       <View style={s.dayRow}>
         {DAY_SHORT.map((label, i) => {
           const isToday = i === todayIdx;
@@ -575,7 +451,6 @@ export default function SchuleScreen() {
         {DAY_NAMES[selectedDay]}{selectedDay === todayIdx ? ' · heute' : ''}
       </Text>
 
-      {/* Stunden des gewählten Tages */}
       <View style={s.section}>
         {isLinked && visiblePeriods.length === 0 && (
           <Text style={s.lessonEmpty}>Heute keine Schule.</Text>
@@ -637,7 +512,139 @@ export default function SchuleScreen() {
           );
         })}
       </View>
-      </>
+    </>
+  );
+
+  return (
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={s.container}>
+      {/* Kind-Auswahl */}
+      <View style={s.childRow}>
+        {familyChildren.map((child) => {
+          const isSelected = child.id === selectedChild;
+          return (
+            <TouchableOpacity
+              key={child.id}
+              style={[s.childChip, isSelected && { backgroundColor: child.color }]}
+              onPress={() => setSelectedChild(child.id)}
+            >
+              <Text style={[s.childName, isSelected && { color: readableTextOn(child.color) }]}>
+                {child.emoji ? `${child.emoji} ` : ''}{child.name}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      {/* Kindergarten-Kinder: kein Umschalter, nur der manuelle Eintrags-
+          Strom. Hannes/Emil (manuell, aber schulpflichtig): Klassenbuch und
+          Stundenplan auf einer Seite, kein Tab mehr. Lenny (synchronisiert):
+          weiterhin der Stundenplan/Noten/Klassenbuch-Umschalter. */}
+      {isKindergarten ? (
+        manualKlassenbuchContent
+      ) : !isLinked ? (
+        <>
+          {manualKlassenbuchContent}
+          {stundenplanContent}
+        </>
+      ) : (
+      <>
+      <View style={s.viewToggle}>
+        <TouchableOpacity
+          style={[s.viewToggleBtn, view === 'plan' && s.viewToggleBtnActive]}
+          onPress={() => setView('plan')}
+        >
+          <Text style={[s.viewToggleText, view === 'plan' && s.viewToggleTextActive]}>Stundenplan</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[s.viewToggleBtn, view === 'noten' && s.viewToggleBtnActive]}
+          onPress={() => setView('noten')}
+        >
+          <Text style={[s.viewToggleText, view === 'noten' && s.viewToggleTextActive]}>Noten</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[s.viewToggleBtn, view === 'klassenbuch' && s.viewToggleBtnActive]}
+          onPress={() => setView('klassenbuch')}
+        >
+          <Text style={[s.viewToggleText, view === 'klassenbuch' && s.viewToggleTextActive]}>Klassenbuch</Text>
+        </TouchableOpacity>
+      </View>
+
+      {view === 'klassenbuch' ? (
+        <View style={s.section}>
+          <Text style={s.klassenbuchTitle}>Vertretungen</Text>
+          {journal.substitutions.length === 0 ? (
+            <Text style={s.lessonEmpty}>Keine Vertretungen bekannt.</Text>
+          ) : (
+            journal.substitutions.map((n, i) => (
+              <View key={i} style={s.journalRow}>
+                <Text style={s.journalDate}>{journalDayLabel(n.date)}</Text>
+                <View style={s.journalBody}>
+                  {n.fach && (
+                    <View style={s.lessonHead}>
+                      <View style={[s.lessonDot, { backgroundColor: subjectColor(n.fach) }]} />
+                      <Text style={s.lessonFach}>{n.fach}</Text>
+                    </View>
+                  )}
+                  <Text style={s.journalText}>{n.text}</Text>
+                </View>
+              </View>
+            ))
+          )}
+          <Text style={[s.klassenbuchTitle, { marginTop: 14 }]}>Hausaufgaben</Text>
+          {journal.homework.length === 0 ? (
+            <Text style={s.lessonEmpty}>Keine offenen Hausaufgaben.</Text>
+          ) : (
+            journal.homework.map((n, i) => (
+              <View key={i} style={s.journalRow}>
+                <Text style={s.journalDate}>{journalDayLabel(n.date)}</Text>
+                <View style={s.journalBody}>
+                  {n.fach && (
+                    <View style={s.lessonHead}>
+                      <View style={[s.lessonDot, { backgroundColor: subjectColor(n.fach) }]} />
+                      <Text style={s.lessonFach}>{n.fach}</Text>
+                    </View>
+                  )}
+                  <Text style={s.journalText}>{n.text}</Text>
+                </View>
+              </View>
+            ))
+          )}
+        </View>
+      ) : view === 'noten' ? (
+        <View style={s.section}>
+          {Object.keys(grades).length === 0 ? (
+            <Text style={s.lessonEmpty}>Noch keine Fächer synchronisiert.</Text>
+          ) : (
+            Object.entries(grades)
+              .sort(([a], [b]) => a.localeCompare(b, 'de'))
+              .map(([fach, entries]) => (
+                <View key={fach} style={s.gradeCard}>
+                  <View style={s.gradeHead}>
+                    <View style={[s.lessonDot, { backgroundColor: subjectColor(fach) }]} />
+                    <Text style={s.lessonFach}>{fach}</Text>
+                  </View>
+                  {!!teachersByFach[fach]?.size && (
+                    <Text style={s.gradeTeachers}>{[...teachersByFach[fach]].join(', ')}</Text>
+                  )}
+                  {entries.length === 0 ? (
+                    <Text style={s.lessonEmpty}>Keine Noten erteilt.</Text>
+                  ) : (
+                    <View style={s.gradeChipsRow}>
+                      {entries.map((g, i) => (
+                        <View key={i} style={s.gradeChip}>
+                          <Text style={s.gradeChipText}>{g.value}</Text>
+                          {!!g.type && <Text style={s.gradeChipMeta}>{g.type}</Text>}
+                        </View>
+                      ))}
+                    </View>
+                  )}
+                </View>
+              ))
+          )}
+        </View>
+      ) : (
+        stundenplanContent
       )}
       </>
       )}
