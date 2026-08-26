@@ -11,7 +11,7 @@ import {
   TextInput, Modal, Pressable,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { format, parseISO, isToday, isTomorrow, isYesterday } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { useTheme, readableTextOn } from '../utils/theme';
@@ -90,6 +90,17 @@ export default function SchuleScreen() {
   useEffect(() => {
     if (familyChildren.length > 0 && !selectedChild) setSelectedChild(familyChildren[0].id);
   }, [familyChildren, selectedChild]);
+
+  // Direkt zum passenden Kind springen, wenn von außen mit ?child=<id>
+  // verlinkt wurde (z. B. "Schulaufgaben" im Dashboard) – bei jedem
+  // Fokussieren erneut, falls der Tab schon gemountet war und sich nur der
+  // Parameter geändert hat.
+  const { child: childParam } = useLocalSearchParams<{ child?: string }>();
+  useFocusEffect(
+    useCallback(() => {
+      if (childParam) setSelectedChild(childParam);
+    }, [childParam])
+  );
 
   // Ansicht-Umschalter unterscheidet sich je nach Kind (Noten/Klassenbuch vs.
   // Hausaufgaben/Infos/Termine) – beim Kindwechsel immer auf Stundenplan zurück.

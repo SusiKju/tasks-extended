@@ -1294,7 +1294,12 @@ export function DashboardScreen() {
               const list = schoolTasksByChild[childId];
               return (
                 <React.Fragment key={childId}>
-                  <View style={[styles.kidHeaderRow, styles.rowDivider]}>
+                  {/* Name antippbar: springt direkt zu diesem Kind im Schule-Tab
+                      (?child=<id>), statt nur auf den Tab allgemein. */}
+                  <Pressable
+                    onPress={() => router.push({ pathname: '/(tabs)/schule', params: { child: childId } } as any)}
+                    style={({ pressed }) => [styles.kidHeaderRow, styles.rowDivider, { opacity: pressed ? 0.6 : 1 }]}
+                  >
                     <View style={[styles.kidAvatar, { backgroundColor: childColor(childId) }]}>
                       <Text style={styles.kidAvatarText}>
                         {childEmoji(childId) ?? childName(childId).charAt(0)}
@@ -1303,13 +1308,13 @@ export function DashboardScreen() {
                     <Text style={[styles.kidHeaderText, { color: colors.textMuted }]}>
                       {childName(childId)}
                     </Text>
-                  </View>
+                  </Pressable>
                   {list.map((item) => {
                     const due = taskDue(item.date || null);
                     return (
                       <Pressable
                         key={item.id}
-                        onPress={() => router.push('/(tabs)/schule' as any)}
+                        onPress={() => router.push({ pathname: '/(tabs)/schule', params: { child: childId } } as any)}
                         style={({ pressed }) => [styles.kidRow, styles.rowDivider, { opacity: pressed ? 0.6 : 1 }]}
                       >
                         <Ionicons name="square-outline" size={18} color={colors.textMuted} />
