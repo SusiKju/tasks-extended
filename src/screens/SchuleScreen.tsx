@@ -508,6 +508,7 @@ export default function SchuleScreen() {
           anderen Kindern oben in der Hauptübersicht, unabhängig vom
           gewählten Reiter – darunter folgt der Rest aus beste.schule. */}
       {manualKlassenbuchContent}
+      <View style={s.stundenplanDivider} />
       <View style={s.viewToggle}>
         <TouchableOpacity
           style={[s.viewToggleBtn, view === 'plan' && s.viewToggleBtnActive]}
