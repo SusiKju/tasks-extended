@@ -357,71 +357,85 @@ export default function SchuleScreen() {
       {openItems.length === 0 ? (
         <Text style={s.lessonEmpty}>Noch nichts eingetragen.</Text>
       ) : (
-        openItems.map((item, idx) => (
-          <TouchableOpacity key={item.id} style={s.journalRow} onPress={() => openEditItem(item)}>
-            <TouchableOpacity onPress={() => toggleItemDone(item)} hitSlop={8}>
-              <Ionicons name="square-outline" size={20} color={colors.textMuted} />
+        <View style={s.listCard}>
+          {openItems.map((item, idx) => (
+            <TouchableOpacity
+              key={item.id}
+              style={[s.listRow, idx > 0 && s.listRowDivider]}
+              onPress={() => openEditItem(item)}
+            >
+              <TouchableOpacity onPress={() => toggleItemDone(item)} hitSlop={10}>
+                <Ionicons name="square-outline" size={20} color={colors.textMuted} />
+              </TouchableOpacity>
+              <Ionicons name={ITEM_ICON[item.type]} size={16} color={colors.textMuted} style={s.itemTypeIcon} />
+              <View style={s.journalBody}>
+                {item.type === 'homework' && (
+                  <>
+                    {!!item.subject && (
+                      <View style={s.lessonHead}>
+                        <View style={[s.lessonDot, { backgroundColor: subjectColor(item.subject) }]} />
+                        <Text style={s.lessonFach}>{item.subject}</Text>
+                      </View>
+                    )}
+                    <Text style={s.journalText}>{item.text}</Text>
+                  </>
+                )}
+                {item.type === 'info' && <Text style={s.journalText}>{item.text}</Text>}
+                {item.type === 'event' && (
+                  <>
+                    <Text style={s.journalText}>{item.title}</Text>
+                    {!!(item.date || item.location) && (
+                      <Text style={s.lessonMeta}>
+                        {[item.date && journalDayLabel(item.date), item.time, item.location].filter(Boolean).join(' · ')}
+                      </Text>
+                    )}
+                  </>
+                )}
+              </View>
+              <View style={s.moveCol}>
+                <TouchableOpacity
+                  onPress={() => handleMoveItem(item.id, 'up')}
+                  disabled={idx === 0}
+                  hitSlop={8}
+                  style={s.moveBtn}
+                >
+                  <Ionicons name="chevron-up" size={18} color={idx === 0 ? colors.border : colors.textMuted} />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => handleMoveItem(item.id, 'down')}
+                  disabled={idx === openItems.length - 1}
+                  hitSlop={8}
+                  style={s.moveBtn}
+                >
+                  <Ionicons name="chevron-down" size={18} color={idx === openItems.length - 1 ? colors.border : colors.textMuted} />
+                </TouchableOpacity>
+              </View>
             </TouchableOpacity>
-            <Ionicons name={ITEM_ICON[item.type]} size={16} color={colors.textMuted} style={s.itemTypeIcon} />
-            <View style={s.journalBody}>
-              {item.type === 'homework' && (
-                <>
-                  {!!item.subject && (
-                    <View style={s.lessonHead}>
-                      <View style={[s.lessonDot, { backgroundColor: subjectColor(item.subject) }]} />
-                      <Text style={s.lessonFach}>{item.subject}</Text>
-                    </View>
-                  )}
-                  <Text style={s.journalText}>{item.text}</Text>
-                </>
-              )}
-              {item.type === 'info' && <Text style={s.journalText}>{item.text}</Text>}
-              {item.type === 'event' && (
-                <>
-                  <Text style={s.journalText}>{item.title}</Text>
-                  {!!(item.date || item.location) && (
-                    <Text style={s.lessonMeta}>
-                      {[item.date && journalDayLabel(item.date), item.time, item.location].filter(Boolean).join(' · ')}
-                    </Text>
-                  )}
-                </>
-              )}
-            </View>
-            <View style={s.moveCol}>
-              <TouchableOpacity
-                onPress={() => handleMoveItem(item.id, 'up')}
-                disabled={idx === 0}
-                hitSlop={6}
-              >
-                <Ionicons name="chevron-up" size={16} color={idx === 0 ? colors.border : colors.textMuted} />
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => handleMoveItem(item.id, 'down')}
-                disabled={idx === openItems.length - 1}
-                hitSlop={6}
-              >
-                <Ionicons name="chevron-down" size={16} color={idx === openItems.length - 1 ? colors.border : colors.textMuted} />
-              </TouchableOpacity>
-            </View>
-          </TouchableOpacity>
-        ))
+          ))}
+        </View>
       )}
       {historyItems.length > 0 && (
         <>
           <Text style={[s.klassenbuchTitle, { marginTop: 14 }]}>Erledigt</Text>
-          {historyItems.map((item) => (
-            <TouchableOpacity key={item.id} style={s.journalRow} onPress={() => openEditItem(item)}>
-              <TouchableOpacity onPress={() => toggleItemDone(item)} hitSlop={8}>
-                <Ionicons name="checkbox" size={20} color={colors.accentNeon} />
+          <View style={s.listCard}>
+            {historyItems.map((item, idx) => (
+              <TouchableOpacity
+                key={item.id}
+                style={[s.listRow, idx > 0 && s.listRowDivider]}
+                onPress={() => openEditItem(item)}
+              >
+                <TouchableOpacity onPress={() => toggleItemDone(item)} hitSlop={10}>
+                  <Ionicons name="checkbox" size={20} color={colors.accentNeon} />
+                </TouchableOpacity>
+                <Ionicons name={ITEM_ICON[item.type]} size={16} color={colors.textMuted} style={s.itemTypeIcon} />
+                <View style={s.journalBody}>
+                  <Text style={[s.journalText, s.journalTextDone]}>
+                    {item.type === 'event' ? item.title : item.text}
+                  </Text>
+                </View>
               </TouchableOpacity>
-              <Ionicons name={ITEM_ICON[item.type]} size={16} color={colors.textMuted} style={s.itemTypeIcon} />
-              <View style={s.journalBody}>
-                <Text style={[s.journalText, s.journalTextDone]}>
-                  {item.type === 'event' ? item.title : item.text}
-                </Text>
-              </View>
-            </TouchableOpacity>
-          ))}
+            ))}
+          </View>
         </>
       )}
     </View>
@@ -545,6 +559,9 @@ export default function SchuleScreen() {
       ) : !isLinked ? (
         <>
           {manualKlassenbuchContent}
+          <View style={s.stundenplanDivider}>
+            <Text style={s.stundenplanDividerText}>Stundenplan</Text>
+          </View>
           {stundenplanContent}
         </>
       ) : (
@@ -576,39 +593,43 @@ export default function SchuleScreen() {
           {journal.substitutions.length === 0 ? (
             <Text style={s.lessonEmpty}>Keine Vertretungen bekannt.</Text>
           ) : (
-            journal.substitutions.map((n, i) => (
-              <View key={i} style={s.journalRow}>
-                <Text style={s.journalDate}>{journalDayLabel(n.date)}</Text>
-                <View style={s.journalBody}>
-                  {n.fach && (
-                    <View style={s.lessonHead}>
-                      <View style={[s.lessonDot, { backgroundColor: subjectColor(n.fach) }]} />
-                      <Text style={s.lessonFach}>{n.fach}</Text>
-                    </View>
-                  )}
-                  <Text style={s.journalText}>{n.text}</Text>
+            <View style={s.listCard}>
+              {journal.substitutions.map((n, i) => (
+                <View key={i} style={[s.listRow, i > 0 && s.listRowDivider]}>
+                  <Text style={s.journalDate}>{journalDayLabel(n.date)}</Text>
+                  <View style={s.journalBody}>
+                    {n.fach && (
+                      <View style={s.lessonHead}>
+                        <View style={[s.lessonDot, { backgroundColor: subjectColor(n.fach) }]} />
+                        <Text style={s.lessonFach}>{n.fach}</Text>
+                      </View>
+                    )}
+                    <Text style={s.journalText}>{n.text}</Text>
+                  </View>
                 </View>
-              </View>
-            ))
+              ))}
+            </View>
           )}
           <Text style={[s.klassenbuchTitle, { marginTop: 14 }]}>Hausaufgaben</Text>
           {journal.homework.length === 0 ? (
             <Text style={s.lessonEmpty}>Keine offenen Hausaufgaben.</Text>
           ) : (
-            journal.homework.map((n, i) => (
-              <View key={i} style={s.journalRow}>
-                <Text style={s.journalDate}>{journalDayLabel(n.date)}</Text>
-                <View style={s.journalBody}>
-                  {n.fach && (
-                    <View style={s.lessonHead}>
-                      <View style={[s.lessonDot, { backgroundColor: subjectColor(n.fach) }]} />
-                      <Text style={s.lessonFach}>{n.fach}</Text>
-                    </View>
-                  )}
-                  <Text style={s.journalText}>{n.text}</Text>
+            <View style={s.listCard}>
+              {journal.homework.map((n, i) => (
+                <View key={i} style={[s.listRow, i > 0 && s.listRowDivider]}>
+                  <Text style={s.journalDate}>{journalDayLabel(n.date)}</Text>
+                  <View style={s.journalBody}>
+                    {n.fach && (
+                      <View style={s.lessonHead}>
+                        <View style={[s.lessonDot, { backgroundColor: subjectColor(n.fach) }]} />
+                        <Text style={s.lessonFach}>{n.fach}</Text>
+                      </View>
+                    )}
+                    <Text style={s.journalText}>{n.text}</Text>
+                  </View>
                 </View>
-              </View>
-            ))
+              ))}
+            </View>
           )}
         </View>
       ) : view === 'noten' ? (
@@ -974,7 +995,19 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
     klassenbuchTitle: { fontSize: 13, fontWeight: '700', color: colors.textSecondary, marginBottom: 2 },
     journalTextDone: { textDecorationLine: 'line-through', color: colors.textMuted },
     itemTypeIcon: { marginTop: 1 },
-    moveCol: { justifyContent: 'center', gap: 2 },
+    moveCol: { justifyContent: 'center' },
+    // Größere Tippfläche als der 18px-Pfeil selbst (Touch-Ziel).
+    moveBtn: { padding: 5 },
+    // Klare Abhebung zum Stundenplan darunter, wenn beides ohne Tab auf
+    // einer Seite steht (Hannes/Emil).
+    stundenplanDivider: {
+      marginTop: 22, paddingTop: 14, marginBottom: 2,
+      borderTopWidth: 1, borderTopColor: colors.border,
+    },
+    stundenplanDividerText: {
+      fontSize: 12, fontWeight: '700', color: colors.textMuted,
+      textTransform: 'uppercase', letterSpacing: 0.6,
+    },
     // Drei FABs zum direkten Anlegen je Typ – gleiche Optik/Position wie im
     // Bambini-Tab (unten rechts, 56px, gestaffelt um 68px).
     fabHomework: {
@@ -995,11 +1028,17 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
       backgroundColor: colors.accentNeon, alignItems: 'center', justifyContent: 'center',
       shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 6, elevation: 6,
     },
-    journalRow: {
-      flexDirection: 'row', gap: 10,
-      backgroundColor: colors.surface, borderRadius: 12, paddingVertical: 8, paddingHorizontal: 12,
+    // Eine Karte pro Liste statt eines Rahmens pro Zeile – Zeilen trennen
+    // sich nur durch eine dünne Linie, das wirkt deutlich kompakter.
+    listCard: {
+      backgroundColor: colors.surface, borderRadius: 14,
       borderWidth: 1, borderColor: colors.border,
     },
+    listRow: {
+      flexDirection: 'row', alignItems: 'center', gap: 10,
+      paddingVertical: 9, paddingHorizontal: 12,
+    },
+    listRowDivider: { borderTopWidth: 1, borderTopColor: colors.border },
     journalDate: { width: 80, fontSize: 11.5, color: colors.textMuted, paddingTop: 1 },
     journalBody: { flex: 1, minWidth: 0, gap: 3 },
     journalText: { fontSize: 13, color: colors.text },
