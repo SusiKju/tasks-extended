@@ -402,24 +402,11 @@ export default function SchuleScreen() {
     setEditingFact(null);
   }, [fid, selectedChild, infoFactsByChild, editingFact]);
 
-  // Schlanke Kontakt-/Info-Zeilen, für jedes Kind oberhalb von allem anderen.
-  const infoFactsContent = (
-    <View style={s.section}>
-      <View style={s.listCard}>
-        {infoFacts.map((fact) => (
-          <TouchableOpacity key={fact.id} style={s.listRow} onPress={() => openEditFact(fact)}>
-            <Text style={s.factText} numberOfLines={1}>
-              <Text style={s.factLabel}>{fact.label}</Text>{'  '}{fact.value}
-            </Text>
-          </TouchableOpacity>
-        ))}
-        <TouchableOpacity style={s.listRow} onPress={openNewFact}>
-          <Ionicons name="add" size={16} color={colors.textMuted} />
-          <Text style={[s.lessonEmpty, { flex: 1 }]}>Info hinzufügen</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
+  // Kontakte & Kurzinfos: dezente, einzeilige Zusammenfassung oben rechts
+  // (nur wenn welche gepflegt sind) – Bearbeiten passiert über den
+  // zurückhaltenden Link ganz unten auf der Seite, nicht hier oben.
+  const [factsListOpen, setFactsListOpen] = useState(false);
+  const factLine = infoFacts.map((f) => `${f.label}: ${f.value}`).join('  ·  ');
 
   // Eintrags-Strom für manuell gepflegte Kinder (Hannes/Emil im Klassenbuch,
   // Liddy als einziger Inhalt ohne Schulpflicht) – identische Darstellung.
@@ -581,9 +568,14 @@ export default function SchuleScreen() {
         })}
       </View>
 
-      {/* Kontakte & Kurzinfos: für jedes Kind gleich, ganz oben, unabhängig
-          von Sync-Status/Kindergarten. */}
-      {infoFactsContent}
+      {/* Kontakte & Kurzinfos: eine dezente Zeile oben rechts, kein Rahmen,
+          kein Umbruch – Einträge durch " · " getrennt. Nur sichtbar, wenn
+          welche gepflegt sind; bearbeitet wird ganz unten auf der Seite. */}
+      {!!factLine && (
+        <Text style={s.factLine} numberOfLines={1} ellipsizeMode="tail">
+          {factLine}
+        </Text>
+      )}
 
       {/* Kindergarten-Kinder: kein Umschalter, nur der manuelle Eintrags-
           Strom. Hannes/Emil (manuell, aber schulpflichtig): Klassenbuch und
@@ -726,6 +718,13 @@ export default function SchuleScreen() {
           </Text>
         </View>
       )}
+
+      {/* Kontakte & Kurzinfos bearbeiten – bewusst ganz unten und zurück-
+          haltend: wird sehr selten angepasst, soll oben nicht auffallen. */}
+      <TouchableOpacity style={s.factsFooter} onPress={() => setFactsListOpen(true)}>
+        <Ionicons name="information-circle-outline" size={13} color={colors.textMuted} />
+        <Text style={s.factsFooterText}>Kontakte & Kurzinfos bearbeiten</Text>
+      </TouchableOpacity>
     </ScrollView>
 
       {/* Editor-Modal */}
@@ -948,6 +947,41 @@ export default function SchuleScreen() {
         </Pressable>
       </Modal>
 
+      {/* Kontakte & Kurzinfos – Übersicht/Verwaltung, geöffnet über den
+          zurückhaltenden Link ganz unten auf der Seite. */}
+      <Modal visible={factsListOpen} transparent animationType="fade">
+        <Pressable style={s.modalOverlay} onPress={() => setFactsListOpen(false)}>
+          <Pressable style={s.modalBox} onPress={() => {}}>
+            <Text style={s.modalTitle}>Kontakte & Kurzinfos</Text>
+            {infoFacts.length === 0 ? (
+              <Text style={s.lessonEmpty}>Noch nichts eingetragen.</Text>
+            ) : (
+              <View style={s.listCard}>
+                {infoFacts.map((fact) => (
+                  <TouchableOpacity
+                    key={fact.id}
+                    style={s.listRow}
+                    onPress={() => { setFactsListOpen(false); openEditFact(fact); }}
+                  >
+                    <Text style={s.factText} numberOfLines={1}>
+                      <Text style={s.factLabel}>{fact.label}</Text>{'  '}{fact.value}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+            <View style={s.modalActions}>
+              <TouchableOpacity onPress={() => { setFactsListOpen(false); openNewFact(); }}>
+                <Text style={s.factsAddText}>+ Info hinzufügen</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[s.cancelBtn, { marginLeft: 'auto' }]} onPress={() => setFactsListOpen(false)}>
+                <Text style={s.cancelBtnText}>Schließen</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       {/* Kontakt-/Info-Editor-Modal – Label frei wählbar (z. B. "Klassenlehrer",
           "Hort-Tel."), kein festes Feld-Set. */}
       <Modal visible={!!editingFact} transparent animationType="fade">
@@ -1104,6 +1138,18 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
     // Kontakte & Kurzinfos: eine Zeile, Bezeichnung fett+gedimmt, Wert normal.
     factText: { fontSize: 13, color: colors.text, flex: 1 },
     factLabel: { fontWeight: '700', color: colors.textSecondary },
+    // Dezente Einzeiler-Zusammenfassung oben rechts, kein Rahmen/Umbruch.
+    factLine: {
+      fontSize: 11, color: colors.textMuted, textAlign: 'right',
+      marginBottom: 8,
+    },
+    // Zurückhaltender Link ganz unten zum Bearbeiten der Kontakte/Kurzinfos.
+    factsFooter: {
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5,
+      marginTop: 20, paddingVertical: 10,
+    },
+    factsFooterText: { fontSize: 11.5, color: colors.textMuted },
+    factsAddText: { fontSize: 13, fontWeight: '700', color: colors.accentNeon },
     // Modal
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
     modalBox: { backgroundColor: colors.surface, borderRadius: 20, padding: 22, width: 320, gap: 10 },
