@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
-import { format, parseISO, isToday, isTomorrow } from 'date-fns';
+import { format, parseISO, isToday, isTomorrow, isYesterday } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { useTheme, readableTextOn } from '../utils/theme';
 import { useFamily } from '../hooks/useFamily';
@@ -27,26 +27,12 @@ import { GradesMap, subscribeToGrades, replaceGrades } from '../services/grades'
 import { JournalData, subscribeToJournal, replaceJournal } from '../services/journal';
 import { fetchBesteSchuleTimetable, fetchBesteSchuleGrades, fetchBesteSchuleJournal } from '../services/besteSchule';
 import {
-  SchoolItem, SchoolItemType, makeId,
-  subscribeToSchoolItems, saveSchoolItems, nextOrder, moveItem,
+  SchoolItem, makeId,
+  subscribeToSchoolItems, saveSchoolItems,
 } from '../services/schoolManual';
 
 type SyncState = { status: 'idle' | 'syncing' | 'done' | 'error'; message?: string };
 type ScreenView = 'plan' | 'noten' | 'klassenbuch';
-
-const ITEM_ICON: Record<SchoolItemType, keyof typeof Ionicons.glyphMap> = {
-  homework: 'book-outline',
-  info: 'information-circle-outline',
-  event: 'calendar-outline',
-};
-const ITEM_LABEL: Record<SchoolItemType, string> = {
-  homework: 'Hausaufgabe', info: 'Info', event: 'Termin',
-};
-// "Neue Hausaufgabe"/"Neue Info", aber "Neuer Termin" (der Termin) – eigener
-// Artikel statt pauschal "Neue X".
-const ITEM_LABEL_NEW: Record<SchoolItemType, string> = {
-  homework: 'Neue Hausaufgabe', info: 'Neue Info', event: 'Neuer Termin',
-};
 
 const EMPTY_JOURNAL: JournalData = { homework: [], substitutions: [] };
 
@@ -55,6 +41,15 @@ function journalDayLabel(iso: string): string {
   if (isToday(d)) return 'Heute';
   if (isTomorrow(d)) return 'Morgen';
   return format(d, 'EEEE, dd.MM.', { locale: de });
+}
+
+/** "Angelegt heute 14:32" / "Bearbeitet gestern" / "Bearbeitet 12.08." – treibt
+ *  auch die Sortierung der offenen Klassenbuch-Einträge (neuestes zuerst). */
+function editedLabel(item: SchoolItem): string {
+  const edited = item.updatedAt !== item.createdAt;
+  const d = parseISO(edited ? item.updatedAt : item.createdAt);
+  const when = isToday(d) ? `heute ${format(d, 'HH:mm')}` : isYesterday(d) ? 'gestern' : format(d, 'dd.MM.');
+  return `${edited ? 'Bearbeitet' : 'Angelegt'} ${when}`;
 }
 
 export default function SchuleScreen() {
@@ -167,7 +162,7 @@ export default function SchuleScreen() {
   const journal = journalByChild[selectedChild] ?? EMPTY_JOURNAL;
   const schoolItems = schoolItemsByChild[selectedChild] ?? [];
   const openItems = React.useMemo(
-    () => schoolItems.filter((i) => !i.done).sort((a, b) => a.order - b.order),
+    () => schoolItems.filter((i) => !i.done).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
     [schoolItems]
   );
   const historyItems = React.useMemo(
@@ -275,58 +270,42 @@ export default function SchuleScreen() {
     setEditingTime(null);
   }, [editingTime, fid, selectedChild]);
 
-  // ── Klassenbuch, manuell gepflegte Kinder: ein Eintrags-Strom aus
-  // Hausaufgaben/Infos/Terminen, per FAB direkt nach Typ angelegt, per
-  // Pfeil-Buttons selbst sortiert, beim Abhaken in die History verschoben. ──
+  // ── Klassenbuch, manuell gepflegte Kinder: ein Eintrags-Strom, per "+"
+  // angelegt (Titel/Datum/Notiz + "Nur Info"-Haken), per Pfeil-Buttons
+  // selbst sortiert, beim Abhaken in die History verschoben. Info-Einträge
+  // haben keinen Haken und bleiben dauerhaft in der offenen Liste. ────────
   const [editingItem, setEditingItem] = useState<SchoolItem | 'new' | null>(null);
-  const [newItemType, setNewItemType] = useState<SchoolItemType>('homework');
-  const [hwSubject, setHwSubject] = useState('');
-  const [hwText, setHwText] = useState('');
-  const [infoText, setInfoText] = useState('');
-  const [evTitle, setEvTitle] = useState('');
-  const [evDate, setEvDate] = useState('');
-  const [evTime, setEvTime] = useState('');
-  const [evLocation, setEvLocation] = useState('');
-  const [evNotes, setEvNotes] = useState('');
+  const [itemTitle, setItemTitle] = useState('');
+  const [itemDate, setItemDate] = useState('');
+  const [itemNotes, setItemNotes] = useState('');
+  const [itemIsInfo, setItemIsInfo] = useState(false);
 
-  const itemType: SchoolItemType = editingItem === 'new' ? newItemType : editingItem?.type ?? 'homework';
-
-  const pickType = useCallback((type: SchoolItemType) => {
-    setNewItemType(type);
-    setHwSubject(''); setHwText('');
-    setInfoText('');
-    setEvTitle(''); setEvDate(''); setEvTime(''); setEvLocation(''); setEvNotes('');
+  const openNewItem = useCallback(() => {
+    setItemTitle(''); setItemDate(''); setItemNotes(''); setItemIsInfo(false);
     setEditingItem('new');
   }, []);
 
   const openEditItem = useCallback((item: SchoolItem) => {
-    if (item.type === 'homework') { setHwSubject(item.subject); setHwText(item.text); }
-    else if (item.type === 'info') { setInfoText(item.text); }
-    else { setEvTitle(item.title); setEvDate(item.date); setEvTime(item.time); setEvLocation(item.location); setEvNotes(item.notes); }
+    setItemTitle(item.title); setItemDate(item.date); setItemNotes(item.notes); setItemIsInfo(item.isInfo);
     setEditingItem(item);
   }, []);
 
   const closeItemEditor = useCallback(() => setEditingItem(null), []);
 
-  const itemValid = itemType === 'homework' ? hwText.trim().length > 0
-    : itemType === 'info' ? infoText.trim().length > 0
-    : evTitle.trim().length > 0 && (evDate === '' || /^\d{4}-\d{2}-\d{2}$/.test(evDate))
-      && (evTime === '' || /^([01]\d|2[0-3]):[0-5]\d$/.test(evTime));
+  const itemValid = itemTitle.trim().length > 0 && (itemDate === '' || /^\d{4}-\d{2}-\d{2}$/.test(itemDate));
 
   const handleSaveItem = useCallback(async () => {
     if (!fid || !selectedChild || !editingItem || !itemValid) return;
     const list = schoolItemsByChild[selectedChild] ?? [];
-    const base = editingItem === 'new'
-      ? { id: makeId(), done: false, order: nextOrder(list), createdAt: new Date().toISOString(), completedAt: null }
-      : editingItem;
-    const item: SchoolItem =
-      itemType === 'homework' ? { ...base, type: 'homework', subject: hwSubject.trim(), text: hwText.trim() }
-      : itemType === 'info' ? { ...base, type: 'info', text: infoText.trim() }
-      : { ...base, type: 'event', title: evTitle.trim(), date: evDate.trim(), time: evTime.trim(), location: evLocation.trim(), notes: evNotes.trim() };
+    const now = new Date().toISOString();
+    const fields = { title: itemTitle.trim(), date: itemDate.trim(), notes: itemNotes.trim(), isInfo: itemIsInfo };
+    const item: SchoolItem = editingItem === 'new'
+      ? { id: makeId(), done: false, createdAt: now, updatedAt: now, completedAt: null, ...fields }
+      : { ...editingItem, ...fields, updatedAt: now };
     const next = editingItem === 'new' ? [...list, item] : list.map((i) => i.id === item.id ? item : i);
     await saveSchoolItems(fid, selectedChild, next);
     setEditingItem(null);
-  }, [fid, selectedChild, schoolItemsByChild, editingItem, itemValid, itemType, hwSubject, hwText, infoText, evTitle, evDate, evTime, evLocation, evNotes]);
+  }, [fid, selectedChild, schoolItemsByChild, editingItem, itemValid, itemTitle, itemDate, itemNotes, itemIsInfo]);
 
   const handleDeleteItem = useCallback(async () => {
     if (!fid || !selectedChild || !editingItem || editingItem === 'new') return;
@@ -344,12 +323,6 @@ export default function SchuleScreen() {
     await saveSchoolItems(fid, selectedChild, next);
   }, [fid, selectedChild, schoolItemsByChild]);
 
-  const handleMoveItem = useCallback(async (id: string, dir: 'up' | 'down') => {
-    if (!fid || !selectedChild) return;
-    const list = schoolItemsByChild[selectedChild] ?? [];
-    await saveSchoolItems(fid, selectedChild, moveItem(list, id, dir));
-  }, [fid, selectedChild, schoolItemsByChild]);
-
   // Eintrags-Strom für manuell gepflegte Kinder (Hannes/Emil im Klassenbuch,
   // Liddy als einziger Inhalt ohne Schulpflicht) – identische Darstellung.
   const manualKlassenbuchContent = (
@@ -358,57 +331,20 @@ export default function SchuleScreen() {
         <Text style={s.lessonEmpty}>Noch nichts eingetragen.</Text>
       ) : (
         <View style={s.listCard}>
-          {openItems.map((item, idx) => (
-            <TouchableOpacity
-              key={item.id}
-              style={[s.listRow, idx > 0 && s.listRowDivider]}
-              onPress={() => openEditItem(item)}
-            >
-              <TouchableOpacity onPress={() => toggleItemDone(item)} hitSlop={10}>
-                <Ionicons name="square-outline" size={20} color={colors.textMuted} />
-              </TouchableOpacity>
-              <Ionicons name={ITEM_ICON[item.type]} size={16} color={colors.textMuted} style={s.itemTypeIcon} />
+          {openItems.map((item) => (
+            <TouchableOpacity key={item.id} style={s.listRow} onPress={() => openEditItem(item)}>
+              {item.isInfo ? (
+                <Ionicons name="information-circle-outline" size={18} color={colors.textMuted} />
+              ) : (
+                <TouchableOpacity onPress={() => toggleItemDone(item)} hitSlop={10}>
+                  <Ionicons name="square-outline" size={18} color={colors.textMuted} />
+                </TouchableOpacity>
+              )}
               <View style={s.journalBody}>
-                {item.type === 'homework' && (
-                  <>
-                    {!!item.subject && (
-                      <View style={s.lessonHead}>
-                        <View style={[s.lessonDot, { backgroundColor: subjectColor(item.subject) }]} />
-                        <Text style={s.lessonFach}>{item.subject}</Text>
-                      </View>
-                    )}
-                    <Text style={s.journalText}>{item.text}</Text>
-                  </>
-                )}
-                {item.type === 'info' && <Text style={s.journalText}>{item.text}</Text>}
-                {item.type === 'event' && (
-                  <>
-                    <Text style={s.journalText}>{item.title}</Text>
-                    {!!(item.date || item.location) && (
-                      <Text style={s.lessonMeta}>
-                        {[item.date && journalDayLabel(item.date), item.time, item.location].filter(Boolean).join(' · ')}
-                      </Text>
-                    )}
-                  </>
-                )}
-              </View>
-              <View style={s.moveCol}>
-                <TouchableOpacity
-                  onPress={() => handleMoveItem(item.id, 'up')}
-                  disabled={idx === 0}
-                  hitSlop={8}
-                  style={s.moveBtn}
-                >
-                  <Ionicons name="chevron-up" size={18} color={idx === 0 ? colors.border : colors.textMuted} />
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => handleMoveItem(item.id, 'down')}
-                  disabled={idx === openItems.length - 1}
-                  hitSlop={8}
-                  style={s.moveBtn}
-                >
-                  <Ionicons name="chevron-down" size={18} color={idx === openItems.length - 1 ? colors.border : colors.textMuted} />
-                </TouchableOpacity>
+                <Text style={s.journalText}>{item.title}</Text>
+                <Text style={s.lessonMeta}>
+                  {[item.date && journalDayLabel(item.date), item.notes, editedLabel(item)].filter(Boolean).join(' · ')}
+                </Text>
               </View>
             </TouchableOpacity>
           ))}
@@ -418,20 +354,13 @@ export default function SchuleScreen() {
         <>
           <Text style={[s.klassenbuchTitle, { marginTop: 14 }]}>Erledigt</Text>
           <View style={s.listCard}>
-            {historyItems.map((item, idx) => (
-              <TouchableOpacity
-                key={item.id}
-                style={[s.listRow, idx > 0 && s.listRowDivider]}
-                onPress={() => openEditItem(item)}
-              >
+            {historyItems.map((item) => (
+              <TouchableOpacity key={item.id} style={s.listRow} onPress={() => openEditItem(item)}>
                 <TouchableOpacity onPress={() => toggleItemDone(item)} hitSlop={10}>
-                  <Ionicons name="checkbox" size={20} color={colors.accentNeon} />
+                  <Ionicons name="checkbox" size={18} color={colors.accentNeon} />
                 </TouchableOpacity>
-                <Ionicons name={ITEM_ICON[item.type]} size={16} color={colors.textMuted} style={s.itemTypeIcon} />
                 <View style={s.journalBody}>
-                  <Text style={[s.journalText, s.journalTextDone]}>
-                    {item.type === 'event' ? item.title : item.text}
-                  </Text>
+                  <Text style={[s.journalText, s.journalTextDone]}>{item.title}</Text>
                 </View>
               </TouchableOpacity>
             ))}
@@ -595,7 +524,7 @@ export default function SchuleScreen() {
           ) : (
             <View style={s.listCard}>
               {journal.substitutions.map((n, i) => (
-                <View key={i} style={[s.listRow, i > 0 && s.listRowDivider]}>
+                <View key={i} style={s.listRow}>
                   <Text style={s.journalDate}>{journalDayLabel(n.date)}</Text>
                   <View style={s.journalBody}>
                     {n.fach && (
@@ -616,7 +545,7 @@ export default function SchuleScreen() {
           ) : (
             <View style={s.listCard}>
               {journal.homework.map((n, i) => (
-                <View key={i} style={[s.listRow, i > 0 && s.listRowDivider]}>
+                <View key={i} style={s.listRow}>
                   <Text style={s.journalDate}>{journalDayLabel(n.date)}</Text>
                   <View style={s.journalBody}>
                     {n.fach && (
@@ -688,20 +617,12 @@ export default function SchuleScreen() {
       )}
     </ScrollView>
 
-    {/* Drei FABs statt "+"-Menü: legen direkt den jeweiligen Typ an, gleiche
-        Position/Optik wie die FABs im Bambini-Tab (unten rechts, gestaffelt). */}
+    {/* Ein "+"-FAB legt einen neuen Eintrag an – gleiche Position/Optik wie
+        im Bambini-Tab (unten rechts). */}
     {showManualList && (
-      <>
-        <Pressable style={s.fabTermin} onPress={() => pickType('event')} accessibilityLabel="Termin hinzufügen">
-          <Ionicons name="calendar" size={24} color={colors.accentFg} />
-        </Pressable>
-        <Pressable style={s.fabInfo} onPress={() => pickType('info')} accessibilityLabel="Info hinzufügen">
-          <Ionicons name="information-circle" size={24} color={colors.accentFg} />
-        </Pressable>
-        <Pressable style={s.fabHomework} onPress={() => pickType('homework')} accessibilityLabel="Hausaufgabe hinzufügen">
-          <Ionicons name="book" size={22} color={colors.accentFg} />
-        </Pressable>
-      </>
+      <Pressable style={s.fab} onPress={openNewItem} accessibilityLabel="Eintrag hinzufügen">
+        <Ionicons name="add" size={28} color={colors.accentFg} />
+      </Pressable>
     )}
 
       {/* Editor-Modal */}
@@ -799,96 +720,44 @@ export default function SchuleScreen() {
         </Pressable>
       </Modal>
 
-      {/* Eintrags-Editor-Modal – Felder je nach Typ (Hausaufgabe/Info/Termin) */}
+      {/* Eintrags-Editor-Modal – ein Feld-Set für alles (Titel/Datum/Notiz),
+          "Nur Info" nimmt dem Eintrag den Haken. */}
       <Modal visible={!!editingItem} transparent animationType="fade">
         <Pressable style={s.modalOverlay} onPress={closeItemEditor}>
           <Pressable style={s.modalBox} onPress={() => {}}>
-            <Text style={s.modalTitle}>
-              {editingItem === 'new' ? ITEM_LABEL_NEW[itemType] : `${ITEM_LABEL[itemType]} bearbeiten`}
-            </Text>
+            <Text style={s.modalTitle}>{editingItem === 'new' ? 'Neuer Eintrag' : 'Eintrag bearbeiten'}</Text>
 
-            {itemType === 'homework' && (
-              <>
-                <TextInput
-                  style={s.input}
-                  value={hwSubject}
-                  onChangeText={setHwSubject}
-                  placeholder="Fach (optional)"
-                  placeholderTextColor={colors.placeholder}
-                />
-                <TextInput
-                  style={s.input}
-                  value={hwText}
-                  onChangeText={setHwText}
-                  placeholder="Was ist zu tun?"
-                  placeholderTextColor={colors.placeholder}
-                  autoFocus
-                  multiline
-                  returnKeyType="done"
-                />
-              </>
-            )}
-
-            {itemType === 'info' && (
-              <TextInput
-                style={s.input}
-                value={infoText}
-                onChangeText={setInfoText}
-                placeholder="z. B. Klassenlehrerin: Frau Kohl"
-                placeholderTextColor={colors.placeholder}
-                autoFocus
-                multiline
-              />
-            )}
-
-            {itemType === 'event' && (
-              <>
-                <TextInput
-                  style={s.input}
-                  value={evTitle}
-                  onChangeText={setEvTitle}
-                  placeholder="Titel, z. B. Museumsbesuch"
-                  placeholderTextColor={colors.placeholder}
-                  autoFocus
-                />
-                <View style={{ flexDirection: 'row', gap: 8 }}>
-                  <TextInput
-                    style={[s.input, { flex: 1 }]}
-                    value={evDate}
-                    onChangeText={setEvDate}
-                    placeholder="Datum (JJJJ-MM-TT)"
-                    placeholderTextColor={colors.placeholder}
-                    keyboardType="numbers-and-punctuation"
-                    maxLength={10}
-                  />
-                  <TextInput
-                    style={[s.input, { width: 90 }]}
-                    value={evTime}
-                    onChangeText={setEvTime}
-                    placeholder="HH:MM"
-                    placeholderTextColor={colors.placeholder}
-                    keyboardType="numbers-and-punctuation"
-                    maxLength={5}
-                  />
-                </View>
-                <TextInput
-                  style={s.input}
-                  value={evLocation}
-                  onChangeText={setEvLocation}
-                  placeholder="Ort (optional)"
-                  placeholderTextColor={colors.placeholder}
-                />
-                <TextInput
-                  style={s.input}
-                  value={evNotes}
-                  onChangeText={setEvNotes}
-                  placeholder="Notiz (optional)"
-                  placeholderTextColor={colors.placeholder}
-                  multiline
-                  returnKeyType="done"
-                />
-              </>
-            )}
+            <TextInput
+              style={s.input}
+              value={itemTitle}
+              onChangeText={setItemTitle}
+              placeholder="Titel"
+              placeholderTextColor={colors.placeholder}
+              autoFocus
+              multiline
+            />
+            <TextInput
+              style={s.input}
+              value={itemDate}
+              onChangeText={setItemDate}
+              placeholder="Datum (JJJJ-MM-TT, optional)"
+              placeholderTextColor={colors.placeholder}
+              keyboardType="numbers-and-punctuation"
+              maxLength={10}
+            />
+            <TextInput
+              style={s.input}
+              value={itemNotes}
+              onChangeText={setItemNotes}
+              placeholder="Notiz (optional)"
+              placeholderTextColor={colors.placeholder}
+              multiline
+              returnKeyType="done"
+            />
+            <TouchableOpacity style={s.checkboxRow} onPress={() => setItemIsInfo((v) => !v)}>
+              <Ionicons name={itemIsInfo ? 'checkbox' : 'square-outline'} size={18} color={itemIsInfo ? colors.accentNeon : colors.textMuted} />
+              <Text style={s.checkboxRowText}>Nur Info (kein Haken zum Abhaken)</Text>
+            </TouchableOpacity>
 
             <View style={s.modalActions}>
               {editingItem !== 'new' && (
@@ -991,13 +860,9 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
     lessonFachPause: { color: colors.warning, fontStyle: 'italic' },
     pauseRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 4, paddingVertical: 0 },
     pauseText: { fontSize: 11, color: colors.textMuted, fontStyle: 'italic' },
-    // Klassenbuch / manuelles Klassenbuch (Hausaufgaben, Infos, Termine gemischt)
+    // Klassenbuch / manuelles Klassenbuch (Aufgaben + Infos gemischt)
     klassenbuchTitle: { fontSize: 13, fontWeight: '700', color: colors.textSecondary, marginBottom: 2 },
     journalTextDone: { textDecorationLine: 'line-through', color: colors.textMuted },
-    itemTypeIcon: { marginTop: 1 },
-    moveCol: { justifyContent: 'center' },
-    // Größere Tippfläche als der 18px-Pfeil selbst (Touch-Ziel).
-    moveBtn: { padding: 5 },
     // Klare Abhebung zum Stundenplan darunter, wenn beides ohne Tab auf
     // einer Seite steht (Hannes/Emil).
     stundenplanDivider: {
@@ -1008,39 +873,28 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
       fontSize: 12, fontWeight: '700', color: colors.textMuted,
       textTransform: 'uppercase', letterSpacing: 0.6,
     },
-    // Drei FABs zum direkten Anlegen je Typ – gleiche Optik/Position wie im
-    // Bambini-Tab (unten rechts, 56px, gestaffelt um 68px).
-    fabHomework: {
+    // Ein FAB zum Anlegen – gleiche Optik/Position wie im Bambini-Tab
+    // (unten rechts, 56px).
+    fab: {
       position: 'absolute', right: 18, bottom: 24,
       width: 56, height: 56, borderRadius: 28,
       backgroundColor: colors.accentNeon, alignItems: 'center', justifyContent: 'center',
       shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 6, elevation: 6,
     },
-    fabInfo: {
-      position: 'absolute', right: 86, bottom: 24,
-      width: 56, height: 56, borderRadius: 28,
-      backgroundColor: colors.accentNeon, alignItems: 'center', justifyContent: 'center',
-      shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 6, elevation: 6,
-    },
-    fabTermin: {
-      position: 'absolute', right: 154, bottom: 24,
-      width: 56, height: 56, borderRadius: 28,
-      backgroundColor: colors.accentNeon, alignItems: 'center', justifyContent: 'center',
-      shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 6, elevation: 6,
-    },
-    // Eine Karte pro Liste statt eines Rahmens pro Zeile – Zeilen trennen
-    // sich nur durch eine dünne Linie, das wirkt deutlich kompakter.
+    // Eine Karte pro Liste, keine Trennlinien zwischen den Zeilen – nur
+    // knappes Padding hält die Zeilen auseinander, das wirkt am kompaktesten.
     listCard: {
       backgroundColor: colors.surface, borderRadius: 14,
       borderWidth: 1, borderColor: colors.border,
     },
     listRow: {
-      flexDirection: 'row', alignItems: 'center', gap: 10,
-      paddingVertical: 9, paddingHorizontal: 12,
+      flexDirection: 'row', alignItems: 'center', gap: 8,
+      paddingVertical: 6, paddingHorizontal: 12,
     },
-    listRowDivider: { borderTopWidth: 1, borderTopColor: colors.border },
+    checkboxRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 2 },
+    checkboxRowText: { fontSize: 13.5, color: colors.textSecondary },
     journalDate: { width: 80, fontSize: 11.5, color: colors.textMuted, paddingTop: 1 },
-    journalBody: { flex: 1, minWidth: 0, gap: 3 },
+    journalBody: { flex: 1, minWidth: 0 },
     journalText: { fontSize: 13, color: colors.text },
     // Modal
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
