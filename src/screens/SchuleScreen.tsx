@@ -177,7 +177,6 @@ export default function SchuleScreen() {
   // Kindergarten-Kinder (TE-Settings "Kindergarten"): kein Stundenplan/
   // Klassenbuch-Umschalter, nur der manuelle Eintrags-Strom.
   const isKindergarten = !!settings.kindergartenChildIds?.[selectedChild];
-  const showManualList = isKindergarten || !isLinked;
 
   // Zeiten/Pausen sind bei beste.schule-Kindern durch den Sync vorgegeben;
   // manuell gepflegte Kinder (andere Schule, andere Taktung) können sie
@@ -327,29 +326,33 @@ export default function SchuleScreen() {
   // Liddy als einziger Inhalt ohne Schulpflicht) – identische Darstellung.
   const manualKlassenbuchContent = (
     <View style={s.section}>
-      {openItems.length === 0 ? (
-        <Text style={s.lessonEmpty}>Noch nichts eingetragen.</Text>
-      ) : (
-        <View style={s.listCard}>
-          {openItems.map((item) => (
-            <TouchableOpacity key={item.id} style={s.listRow} onPress={() => openEditItem(item)}>
-              {item.isInfo ? (
-                <Ionicons name="information-circle-outline" size={18} color={colors.textMuted} />
-              ) : (
-                <TouchableOpacity onPress={() => toggleItemDone(item)} hitSlop={10}>
-                  <Ionicons name="square-outline" size={18} color={colors.textMuted} />
-                </TouchableOpacity>
-              )}
-              <View style={s.journalBody}>
-                <Text style={s.journalText}>{item.title}</Text>
-                <Text style={s.lessonMeta}>
-                  {[item.date && journalDayLabel(item.date), item.notes, editedLabel(item)].filter(Boolean).join(' · ')}
-                </Text>
-              </View>
-            </TouchableOpacity>
-          ))}
+      <View style={s.listCard}>
+        {openItems.length === 0 && (
+          <Text style={[s.lessonEmpty, s.listCardEmptyText]}>Noch nichts eingetragen.</Text>
+        )}
+        {openItems.map((item) => (
+          <TouchableOpacity key={item.id} style={s.listRow} onPress={() => openEditItem(item)}>
+            {item.isInfo ? (
+              <Ionicons name="information-circle-outline" size={18} color={colors.textMuted} />
+            ) : (
+              <TouchableOpacity onPress={() => toggleItemDone(item)} hitSlop={10}>
+                <Ionicons name="square-outline" size={18} color={colors.textMuted} />
+              </TouchableOpacity>
+            )}
+            <View style={s.journalBody}>
+              <Text style={s.journalText}>{item.title}</Text>
+              <Text style={s.lessonMeta}>
+                {[item.date && journalDayLabel(item.date), item.notes, editedLabel(item)].filter(Boolean).join(' · ')}
+              </Text>
+            </View>
+          </TouchableOpacity>
+        ))}
+        <View style={s.listCardFooter}>
+          <TouchableOpacity onPress={openNewItem} hitSlop={10} style={s.cardAddBtn} accessibilityLabel="Eintrag hinzufügen">
+            <Ionicons name="add" size={20} color={colors.accentFg} />
+          </TouchableOpacity>
         </View>
-      )}
+      </View>
       {historyItems.length > 0 && (
         <>
           <Text style={[s.klassenbuchTitle, { marginTop: 14 }]}>Erledigt</Text>
@@ -617,14 +620,6 @@ export default function SchuleScreen() {
       )}
     </ScrollView>
 
-    {/* Ein "+"-FAB legt einen neuen Eintrag an – gleiche Position/Optik wie
-        im Bambini-Tab (unten rechts). */}
-    {showManualList && (
-      <Pressable style={s.fab} onPress={openNewItem} accessibilityLabel="Eintrag hinzufügen">
-        <Ionicons name="add" size={28} color={colors.accentFg} />
-      </Pressable>
-    )}
-
       {/* Editor-Modal */}
       <Modal visible={!!editing} transparent animationType="fade">
         <Pressable style={s.modalOverlay} onPress={closeEditor}>
@@ -873,16 +868,10 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
       fontSize: 12, fontWeight: '700', color: colors.textMuted,
       textTransform: 'uppercase', letterSpacing: 0.6,
     },
-    // Ein FAB zum Anlegen – gleiche Optik/Position wie im Bambini-Tab
-    // (unten rechts, 56px).
-    fab: {
-      position: 'absolute', right: 18, bottom: 24,
-      width: 56, height: 56, borderRadius: 28,
-      backgroundColor: colors.accentNeon, alignItems: 'center', justifyContent: 'center',
-      shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 6, elevation: 6,
-    },
     // Eine Karte pro Liste, keine Trennlinien zwischen den Zeilen – nur
     // knappes Padding hält die Zeilen auseinander, das wirkt am kompaktesten.
+    // "+" sitzt als Fußzeile IN der Karte statt als schwebender FAB – bleibt
+    // dadurch auch bei leerer Liste sichtbar (Karte wird immer gerendert).
     listCard: {
       backgroundColor: colors.surface, borderRadius: 14,
       borderWidth: 1, borderColor: colors.border,
@@ -890,6 +879,12 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
     listRow: {
       flexDirection: 'row', alignItems: 'center', gap: 8,
       paddingVertical: 6, paddingHorizontal: 12,
+    },
+    listCardEmptyText: { paddingHorizontal: 12, paddingTop: 8 },
+    listCardFooter: { flexDirection: 'row', justifyContent: 'flex-end', padding: 6 },
+    cardAddBtn: {
+      width: 30, height: 30, borderRadius: 15,
+      backgroundColor: colors.accentNeon, alignItems: 'center', justifyContent: 'center',
     },
     checkboxRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 2 },
     checkboxRowText: { fontSize: 13.5, color: colors.textSecondary },
