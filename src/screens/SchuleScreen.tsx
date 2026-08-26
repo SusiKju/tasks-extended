@@ -8,7 +8,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  TextInput, Modal, Pressable,
+  TextInput, Modal, Pressable, Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
@@ -52,6 +52,14 @@ function editedLabel(item: SchoolItem): string {
   const d = parseISO(edited ? item.updatedAt : item.createdAt);
   const when = isToday(d) ? `heute ${format(d, 'HH:mm')}` : isYesterday(d) ? 'gestern' : format(d, 'dd.MM.');
   return `${edited ? 'Bearbeitet' : 'Angelegt'} ${when}`;
+}
+
+/** Erkennt Telefonnummern in einem Kurzinfo-Wert (z. B. "+49 351 48818411"),
+ *  damit sie antippbar zum Anrufen werden – kein festes Feld-Set nötig. */
+function isPhoneNumber(value: string): boolean {
+  const trimmed = value.trim();
+  if (!/^[+\d][\d\s()/-]*$/.test(trimmed)) return false;
+  return trimmed.replace(/\D/g, '').length >= 6;
 }
 
 export default function SchuleScreen() {
@@ -382,7 +390,7 @@ export default function SchuleScreen() {
 
   const closeFactEditor = useCallback(() => setEditingFact(null), []);
 
-  const factValid = factLabel.trim().length > 0 && factValue.trim().length > 0;
+  const factValid = factLabel.trim().length > 0;
 
   const handleSaveFact = useCallback(async () => {
     if (!fid || !selectedChild || !editingFact || !factValid) return;
@@ -406,7 +414,7 @@ export default function SchuleScreen() {
   // (nur wenn welche gepflegt sind) – Bearbeiten passiert über den
   // zurückhaltenden Link ganz unten auf der Seite, nicht hier oben.
   const [factsListOpen, setFactsListOpen] = useState(false);
-  const factLine = infoFacts.map((f) => `${f.label}: ${f.value}`).join('  ·  ');
+  const factLine = infoFacts.map((f) => (f.value ? `${f.label}: ${f.value}` : f.label)).join('  ·  ');
 
   // Eintrags-Strom für manuell gepflegte Kinder (Hannes/Emil im Klassenbuch,
   // Liddy als einziger Inhalt ohne Schulpflicht) – identische Darstellung.
@@ -964,8 +972,17 @@ export default function SchuleScreen() {
                     onPress={() => { setFactsListOpen(false); openEditFact(fact); }}
                   >
                     <Text style={s.factText} numberOfLines={1}>
-                      <Text style={s.factLabel}>{fact.label}</Text>{'  '}{fact.value}
+                      <Text style={s.factLabel}>{fact.label}</Text>{fact.value ? `  ${fact.value}` : ''}
                     </Text>
+                    {isPhoneNumber(fact.value) && (
+                      <TouchableOpacity
+                        onPress={() => Linking.openURL(`tel:${fact.value.replace(/[\s()/-]/g, '')}`)}
+                        hitSlop={10}
+                        accessibilityLabel="Anrufen"
+                      >
+                        <Ionicons name="call-outline" size={16} color={colors.accentNeon} />
+                      </TouchableOpacity>
+                    )}
                   </TouchableOpacity>
                 ))}
               </View>
@@ -988,22 +1005,28 @@ export default function SchuleScreen() {
         <Pressable style={s.modalOverlay} onPress={closeFactEditor}>
           <Pressable style={s.modalBox} onPress={() => {}}>
             <Text style={s.modalTitle}>{editingFact === 'new' ? 'Neue Info' : 'Info bearbeiten'}</Text>
-            <TextInput
-              style={s.input}
-              value={factLabel}
-              onChangeText={setFactLabel}
-              placeholder="Bezeichnung, z. B. Klassenlehrer"
-              placeholderTextColor={colors.placeholder}
-              autoFocus
-            />
-            <TextInput
-              style={s.input}
-              value={factValue}
-              onChangeText={setFactValue}
-              placeholder="Wert, z. B. Frau Kohl"
-              placeholderTextColor={colors.placeholder}
-              returnKeyType="done"
-            />
+            <View style={{ gap: 4 }}>
+              <Text style={s.fieldLabel}>Bezeichnung</Text>
+              <TextInput
+                style={s.input}
+                value={factLabel}
+                onChangeText={setFactLabel}
+                placeholder="z. B. Klassenlehrer"
+                placeholderTextColor={colors.placeholder}
+                autoFocus
+              />
+            </View>
+            <View style={{ gap: 4 }}>
+              <Text style={[s.fieldLabel, s.fieldLabelOptional]}>Wert (optional)</Text>
+              <TextInput
+                style={s.input}
+                value={factValue}
+                onChangeText={setFactValue}
+                placeholder="z. B. Frau Kohl"
+                placeholderTextColor={colors.placeholder}
+                returnKeyType="done"
+              />
+            </View>
             <View style={s.modalActions}>
               {editingFact !== 'new' && (
                 <TouchableOpacity onPress={handleDeleteFact}>
@@ -1131,6 +1154,11 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
     },
     checkboxRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 2 },
     checkboxRowText: { fontSize: 13.5, color: colors.textSecondary },
+    fieldLabel: {
+      fontSize: 11.5, fontWeight: '700', color: colors.textSecondary,
+      letterSpacing: 0.2, marginLeft: 2,
+    },
+    fieldLabelOptional: { fontWeight: '400', color: colors.textMuted },
     journalDate: { width: 80, fontSize: 11.5, color: colors.textMuted, paddingTop: 1 },
     journalBody: { flex: 1, minWidth: 0 },
     journalText: { fontSize: 13, color: colors.text },

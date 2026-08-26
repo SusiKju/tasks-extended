@@ -114,14 +114,14 @@ export async function saveSchoolItems(familyId: string, childId: string, list: S
 export interface ChildInfoFact {
   id: string;
   label: string;
+  /** '' = kein Wert – nur die Bezeichnung ist Pflicht. */
   value: string;
 }
 
 function sanitizeFact(raw: any): ChildInfoFact | null {
   const label = String(raw?.label ?? '').trim();
-  const value = String(raw?.value ?? '').trim();
-  if (!label || !value) return null;
-  return { id: String(raw?.id ?? '') || makeId(), label, value };
+  if (!label) return null;
+  return { id: String(raw?.id ?? '') || makeId(), label, value: String(raw?.value ?? '').trim() };
 }
 
 function sanitizeFacts(raw: any): ChildInfoFact[] {
