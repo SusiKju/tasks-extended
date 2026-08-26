@@ -1043,7 +1043,7 @@ export function SettingsScreen() {
         <Text style={styles.sectionHeader}>App</Text>
         <View style={styles.row}>
           <Text style={styles.rowTitle}>Version</Text>
-          <Text style={styles.rowValue}>{Constants.expoConfig?.version ?? '1.1.0'}</Text>
+          <Text style={styles.rowValue}>{Constants.expoConfig?.version ?? '2.0.0'}</Text>
         </View>
         {user && (
           <Pressable

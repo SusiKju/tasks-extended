@@ -18,3 +18,11 @@ werden, solange `app.json` stimmt.
   alte Daten unbrauchbar macht, oder ein kompletter Rewrite eines Kernbereichs.
 
 Im Zweifel: MINOR. Bei reinen Fixes: PATCH.
+
+## Historie
+
+- **2.0.0** (2026-08-26): Einmalige Nachkalibrierung. Die App stand seit Projektbeginn
+  (Mai 2026, ~470 Commits, ~240 Feature-Commits) unversioniert auf `1.0.0` — es gab
+  nie einen echten Bump. `2.0.0` markiert den Umfang, der bereits existiert, bevor die
+  Regel oben griff. Kein Breaking Change im SemVer-Sinn, sondern reine Standortbestimmung.
+  Ab hier gilt die PATCH/MINOR/MAJOR-Regel strikt pro Commit.
