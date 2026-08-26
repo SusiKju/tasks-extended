@@ -327,9 +327,6 @@ export default function SchuleScreen() {
   const manualKlassenbuchContent = (
     <View style={s.section}>
       <View style={s.listCard}>
-        {openItems.length === 0 && (
-          <Text style={[s.lessonEmpty, s.listCardEmptyText]}>Noch nichts eingetragen.</Text>
-        )}
         {openItems.map((item) => (
           <TouchableOpacity key={item.id} style={s.listRow} onPress={() => openEditItem(item)}>
             {item.isInfo ? (
@@ -347,11 +344,12 @@ export default function SchuleScreen() {
             </View>
           </TouchableOpacity>
         ))}
-        <View style={s.listCardFooter}>
-          <TouchableOpacity onPress={openNewItem} hitSlop={10} style={s.cardAddBtn} accessibilityLabel="Eintrag hinzufügen">
-            <Ionicons name="add" size={20} color={colors.accentFg} />
-          </TouchableOpacity>
-        </View>
+        {/* Direkt unter dem letzten Eintrag antippbar, statt eines separaten
+            Buttons – gleiches Muster wie "+ Stunde eintragen" im Stundenplan. */}
+        <TouchableOpacity style={s.listRow} onPress={openNewItem}>
+          <Ionicons name="add" size={18} color={colors.textMuted} />
+          <Text style={s.lessonEmpty}>Eintrag hinzufügen</Text>
+        </TouchableOpacity>
       </View>
       {historyItems.length > 0 && (
         <>
@@ -521,7 +519,12 @@ export default function SchuleScreen() {
 
       {view === 'klassenbuch' ? (
         <View style={s.section}>
-          <Text style={s.klassenbuchTitle}>Vertretungen</Text>
+          {/* Eigene, manuell gepflegte Einträge oberhalb der synchronisierten
+              beste.schule-Daten – wie bei den anderen Kindern, nur zusätzlich
+              statt anstelle des Sync-Inhalts. */}
+          <Text style={s.klassenbuchTitle}>Eigene Einträge</Text>
+          {manualKlassenbuchContent}
+          <Text style={[s.klassenbuchTitle, { marginTop: 14 }]}>Vertretungen</Text>
           {journal.substitutions.length === 0 ? (
             <Text style={s.lessonEmpty}>Keine Vertretungen bekannt.</Text>
           ) : (
@@ -879,12 +882,6 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
     listRow: {
       flexDirection: 'row', alignItems: 'center', gap: 8,
       paddingVertical: 6, paddingHorizontal: 12,
-    },
-    listCardEmptyText: { paddingHorizontal: 12, paddingTop: 8 },
-    listCardFooter: { flexDirection: 'row', justifyContent: 'flex-end', padding: 6 },
-    cardAddBtn: {
-      width: 30, height: 30, borderRadius: 15,
-      backgroundColor: colors.accentNeon, alignItems: 'center', justifyContent: 'center',
     },
     checkboxRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 2 },
     checkboxRowText: { fontSize: 13.5, color: colors.textSecondary },
