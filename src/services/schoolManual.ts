@@ -16,6 +16,11 @@
  * zuerst, bewusst nicht manuell sortierbar – Nachrücken passiert einfach
  * durchs Bearbeiten.
  *
+ * Abhaken und Löschen sind beide nicht destruktiv: `done`/`deletedAt` blenden
+ * einen Eintrag nur aus der offenen Liste aus, der Eintrag bleibt im Array
+ * erhalten und taucht im Verlauf (History-Dialog) auf, von dort per
+ * "wiederherstellen" zurückholbar.
+ *
  * Reine Elternsache: anders als kinderTasks.ts (Kind-Aufgaben mit Belohnung,
  * Push, Aktivitätslog) gibt es hier keine Kind-Ansicht, kein Push, keine
  * Aktivität – nur Lesen/Schreiben durch die Eltern-App.
@@ -45,6 +50,8 @@ export interface SchoolItem {
   updatedAt: string;
   /** ISO-Zeitstempel des Abhakens. null/undefined = noch offen. */
   completedAt?: string | null;
+  /** ISO-Zeitstempel des (weichen) Löschens. null/undefined = nicht gelöscht. */
+  deletedAt?: string | null;
 }
 
 /**
@@ -70,6 +77,7 @@ function sanitizeItem(raw: any): SchoolItem | null {
     createdAt,
     updatedAt: String(raw?.updatedAt ?? createdAt),
     completedAt: raw?.completedAt ? String(raw.completedAt) : null,
+    deletedAt: raw?.deletedAt ? String(raw.deletedAt) : null,
   };
 }
 

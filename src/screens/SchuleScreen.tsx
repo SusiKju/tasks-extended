@@ -30,6 +30,7 @@ import {
   SchoolItem, makeId,
   subscribeToSchoolItems, saveSchoolItems,
 } from '../services/schoolManual';
+import { DatePickerModal } from '../components/DatePickerModal';
 
 type SyncState = { status: 'idle' | 'syncing' | 'done' | 'error'; message?: string };
 type ScreenView = 'plan' | 'noten' | 'klassenbuch';
@@ -162,13 +163,16 @@ export default function SchuleScreen() {
   const journal = journalByChild[selectedChild] ?? EMPTY_JOURNAL;
   const schoolItems = schoolItemsByChild[selectedChild] ?? [];
   const openItems = React.useMemo(
-    () => schoolItems.filter((i) => !i.done).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
+    () => schoolItems.filter((i) => !i.done && !i.deletedAt).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
     [schoolItems]
   );
+  // Abgehakte UND gelöschte Einträge landen hier statt im offenen Bereich –
+  // sichtbar nur im Verlauf-Dialog, von dort wiederherstellbar.
   const historyItems = React.useMemo(
     () => schoolItems
-      .filter((i) => i.done)
-      .sort((a, b) => (b.completedAt ?? b.createdAt).localeCompare(a.completedAt ?? a.createdAt)),
+      .filter((i) => i.done || i.deletedAt)
+      .sort((a, b) =>
+        (b.deletedAt ?? b.completedAt ?? b.updatedAt).localeCompare(a.deletedAt ?? a.completedAt ?? a.updatedAt)),
     [schoolItems]
   );
   const todayIdx = todayDayIndex();
@@ -270,14 +274,16 @@ export default function SchuleScreen() {
   }, [editingTime, fid, selectedChild]);
 
   // ── Klassenbuch, manuell gepflegte Kinder: ein Eintrags-Strom, per "+"
-  // angelegt (Titel/Datum/Notiz + "Nur Info"-Haken), per Pfeil-Buttons
-  // selbst sortiert, beim Abhaken in die History verschoben. Info-Einträge
-  // haben keinen Haken und bleiben dauerhaft in der offenen Liste. ────────
+  // angelegt (Titel/Datum/Notiz + "Nur Info"-Haken), neuestes Anlegen/
+  // Bearbeiten zuerst. Abhaken und Löschen sind nicht destruktiv – beides
+  // landet im Verlauf-Dialog und ist von dort wiederherstellbar. ─────────
   const [editingItem, setEditingItem] = useState<SchoolItem | 'new' | null>(null);
   const [itemTitle, setItemTitle] = useState('');
   const [itemDate, setItemDate] = useState('');
   const [itemNotes, setItemNotes] = useState('');
   const [itemIsInfo, setItemIsInfo] = useState(false);
+  const [showItemDatePicker, setShowItemDatePicker] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   const openNewItem = useCallback(() => {
     setItemTitle(''); setItemDate(''); setItemNotes(''); setItemIsInfo(false);
@@ -299,17 +305,20 @@ export default function SchuleScreen() {
     const now = new Date().toISOString();
     const fields = { title: itemTitle.trim(), date: itemDate.trim(), notes: itemNotes.trim(), isInfo: itemIsInfo };
     const item: SchoolItem = editingItem === 'new'
-      ? { id: makeId(), done: false, createdAt: now, updatedAt: now, completedAt: null, ...fields }
+      ? { id: makeId(), done: false, createdAt: now, updatedAt: now, completedAt: null, deletedAt: null, ...fields }
       : { ...editingItem, ...fields, updatedAt: now };
     const next = editingItem === 'new' ? [...list, item] : list.map((i) => i.id === item.id ? item : i);
     await saveSchoolItems(fid, selectedChild, next);
     setEditingItem(null);
   }, [fid, selectedChild, schoolItemsByChild, editingItem, itemValid, itemTitle, itemDate, itemNotes, itemIsInfo]);
 
+  /** Weiches Löschen: Eintrag bleibt erhalten, verschwindet nur aus der
+   *  offenen Liste und taucht im Verlauf-Dialog auf (wiederherstellbar). */
   const handleDeleteItem = useCallback(async () => {
     if (!fid || !selectedChild || !editingItem || editingItem === 'new') return;
     const list = schoolItemsByChild[selectedChild] ?? [];
-    await saveSchoolItems(fid, selectedChild, list.filter((i) => i.id !== (editingItem as SchoolItem).id));
+    const next = list.map((i) => i.id === (editingItem as SchoolItem).id ? { ...i, deletedAt: new Date().toISOString() } : i);
+    await saveSchoolItems(fid, selectedChild, next);
     setEditingItem(null);
   }, [fid, selectedChild, schoolItemsByChild, editingItem]);
 
@@ -322,10 +331,28 @@ export default function SchuleScreen() {
     await saveSchoolItems(fid, selectedChild, next);
   }, [fid, selectedChild, schoolItemsByChild]);
 
+  /** Holt einen abgehakten oder gelöschten Eintrag aus dem Verlauf zurück. */
+  const handleRestoreItem = useCallback(async (item: SchoolItem) => {
+    if (!fid || !selectedChild) return;
+    const list = schoolItemsByChild[selectedChild] ?? [];
+    const next = list.map((i) => i.id === item.id
+      ? { ...i, done: false, completedAt: null, deletedAt: null }
+      : i);
+    await saveSchoolItems(fid, selectedChild, next);
+  }, [fid, selectedChild, schoolItemsByChild]);
+
   // Eintrags-Strom für manuell gepflegte Kinder (Hannes/Emil im Klassenbuch,
   // Liddy als einziger Inhalt ohne Schulpflicht) – identische Darstellung.
+  // Abgehakte/gelöschte Einträge tauchen hier NICHT mehr auf, nur noch im
+  // Verlauf-Dialog (weniger präsent, aber wiederherstellbar).
   const manualKlassenbuchContent = (
     <View style={s.section}>
+      <View style={s.klassenbuchHeaderRow}>
+        <TouchableOpacity style={s.historyBtn} onPress={() => setHistoryOpen(true)}>
+          <Ionicons name="time-outline" size={14} color={colors.accentNeon} />
+          <Text style={s.historyBtnText}>Verlauf</Text>
+        </TouchableOpacity>
+      </View>
       <View style={s.listCard}>
         {openItems.map((item) => (
           <TouchableOpacity key={item.id} style={s.listRow} onPress={() => openEditItem(item)}>
@@ -351,23 +378,6 @@ export default function SchuleScreen() {
           <Text style={s.lessonEmpty}>Eintrag hinzufügen</Text>
         </TouchableOpacity>
       </View>
-      {historyItems.length > 0 && (
-        <>
-          <Text style={[s.klassenbuchTitle, { marginTop: 14 }]}>Erledigt</Text>
-          <View style={s.listCard}>
-            {historyItems.map((item) => (
-              <TouchableOpacity key={item.id} style={s.listRow} onPress={() => openEditItem(item)}>
-                <TouchableOpacity onPress={() => toggleItemDone(item)} hitSlop={10}>
-                  <Ionicons name="checkbox" size={18} color={colors.accentNeon} />
-                </TouchableOpacity>
-                <View style={s.journalBody}>
-                  <Text style={[s.journalText, s.journalTextDone]}>{item.title}</Text>
-                </View>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </>
-      )}
     </View>
   );
 
@@ -734,15 +744,17 @@ export default function SchuleScreen() {
               autoFocus
               multiline
             />
-            <TextInput
-              style={s.input}
-              value={itemDate}
-              onChangeText={setItemDate}
-              placeholder="Datum (JJJJ-MM-TT, optional)"
-              placeholderTextColor={colors.placeholder}
-              keyboardType="numbers-and-punctuation"
-              maxLength={10}
-            />
+            <TouchableOpacity style={[s.input, s.dateInput]} onPress={() => setShowItemDatePicker(true)}>
+              <Ionicons name="calendar-outline" size={16} color={itemDate ? colors.text : colors.placeholder} />
+              <Text style={[s.dateInputText, { color: itemDate ? colors.text : colors.placeholder }]}>
+                {itemDate ? format(parseISO(itemDate), 'dd.MM.yyyy') : 'Datum (optional)'}
+              </Text>
+              {!!itemDate && (
+                <TouchableOpacity onPress={(e) => { e.stopPropagation(); setItemDate(''); }} hitSlop={8}>
+                  <Ionicons name="close-circle" size={16} color={colors.textSecondary} />
+                </TouchableOpacity>
+              )}
+            </TouchableOpacity>
             <TextInput
               style={s.input}
               value={itemNotes}
@@ -776,6 +788,67 @@ export default function SchuleScreen() {
                 </TouchableOpacity>
               </View>
             </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <DatePickerModal
+        visible={showItemDatePicker}
+        value={itemDate ? parseISO(itemDate) : null}
+        onConfirm={(d) => { setItemDate(format(d, 'yyyy-MM-dd')); setShowItemDatePicker(false); }}
+        onCancel={() => setShowItemDatePicker(false)}
+        colors={colors}
+      />
+
+      {/* Verlauf-Dialog – abgehakte/gelöschte Einträge, wiederherstellbar.
+          Gleiches Design/Logik wie das History-Modal im Kinder-Tab. */}
+      <Modal visible={historyOpen} transparent animationType="slide">
+        <Pressable style={s.modalOverlay} onPress={() => setHistoryOpen(false)}>
+          <Pressable style={s.historyBox} onPress={() => {}}>
+            <View style={s.historyHeaderRow}>
+              <Text style={s.modalTitle}>Verlauf</Text>
+              <TouchableOpacity onPress={() => setHistoryOpen(false)}>
+                <Ionicons name="close" size={22} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+            {historyItems.length === 0 ? (
+              <Text style={s.lessonEmpty}>Noch nichts Abgehaktes oder Gelöschtes.</Text>
+            ) : (
+              <ScrollView style={{ maxHeight: 420 }}>
+                {(() => {
+                  let lastDate = '';
+                  return historyItems.map((item) => {
+                    const at = item.deletedAt ?? item.completedAt ?? item.updatedAt;
+                    const day = at.slice(0, 10);
+                    const showDate = day !== lastDate;
+                    lastDate = day;
+                    const [y, m, d] = day.split('-');
+                    const time = format(parseISO(at), 'HH:mm');
+                    const isDeleted = !!item.deletedAt;
+                    return (
+                      <View key={item.id}>
+                        {showDate && <Text style={s.historyDate}>{`${d}.${m}.${y}`}</Text>}
+                        <View style={s.historyRow}>
+                          <Ionicons
+                            name={isDeleted ? 'trash' : 'checkmark-circle'}
+                            size={18}
+                            color={isDeleted ? colors.danger : colors.success}
+                          />
+                          <View style={{ flex: 1 }}>
+                            <Text style={s.historyTitle} numberOfLines={2}>{item.title}</Text>
+                            <Text style={s.historyMeta}>{isDeleted ? 'Gelöscht' : 'Abgehakt'}</Text>
+                          </View>
+                          <Text style={s.historyTime}>{time}</Text>
+                          <TouchableOpacity onPress={() => handleRestoreItem(item)} hitSlop={8} accessibilityLabel="Wiederherstellen">
+                            <Ionicons name="arrow-undo-circle-outline" size={20} color={colors.accentNeon} />
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    );
+                  });
+                })()}
+              </ScrollView>
+            )}
           </Pressable>
         </Pressable>
       </Modal>
@@ -860,7 +933,15 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
     pauseText: { fontSize: 11, color: colors.textMuted, fontStyle: 'italic' },
     // Klassenbuch / manuelles Klassenbuch (Aufgaben + Infos gemischt)
     klassenbuchTitle: { fontSize: 13, fontWeight: '700', color: colors.textSecondary, marginBottom: 2 },
-    journalTextDone: { textDecorationLine: 'line-through', color: colors.textMuted },
+    // Öffnet den Verlauf-Dialog (abgehakte/gelöschte Einträge) – gleiche
+    // Optik wie der "Verlauf"-Button im Kinder-Tab.
+    klassenbuchHeaderRow: { flexDirection: 'row', justifyContent: 'flex-end' },
+    historyBtn: {
+      flexDirection: 'row', alignItems: 'center', gap: 4,
+      borderWidth: 1, borderColor: colors.accentNeon, borderRadius: 8,
+      paddingHorizontal: 10, paddingVertical: 5,
+    },
+    historyBtnText: { fontSize: 12, fontWeight: '700', color: colors.accentNeon },
     // Klare Abhebung zum Stundenplan darunter, wenn beides ohne Tab auf
     // einer Seite steht (Hannes/Emil).
     stundenplanDivider: {
@@ -897,6 +978,26 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
       paddingHorizontal: 12, paddingVertical: 10, fontSize: 15,
       color: colors.text, backgroundColor: colors.inputBackground,
     },
+    dateInput: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    dateInputText: { flex: 1, fontSize: 15 },
+    // Verlauf-Dialog – 1:1 Design/Struktur wie das History-Modal im
+    // Kinder-Tab (app/(tabs)/kids.tsx).
+    historyBox: {
+      backgroundColor: colors.surface, borderRadius: 20, padding: 20,
+      width: 340, maxWidth: '92%', gap: 10,
+    },
+    historyHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    historyDate: {
+      fontSize: 12, fontWeight: '700', color: colors.textMuted,
+      textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 12, marginBottom: 4,
+    },
+    historyRow: {
+      flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6,
+      borderBottomWidth: 1, borderColor: colors.border,
+    },
+    historyTitle: { fontSize: 14, color: colors.text },
+    historyMeta: { fontSize: 11, color: colors.textMuted, marginTop: 1 },
+    historyTime: { fontSize: 13, fontWeight: '600', color: colors.accentNeon },
     modalActions: {
       flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8,
     },
