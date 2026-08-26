@@ -13,6 +13,7 @@ import {
   Platform,
 } from 'react-native';
 import { Clipboard } from 'react-native';
+import Constants from 'expo-constants';
 import { Ionicons } from '@expo/vector-icons';
 import { useStore } from '../store';
 import { useTheme, ThemeColors, neonGlow } from '../utils/theme';
@@ -1042,7 +1043,7 @@ export function SettingsScreen() {
         <Text style={styles.sectionHeader}>App</Text>
         <View style={styles.row}>
           <Text style={styles.rowTitle}>Version</Text>
-          <Text style={styles.rowValue}>1.0.0</Text>
+          <Text style={styles.rowValue}>{Constants.expoConfig?.version ?? '1.1.0'}</Text>
         </View>
         {user && (
           <Pressable
