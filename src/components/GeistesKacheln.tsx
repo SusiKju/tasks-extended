@@ -107,10 +107,12 @@ function randomColor(): string {
 
 // ─── Modal ────────────────────────────────────────────────────────────────────
 
+const LABEL_MAX_LENGTH = 16;
+
 interface ModalProps {
   visible: boolean;
   editing: GeistesKachel | null;
-  onSave: (text: string, icon: string, color: string) => Promise<void>;
+  onSave: (text: string, icon: string, color: string, label: string) => Promise<void>;
   onDelete: () => Promise<void>;
   onClose: () => void;
   colors: ThemeColors;
@@ -120,6 +122,7 @@ function KachelModal({ visible, editing, onSave, onDelete, onClose, colors }: Mo
   const [text, setText] = useState('');
   const [icon, setIcon] = useState<IoniconName>('bulb-outline');
   const [color, setColor] = useState(COLORS[0]);
+  const [label, setLabel] = useState('');
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const inputRef = useRef<TextInput>(null);
@@ -129,6 +132,7 @@ function KachelModal({ visible, editing, onSave, onDelete, onClose, colors }: Mo
       setText(editing?.text ?? '');
       setIcon((editing?.emoji as IoniconName) ?? 'bulb-outline');
       setColor(editing?.color ?? randomColor());
+      setLabel(editing?.label ?? '');
       setTimeout(() => inputRef.current?.focus(), 120);
     }
   }, [visible, editing]);
@@ -145,7 +149,7 @@ function KachelModal({ visible, editing, onSave, onDelete, onClose, colors }: Mo
   const handleSave = async () => {
     if (!text.trim()) return;
     setSaving(true);
-    try { await onSave(text, icon, color); onClose(); }
+    try { await onSave(text, icon, color, label); onClose(); }
     finally { setSaving(false); }
   };
 
@@ -176,6 +180,18 @@ function KachelModal({ visible, editing, onSave, onDelete, onClose, colors }: Mo
             placeholderTextColor={colors.textMuted}
             multiline
             textAlignVertical="top"
+          />
+
+          {/* Kurz-Label für die Kachel – bewusst getrennt vom freien Gedanken-Text
+              oben, den der User explizit vergibt, damit er kurz bleibt. */}
+          <Text style={[s.pickerLabel, { color: colors.textMuted }]}>Label auf der Kachel (optional)</Text>
+          <TextInput
+            style={[s.labelInput, { color: colors.text, borderColor: color + '50' }]}
+            value={label}
+            onChangeText={setLabel}
+            placeholder="z. B. Fotowand"
+            placeholderTextColor={colors.textMuted}
+            maxLength={LABEL_MAX_LENGTH}
           />
 
           {/* Icon-Auswahl */}
@@ -237,8 +253,6 @@ function KachelModal({ visible, editing, onSave, onDelete, onClose, colors }: Mo
 // Rahmen, exakt wie Countdown-Kacheln daneben und wie im Redesign-Artefakt
 // ("Clean": Farbe sitzt im Icon, nicht in der Fläche). Icon-Form bleibt
 // weiterhin content-abhängig (detectIcon/kachel.emoji).
-const GEISTESBLITZ_ACCENT = '#A78BFA';
-
 function KachelCard({ kachel, onPress, size, colors, compact }: {
   kachel: GeistesKachel;
   onPress: () => void;
@@ -247,6 +261,7 @@ function KachelCard({ kachel, onPress, size, colors, compact }: {
   compact?: boolean;
 }) {
   const iconName = (kachel.emoji as IoniconName) ?? detectIcon(kachel.text);
+  const label = kachel.label?.trim();
   return (
     <Pressable
       style={({ pressed }) => [
@@ -257,7 +272,10 @@ function KachelCard({ kachel, onPress, size, colors, compact }: {
       ]}
       onPress={onPress}
     >
-      <Ionicons name={iconName} size={Math.round(size * 0.42)} color={compact ? GEISTESBLITZ_ACCENT : '#fff'} />
+      <Ionicons name={iconName} size={Math.round(size * (compact && label ? 0.34 : 0.42))} color={compact ? kachel.color : '#fff'} />
+      {compact && label ? (
+        <Text style={[s.cardLabel, { color: colors.textSecondary }]} numberOfLines={1}>{label}</Text>
+      ) : null}
     </Pressable>
   );
 }
@@ -282,10 +300,11 @@ export function GeistesKacheln({ colors, isDark, areaWidth, columns, compact = f
   const openNew    = useCallback(() => { setEditing(null); setModalVisible(true); }, []);
   const openEdit   = useCallback((k: GeistesKachel) => { setEditing(k); setModalVisible(true); }, []);
 
-  const handleSave = useCallback(async (text: string, icon: string, color: string) => {
+  const handleSave = useCallback(async (text: string, icon: string, color: string, label: string) => {
     if (!fid || !uid) return;
-    if (editing) await updateGeistesKachel(fid, uid, editing.id, { text, emoji: icon, color });
-    else         await addGeistesKachel(fid, uid, text, icon, color);
+    const trimmedLabel = label.trim() || null;
+    if (editing) await updateGeistesKachel(fid, uid, editing.id, { text, emoji: icon, color, label: trimmedLabel });
+    else         await addGeistesKachel(fid, uid, text, icon, color, trimmedLabel);
   }, [fid, uid, editing]);
 
   const handleDelete = useCallback(async () => {
@@ -377,7 +396,8 @@ const s = StyleSheet.create({
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   // Redesign: Radius an die Countdown-/Artefakt-Mini-Kachel angeglichen
   // (14 statt 10) – wirkten nebeneinander sonst unterschiedlich rund.
-  card: { borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  card: { borderRadius: 14, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
+  cardLabel: { fontSize: 8.5, fontWeight: '600', textAlign: 'center', marginTop: 2 },
   addCard: { borderRadius: 14, borderWidth: 1.5, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center', gap: 3 },
 
   empty: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1.5, borderStyle: 'dashed', borderRadius: 12, padding: 16 },
@@ -408,6 +428,11 @@ const s = StyleSheet.create({
   textInput: {
     borderWidth: 1.5, borderRadius: 10, padding: 12,
     fontSize: 14, minHeight: 100, maxHeight: 200, lineHeight: 20,
+  },
+
+  labelInput: {
+    borderWidth: 1.5, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10,
+    fontSize: 14,
   },
 
   pickerLabel: { fontSize: 11, fontWeight: '600', letterSpacing: 0.5, textTransform: 'uppercase' },

@@ -23,6 +23,8 @@ export interface GeistesKachel {
   text: string;
   emoji: string | null;
   color: string;
+  /** Kurzes, explizit vergebenes Label für die Dashboard-Kachel (statt langem Freitext). */
+  label?: string | null;
   createdAt: string;
 }
 
@@ -59,11 +61,13 @@ export async function addGeistesKachel(
   text: string,
   emoji: string | null,
   color: string,
+  label?: string | null,
 ): Promise<string> {
   const ref = await addDoc(tilesCol(familyId, uid), {
     text: text.trim(),
     emoji: emoji ?? null,
     color,
+    label: label ?? null,
     createdAt: new Date().toISOString(),
   });
   return ref.id;
@@ -73,7 +77,7 @@ export async function updateGeistesKachel(
   familyId: string,
   uid: string,
   id: string,
-  patch: Partial<Pick<GeistesKachel, 'text' | 'emoji' | 'color'>>,
+  patch: Partial<Pick<GeistesKachel, 'text' | 'emoji' | 'color' | 'label'>>,
 ): Promise<void> {
   await updateDoc(
     doc(db, 'families', familyId, 'geistesKachelByUser', uid, 'tiles', id),
