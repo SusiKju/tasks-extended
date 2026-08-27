@@ -33,6 +33,7 @@ import {
   subscribeToMembers, leaveFamily,
   addChild, updateChild, deleteChild,
   subscribeToJoinRequests, approveJoinRequest, denyJoinRequest, setFuerUnsAccess,
+  setMemberRole,
 } from '../services/family';
 import {
   setChildAllowance, setAllowanceOverride, subscribeToAllowanceMonths,
@@ -99,6 +100,7 @@ export function SettingsScreen() {
     name: string;
     color: string;
     emoji: string;
+    email: string;
   } | null>(null);
   const [savingChild, setSavingChild] = useState(false);
   const [confirmDeleteChildId, setConfirmDeleteChildId] = useState<string | null>(null);
@@ -165,6 +167,22 @@ export function SettingsScreen() {
 
   const fuerUnsUids = meta?.fuerUnsUids ?? [];
   const iAmFuerUnsMember = !!user && fuerUnsUids.includes(user.uid);
+  const iAmParent = members.find((m) => m.uid === user?.uid)?.role === 'parent';
+
+  const handleToggleRole = useCallback((member: FamilyMember) => {
+    if (!familyId) return;
+    const nextRole = member.role === 'parent' ? 'child' : 'parent';
+    crossAlert(
+      nextRole === 'child' ? `${member.displayName} als Kind einstufen?` : `${member.displayName} als Elternteil einstufen?`,
+      nextRole === 'child'
+        ? 'Verliert Zugriff auf Mitgliederverwaltung, Beitrittsanfragen und Kinder-Einstellungen.'
+        : 'Bekommt vollen Zugriff wie ein Elternteil.',
+      () => {
+        setMemberRole(familyId, member.uid, nextRole).catch((e: any) =>
+          Alert.alert('Fehler', e?.message ?? 'Rolle konnte nicht geändert werden.'));
+      }
+    );
+  }, [familyId]);
 
   const handleApproveJoin = useCallback((request: JoinRequest) => {
     if (!familyId || !user) return;
@@ -226,11 +244,14 @@ export function SettingsScreen() {
   }, [familyId, user]);
 
   const openAddChild = useCallback(() => {
-    setChildModal({ mode: 'add', name: '', color: CHILD_COLORS[0], emoji: '' });
+    setChildModal({ mode: 'add', name: '', color: CHILD_COLORS[0], emoji: '', email: '' });
   }, []);
 
   const openEditChild = useCallback((child: ChildConfig) => {
-    setChildModal({ mode: 'edit', child, name: child.name, color: child.color, emoji: child.emoji ?? '' });
+    setChildModal({
+      mode: 'edit', child, name: child.name, color: child.color,
+      emoji: child.emoji ?? '', email: child.email ?? '',
+    });
   }, []);
 
   const handleSaveChild = useCallback(async () => {
@@ -240,10 +261,11 @@ export function SettingsScreen() {
     setSavingChild(true);
     try {
       const emoji = childModal.emoji.trim() || null;
+      const email = childModal.email.trim() || null;
       if (childModal.mode === 'add') {
-        await addChild(familyId, name, childModal.color, emoji);
+        await addChild(familyId, name, childModal.color, emoji, email);
       } else if (childModal.child) {
-        await updateChild(familyId, childModal.child.id, { name, color: childModal.color, emoji });
+        await updateChild(familyId, childModal.child.id, { name, color: childModal.color, emoji, email });
       }
       setChildModal(null);
     } catch (e: any) {
@@ -628,6 +650,20 @@ export function SettingsScreen() {
                   {m.uid === user?.uid && (
                     <Text style={[styles.rowSubtitle, { color: colors.accentNeon }]}>(du)</Text>
                   )}
+                  {/* Rolle korrigieren – nur Eltern dürfen das, und nicht sich selbst versehentlich aussperren */}
+                  {iAmParent && m.uid !== user?.uid && (
+                    <Pressable
+                      onPress={() => handleToggleRole(m)}
+                      style={({ pressed }) => [styles.roleBadge, pressed && { opacity: 0.6 }]}
+                    >
+                      <Text style={styles.roleBadgeText}>{m.role === 'parent' ? 'Elternteil' : 'Kind'}</Text>
+                    </Pressable>
+                  )}
+                  {!iAmParent || m.uid === user?.uid ? (
+                    <Text style={[styles.rowSubtitle, { fontSize: 11, color: colors.textSecondary }]}>
+                      {m.role === 'parent' ? 'Elternteil' : 'Kind'}
+                    </Text>
+                  ) : null}
                   {/* TE-59: Zugriff auf "Für uns" – nur ändern kann, wer selbst drinsteht */}
                   <Pressable
                     disabled={!iAmFuerUnsMember}
@@ -977,6 +1013,21 @@ export function SettingsScreen() {
               placeholderTextColor={colors.placeholder}
             />
 
+            <Text style={[styles.rowSubtitle, { marginTop: 12, marginBottom: 4 }]}>Eigener Login (optional)</Text>
+            <TextInput
+              style={styles.settingInput}
+              value={childModal?.email ?? ''}
+              onChangeText={(v) => setChildModal((m) => m ? { ...m, email: v } : m)}
+              placeholder="E-Mail, mit der sich das Kind selbst anmeldet"
+              placeholderTextColor={colors.placeholder}
+              autoCapitalize="none"
+              keyboardType="email-address"
+            />
+            <Text style={[styles.rowSubtitle, { marginTop: 4, fontSize: 12 }]}>
+              Meldet sich jemand mit dieser E-Mail an, bekommt er/sie automatisch die
+              eingeschränkte Kind-Rolle statt vollen Zugriff.
+            </Text>
+
             <Text style={[styles.rowSubtitle, { marginTop: 12, marginBottom: 6 }]}>Farbe</Text>
             <View style={styles.colorGrid}>
               {CHILD_COLORS.map((clr) => (
@@ -1271,6 +1322,13 @@ function makeStyles(c: ThemeColors) {
       borderRadius: 8,
     },
     smallBtnText: { fontSize: 13, fontWeight: '600', color: c.accentFg },
+    roleBadge: {
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 6,
+      backgroundColor: c.accent,
+    },
+    roleBadgeText: { fontSize: 11, fontWeight: '600', color: c.accentFg },
     childManageRow: {
       flexDirection: 'row',
       alignItems: 'center',

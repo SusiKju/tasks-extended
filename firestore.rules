@@ -11,6 +11,22 @@ service cloud.firestore {
           && exists(/databases/$(database)/documents/families/$(familyId)/members/$(request.auth.uid));
     }
 
+    // Ist der anfragende User ein Elternteil dieser Familie (nicht nur
+    // Mitglied)? role wird beim Anlegen des Mitglieds-Dokuments serverseitig
+    // aus childEmails abgeleitet und ist danach unveränderlich (siehe unten) –
+    // ein Kind kann sich also nicht selbst zum 'parent' machen.
+    function isParent(familyId) {
+      return isFamilyMember(familyId)
+          && get(/databases/$(database)/documents/families/$(familyId)/members/$(request.auth.uid)).data.role == 'parent';
+    }
+
+    // Ist die eigene, per Google-Login verifizierte E-Mail als Kind-E-Mail
+    // dieser Familie hinterlegt (families/{familyId}/childEmails/{email})?
+    function isRegisteredChildEmail(familyId) {
+      return request.auth.token.email != null
+          && exists(/databases/$(database)/documents/families/$(familyId)/childEmails/$(request.auth.token.email.lower()));
+    }
+
     // Ist der anfragende User eingeloggt?
     function isSignedIn() {
       return request.auth != null;
@@ -57,13 +73,22 @@ service cloud.firestore {
       // kann sie bestätigen (approved:true) – siehe members/create unten.
       match /joinRequests/{uid} {
         allow read: if isFamilyMember(familyId) || (isSignedIn() && request.auth.uid == uid);
-        allow create: if isSignedIn() && request.auth.uid == uid
+        // Anlegen ODER Zurücksetzen der eigenen Anfrage: requestToJoinFamily()
+        // schreibt per setDoc() auf einen festen Pfad (uid) – existiert schon
+        // ein (z.B. längst genehmigtes, aber nie abgeschlossenes) Dokument
+        // von einem früheren Versuch, zählt der erneute Schreibversuch für
+        // Firestore-Rules als "update", nicht "create". Ohne diese Zeile
+        // könnte sich niemand ohne bestehende Mitgliedschaft ein zweites Mal
+        // bewerben. In beiden Fällen muss der Inhalt wie eine frische,
+        // unbestätigte Anfrage aussehen – ein Antragsteller kann sich damit
+        // nicht selbst freischalten.
+        allow create, update: if isSignedIn() && request.auth.uid == uid
             && request.resource.data.approved == false
             && request.resource.data.joinCode is string
             && get(/databases/$(database)/documents/familyCodes/$(request.resource.data.joinCode)).data.familyId == familyId;
-        // Bestätigen (approved:true setzen) darf nur ein bestehendes Mitglied –
-        // die Anfrage selbst kann sich nicht freischalten.
-        allow update: if isFamilyMember(familyId);
+        // Bestätigen (approved:true setzen) darf nur ein Elternteil – Kinder
+        // dürfen keine neuen Mitglieder freischalten.
+        allow update: if isParent(familyId);
         // Ablehnen/Aufräumen durch ein Mitglied, oder eigene Anfrage zurückziehen.
         allow delete: if isFamilyMember(familyId) || (isSignedIn() && request.auth.uid == uid);
       }
@@ -73,23 +98,64 @@ service cloud.firestore {
         // Mitglieder lesen alle; User darf eigenes Dokument lesen (z.B. beim Beitreten prüfen)
         allow read: if isFamilyMember(familyId) || (isSignedIn() && request.auth.uid == uid);
         // Selbst-Eintrag erlaubt für:
-        //  a) den Familien-Gründer beim Anlegen (createFamily)
+        //  a) den Familien-Gründer beim Anlegen (createFamily) – immer 'parent'.
         //  b) einen bestätigten Beitritt (completeJoin) – NUR wenn die eigene
         //     joinRequests/{uid} mit approved:true vorliegt. Ersetzt seit
         //     TE-59 die reine joinCode-Prüfung: ein Code allein reicht nicht
         //     mehr, ein bestehendes Mitglied muss aktiv zustimmen.
+        // In beiden Fällen wird `role` NICHT vom Client übernommen, sondern
+        // hier serverseitig gegen childEmails geprüft: nur wer mit einer als
+        // Kind hinterlegten E-Mail beitritt, darf 'child' eintragen; sonst
+        // ist ausschließlich 'parent' erlaubt. Ein manipulierter Client kann
+        // sich also nicht als 'parent' eintragen, indem er das Feld fälscht.
         allow create: if isSignedIn() && request.auth.uid == uid
             && (
-              get(/databases/$(database)/documents/families/$(familyId)).data.createdByUid == request.auth.uid
-              || get(/databases/$(database)/documents/families/$(familyId)/joinRequests/$(uid)).data.approved == true
+              (
+                get(/databases/$(database)/documents/families/$(familyId)).data.createdByUid == request.auth.uid
+                && request.resource.data.role == 'parent'
+              )
+              || (
+                get(/databases/$(database)/documents/families/$(familyId)/joinRequests/$(uid)).data.approved == true
+                && request.resource.data.role == (isRegisteredChildEmail(familyId) ? 'child' : 'parent')
+              )
             );
         allow delete: if isSignedIn() && request.auth.uid == uid;
-        allow update: if isFamilyMember(familyId) || (isSignedIn() && request.auth.uid == uid);
+        // Eigenes Profil darf jeder aktualisieren, aber NICHT die eigene
+        // role/uid ändern (sonst könnte sich ein 'child'-Mitglied selbst zu
+        // 'parent' hochstufen).
+        allow update: if isSignedIn() && request.auth.uid == uid
+            && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'uid']);
+        // Ein Elternteil darf jedes Mitglied bearbeiten, INKLUSIVE role –
+        // das ist der einzige Weg, eine falsch zugeordnete Rolle nachträglich
+        // zu korrigieren (z.B. ein Kind, das vor Einführung der Kind-E-Mail
+        // oder ohne hinterlegte E-Mail als 'parent' beigetreten ist), ohne
+        // dass das Mitglied die Familie verlassen und neu beitreten muss.
+        // uid bleibt auch hier unveränderlich (Dokument-Identität).
+        allow update: if isParent(familyId)
+            && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['uid']);
       }
 
-      // Kinder-Konfiguration (addChild, updateChild, deleteChild)
+      // Kinder-Konfiguration (addChild, updateChild, deleteChild, Taschengeld).
+      // Lesen bleibt für alle Mitglieder offen (Kind sieht sein eigenes
+      // Profil), Ändern (u.a. Taschengeld, Login-E-Mail) nur für Eltern.
       match /childrenConfig/{childId} {
-        allow read, write: if isFamilyMember(familyId);
+        allow read: if isFamilyMember(familyId);
+        allow write: if isParent(familyId);
+      }
+
+      // E-Mail → Kind-Zuordnung (siehe isRegisteredChildEmail). Nur Eltern
+      // legen fest, welche E-Mail beim Beitritt automatisch die
+      // eingeschränkte 'child'-Rolle bekommt.
+      match /childEmails/{email} {
+        // Auch ohne bestehende Mitgliedschaft lesbar für jemanden mit
+        // bestätigter Beitrittsanfrage – completeJoin() muss genau diesen
+        // Pfad VOR dem Anlegen des eigenen Mitglieds-Dokuments prüfen, um die
+        // korrekte role zu bestimmen. Ohne diese Ausnahme wäre das ein
+        // Henne-Ei-Problem: kein Mitglied → kein Lesen → keine Rolle bekannt.
+        allow read: if isFamilyMember(familyId)
+            || (isSignedIn()
+                && get(/databases/$(database)/documents/families/$(familyId)/joinRequests/$(request.auth.uid)).data.approved == true);
+        allow write: if isParent(familyId);
       }
 
       // Kinder-Aufgaben, Aktivitätslog, pushToken, Belohnung

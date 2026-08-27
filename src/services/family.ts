@@ -29,7 +29,7 @@ import { db } from './firebase';
 
 export interface FamilyMember {
   uid: string;
-  role: 'parent';
+  role: 'parent' | 'child';
   displayName: string;
   email: string;
   joinedAt: string;
@@ -79,6 +79,14 @@ export interface ChildConfig {
   emoji?: string | null;
   /** Monatliches Taschengeld in EUR (TE-52). null/undefined = nicht konfiguriert. */
   allowance?: number | null;
+  /**
+   * E-Mail-Adresse, mit der dieses Kind sich selbst anmelden kann. Wird beim
+   * Beitritt gegen families/{familyId}/childEmails/{email} geprüft, damit die
+   * Firestore-Regel die Rolle ('child' statt 'parent') serverseitig ableiten
+   * kann – der Client kann die Rolle nicht selbst behaupten. Optional, da
+   * viele Kinder keinen eigenen Account haben (Gerät im Kind-Modus reicht).
+   */
+  email?: string | null;
   createdAt: string;
 }
 
@@ -118,6 +126,14 @@ function memberDoc(familyId: string, uid: string) {
 
 function childrenConfigCol(familyId: string) {
   return collection(db, 'families', familyId, 'childrenConfig');
+}
+
+function normaliseEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
+function childEmailDoc(familyId: string, email: string) {
+  return doc(db, 'families', familyId, 'childEmails', normaliseEmail(email));
 }
 
 function metaDoc(familyId: string) {
@@ -237,10 +253,17 @@ export async function cancelJoinRequest(familyId: string, uid: string): Promise<
  * eigenständig gegen; ein Aufruf ohne bestätigte Anfrage schlägt fehl.
  */
 export async function completeJoin(user: User, familyId: string): Promise<void> {
+  // Rolle wird anhand von childEmails abgeleitet, NICHT frei gewählt – die
+  // Firestore-Regel validiert diesen Wert unabhängig gegen denselben Pfad,
+  // ein manipulierter Client könnte sich also nicht als 'parent' eintragen.
+  const isChild = user.email
+    ? (await getDoc(childEmailDoc(familyId, user.email))).exists()
+    : false;
+
   await setDoc(memberDoc(familyId, user.uid), {
     uid: user.uid,
-    role: 'parent',
-    displayName: user.displayName ?? user.email ?? 'Elternteil',
+    role: isChild ? 'child' : 'parent',
+    displayName: user.displayName ?? user.email ?? 'Mitglied',
     email: user.email ?? '',
     joinedAt: new Date().toISOString(),
   } satisfies FamilyMember);
@@ -346,6 +369,35 @@ export async function leaveFamily(uid: string, familyId: string): Promise<void> 
   await batch.commit();
 }
 
+/**
+ * Korrigiert nachträglich die Rolle eines Mitglieds (z.B. ein Kind, das ohne
+ * hinterlegte childEmails-Zuordnung als 'parent' beigetreten ist). Nur ein
+ * Elternteil darf das – siehe firestore.rules members/update.
+ */
+export async function setMemberRole(
+  familyId: string,
+  targetUid: string,
+  role: 'parent' | 'child'
+): Promise<void> {
+  const { updateDoc } = await import('firebase/firestore');
+  await updateDoc(memberDoc(familyId, targetUid), { role });
+}
+
+/** Lädt das eigene Mitglieds-Dokument (u.a. für die role-Prüfung beim App-Start). */
+export async function getOwnMember(familyId: string, uid: string): Promise<FamilyMember | null> {
+  const snap = await getDoc(memberDoc(familyId, uid));
+  return snap.exists() ? (snap.data() as FamilyMember) : null;
+}
+
+/**
+ * Liefert die childId, die zu einer als Kind hinterlegten E-Mail gehört
+ * (families/{familyId}/childEmails/{email}), oder null.
+ */
+export async function getChildIdForEmail(familyId: string, email: string): Promise<string | null> {
+  const snap = await getDoc(childEmailDoc(familyId, email));
+  return snap.exists() ? (snap.data() as { childId: string }).childId : null;
+}
+
 /** Lädt die FamilyMeta (inkl. Code). */
 export async function getFamilyMeta(familyId: string): Promise<FamilyMeta | null> {
   const snap = await getDoc(metaDoc(familyId));
@@ -369,7 +421,8 @@ export async function addChild(
   familyId: string,
   name: string,
   color: string,
-  emoji?: string | null
+  emoji?: string | null,
+  email?: string | null
 ): Promise<string> {
   const ref = doc(childrenConfigCol(familyId));
   const child: ChildConfig = {
@@ -377,20 +430,48 @@ export async function addChild(
     name: name.trim(),
     color,
     emoji: emoji ?? null,
+    email: email ? normaliseEmail(email) : null,
     createdAt: new Date().toISOString(),
   };
-  await setDoc(ref, child);
+  const batch = writeBatch(db);
+  batch.set(ref, child);
+  if (child.email) {
+    batch.set(childEmailDoc(familyId, child.email), { childId: ref.id, name: child.name });
+  }
+  await batch.commit();
   return ref.id;
 }
 
-/** Aktualisiert Name, Farbe oder Emoji eines Kindes. */
+/** Aktualisiert Name, Farbe, Emoji oder E-Mail eines Kindes. */
 export async function updateChild(
   familyId: string,
   childId: string,
-  updates: Partial<Pick<ChildConfig, 'name' | 'color' | 'emoji'>>
+  updates: Partial<Pick<ChildConfig, 'name' | 'color' | 'emoji' | 'email'>>
 ): Promise<void> {
   const { updateDoc } = await import('firebase/firestore');
-  await updateDoc(doc(childrenConfigCol(familyId), childId), updates);
+  const ref = doc(childrenConfigCol(familyId), childId);
+
+  if ('email' in updates) {
+    const current = await getDoc(ref);
+    const oldEmail = (current.data() as ChildConfig | undefined)?.email;
+    const newEmail = updates.email ? normaliseEmail(updates.email) : null;
+
+    const batch = writeBatch(db);
+    if (oldEmail && oldEmail !== newEmail) {
+      batch.delete(childEmailDoc(familyId, oldEmail));
+    }
+    if (newEmail) {
+      batch.set(childEmailDoc(familyId, newEmail), {
+        childId,
+        name: (updates.name ?? (current.data() as ChildConfig | undefined)?.name) ?? '',
+      });
+    }
+    batch.update(ref, { ...updates, email: newEmail });
+    await batch.commit();
+    return;
+  }
+
+  await updateDoc(ref, updates);
 }
 
 /** Löscht ein Kind und alle zugehörigen Tasks. */
@@ -400,9 +481,15 @@ export async function deleteChild(familyId: string, childId: string): Promise<vo
   const tasksSnap = await getDocs(
     collection(db, 'families', familyId, 'children', childId, 'tasks')
   );
+  const configSnap = await getDoc(doc(childrenConfigCol(familyId), childId));
+  const email = (configSnap.data() as ChildConfig | undefined)?.email;
+
   const batch = writeBatch(db);
   tasksSnap.docs.forEach((d) => batch.delete(d.ref));
   batch.delete(doc(childrenConfigCol(familyId), childId));
+  if (email) {
+    batch.delete(childEmailDoc(familyId, email));
+  }
   await batch.commit();
 }
 

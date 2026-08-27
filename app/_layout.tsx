@@ -19,6 +19,7 @@ import { useMailPinsSync } from '../src/hooks/useMailPinsSync';
 import { useImportantTasksSync } from '../src/hooks/useImportantTasksSync';
 import { handleRedirectResult } from '../src/services/firebaseAuth';
 import { getChildDeviceState } from '../src/services/childDevice';
+import { getOwnMember, getChildIdForEmail } from '../src/services/family';
 import { useAutoReloadOnNewVersion } from '../src/hooks/useAutoReloadOnNewVersion';
 import { AppContextProvider } from '../src/contexts/AppContext';
 
@@ -140,6 +141,26 @@ export default function RootLayout() {
           ['kinder_family_id', familyId],
         ]).then(() => setIsChildMode(true));
       }
+    }).catch(() => {});
+  }, [user, familyId, isChildMode]);
+
+  // Account-Rolle: meldet sich jemand mit einer als Kind-E-Mail hinterlegten
+  // Adresse an (siehe firestore.rules → isRegisteredChildEmail), ist der
+  // eigene Mitglieds-Eintrag serverseitig auf role:'child' gesetzt. Erzwingt
+  // dann den Kind-Modus unabhängig vom lokalen Geräte-Flag – sonst würde ein
+  // Kind mit eigenem Login trotz eingeschränkter Firestore-Rechte die volle
+  // Eltern-Oberfläche angezeigt bekommen.
+  useEffect(() => {
+    if (!user || !familyId || isChildMode !== false) return;
+    getOwnMember(familyId, user.uid).then(async (member) => {
+      if (member?.role !== 'child' || !user.email) return;
+      const childId = await getChildIdForEmail(familyId, user.email);
+      if (!childId) return;
+      await AsyncStorage.multiSet([
+        ['kinder_child_id', childId],
+        ['kinder_family_id', familyId],
+      ]);
+      setIsChildMode(true);
     }).catch(() => {});
   }, [user, familyId, isChildMode]);
 

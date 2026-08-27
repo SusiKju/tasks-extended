@@ -34,7 +34,10 @@ export function FamilySetupScreen() {
 
   const handleCreate = useCallback(async () => {
     const user = getCurrentUser();
-    if (!user) return;
+    if (!user) {
+      Alert.alert('Nicht angemeldet', 'Bitte lade die Seite neu und melde dich erneut an.');
+      return;
+    }
     setLoading(true);
     try {
       const familyId = await createFamily(user);
@@ -49,7 +52,11 @@ export function FamilySetupScreen() {
 
   const handleJoin = useCallback(async () => {
     const user = getCurrentUser();
-    if (!user || !code.trim()) return;
+    if (!code.trim()) return;
+    if (!user) {
+      Alert.alert('Nicht angemeldet', 'Bitte lade die Seite neu und melde dich erneut an.');
+      return;
+    }
     setLoading(true);
     try {
       const familyId = await requestToJoinFamily(user, code.trim());
