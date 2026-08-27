@@ -1,14 +1,44 @@
-import React from 'react';
-import { Tabs } from 'expo-router';
+import React, { useState, useEffect } from 'react';
+import { Tabs, Redirect } from 'expo-router';
 import { Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme, neonGlow } from '../../src/utils/theme';
 import { useStore } from '../../src/store';
 import { DEFAULT_VISIBLE_TABS, TabKey } from '../../src/types';
+import { useFuerUns } from '../../src/hooks/useFuerUns';
 
 export default function TabsLayout() {
+  // TE-57: eigenständige Kinder-Modus-Sperre zusätzlich zum Root-Guard
+  // (app/_layout.tsx). Der Root-Guard bounct per useEffect zurück – bei einem
+  // direkten Deep-Link auf eine Tab-Route (z. B. /fuer-uns, Hard-Reload im
+  // Web) rendert die Ziel-Route dadurch für einen Frame, BEVOR der Bounce
+  // greift. Hier wird <TabsLayoutInner> (und damit jeder Tab-Inhalt,
+  // insbesondere die privaten "Für uns"-Nachrichten) erst gemountet, nachdem
+  // lokal feststeht, dass es kein Kinder-Gerät ist.
+  //
+  // Wichtig: Dieser Guard muss in einer eigenen Komponente OHNE Daten-Hooks
+  // sitzen. useFuerUns() (Firestore-onSnapshot auf die kompletten "Für
+  // uns"-Nachrichten) stand früher direkt hier – React führt Hooks aber immer
+  // vor einem Return-Statement aus, ein späteres `if (isChildDevice) return
+  // <Redirect />` verhindert nur das Rendern von <Tabs>, nicht das Laden der
+  // Daten. Auf einem Kind-Gerät wurden dadurch kurzzeitig die echten
+  // Nachrichten in den Component-State geladen, bevor der Redirect griff.
+  const [isChildDevice, setIsChildDevice] = useState<boolean | null>(null);
+  useEffect(() => {
+    AsyncStorage.getItem('kinder_child_id').then((id) => setIsChildDevice(!!id));
+  }, []);
+
+  if (isChildDevice === null) return null;
+  if (isChildDevice) return <Redirect href="/" />;
+
+  return <TabsLayoutInner />;
+}
+
+function TabsLayoutInner() {
   const { colors, isDark } = useTheme();
   const visibleTabs = useStore((s) => s.settings.visibleTabs ?? DEFAULT_VISIBLE_TABS);
+  const { unreadCount } = useFuerUns();
   // TE-49: Elternteil kann Tabs zwischen Dashboard und Settings einzeln ausblenden.
   const hrefFor = (key: TabKey) => (visibleTabs[key] === false ? null : undefined);
 
@@ -120,6 +150,17 @@ export default function TabsLayout() {
             <Text style={{ color: colors.textSecondary, fontSize: 12, marginRight: 16 }}>
               Trainer seit 28.08.2024
             </Text>
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="fuer-uns"
+        options={{
+          title: 'Für uns',
+          href: hrefFor('fuerUns'),
+          tabBarBadge: unreadCount > 0 ? unreadCount : undefined,
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="heart-outline" size={size} color={color} />
           ),
         }}
       />

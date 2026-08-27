@@ -5,7 +5,7 @@
  * Zwei Optionen: Neue Familie erstellen oder mit Wort-Paar-Code beitreten.
  */
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -20,13 +20,17 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { getCurrentUser } from '../services/firebaseAuth';
-import { createFamily, joinFamilyWithCode, saveUserFamilyLink } from '../services/family';
+import {
+  createFamily, requestToJoinFamily, subscribeToJoinRequest,
+  cancelJoinRequest, completeJoin, saveUserFamilyLink,
+} from '../services/family';
 
 export function FamilySetupScreen() {
   const router = useRouter();
-  const [mode, setMode] = useState<'choose' | 'create' | 'join'>('choose');
+  const [mode, setMode] = useState<'choose' | 'create' | 'join' | 'pending'>('choose');
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
+  const [pendingFamilyId, setPendingFamilyId] = useState<string | null>(null);
 
   const handleCreate = useCallback(async () => {
     const user = getCurrentUser();
@@ -48,15 +52,53 @@ export function FamilySetupScreen() {
     if (!user || !code.trim()) return;
     setLoading(true);
     try {
-      const familyId = await joinFamilyWithCode(user, code.trim());
-      await saveUserFamilyLink(user.uid, familyId);
-      router.replace('/(tabs)/dashboard');
+      const familyId = await requestToJoinFamily(user, code.trim());
+      setPendingFamilyId(familyId);
+      setMode('pending');
     } catch (e: any) {
       Alert.alert('Unbekannter Code', e?.message ?? 'Bitte Schreibweise prüfen.');
     } finally {
       setLoading(false);
     }
   }, [code]);
+
+  // TE-59: Beitritt braucht seit dem Sicherheitsaudit die Bestätigung eines
+  // bestehenden Mitglieds. Solange die Anfrage offen ist, hier warten und
+  // live auf Bestätigung/Ablehnung reagieren.
+  useEffect(() => {
+    if (mode !== 'pending' || !pendingFamilyId) return;
+    const user = getCurrentUser();
+    if (!user) return;
+    return subscribeToJoinRequest(pendingFamilyId, user.uid, async (request) => {
+      if (request === null) {
+        Alert.alert('Anfrage abgelehnt', 'Dein Beitritt wurde nicht bestätigt.');
+        setMode('choose');
+        setPendingFamilyId(null);
+        return;
+      }
+      if (request.approved) {
+        try {
+          await completeJoin(user, pendingFamilyId);
+          await saveUserFamilyLink(user.uid, pendingFamilyId);
+          router.replace('/(tabs)/dashboard');
+        } catch (e: any) {
+          Alert.alert('Fehler', e?.message ?? 'Beitritt konnte nicht abgeschlossen werden.');
+        }
+      }
+    });
+  }, [mode, pendingFamilyId]);
+
+  const handleCancelRequest = useCallback(async () => {
+    const user = getCurrentUser();
+    if (!user || !pendingFamilyId) return;
+    try {
+      await cancelJoinRequest(pendingFamilyId, user.uid);
+    } catch {
+      // Anfrage evtl. schon bestätigt/gelöscht – egal, UI geht trotzdem zurück
+    }
+    setPendingFamilyId(null);
+    setMode('choose');
+  }, [pendingFamilyId]);
 
   return (
     <KeyboardAvoidingView
@@ -154,6 +196,21 @@ export function FamilySetupScreen() {
 
           <Pressable onPress={() => setMode('choose')} style={styles.backBtn}>
             <Text style={styles.backText}>← Zurück</Text>
+          </Pressable>
+        </View>
+      )}
+
+      {/* ── Warten auf Bestätigung (TE-59) ── */}
+      {mode === 'pending' && (
+        <View style={styles.inner}>
+          <ActivityIndicator size="large" color="#4F7EF5" />
+          <Text style={styles.title}>Warte auf Bestätigung</Text>
+          <Text style={styles.subtitle}>
+            Ein bestehendes Mitglied der Familie muss deinen Beitritt bestätigen. Das dauert nur einen Moment.
+          </Text>
+
+          <Pressable onPress={handleCancelRequest} style={styles.backBtn}>
+            <Text style={styles.backText}>Anfrage zurückziehen</Text>
           </Pressable>
         </View>
       )}

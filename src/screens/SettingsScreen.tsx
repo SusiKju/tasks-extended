@@ -29,9 +29,10 @@ import { useFamily } from '../hooks/useFamily';
 import { useFirebaseAuth } from '../hooks/useFirebaseAuth';
 import { signOutFirebase } from '../services/firebaseAuth';
 import {
-  FamilyMember, ChildConfig,
+  FamilyMember, ChildConfig, JoinRequest,
   subscribeToMembers, leaveFamily,
   addChild, updateChild, deleteChild,
+  subscribeToJoinRequests, approveJoinRequest, denyJoinRequest, setFuerUnsAccess,
 } from '../services/family';
 import {
   setChildAllowance, setAllowanceOverride, subscribeToAllowanceMonths,
@@ -84,6 +85,7 @@ export function SettingsScreen() {
   const { user } = useFirebaseAuth();
   const { familyId, meta, children: familyChildren } = useFamily();
   const [members, setMembers] = useState<FamilyMember[]>([]);
+  const [joinRequests, setJoinRequests] = useState<JoinRequest[]>([]);
   const [codeCopied, setCodeCopied] = useState(false);
   const [confirmLeave, setConfirmLeave] = useState(false);
   const [leavingFamily, setLeavingFamily] = useState(false);
@@ -153,6 +155,43 @@ export function SettingsScreen() {
   useEffect(() => {
     if (!familyId) return;
     return subscribeToMembers(familyId, setMembers);
+  }, [familyId]);
+
+  // TE-59: offene Beitrittsanfragen für bestehende Mitglieder.
+  useEffect(() => {
+    if (!familyId) return;
+    return subscribeToJoinRequests(familyId, setJoinRequests);
+  }, [familyId]);
+
+  const fuerUnsUids = meta?.fuerUnsUids ?? [];
+  const iAmFuerUnsMember = !!user && fuerUnsUids.includes(user.uid);
+
+  const handleApproveJoin = useCallback((request: JoinRequest) => {
+    if (!familyId || !user) return;
+    // Erste zwei "Für uns"-Berechtigte werden automatisch übernommen (der
+    // typische Fall: der Partner tritt bei) – jedes weitere Mitglied braucht
+    // eine bewusste, separate Freigabe über den Herz-Schalter unten.
+    const grantFuerUns = fuerUnsUids.length < 2;
+    approveJoinRequest(familyId, request.uid, user.uid, grantFuerUns).then(() => {
+      Alert.alert(
+        'Bestätigt',
+        grantFuerUns
+          ? `${request.displayName} ist jetzt Mitglied und hat Zugriff auf "Für uns".`
+          : `${request.displayName} ist jetzt Mitglied.`
+      );
+    }).catch((e: any) => Alert.alert('Fehler', e?.message ?? 'Bestätigen fehlgeschlagen.'));
+  }, [familyId, user, fuerUnsUids]);
+
+  const handleDenyJoin = useCallback((request: JoinRequest) => {
+    if (!familyId) return;
+    denyJoinRequest(familyId, request.uid).catch((e: any) =>
+      Alert.alert('Fehler', e?.message ?? 'Ablehnen fehlgeschlagen.'));
+  }, [familyId]);
+
+  const handleToggleFuerUns = useCallback((targetUid: string, granted: boolean) => {
+    if (!familyId) return;
+    setFuerUnsAccess(familyId, targetUid, granted).catch((e: any) =>
+      Alert.alert('Fehler', e?.message ?? 'Konnte nicht geändert werden.'));
   }, [familyId]);
 
   // Taschengeld-Monate pro Kind für die Korrektur-Anzeige (TE-154).
@@ -559,6 +598,25 @@ export function SettingsScreen() {
             <Ionicons name={codeCopied ? 'checkmark' : 'copy-outline'} size={18} color={colors.textSecondary} />
           </Pressable>
 
+          {/* Beitrittsanfragen (TE-59) */}
+          {joinRequests.length > 0 && (
+            <View style={[styles.row, { flexDirection: 'column', alignItems: 'flex-start', gap: 6 }]}>
+              <Text style={styles.rowTitle}>Beitrittsanfragen</Text>
+              {joinRequests.map((r) => (
+                <View key={r.uid} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, width: '100%' as any }}>
+                  <Ionicons name="person-add-outline" size={18} color={colors.textSecondary} />
+                  <Text style={[styles.rowSubtitle, { flex: 1 }]}>{r.displayName}</Text>
+                  <Pressable onPress={() => handleDenyJoin(r)} style={({ pressed }) => [{ padding: 6 }, pressed && { opacity: 0.6 }]}>
+                    <Ionicons name="close-circle-outline" size={22} color={colors.danger} />
+                  </Pressable>
+                  <Pressable onPress={() => handleApproveJoin(r)} style={({ pressed }) => [{ padding: 6 }, pressed && { opacity: 0.6 }]}>
+                    <Ionicons name="checkmark-circle-outline" size={22} color={colors.accentNeon} />
+                  </Pressable>
+                </View>
+              ))}
+            </View>
+          )}
+
           {/* Mitglieder */}
           {members.length > 0 && (
             <View style={[styles.row, { flexDirection: 'column', alignItems: 'flex-start', gap: 6 }]}>
@@ -570,6 +628,18 @@ export function SettingsScreen() {
                   {m.uid === user?.uid && (
                     <Text style={[styles.rowSubtitle, { color: colors.accentNeon }]}>(du)</Text>
                   )}
+                  {/* TE-59: Zugriff auf "Für uns" – nur ändern kann, wer selbst drinsteht */}
+                  <Pressable
+                    disabled={!iAmFuerUnsMember}
+                    onPress={() => handleToggleFuerUns(m.uid, !fuerUnsUids.includes(m.uid))}
+                    style={({ pressed }) => [{ padding: 4 }, pressed && iAmFuerUnsMember && { opacity: 0.6 }]}
+                  >
+                    <Ionicons
+                      name={fuerUnsUids.includes(m.uid) ? 'heart' : 'heart-outline'}
+                      size={16}
+                      color={fuerUnsUids.includes(m.uid) ? colors.accentNeon : colors.textSecondary}
+                    />
+                  </Pressable>
                 </View>
               ))}
             </View>

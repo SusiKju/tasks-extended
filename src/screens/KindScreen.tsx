@@ -30,6 +30,7 @@ import {
 import SchuleScreen from './SchuleScreen';
 import { BambiniScreen } from './BambiniScreen';
 import { Match, Standing, subscribeToMatches, subscribeToTable } from '../services/fussballDe';
+import { markChildDeviceInactive } from '../services/childDevice';
 
 const FAMILY_ID_KEY = 'kinder_family_id';
 import { Platform } from 'react-native';
@@ -181,6 +182,9 @@ export default function KindScreen({ onExitChildMode }: Props) {
       setPinError(false);
       // Kind-Modus verlassen
       await AsyncStorage.removeItem(STORAGE_KEY);
+      // TE-59: Server-Spiegel mit austragen, sonst hält der Root-Guard das
+      // Gerät fälschlich weiter für ein Kind-Gerät.
+      if (familyId) markChildDeviceInactive(familyId).catch(() => {});
       setChildId(null);
       onExitChildMode?.();
     } else {

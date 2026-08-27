@@ -40,8 +40,33 @@ service cloud.firestore {
       // Meta-Dokument: alle Mitglieder lesen, kein direktes Schreiben
       allow read: if isFamilyMember(familyId);
       allow create: if isSignedIn(); // createFamily schreibt das erste Mal
-      allow update: if isFamilyMember(familyId);
+      // TE-59: fuerUnsUids ist eine bewusst engere Allowlist als "alle
+      // Mitglieder" – nur wer selbst schon drinsteht, darf das Feld ändern
+      // (Annehmen einer Beitrittsanfrage mit Für-uns-Zugriff, oder späteres
+      // Verwalten in den Einstellungen). Alle anderen Felder bleiben für
+      // jedes Mitglied änderbar wie bisher.
+      allow update: if isFamilyMember(familyId)
+          && (
+            !request.resource.data.diff(resource.data).affectedKeys().hasAny(['fuerUnsUids'])
+            || request.auth.uid in resource.data.fuerUnsUids
+          );
       allow delete: if false;
+
+      // Beitrittsanfragen (TE-59): ein Beitrittscode legt nur noch eine
+      // Anfrage an, kein Mitglieds-Dokument. Erst ein bestehendes Mitglied
+      // kann sie bestätigen (approved:true) – siehe members/create unten.
+      match /joinRequests/{uid} {
+        allow read: if isFamilyMember(familyId) || (isSignedIn() && request.auth.uid == uid);
+        allow create: if isSignedIn() && request.auth.uid == uid
+            && request.resource.data.approved == false
+            && request.resource.data.joinCode is string
+            && get(/databases/$(database)/documents/familyCodes/$(request.resource.data.joinCode)).data.familyId == familyId;
+        // Bestätigen (approved:true setzen) darf nur ein bestehendes Mitglied –
+        // die Anfrage selbst kann sich nicht freischalten.
+        allow update: if isFamilyMember(familyId);
+        // Ablehnen/Aufräumen durch ein Mitglied, oder eigene Anfrage zurückziehen.
+        allow delete: if isFamilyMember(familyId) || (isSignedIn() && request.auth.uid == uid);
+      }
 
       // Mitglieder-Liste
       match /members/{uid} {
@@ -49,17 +74,14 @@ service cloud.firestore {
         allow read: if isFamilyMember(familyId) || (isSignedIn() && request.auth.uid == uid);
         // Selbst-Eintrag erlaubt für:
         //  a) den Familien-Gründer beim Anlegen (createFamily)
-        //  b) einen Beitritt (joinFamilyWithCode), NUR wenn der mitgeschickte
-        //     joinCode tatsächlich zu dieser familyId gehört – verhindert,
-        //     dass jemand ohne gültigen Code direkt einen Mitglieds-Eintrag
-        //     in eine beliebige familyId schreibt.
+        //  b) einen bestätigten Beitritt (completeJoin) – NUR wenn die eigene
+        //     joinRequests/{uid} mit approved:true vorliegt. Ersetzt seit
+        //     TE-59 die reine joinCode-Prüfung: ein Code allein reicht nicht
+        //     mehr, ein bestehendes Mitglied muss aktiv zustimmen.
         allow create: if isSignedIn() && request.auth.uid == uid
             && (
               get(/databases/$(database)/documents/families/$(familyId)).data.createdByUid == request.auth.uid
-              || (
-                request.resource.data.joinCode is string
-                && get(/databases/$(database)/documents/familyCodes/$(request.resource.data.joinCode)).data.familyId == familyId
-              )
+              || get(/databases/$(database)/documents/families/$(familyId)/joinRequests/$(uid)).data.approved == true
             );
         allow delete: if isSignedIn() && request.auth.uid == uid;
         allow update: if isFamilyMember(familyId) || (isSignedIn() && request.auth.uid == uid);
@@ -88,6 +110,13 @@ service cloud.firestore {
         allow read, write: if isFamilyMember(familyId);
       }
 
+      // Server-Spiegel des Kinder-Modus pro Gerät (TE-59, siehe childDevice.ts).
+      // deviceId ist keine uid – jedes Familienmitglied darf lesen/schreiben,
+      // genau wie bei childrenConfig.
+      match /childDeviceById/{deviceId} {
+        allow read, write: if isFamilyMember(familyId);
+      }
+
       // App-Konfiguration (Erinnerungszeiten)
       match /config/{docId} {
         allow read, write: if isFamilyMember(familyId);
@@ -96,6 +125,17 @@ service cloud.firestore {
       // Geteilte Notizliste
       match /shared/{document=**} {
         allow read, write: if isFamilyMember(familyId);
+      }
+
+      // "Für uns" (TE-59): eigene, engere Regel statt der pauschalen
+      // shared/{document=**}-Regel oben. Firestore wertet bei überlappenden
+      // match-Blöcken den spezifischeren Pfad aus – diese Regel gilt also für
+      // fuerUns/items statt der allgemeinen shared-Regel. isFamilyMember
+      // zusätzlich zur Allowlist geprüft, damit ein ausgetretenes Mitglied
+      // nicht allein über eine veraltete fuerUnsUids-Liste Zugriff behält.
+      match /shared/fuerUns/items/{itemId} {
+        allow read, write: if isFamilyMember(familyId)
+            && request.auth.uid in get(/databases/$(database)/documents/families/$(familyId)).data.fuerUnsUids;
       }
 
       // Countdown-Karten pro User (TE-171: vorher geteilt unter shared/countdowns)

@@ -47,6 +47,27 @@ export interface FamilyMeta {
   code: string; // Wort-Paar, z. B. "blauer-apfel"
   createdAt: string;
   createdByUid: string;
+  /**
+   * uids, die Zugriff auf "Für uns" haben (Sicherheitsaudit TE-59). Maximal
+   * die zwei tatsächlichen Elternteile – NICHT identisch mit der allgemeinen
+   * Mitgliederliste, denn jedes Mitglied hat sonst role:'parent' ohne echte
+   * Rollen-Unterscheidung. Wird bei createFamily mit dem Gründer befüllt und
+   * beim Annehmen einer Beitrittsanfrage optional um das zweite Mitglied
+   * ergänzt (siehe approveJoinRequest). Firestore-Regel erlaubt Änderungen an
+   * diesem Feld nur bestehenden fuerUnsUids-Mitgliedern.
+   */
+  fuerUnsUids?: string[];
+}
+
+export interface JoinRequest {
+  uid: string;
+  displayName: string;
+  email: string;
+  joinCode: string;
+  requestedAt: string;
+  approved: boolean;
+  approvedBy?: string | null;
+  approvedAt?: string | null;
 }
 
 export interface ChildConfig {
@@ -108,6 +129,14 @@ function familyCodeDoc(code: string) {
   return doc(db, 'familyCodes', code);
 }
 
+function joinRequestsCol(familyId: string) {
+  return collection(db, 'families', familyId, 'joinRequests');
+}
+
+function joinRequestDoc(familyId: string, uid: string) {
+  return doc(db, 'families', familyId, 'joinRequests', uid);
+}
+
 // ── Öffentliche API ──────────────────────────────────────────────────────────
 
 /**
@@ -139,6 +168,7 @@ export async function createFamily(user: User): Promise<string> {
     code,
     createdAt: now,
     createdByUid: user.uid,
+    fuerUnsUids: [user.uid],
   } satisfies FamilyMeta);
 
   // Erstes Mitglied
@@ -158,10 +188,12 @@ export async function createFamily(user: User): Promise<string> {
 }
 
 /**
- * Tritt einer bestehenden Familie mit dem Wort-Paar-Code bei.
- * Gibt die familyId zurück, oder wirft einen Fehler wenn der Code unbekannt ist.
+ * Löst mit dem Wort-Paar-Code eine Beitrittsanfrage aus (TE-59). Legt noch
+ * KEIN Mitglieds-Dokument an – das passiert erst nach Bestätigung durch ein
+ * bestehendes Mitglied, siehe completeJoin(). Gibt die familyId zurück, damit
+ * der Screen auf die eigene Anfrage lauschen kann (subscribeToJoinRequest).
  */
-export async function joinFamilyWithCode(user: User, code: string): Promise<string> {
+export async function requestToJoinFamily(user: User, code: string): Promise<string> {
   const normalised = code.trim().toLowerCase();
   const codeSnap = await getDoc(familyCodeDoc(normalised));
   if (!codeSnap.exists()) {
@@ -169,19 +201,100 @@ export async function joinFamilyWithCode(user: User, code: string): Promise<stri
   }
   const { familyId } = codeSnap.data() as { familyId: string };
 
-  // joinCode wird mitgeschrieben, damit die Firestore-Regel gegenprüfen kann,
-  // dass dieser Code wirklich zu familyId gehört (verhindert Beitritt ohne
-  // gültigen Code direkt per SDK-Write).
+  await setDoc(joinRequestDoc(familyId, user.uid), {
+    uid: user.uid,
+    displayName: user.displayName ?? user.email ?? 'Elternteil',
+    email: user.email ?? '',
+    joinCode: normalised,
+    requestedAt: new Date().toISOString(),
+    approved: false,
+    approvedBy: null,
+    approvedAt: null,
+  } satisfies JoinRequest);
+
+  return familyId;
+}
+
+/** Lauscht auf die eigene Beitrittsanfrage. null = abgelehnt/gelöscht oder nicht vorhanden. */
+export function subscribeToJoinRequest(
+  familyId: string,
+  uid: string,
+  callback: (request: JoinRequest | null) => void
+): Unsubscribe {
+  return onSnapshot(joinRequestDoc(familyId, uid), (snap) => {
+    callback(snap.exists() ? (snap.data() as JoinRequest) : null);
+  });
+}
+
+/** Nimmt eine eigene, noch offene Beitrittsanfrage zurück. */
+export async function cancelJoinRequest(familyId: string, uid: string): Promise<void> {
+  await deleteDoc(joinRequestDoc(familyId, uid));
+}
+
+/**
+ * Legt das eigene Mitglieds-Dokument an, NACHDEM ein bestehendes Mitglied die
+ * Anfrage bestätigt hat (approved:true). Die Firestore-Regel prüft das
+ * eigenständig gegen; ein Aufruf ohne bestätigte Anfrage schlägt fehl.
+ */
+export async function completeJoin(user: User, familyId: string): Promise<void> {
   await setDoc(memberDoc(familyId, user.uid), {
     uid: user.uid,
     role: 'parent',
     displayName: user.displayName ?? user.email ?? 'Elternteil',
     email: user.email ?? '',
     joinedAt: new Date().toISOString(),
-    joinCode: normalised,
   } satisfies FamilyMember);
+}
 
-  return familyId;
+/** Echtzeit-Listener auf offene Beitrittsanfragen (für bestehende Mitglieder). */
+export function subscribeToJoinRequests(
+  familyId: string,
+  onChange: (requests: JoinRequest[]) => void
+): Unsubscribe {
+  return onSnapshot(query(joinRequestsCol(familyId)), (snap) => {
+    const pending = snap.docs
+      .map((d) => d.data() as JoinRequest)
+      .filter((r) => !r.approved);
+    onChange(pending);
+  });
+}
+
+/**
+ * Bestätigt eine Beitrittsanfrage. grantFuerUnsAccess sollte vom UI nur dann
+ * angeboten/vorbelegt werden, wenn die Familie aktuell weniger als zwei
+ * "Für uns"-Berechtigte hat (typischer Fall: der zweite Elternteil tritt
+ * bei) – für jedes weitere Mitglied ist das eine bewusste Zusatzentscheidung.
+ */
+export async function approveJoinRequest(
+  familyId: string,
+  uid: string,
+  approverUid: string,
+  grantFuerUnsAccess: boolean
+): Promise<void> {
+  const batch = writeBatch(db);
+  batch.update(joinRequestDoc(familyId, uid), {
+    approved: true,
+    approvedBy: approverUid,
+    approvedAt: new Date().toISOString(),
+  });
+  if (grantFuerUnsAccess) {
+    const { arrayUnion } = await import('firebase/firestore');
+    batch.update(metaDoc(familyId), { fuerUnsUids: arrayUnion(uid) });
+  }
+  await batch.commit();
+}
+
+/** Lehnt eine Beitrittsanfrage ab (löscht sie ersatzlos). */
+export async function denyJoinRequest(familyId: string, uid: string): Promise<void> {
+  await deleteDoc(joinRequestDoc(familyId, uid));
+}
+
+/** Gibt/entzieht einem bestehenden Mitglied Zugriff auf "Für uns". */
+export async function setFuerUnsAccess(familyId: string, targetUid: string, granted: boolean): Promise<void> {
+  const { updateDoc, arrayUnion, arrayRemove } = await import('firebase/firestore');
+  await updateDoc(metaDoc(familyId), {
+    fuerUnsUids: granted ? arrayUnion(targetUid) : arrayRemove(targetUid),
+  });
 }
 
 /**
@@ -216,7 +329,7 @@ export function subscribeToUserFamily(
 
 /**
  * Speichert die familyId im User-eigenen Dokument (für schnellen Lookup beim Login).
- * Wird nach createFamily() und joinFamilyWithCode() aufgerufen.
+ * Wird nach createFamily() und completeJoin() aufgerufen.
  */
 export async function saveUserFamilyLink(uid: string, familyId: string): Promise<void> {
   await setDoc(doc(db, 'userFamilies', uid), { familyId });

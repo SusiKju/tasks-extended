@@ -38,6 +38,7 @@ import {
   getEmailReminderConfig, setEmailReminderConfig,
 } from '../../src/services/kinderTasks';
 import { useFamily } from '../../src/hooks/useFamily';
+import { markChildDeviceActive } from '../../src/services/childDevice';
 import {
   AllowanceMonth, subscribeToAllowanceMonths, monthKey, setAllowanceReceived,
   formatEuro, formatMonthLabel, nextAllowanceMonth, effectiveAllowance,
@@ -1154,6 +1155,10 @@ export default function KinderScreen() {
                 onPress={async () => {
                   await AsyncStorage.setItem('kinder_child_id', child.id);
                   await AsyncStorage.setItem('kinder_family_id', fid);
+                  // TE-59: Server-Spiegel, damit ein gezieltes Löschen nur des
+                  // lokalen Flags (Web: localStorage) den Kinder-Modus nicht
+                  // umgeht, solange die Auth-Session gültig bleibt.
+                  markChildDeviceActive(fid, child.id).catch(() => {});
                   setSetupModalVisible(false);
                   // Sofort in den Kinder-Modus wechseln (TE-64) – '/' rendert KindScreen.
                   // Auch nach einem späteren Reload greift der Guard im RootLayout.

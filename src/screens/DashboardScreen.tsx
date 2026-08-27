@@ -39,6 +39,8 @@ import { GeistesKacheln } from '../components/GeistesKacheln';
 import { LinkCardBar } from '../components/LinkCardBar';
 import { WeatherWidget } from '../components/WeatherWidget';
 import { GoogleConnectBanner } from '../components/GoogleConnectBanner';
+import { FuerUnsReminderBanner } from '../components/FuerUnsReminderBanner';
+import { useFuerUns } from '../hooks/useFuerUns';
 import { CountdownStrip } from '../components/CountdownStrip';
 import { FeedBlock, FeedItem } from '../components/FeedBlock';
 import { subscribeToFeedOrder, saveFeedOrder, FeedOrder } from '../services/feedOrderService';
@@ -236,6 +238,7 @@ export function DashboardScreen() {
   const { user } = useFirebaseAuth();
   const { syncTasks } = useGoogleTasksSync();
   const { syncBirthdays } = useGoogleContactsBirthdaysSync();
+  const { myName: fuerUnsMyName, sentToday: fuerUnsSentToday } = useFuerUns();
 
   // Sync-Button
   const [syncing, setSyncing] = useState(false);
@@ -916,6 +919,11 @@ export function DashboardScreen() {
         </Animated.View>
       )}
 
+      {/* ── "Für uns"-Reminder (TE-55): gleiche Position/Prominenz wie die
+          Geburtstags-Card, aber bewusst ohne Pulsieren. Individuell pro
+          Person – bleibt sichtbar bis ICH selbst heute etwas geschickt habe. */}
+      {!!fuerUnsMyName && !fuerUnsSentToday && <FuerUnsReminderBanner colors={colors} />}
+
       {/* ── Geistesblitze (privat): direkt unter dem Geburtstag ──
           Bewusst ganz oben im privaten Block, damit ein Geistesblitz schnell
           eingetragen werden kann, ohne erst am gesamten Dashboard vorbei zu
@@ -930,7 +938,7 @@ export function DashboardScreen() {
       {showBlock('countdowns') && (
         <View style={styles.section}>
           <SectionLabel title="Countdowns" icon="hourglass-outline" colors={colors} />
-          <CountdownStrip colors={colors} compact />
+          <CountdownStrip colors={colors} />
         </View>
       )}
 
