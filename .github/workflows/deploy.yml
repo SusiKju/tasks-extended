@@ -27,8 +27,13 @@ jobs:
       - run: npx expo export -p web
         env:
           EXPO_PUBLIC_GOOGLE_CLIENT_ID: ${{ secrets.EXPO_PUBLIC_GOOGLE_CLIENT_ID }}
+          EXPO_PUBLIC_GIT_SHA: ${{ github.sha }}
       - run: cp dist/index.html dist/404.html
       - run: cp -r kinder dist/kinder
+      # Ungecachte Versions-Kennung fürs Auto-Reload (useAutoReloadOnNewVersion.ts):
+      # dieselbe SHA steckt auch im Bundle (EXPO_PUBLIC_GIT_SHA oben), die App
+      # vergleicht beide und lädt sich bei Mismatch selbst neu.
+      - run: echo '{"sha":"${{ github.sha }}"}' > dist/version.json
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

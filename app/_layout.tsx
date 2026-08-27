@@ -19,10 +19,14 @@ import { useMailPinsSync } from '../src/hooks/useMailPinsSync';
 import { useImportantTasksSync } from '../src/hooks/useImportantTasksSync';
 import { handleRedirectResult } from '../src/services/firebaseAuth';
 import { getChildDeviceState } from '../src/services/childDevice';
+import { useAutoReloadOnNewVersion } from '../src/hooks/useAutoReloadOnNewVersion';
 import { AppContextProvider } from '../src/contexts/AppContext';
 
 export default function RootLayout() {
   const { colors, isDark } = useTheme();
+
+  // TE-74: gecachtes GitHub-Pages-Bundle bei neuer Version still selbst neu laden.
+  useAutoReloadOnNewVersion();
 
   // Auf GitHub Pages: Firebase Redirect-Ergebnis beim App-Start auswerten.
   // onAuthStateChanged feuert danach automatisch – hier nur Fehler abfangen.
