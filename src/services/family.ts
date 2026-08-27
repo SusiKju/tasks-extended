@@ -79,14 +79,6 @@ export interface ChildConfig {
   emoji?: string | null;
   /** Monatliches Taschengeld in EUR (TE-52). null/undefined = nicht konfiguriert. */
   allowance?: number | null;
-  /**
-   * E-Mail-Adresse, mit der dieses Kind sich selbst anmelden kann. Wird beim
-   * Beitritt gegen families/{familyId}/childEmails/{email} geprüft, damit die
-   * Firestore-Regel die Rolle ('child' statt 'parent') serverseitig ableiten
-   * kann – der Client kann die Rolle nicht selbst behaupten. Optional, da
-   * viele Kinder keinen eigenen Account haben (Gerät im Kind-Modus reicht).
-   */
-  email?: string | null;
   createdAt: string;
 }
 
@@ -421,8 +413,7 @@ export async function addChild(
   familyId: string,
   name: string,
   color: string,
-  emoji?: string | null,
-  email?: string | null
+  emoji?: string | null
 ): Promise<string> {
   const ref = doc(childrenConfigCol(familyId));
   const child: ChildConfig = {
@@ -430,48 +421,20 @@ export async function addChild(
     name: name.trim(),
     color,
     emoji: emoji ?? null,
-    email: email ? normaliseEmail(email) : null,
     createdAt: new Date().toISOString(),
   };
-  const batch = writeBatch(db);
-  batch.set(ref, child);
-  if (child.email) {
-    batch.set(childEmailDoc(familyId, child.email), { childId: ref.id, name: child.name });
-  }
-  await batch.commit();
+  await setDoc(ref, child);
   return ref.id;
 }
 
-/** Aktualisiert Name, Farbe, Emoji oder E-Mail eines Kindes. */
+/** Aktualisiert Name, Farbe oder Emoji eines Kindes. */
 export async function updateChild(
   familyId: string,
   childId: string,
-  updates: Partial<Pick<ChildConfig, 'name' | 'color' | 'emoji' | 'email'>>
+  updates: Partial<Pick<ChildConfig, 'name' | 'color' | 'emoji'>>
 ): Promise<void> {
   const { updateDoc } = await import('firebase/firestore');
-  const ref = doc(childrenConfigCol(familyId), childId);
-
-  if ('email' in updates) {
-    const current = await getDoc(ref);
-    const oldEmail = (current.data() as ChildConfig | undefined)?.email;
-    const newEmail = updates.email ? normaliseEmail(updates.email) : null;
-
-    const batch = writeBatch(db);
-    if (oldEmail && oldEmail !== newEmail) {
-      batch.delete(childEmailDoc(familyId, oldEmail));
-    }
-    if (newEmail) {
-      batch.set(childEmailDoc(familyId, newEmail), {
-        childId,
-        name: (updates.name ?? (current.data() as ChildConfig | undefined)?.name) ?? '',
-      });
-    }
-    batch.update(ref, { ...updates, email: newEmail });
-    await batch.commit();
-    return;
-  }
-
-  await updateDoc(ref, updates);
+  await updateDoc(doc(childrenConfigCol(familyId), childId), updates);
 }
 
 /** Löscht ein Kind und alle zugehörigen Tasks. */
@@ -481,14 +444,37 @@ export async function deleteChild(familyId: string, childId: string): Promise<vo
   const tasksSnap = await getDocs(
     collection(db, 'families', familyId, 'children', childId, 'tasks')
   );
-  const configSnap = await getDoc(doc(childrenConfigCol(familyId), childId));
-  const email = (configSnap.data() as ChildConfig | undefined)?.email;
-
   const batch = writeBatch(db);
   tasksSnap.docs.forEach((d) => batch.delete(d.ref));
   batch.delete(doc(childrenConfigCol(familyId), childId));
-  if (email) {
-    batch.delete(childEmailDoc(familyId, email));
+  await batch.commit();
+}
+
+/**
+ * Spiegelt die (schon bestehende) Benachrichtigungs-E-Mail eines Kindes
+ * (settings.childEmails[childId], siehe SettingsScreen) zusätzlich nach
+ * families/{familyId}/childEmails/{email} – dieselbe Adresse dient jetzt
+ * auch der Rollen-Erkennung beim Beitritt (siehe completeJoin/firestore.rules
+ * isRegisteredChildEmail). Ein Kind bekommt so mit EINER hinterlegten Adresse
+ * sowohl Aufgaben-Mails als auch automatisch die eingeschränkte Rolle.
+ */
+export async function syncChildLoginEmail(
+  familyId: string,
+  childId: string,
+  childName: string,
+  oldEmail: string | null,
+  newEmail: string | null
+): Promise<void> {
+  const normalisedOld = oldEmail?.trim() ? normaliseEmail(oldEmail) : null;
+  const normalisedNew = newEmail?.trim() ? normaliseEmail(newEmail) : null;
+  if (normalisedOld === normalisedNew) return;
+
+  const batch = writeBatch(db);
+  if (normalisedOld) {
+    batch.delete(childEmailDoc(familyId, normalisedOld));
+  }
+  if (normalisedNew) {
+    batch.set(childEmailDoc(familyId, normalisedNew), { childId, name: childName });
   }
   await batch.commit();
 }

@@ -33,7 +33,7 @@ import {
   subscribeToMembers, leaveFamily,
   addChild, updateChild, deleteChild,
   subscribeToJoinRequests, approveJoinRequest, denyJoinRequest, setFuerUnsAccess,
-  setMemberRole,
+  setMemberRole, syncChildLoginEmail,
 } from '../services/family';
 import {
   setChildAllowance, setAllowanceOverride, subscribeToAllowanceMonths,
@@ -250,9 +250,9 @@ export function SettingsScreen() {
   const openEditChild = useCallback((child: ChildConfig) => {
     setChildModal({
       mode: 'edit', child, name: child.name, color: child.color,
-      emoji: child.emoji ?? '', email: child.email ?? '',
+      emoji: child.emoji ?? '', email: settings.childEmails?.[child.id] ?? '',
     });
-  }, []);
+  }, [settings.childEmails]);
 
   const handleSaveChild = useCallback(async () => {
     if (!childModal || !familyId) return;
@@ -262,10 +262,22 @@ export function SettingsScreen() {
     try {
       const emoji = childModal.emoji.trim() || null;
       const email = childModal.email.trim() || null;
+      let childId: string;
+      let oldEmail: string | null = null;
       if (childModal.mode === 'add') {
-        await addChild(familyId, name, childModal.color, emoji, email);
+        childId = await addChild(familyId, name, childModal.color, emoji);
       } else if (childModal.child) {
-        await updateChild(familyId, childModal.child.id, { name, color: childModal.color, emoji, email });
+        childId = childModal.child.id;
+        oldEmail = settings.childEmails?.[childId] ?? null;
+        await updateChild(familyId, childId, { name, color: childModal.color, emoji });
+      } else {
+        return;
+      }
+      // EINE E-Mail pro Kind für beides: Aufgaben-Benachrichtigung UND
+      // (via childEmails-Spiegelung) automatische Rollen-Erkennung beim Beitritt.
+      if (email !== oldEmail) {
+        updateSettings({ childEmails: { ...settings.childEmails, [childId]: email ?? '' } });
+        await syncChildLoginEmail(familyId, childId, name, oldEmail, email);
       }
       setChildModal(null);
     } catch (e: any) {
@@ -273,7 +285,7 @@ export function SettingsScreen() {
     } finally {
       setSavingChild(false);
     }
-  }, [childModal, familyId]);
+  }, [childModal, familyId, settings.childEmails]);
 
   const handleDeleteChild = useCallback((child: ChildConfig) => {
     crossAlert(
@@ -716,72 +728,6 @@ export function SettingsScreen() {
                     <Ionicons name="trash-outline" size={18} color={colors.danger} />
                   </Pressable>
                 </View>
-                <TextInput
-                  style={[styles.settingInput, { marginLeft: 44, fontSize: 12 }]}
-                  placeholder="E-Mail für Benachrichtigungen"
-                  placeholderTextColor={colors.placeholder}
-                  value={settings.childEmails?.[child.id] ?? ''}
-                  onChangeText={(v) =>
-                    updateSettings({ childEmails: { ...settings.childEmails, [child.id]: v } })
-                  }
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                />
-                {/* Taschengeld pro Monat (TE-52) */}
-                <View style={styles.allowanceRow}>
-                  <Ionicons name="cash-outline" size={16} color={colors.textSecondary} />
-                  <Text style={[styles.rowSubtitle, { flex: 1 }]}>Taschengeld / Monat</Text>
-                  <TextInput
-                    style={[styles.settingInput, styles.allowanceInput]}
-                    placeholder="0"
-                    placeholderTextColor={colors.placeholder}
-                    value={allowanceDrafts[child.id] ?? (child.allowance != null ? String(child.allowance) : '')}
-                    onChangeText={(v) => setAllowanceDrafts((d) => ({ ...d, [child.id]: v }))}
-                    onEndEditing={(e) => handleAllowanceCommit(child, e.nativeEvent.text)}
-                    onBlur={() => handleAllowanceCommit(child, allowanceDrafts[child.id] ?? '')}
-                    keyboardType="decimal-pad"
-                  />
-                  <Text style={styles.rowSubtitle}>€</Text>
-                </View>
-                {/* Monats-Korrektur (TE-154): nur für den laufenden Monat */}
-                {(child.allowance ?? 0) > 0 && (
-                  <>
-                    <View style={styles.allowanceRow}>
-                      <Ionicons name="create-outline" size={16} color={colors.textSecondary} />
-                      <Text style={[styles.rowSubtitle, { flex: 1 }]}>
-                        Diesen Monat ({formatMonthLabel(currentMonth)})
-                      </Text>
-                      <TextInput
-                        style={[styles.settingInput, styles.allowanceInput]}
-                        placeholder={String(child.allowance ?? 0)}
-                        placeholderTextColor={colors.placeholder}
-                        value={
-                          overrideDrafts[child.id] ??
-                          (allowanceMonthsByChild[child.id]?.[currentMonth]?.overrideAmount != null
-                            ? String(allowanceMonthsByChild[child.id][currentMonth].overrideAmount)
-                            : '')
-                        }
-                        onChangeText={(v) => setOverrideDrafts((d) => ({ ...d, [child.id]: v }))}
-                        onEndEditing={() => handleOverrideCommit(child)}
-                        onBlur={() => handleOverrideCommit(child)}
-                        keyboardType="decimal-pad"
-                      />
-                      <Text style={styles.rowSubtitle}>€</Text>
-                    </View>
-                    <TextInput
-                      style={[styles.settingInput, { marginTop: 4 }]}
-                      placeholder="Grund (optional, z.B. geborgt)"
-                      placeholderTextColor={colors.placeholder}
-                      value={
-                        reasonDrafts[child.id] ??
-                        (allowanceMonthsByChild[child.id]?.[currentMonth]?.overrideReason ?? '')
-                      }
-                      onChangeText={(v) => setReasonDrafts((d) => ({ ...d, [child.id]: v }))}
-                      onEndEditing={() => handleOverrideCommit(child)}
-                      onBlur={() => handleOverrideCommit(child)}
-                    />
-                  </>
-                )}
               </View>
             ))}
           </View>
@@ -1013,20 +959,79 @@ export function SettingsScreen() {
               placeholderTextColor={colors.placeholder}
             />
 
-            <Text style={[styles.rowSubtitle, { marginTop: 12, marginBottom: 4 }]}>Eigener Login (optional)</Text>
+            <Text style={[styles.rowSubtitle, { marginTop: 12, marginBottom: 4 }]}>E-Mail (optional)</Text>
             <TextInput
               style={styles.settingInput}
               value={childModal?.email ?? ''}
               onChangeText={(v) => setChildModal((m) => m ? { ...m, email: v } : m)}
-              placeholder="E-Mail, mit der sich das Kind selbst anmeldet"
+              placeholder="z.B. lenny@gmail.com"
               placeholderTextColor={colors.placeholder}
               autoCapitalize="none"
               keyboardType="email-address"
             />
             <Text style={[styles.rowSubtitle, { marginTop: 4, fontSize: 12 }]}>
-              Meldet sich jemand mit dieser E-Mail an, bekommt er/sie automatisch die
+              Dahin gehen die Aufgaben-Benachrichtigungen. Meldet sich jemand mit
+              genau dieser Adresse in der App an, bekommt er/sie automatisch die
               eingeschränkte Kind-Rolle statt vollen Zugriff.
             </Text>
+
+            {childModal?.mode === 'edit' && childModal.child && (
+              <>
+                <View style={[styles.allowanceRow, { marginTop: 12 }]}>
+                  <Ionicons name="cash-outline" size={16} color={colors.textSecondary} />
+                  <Text style={[styles.rowSubtitle, { flex: 1 }]}>Taschengeld / Monat</Text>
+                  <TextInput
+                    style={[styles.settingInput, styles.allowanceInput]}
+                    placeholder="0"
+                    placeholderTextColor={colors.placeholder}
+                    value={allowanceDrafts[childModal.child.id] ?? (childModal.child.allowance != null ? String(childModal.child.allowance) : '')}
+                    onChangeText={(v) => setAllowanceDrafts((d) => ({ ...d, [childModal.child!.id]: v }))}
+                    onEndEditing={(e) => handleAllowanceCommit(childModal.child!, e.nativeEvent.text)}
+                    onBlur={() => handleAllowanceCommit(childModal.child!, allowanceDrafts[childModal.child!.id] ?? '')}
+                    keyboardType="decimal-pad"
+                  />
+                  <Text style={styles.rowSubtitle}>€</Text>
+                </View>
+                {(childModal.child.allowance ?? 0) > 0 && (
+                  <>
+                    <View style={styles.allowanceRow}>
+                      <Ionicons name="create-outline" size={16} color={colors.textSecondary} />
+                      <Text style={[styles.rowSubtitle, { flex: 1 }]}>
+                        Diesen Monat ({formatMonthLabel(currentMonth)})
+                      </Text>
+                      <TextInput
+                        style={[styles.settingInput, styles.allowanceInput]}
+                        placeholder={String(childModal.child.allowance ?? 0)}
+                        placeholderTextColor={colors.placeholder}
+                        value={
+                          overrideDrafts[childModal.child.id] ??
+                          (allowanceMonthsByChild[childModal.child.id]?.[currentMonth]?.overrideAmount != null
+                            ? String(allowanceMonthsByChild[childModal.child.id][currentMonth].overrideAmount)
+                            : '')
+                        }
+                        onChangeText={(v) => setOverrideDrafts((d) => ({ ...d, [childModal.child!.id]: v }))}
+                        onEndEditing={() => handleOverrideCommit(childModal.child!)}
+                        onBlur={() => handleOverrideCommit(childModal.child!)}
+                        keyboardType="decimal-pad"
+                      />
+                      <Text style={styles.rowSubtitle}>€</Text>
+                    </View>
+                    <TextInput
+                      style={[styles.settingInput, { marginTop: 4 }]}
+                      placeholder="Grund (optional, z.B. geborgt)"
+                      placeholderTextColor={colors.placeholder}
+                      value={
+                        reasonDrafts[childModal.child.id] ??
+                        (allowanceMonthsByChild[childModal.child.id]?.[currentMonth]?.overrideReason ?? '')
+                      }
+                      onChangeText={(v) => setReasonDrafts((d) => ({ ...d, [childModal.child!.id]: v }))}
+                      onEndEditing={() => handleOverrideCommit(childModal.child!)}
+                      onBlur={() => handleOverrideCommit(childModal.child!)}
+                    />
+                  </>
+                )}
+              </>
+            )}
 
             <Text style={[styles.rowSubtitle, { marginTop: 12, marginBottom: 6 }]}>Farbe</Text>
             <View style={styles.colorGrid}>
