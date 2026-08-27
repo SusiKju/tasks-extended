@@ -894,7 +894,11 @@ export function DashboardScreen() {
           style={[
             styles.birthdayCard,
             {
-              borderWidth: birthdayPulse.interpolate({ inputRange: [0, 1], outputRange: [2, 3.5] }),
+              // Fixe Border-Breite (Max-Wert) statt animiert: eine animierte
+              // borderWidth ändert die Layout-Box und lässt den Content
+              // darunter in Y-Richtung mitwackeln (User-Report). Nur Farbe
+              // und Shadow pulsieren, die beeinflussen das Layout nicht.
+              borderWidth: 3.5,
               borderColor: birthdayPulse.interpolate({ inputRange: [0, 1], outputRange: ['#8A6D00', '#FFD400'] }),
               shadowColor: '#FFD400',
               shadowOpacity: birthdayPulse.interpolate({ inputRange: [0, 1], outputRange: [0.35, 0.75] }),
