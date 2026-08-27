@@ -122,17 +122,21 @@ service cloud.firestore {
         allow read, write: if isFamilyMember(familyId);
       }
 
-      // Geteilte Notizliste
-      match /shared/{document=**} {
+      // Geteilte Notizliste (TE-59: von {document=**} auf den tatsächlich
+      // genutzten Pfad eingeschränkt – siehe Begründung bei "Für uns" unten.
+      // sharedNotes.ts schreibt ausschließlich unter shared/notepad/items/*.)
+      match /shared/notepad/items/{itemId} {
         allow read, write: if isFamilyMember(familyId);
       }
 
-      // "Für uns" (TE-59): eigene, engere Regel statt der pauschalen
-      // shared/{document=**}-Regel oben. Firestore wertet bei überlappenden
-      // match-Blöcken den spezifischeren Pfad aus – diese Regel gilt also für
-      // fuerUns/items statt der allgemeinen shared-Regel. isFamilyMember
-      // zusätzlich zur Allowlist geprüft, damit ein ausgetretenes Mitglied
-      // nicht allein über eine veraltete fuerUnsUids-Liste Zugriff behält.
+      // "Für uns" (TE-59): eigene, engere Allowlist statt Familienmitgliedschaft.
+      // WICHTIG: Firestore kombiniert überlappende match-Blöcke mit ODER, nicht
+      // "spezifischster Pfad gewinnt" – ein zusätzlicher shared/{document=**}
+      // daneben hätte diese Regel wirkungslos gemacht (isFamilyMember allein
+      // hätte weiter gereicht, per Live-Test gegen die echten Prod-Rules
+      // bestätigt: Lenny konnte trotz dieser Regel lesen). Deshalb ist die
+      // shared-Notizen-Regel oben auf ihren echten Pfad eingeschränkt, damit
+      // hier NUR diese engere Regel greift.
       match /shared/fuerUns/items/{itemId} {
         allow read, write: if isFamilyMember(familyId)
             && request.auth.uid in get(/databases/$(database)/documents/families/$(familyId)).data.fuerUnsUids;
