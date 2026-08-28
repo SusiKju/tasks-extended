@@ -4,7 +4,9 @@
  * Dashboard-Reminder: "Hast du deinem Partner heute schon etwas geschickt?"
  * Bewusst ruhig gehalten (kein Pulsieren wie die Geburtstags-Card) – gleiche
  * Position/Prominenz, aber gleiches unaufgeregte Muster wie GoogleConnectBanner.
- * Bleibt sichtbar bis die Person SELBST heute etwas geschickt hat (useFuerUns).
+ * Bleibt sichtbar bis die Person SELBST genug geschickt hat (useFuerUns,
+ * owedToday) – wer einen Tag ausgelassen hat, sieht hier eine höhere Zahl statt
+ * schlicht wieder bei 1 anzufangen, bis die Schuld abgetragen ist.
  */
 
 import React from 'react';
@@ -13,17 +15,18 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { ThemeColors } from '../utils/theme';
 
-export function FuerUnsReminderBanner({ colors }: { colors: ThemeColors }) {
+export function FuerUnsReminderBanner({ colors, owed }: { colors: ThemeColors; owed: number }) {
   const router = useRouter();
+  const subtitle = owed > 1
+    ? `Du hast einen Tag ausgelassen – heute stehen noch ${owed} Nachrichten aus.`
+    : 'Hast du deinem Partner heute schon etwas mitgeteilt?';
 
   return (
     <View style={[styles.banner, { backgroundColor: '#E8607A' + '18', borderColor: '#E8607A' + '55' }]}>
       <Ionicons name="heart-outline" size={20} color="#E8607A" style={{ flexShrink: 0 }} />
       <View style={{ flex: 1 }}>
         <Text style={[styles.title, { color: colors.text }]}>Für uns</Text>
-        <Text style={[styles.subtitle, { color: colors.textMuted }]}>
-          Hast du deinem Partner heute schon etwas mitgeteilt?
-        </Text>
+        <Text style={[styles.subtitle, { color: colors.textMuted }]}>{subtitle}</Text>
       </View>
       <Pressable
         onPress={() => router.push('/(tabs)/fuer-uns' as any)}

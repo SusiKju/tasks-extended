@@ -239,7 +239,7 @@ export function DashboardScreen() {
   const { user } = useFirebaseAuth();
   const { syncTasks } = useGoogleTasksSync();
   const { syncBirthdays } = useGoogleContactsBirthdaysSync();
-  const { myName: fuerUnsMyName, sentToday: fuerUnsSentToday } = useFuerUns();
+  const { myName: fuerUnsMyName, owedToday: fuerUnsOwedToday } = useFuerUns();
 
   // Sync-Button
   const [syncing, setSyncing] = useState(false);
@@ -926,8 +926,9 @@ export function DashboardScreen() {
 
       {/* ── "Für uns"-Reminder (TE-55): gleiche Position/Prominenz wie die
           Geburtstags-Card, aber bewusst ohne Pulsieren. Individuell pro
-          Person – bleibt sichtbar bis ICH selbst heute etwas geschickt habe. */}
-      {!!fuerUnsMyName && !fuerUnsSentToday && <FuerUnsReminderBanner colors={colors} />}
+          Person – bleibt sichtbar bis ICH heute (inkl. Nachholschuld aus
+          ausgelassenen Tagen) genug selbst geschickt habe. */}
+      {!!fuerUnsMyName && fuerUnsOwedToday > 0 && <FuerUnsReminderBanner colors={colors} owed={fuerUnsOwedToday} />}
 
       {/* ── Geistesblitze (privat): direkt unter dem Geburtstag ──
           Bewusst ganz oben im privaten Block, damit ein Geistesblitz schnell

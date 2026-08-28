@@ -7,13 +7,13 @@
  * Eine gemeinsame chronologische Liste (neueste zuerst), Emoji-Reaction und
  * Soft-Delete/Bearbeiten wie bei der geteilten Liste (sharedNotes.ts).
  *
- * Ungelesene Nachrichten vom Partner werden beim Öffnen als Momentaufnahme
- * fett markiert und gleichzeitig in Firestore als gelesen vermerkt – der
- * Tab-Badge verschwindet dadurch sofort, die Fett-Markierung bleibt für
- * diesen Screen-Besuch bestehen (kein Nachzucken während des Lesens).
+ * Ungelesene Nachrichten vom Partner sind umrandet/fett hervorgehoben (readAt
+ * fehlt). Erst ein Tap auf die Zeile markiert sie in Firestore als gelesen –
+ * kein automatisches Markieren beim bloßen Öffnen des Tabs, damit der Tab-
+ * Badge wirklich signalisiert "das hast du noch nicht bewusst gesehen".
  */
 
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet, ActivityIndicator, ScrollView, Modal, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { format, parseISO } from 'date-fns';
@@ -26,7 +26,7 @@ import {
   deleteFuerUnsMessage,
   restoreFuerUnsMessage,
   permanentlyDeleteFuerUnsMessage,
-  markFuerUnsRead,
+  setFuerUnsReadState,
   FUER_UNS_REACTIONS,
   FUER_UNS_REACTIONS_EXTRA,
   FUER_UNS_COMBOS,
@@ -43,18 +43,12 @@ const PLACEHOLDER =
 
 export function FuerUnsScreen() {
   const { colors, isDark } = useTheme();
-  const { familyId, myUid, myName, items, deletedItems, loadError, loaded, unreadIds } = useFuerUns();
+  const { familyId, myUid, myName, items, deletedItems, loadError } = useFuerUns();
 
-  // Momentaufnahme: welche Nachrichten waren beim Betreten des Screens ungelesen.
-  // Läuft erst nach dem ersten echten Laden (nicht schon beim leeren Initial-
-  // State), damit die Fett-Markierung für diesen Besuch stabil bleibt –
-  // markFuerUnsRead im Hintergrund lässt die Zeile nicht sofort "entfetten".
-  const unreadSnapshot = useRef<Set<string> | null>(null);
-  useEffect(() => {
-    if (!loaded || !familyId || unreadSnapshot.current !== null) return;
-    unreadSnapshot.current = new Set(unreadIds);
-    if (unreadIds.length > 0) markFuerUnsRead(familyId, unreadIds).catch(() => {});
-  }, [loaded, familyId, unreadIds]);
+  const handleToggleRead = useCallback((item: FuerUnsItem) => {
+    if (!familyId || item.addedByUid === myUid) return;
+    setFuerUnsReadState(familyId, item.id, !item.readAt).catch(() => {});
+  }, [familyId, myUid]);
 
   const [historyOpen, setHistoryOpen] = useState(false);
   const [draft, setDraft] = useState('');
@@ -217,10 +211,13 @@ export function FuerUnsScreen() {
                 {items.map((item) => {
                   const pickerOpen = reactionPickerFor === item.id;
                   const reactedByMe = !!item.reaction && item.reaction.byUid === myUid;
-                  const isUnread = unreadSnapshot.current?.has(item.id) ?? false;
+                  const isUnread = !item.readAt && item.addedByUid !== myUid;
                   return (
                     <View key={item.id}>
-                      <View style={[s.row, { borderColor: isUnread ? accent + '55' : colors.border, backgroundColor: isUnread ? accent + '10' : 'transparent' }]}>
+                      <Pressable
+                        onPress={() => handleToggleRead(item)}
+                        style={[s.row, { borderColor: isUnread ? accent + '55' : colors.border, backgroundColor: isUnread ? accent + '10' : 'transparent' }]}
+                      >
                         <View style={{ flex: 1 }}>
                           {editingId === item.id ? (
                             <TextInput
@@ -283,7 +280,7 @@ export function FuerUnsScreen() {
                             <Ionicons name="close" size={16} color={colors.danger} />
                           </Pressable>
                         )}
-                      </View>
+                      </Pressable>
 
                       {pickerOpen && (
                         <View style={[s.reactionPicker, { borderColor: colors.border, backgroundColor: colors.inputBackground }]}>
