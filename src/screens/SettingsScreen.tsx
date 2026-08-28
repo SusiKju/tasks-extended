@@ -275,7 +275,11 @@ export function SettingsScreen() {
       }
       // EINE E-Mail pro Kind für beides: Aufgaben-Benachrichtigung UND
       // (via childEmails-Spiegelung) automatische Rollen-Erkennung beim Beitritt.
-      if (email !== oldEmail) {
+      // WICHTIG: immer synchronisieren, auch wenn sich der Wert nicht ändert –
+      // schon vor dieser Funktion gesetzte Benachrichtigungs-E-Mails (Alt-
+      // Feature) hatten nie einen passenden childEmails-Spiegel-Eintrag, ein
+      // reiner "hat sich geändert"-Check hätte sie nie nachträglich angelegt.
+      if (email || oldEmail) {
         updateSettings({ childEmails: { ...settings.childEmails, [childId]: email ?? '' } });
         await syncChildLoginEmail(familyId, childId, name, oldEmail, email);
       }

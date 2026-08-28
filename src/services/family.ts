@@ -467,7 +467,6 @@ export async function syncChildLoginEmail(
 ): Promise<void> {
   const normalisedOld = oldEmail?.trim() ? normaliseEmail(oldEmail) : null;
   const normalisedNew = newEmail?.trim() ? normaliseEmail(newEmail) : null;
-  if (normalisedOld === normalisedNew) return;
 
   const batch = writeBatch(db);
   if (normalisedOld) {
