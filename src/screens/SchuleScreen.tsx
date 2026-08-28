@@ -219,14 +219,16 @@ export default function SchuleScreen() {
   // pro Stunde überschreiben (periodTimesByChild), sonst gilt der Default.
   const periods = isLinked ? PERIODS : applyPeriodTimes(PERIODS, periodTimesByChild[selectedChild] ?? {});
 
-  // Bei synchronisierten Kindern (read-only) leere Zeilen am Tagesende weglassen
-  // – nichts zum Antippen/Eintragen, also keine Zeile wert. Bei manuell
-  // gepflegten Kindern bleiben alle Stunden sichtbar (Tippen legt eine an).
+  // Leere Zeilen am Tagesende weglassen – nichts zum Antippen/Eintragen dort,
+  // also keine Zeile wert. Solange der Tag noch komplett leer ist, bleiben bei
+  // manuell gepflegten Kindern alle Stunden sichtbar (Tippen legt eine an).
   const lastFilledIdx = periods.reduce((last, p, idx) => {
     if (p.pause) return last;
     return timetable[key(selectedDay, p.nr)] ? idx : last;
   }, -1);
-  const visiblePeriods = isLinked ? periods.slice(0, lastFilledIdx + 1) : periods;
+  const visiblePeriods = lastFilledIdx === -1 && !isLinked
+    ? periods
+    : periods.slice(0, lastFilledIdx + 1);
 
   // Live-Sync mit beste.schule: bei jedem Öffnen des Tabs (Focus) neu holen,
   // kein manuelles Aktualisieren nötig. Nur für Kinder mit hinterlegter
