@@ -21,7 +21,7 @@ import {
   PERIODS, DAY_NAMES, DAY_SHORT, subjectColor,
   TimetableEntry, TimetableMap, PeriodTimesMap,
   key, todayDayIndex, subscribeToTimetable, setTimetableEntry, replaceTimetable,
-  applyPeriodTimes, subscribeToPeriodTimes, setPeriodTime,
+  applyPeriodTimes, subscribeToPeriodTimes, setPeriodTime, isBiweeklyActiveWeek,
 } from '../services/timetable';
 import { GradesMap, subscribeToGrades, replaceGrades } from '../services/grades';
 import { JournalData, subscribeToJournal, replaceJournal } from '../services/journal';
@@ -95,6 +95,7 @@ export default function SchuleScreen() {
   const [fFach, setFFach] = useState('');
   const [fRaum, setFRaum] = useState('');
   const [fLehrer, setFLehrer] = useState('');
+  const [fBiweekly, setFBiweekly] = useState(false);
   const [editingTime, setEditingTime] = useState<{ nr: number | string; start: string; end: string } | null>(null);
 
   useEffect(() => {
@@ -229,6 +230,7 @@ export default function SchuleScreen() {
   const visiblePeriods = lastFilledIdx === -1 && !isLinked
     ? periods
     : periods.slice(0, lastFilledIdx + 1);
+  const biweeklyActiveThisWeek = isBiweeklyActiveWeek();
 
   // Live-Sync mit beste.schule: bei jedem Öffnen des Tabs (Focus) neu holen,
   // kein manuelles Aktualisieren nötig. Nur für Kinder mit hinterlegter
@@ -263,6 +265,7 @@ export default function SchuleScreen() {
     setFFach(entry?.fach ?? '');
     setFRaum(entry?.raum ?? '');
     setFLehrer(entry?.lehrer ?? '');
+    setFBiweekly(entry?.biweekly ?? false);
     setEditing({ nr, slotKey });
   }, [timetable, isLinked]);
 
@@ -272,11 +275,11 @@ export default function SchuleScreen() {
     if (!editing || !fid || !selectedChild) return;
     const fach = fFach.trim();
     const entry: TimetableEntry | null = fach
-      ? { fach, raum: fRaum.trim(), lehrer: fLehrer.trim() }
+      ? { fach, raum: fRaum.trim(), lehrer: fLehrer.trim(), ...(fBiweekly ? { biweekly: true } : {}) }
       : null;
     await setTimetableEntry(fid, selectedChild, editing.slotKey, entry);
     setEditing(null);
-  }, [editing, fid, selectedChild, fFach, fRaum, fLehrer]);
+  }, [editing, fid, selectedChild, fFach, fRaum, fLehrer, fBiweekly]);
 
   const handleClear = useCallback(async () => {
     if (!editing || !fid || !selectedChild) return;
@@ -526,10 +529,11 @@ export default function SchuleScreen() {
           }
           const slotKey = key(selectedDay, p.nr);
           const entry = timetable[slotKey];
+          const skipsThisWeek = !!entry?.biweekly && !biweeklyActiveThisWeek;
           return (
             <TouchableOpacity
               key={String(p.nr)}
-              style={[s.lessonCard, entry?.pause && s.lessonCardPause]}
+              style={[s.lessonCard, entry?.pause && s.lessonCardPause, skipsThisWeek && s.lessonCardSkipped]}
               onPress={() => openEditor(p.nr, slotKey)}
               activeOpacity={isLinked ? 1 : 0.7}
               disabled={isLinked}
@@ -550,9 +554,11 @@ export default function SchuleScreen() {
                     <View style={[s.lessonDot, { backgroundColor: entry.pause ? colors.warning : subjectColor(entry.fach) }]} />
                     <Text style={[s.lessonFach, entry.pause && s.lessonFachPause]}>{entry.fach}</Text>
                   </View>
-                  {!!(entry.raum || entry.lehrer) && (
+                  {(skipsThisWeek || entry.raum || entry.lehrer || entry.biweekly) && (
                     <Text style={s.lessonMeta}>
-                      {[entry.raum, entry.lehrer].filter(Boolean).join(' · ')}
+                      {skipsThisWeek
+                        ? 'entfällt diese Woche · 14-tägig'
+                        : [entry.raum, entry.lehrer, entry.biweekly && '14-tägig'].filter(Boolean).join(' · ')}
                     </Text>
                   )}
                 </View>
@@ -796,6 +802,10 @@ export default function SchuleScreen() {
               returnKeyType="done"
               onSubmitEditing={handleSave}
             />
+            <TouchableOpacity style={s.checkboxRow} onPress={() => setFBiweekly((v) => !v)}>
+              <Ionicons name={fBiweekly ? 'checkbox' : 'square-outline'} size={18} color={fBiweekly ? colors.accentNeon : colors.textMuted} />
+              <Text style={s.checkboxRowText}>Nur alle 2 Wochen (14-tägig)</Text>
+            </TouchableOpacity>
             <View style={s.modalActions}>
               <TouchableOpacity onPress={handleClear}>
                 <Text style={s.clearText}>Leeren</Text>
@@ -1164,6 +1174,7 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
     lessonMeta: { fontSize: 11.5, color: colors.textMuted },
     lessonEmpty: { fontSize: 13, color: colors.textMuted, fontStyle: 'italic' },
     lessonCardPause: { borderColor: colors.warning },
+    lessonCardSkipped: { opacity: 0.45 },
     lessonFachPause: { color: colors.warning, fontStyle: 'italic' },
     pauseRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 4, paddingVertical: 0 },
     pauseText: { fontSize: 11, color: colors.textMuted, fontStyle: 'italic' },

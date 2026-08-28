@@ -18,6 +18,8 @@ export interface TimetableEntry {
   lehrer: string;
   /** Mittags-/Essenspause statt Unterricht (siehe besteSchule.ts, Code "07/1"). */
   pause?: boolean;
+  /** Findet nur alle 2 Wochen statt (z. B. Werken), siehe BIWEEKLY_ANCHOR_MONDAY. */
+  biweekly?: boolean;
 }
 
 /** Key = "Tag-Stunde", Tag 1=Montag..5=Freitag, Stunde = Period.nr. */
@@ -132,6 +134,35 @@ export async function setPeriodTime(
   );
 }
 
+/** Montag der ISO-Kalenderwoche `week`/`year` (UTC, zeitzonenfrei vergleichbar). */
+function mondayOfIsoWeek(year: number, week: number): Date {
+  const jan4 = new Date(Date.UTC(year, 0, 4));
+  const jan4Day = jan4.getUTCDay() || 7; // Montag=1 .. Sonntag=7
+  const week1Monday = new Date(jan4);
+  week1Monday.setUTCDate(jan4.getUTCDate() - jan4Day + 1);
+  const monday = new Date(week1Monday);
+  monday.setUTCDate(week1Monday.getUTCDate() + (week - 1) * 7);
+  return monday;
+}
+
+function mondayOfWeek(date: Date): Date {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const day = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() - day + 1);
+  return d;
+}
+
+/** Referenz-Montag: KW 34/2026 ist die "aktive" Woche für `biweekly`-Stunden. */
+const BIWEEKLY_ANCHOR_MONDAY = mondayOfIsoWeek(2026, 34);
+
+/** true, wenn eine 14-tägige Stunde in der Woche von `date` stattfindet. */
+export function isBiweeklyActiveWeek(date: Date = new Date()): boolean {
+  const diffWeeks = Math.round(
+    (mondayOfWeek(date).getTime() - BIWEEKLY_ANCHOR_MONDAY.getTime()) / (7 * 86400000),
+  );
+  return diffWeeks % 2 === 0;
+}
+
 /** Heutiger Wochentag als Index 0-4 (Mo-Fr), -1 am Wochenende. */
 export function todayDayIndex(): number {
   const day = new Date().getDay(); // 0=So .. 6=Sa
@@ -150,6 +181,7 @@ function sanitizeEntry(raw: any): TimetableEntry | null {
     raum: String(raw?.raum ?? ''),
     lehrer: String(raw?.lehrer ?? ''),
     ...(raw?.pause === true ? { pause: true } : {}),
+    ...(raw?.biweekly === true ? { biweekly: true } : {}),
   };
 }
 
