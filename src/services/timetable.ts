@@ -83,6 +83,13 @@ export function key(dayIdx: number, nr: number | string): string {
  * deren Zeiten/Pausen weichen von der Schule des Sync-Kindes ab. */
 export type PeriodTimesMap = Record<string, { start: string; end: string }>;
 
+/** Dauer zwischen zwei "HH:MM"-Zeiten in Minuten. */
+export function minutesBetween(start: string, end: string): number {
+  const [sh, sm] = start.split(':').map(Number);
+  const [eh, em] = end.split(':').map(Number);
+  return (eh * 60 + em) - (sh * 60 + sm);
+}
+
 function sanitizeTime(v: any): string {
   const s = String(v ?? '').trim();
   return /^([01]\d|2[0-3]):[0-5]\d$/.test(s) ? s : '';

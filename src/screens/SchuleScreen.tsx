@@ -21,7 +21,7 @@ import {
   PERIODS, DAY_NAMES, DAY_SHORT, subjectColor,
   TimetableEntry, TimetableMap, PeriodTimesMap,
   key, todayDayIndex, subscribeToTimetable, setTimetableEntry, replaceTimetable,
-  applyPeriodTimes, subscribeToPeriodTimes, setPeriodTime, isBiweeklyActiveWeek,
+  applyPeriodTimes, subscribeToPeriodTimes, setPeriodTime, isBiweeklyActiveWeek, minutesBetween,
 } from '../services/timetable';
 import { GradesMap, subscribeToGrades, replaceGrades } from '../services/grades';
 import { JournalData, subscribeToJournal, replaceJournal } from '../services/journal';
@@ -522,7 +522,7 @@ export default function SchuleScreen() {
                 activeOpacity={isLinked ? 1 : 0.6}
                 disabled={isLinked}
               >
-                <Text style={s.pauseText}>{p.label} · {p.start}–{p.end}</Text>
+                <Text style={s.pauseText}>{p.label} · {p.start}–{p.end} · {minutesBetween(p.start, p.end)} min</Text>
                 {!isLinked && <Ionicons name="pencil-outline" size={11} color={colors.textMuted} />}
               </TouchableOpacity>
             );
