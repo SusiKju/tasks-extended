@@ -42,6 +42,7 @@ import { GoogleConnectBanner } from '../components/GoogleConnectBanner';
 import { FuerUnsReminderBanner } from '../components/FuerUnsReminderBanner';
 import { useFuerUns } from '../hooks/useFuerUns';
 import { CountdownStrip } from '../components/CountdownStrip';
+import { WeckmodusCard } from '../components/WeckmodusCard';
 import { FeedBlock, FeedItem } from '../components/FeedBlock';
 import { subscribeToFeedOrder, saveFeedOrder, FeedOrder } from '../services/feedOrderService';
 import { subscribeToFeedHighlight, saveFeedHighlight } from '../services/feedHighlightService';
@@ -883,6 +884,10 @@ export function DashboardScreen() {
           </Pressable>
         </View>
       </View>
+
+      {/* ── Weckmodus (TE-82): nur morgens 5-8 Uhr an Schultagen relevant, ── */}
+      {/* die Karte selbst entscheidet, ob sie überhaupt etwas rendert. ── */}
+      {showBlock('weckmodus') && <WeckmodusCard colors={colors} />}
 
       {/* ── Google-Connect-Banner (nur wenn noch nicht verbunden) ── */}
       {!settings.googleCalendarEnabled && <GoogleConnectBanner colors={colors} />}
