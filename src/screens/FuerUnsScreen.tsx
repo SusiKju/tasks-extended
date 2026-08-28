@@ -16,6 +16,7 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet, ActivityIndicator, ScrollView, Modal, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { format, parseISO } from 'date-fns';
 import { useStore } from '../store';
 import { useTheme } from '../utils/theme';
 import {
@@ -32,6 +33,10 @@ import {
   FUER_UNS_COMBOS,
 } from '../services/fuerUns';
 import { useFuerUns } from '../hooks/useFuerUns';
+
+function formatDateTime(iso: string): string {
+  return format(parseISO(iso), 'dd.MM.yyyy, HH:mm');
+}
 
 const PLACEHOLDER =
   'Was möchtest du deinem Partner heute sagen? Etwas Liebes, etwas Erotisches, ' +
@@ -273,7 +278,9 @@ export function FuerUnsScreen() {
                           )}
                           <View style={s.itemMetaRow}>
                             {isUnread && <View style={[s.unreadDot, { backgroundColor: accent }]} />}
-                            <Text style={[s.itemMeta, { color: colors.textMuted }]}>von {item.addedBy}</Text>
+                            <Text style={[s.itemMeta, { color: colors.textMuted }]}>
+                              von {item.addedBy} · {formatDateTime(item.createdAt)}
+                            </Text>
                             {item.reaction && (
                               <View style={[s.reactionBadge, { borderColor: reactedByMe ? accent : colors.border }]}>
                                 <Text style={s.reactionBadgeEmoji}>{item.reaction.emoji}</Text>
@@ -356,9 +363,14 @@ export function FuerUnsScreen() {
                   const trashLabel = [item.text, comboLabel].filter(Boolean).join(' · ');
                   return (
                   <View key={item.id} style={[s.trashRow, { borderBottomColor: colors.border }]}>
-                    <Text style={[s.trashItemText, { color: colors.textMuted }]} numberOfLines={1}>
-                      {trashLabel}
-                    </Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[s.trashItemText, { color: colors.textMuted }]} numberOfLines={1}>
+                        {trashLabel}
+                      </Text>
+                      <Text style={[s.itemMeta, { color: colors.textMuted }]}>
+                        {formatDateTime(item.deletedAt ?? item.createdAt)}
+                      </Text>
+                    </View>
                     <Pressable onPress={() => handleRestore(item)} hitSlop={8} disabled={busyId === item.id} style={[s.restoreBtn, { borderColor: accent }]}>
                       <Ionicons name="arrow-undo-outline" size={14} color={accent} />
                     </Pressable>
@@ -432,6 +444,6 @@ const s = StyleSheet.create({
   historyToggleText: { fontSize: 12, fontWeight: '600' },
   trashSection: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 6, gap: 2 },
   trashRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6, borderBottomWidth: StyleSheet.hairlineWidth },
-  trashItemText: { flex: 1, fontSize: 13, textDecorationLine: 'line-through' },
+  trashItemText: { fontSize: 13, textDecorationLine: 'line-through' },
   restoreBtn: { width: 28, height: 28, borderRadius: 14, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
 });
