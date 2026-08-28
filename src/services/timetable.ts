@@ -35,17 +35,20 @@ export interface Period {
 
 export const PERIODS: Period[] = [
   { nr: 1, start: '08:00', end: '08:45' },
-  { nr: 2, start: '08:45', end: '09:30' },
-  { nr: 'P1', start: '09:30', end: '09:50', pause: true, label: 'Pause' },
-  { nr: 3, start: '09:50', end: '10:35' },
-  { nr: 4, start: '10:35', end: '11:20' },
-  { nr: 'P2', start: '11:20', end: '11:30', pause: true, label: 'Pause' },
-  { nr: 5, start: '11:30', end: '12:15' },
-  { nr: 6, start: '12:15', end: '13:00' },
-  { nr: 7, start: '13:00', end: '13:45' },
-  { nr: 8, start: '13:45', end: '14:30' },
-  { nr: 9, start: '14:30', end: '15:15' },
-  { nr: 10, start: '15:15', end: '16:00' },
+  { nr: 'P1', start: '08:45', end: '08:55', pause: true, label: 'Pause' },
+  { nr: 2, start: '08:55', end: '09:40' },
+  { nr: 'P2', start: '09:40', end: '10:00', pause: true, label: 'Pause' },
+  { nr: 3, start: '10:00', end: '10:45' },
+  { nr: 'P3', start: '10:45', end: '10:55', pause: true, label: 'Pause' },
+  { nr: 4, start: '10:55', end: '11:40' },
+  { nr: 'P4', start: '11:40', end: '12:00', pause: true, label: 'Pause' },
+  { nr: 5, start: '12:00', end: '12:45' },
+  { nr: 'P5', start: '12:45', end: '13:00', pause: true, label: 'Pause' },
+  { nr: 6, start: '13:00', end: '13:45' },
+  { nr: 7, start: '13:45', end: '14:30' },
+  { nr: 8, start: '14:30', end: '15:15' },
+  { nr: 9, start: '15:15', end: '16:00' },
+  { nr: 10, start: '16:00', end: '16:45' },
 ];
 
 export const DAY_NAMES = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag'];
