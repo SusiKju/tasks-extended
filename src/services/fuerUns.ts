@@ -28,13 +28,15 @@ import { localDateStr } from '../utils/dateFormat';
 export interface FuerUnsItem {
   id: string;
   text: string;
-  /** Anzeigename der Person, die die Nachricht geschickt hat (frei wählbar, wie SharedNoteItem.addedBy). */
+  /** Anzeigename der Person, die die Nachricht geschickt hat (frei wählbar, wie SharedNoteItem.addedBy) – nur für die Anzeige. */
   addedBy: string;
+  /** Firebase-uid der Absenderin/des Absenders. Fehlt bei Nachrichten von vor TE-XX (Namenskollisionen möglich, siehe addedBy). */
+  addedByUid?: string;
   createdAt: string;
   /** Optionale Icon-Kombo (aus FUER_UNS_COMBOS), beim Verfassen ausgewählt (TE-61/TE-62). */
   emoji?: string | null;
   /** Liebevolle Reaktion des Partners auf diese Nachricht. */
-  reaction?: { emoji: string; by: string } | null;
+  reaction?: { emoji: string; by: string; byUid?: string } | null;
   /** Gesetzt, sobald der Partner die Nachricht geöffnet/gesehen hat. */
   readAt?: string | null;
   /** Soft-Delete: gesetzt wenn gelöscht, damit wiederherstellbar bleibt. */
@@ -103,12 +105,14 @@ export async function addFuerUnsMessage(
   familyId: string,
   text: string,
   addedBy: string,
+  addedByUid: string,
   emoji?: string | null
 ): Promise<string> {
   const ref = doc(itemsCollection(familyId));
   const item: Omit<FuerUnsItem, 'id'> = {
     text: text.trim(),
     addedBy: addedBy.trim() || 'Jemand',
+    addedByUid,
     createdAt: new Date().toISOString(),
     emoji: emoji ?? null,
     reaction: null,
@@ -153,13 +157,19 @@ export async function markFuerUnsRead(familyId: string, itemIds: string[]): Prom
   await Promise.all(itemIds.map((id) => updateDoc(itemDoc(familyId, id), { readAt: now })));
 }
 
-/** Nachrichten vom Partner (nicht von mir selbst), die ich noch nicht gelesen habe. */
-export function unreadFromPartner(items: FuerUnsItem[], myName: string): FuerUnsItem[] {
-  return items.filter((i) => i.addedBy !== myName && !i.readAt);
+/**
+ * Nachrichten vom Partner (nicht von mir selbst), die ich noch nicht gelesen habe.
+ * Identität läuft über addedByUid (Firebase-uid), nicht über den frei wählbaren
+ * Anzeigenamen – zwei Personen mit demselben Namen dürfen sich sonst gegenseitig
+ * als "das war ich selbst" erscheinen (führte dazu, dass Partner-Nachrichten
+ * weder als ungelesen zählten noch den Tab-Badge auslösten).
+ */
+export function unreadFromPartner(items: FuerUnsItem[], myUid: string): FuerUnsItem[] {
+  return items.filter((i) => i.addedByUid !== myUid && !i.readAt);
 }
 
 /** Habe ich (lokale Zeit) heute schon selbst etwas geschickt? Steuert den Dashboard-Reminder. */
-export function sentTodayByMe(items: FuerUnsItem[], myName: string): boolean {
+export function sentTodayByMe(items: FuerUnsItem[], myUid: string): boolean {
   const today = localDateStr(new Date().toISOString());
-  return items.some((i) => i.addedBy === myName && localDateStr(i.createdAt) === today);
+  return items.some((i) => i.addedByUid === myUid && localDateStr(i.createdAt) === today);
 }

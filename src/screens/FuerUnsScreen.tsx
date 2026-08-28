@@ -17,7 +17,6 @@ import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet, ActivityIndicator, ScrollView, Modal, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { format, parseISO } from 'date-fns';
-import { useStore } from '../store';
 import { useTheme } from '../utils/theme';
 import {
   FuerUnsItem,
@@ -44,8 +43,7 @@ const PLACEHOLDER =
 
 export function FuerUnsScreen() {
   const { colors, isDark } = useTheme();
-  const { settings, updateSettings } = useStore();
-  const { familyId, myName, items, deletedItems, loadError, loaded, unreadIds } = useFuerUns();
+  const { familyId, myUid, myName, items, deletedItems, loadError, loaded, unreadIds } = useFuerUns();
 
   // Momentaufnahme: welche Nachrichten waren beim Betreten des Screens ungelesen.
   // Läuft erst nach dem ersten echten Laden (nicht schon beim leeren Initial-
@@ -60,7 +58,6 @@ export function FuerUnsScreen() {
 
   const [historyOpen, setHistoryOpen] = useState(false);
   const [draft, setDraft] = useState('');
-  const [nameDraft, setNameDraft] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
   const [reactionPickerFor, setReactionPickerFor] = useState<string | null>(null);
   const [extraOpen, setExtraOpen] = useState(false);
@@ -69,33 +66,27 @@ export function FuerUnsScreen() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState('');
 
-  const handleSaveName = useCallback(() => {
-    const trimmed = nameDraft.trim();
-    if (!trimmed) return;
-    updateSettings({ myName: trimmed });
-  }, [nameDraft, updateSettings]);
-
   const handleAdd = useCallback(async () => {
     const text = draft.trim();
-    if ((!text && !draftEmoji) || !myName || !familyId) return;
+    if ((!text && !draftEmoji) || !myName || !myUid || !familyId) return;
     setDraft('');
     const emoji = draftEmoji;
     setDraftEmoji(null);
     try {
-      await addFuerUnsMessage(familyId, text, myName, emoji);
+      await addFuerUnsMessage(familyId, text, myName, myUid, emoji);
     } catch {}
-  }, [draft, myName, familyId, draftEmoji]);
+  }, [draft, myName, myUid, familyId, draftEmoji]);
 
   const handleReact = useCallback(async (item: FuerUnsItem, emoji: string) => {
     setReactionPickerFor(null);
-    if (!myName || !familyId) return;
+    if (!myName || !myUid || !familyId) return;
     try {
-      const next = item.reaction?.emoji === emoji && item.reaction?.by === myName
+      const next = item.reaction?.emoji === emoji && item.reaction?.byUid === myUid
         ? null
-        : { emoji, by: myName };
+        : { emoji, by: myName, byUid: myUid };
       await setFuerUnsReaction(familyId, item.id, next);
     } catch {}
-  }, [myName, familyId]);
+  }, [myName, myUid, familyId]);
 
   const handleDelete = useCallback(async (item: FuerUnsItem) => {
     if (!familyId) return;
@@ -141,33 +132,7 @@ export function FuerUnsScreen() {
   return (
     <View style={[s.container, { backgroundColor: colors.background }]}>
       <ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
-        {!myName ? (
-          <View style={s.namePrompt}>
-            <Text style={[s.namePromptText, { color: colors.textSecondary }]}>
-              Wie heißt du? So sieht euer Partner, von wem eine Nachricht stammt.
-            </Text>
-            <View style={s.nameRow}>
-              <TextInput
-                style={[s.nameInput, { color: colors.text, backgroundColor: colors.inputBackground, borderColor: colors.border }]}
-                placeholder="z. B. Matthias"
-                placeholderTextColor={colors.placeholder}
-                value={nameDraft}
-                onChangeText={setNameDraft}
-                onSubmitEditing={handleSaveName}
-                returnKeyType="done"
-              />
-              <Pressable
-                style={[s.saveNameBtn, { backgroundColor: accent, opacity: nameDraft.trim() ? 1 : 0.4 }]}
-                onPress={handleSaveName}
-                disabled={!nameDraft.trim()}
-              >
-                <Ionicons name="checkmark" size={18} color="#fff" />
-              </Pressable>
-            </View>
-          </View>
-        ) : (
-          <>
-            <Text style={[s.inspiration, { color: colors.textMuted }]}>{PLACEHOLDER}</Text>
+        <Text style={[s.inspiration, { color: colors.textMuted }]}>{PLACEHOLDER}</Text>
 
             {/* Fertige Icon-Kombos statt Einzelauswahl (TE-62), versteckt hinter
                 einem Bottom-Sheet-Dialog statt dauerhaft sichtbar (TE-63). */}
@@ -251,7 +216,7 @@ export function FuerUnsScreen() {
               <View style={{ gap: 2 }}>
                 {items.map((item) => {
                   const pickerOpen = reactionPickerFor === item.id;
-                  const reactedByMe = !!item.reaction && item.reaction.by === myName;
+                  const reactedByMe = !!item.reaction && item.reaction.byUid === myUid;
                   const isUnread = unreadSnapshot.current?.has(item.id) ?? false;
                   return (
                     <View key={item.id}>
@@ -382,8 +347,6 @@ export function FuerUnsScreen() {
                 })}
               </View>
             )}
-          </>
-        )}
       </ScrollView>
     </View>
   );
@@ -392,12 +355,6 @@ export function FuerUnsScreen() {
 const s = StyleSheet.create({
   container: { flex: 1 },
   content: { padding: 16, paddingBottom: 40, gap: 10 },
-
-  namePrompt: { gap: 8 },
-  namePromptText: { fontSize: 13, lineHeight: 18 },
-  nameRow: { flexDirection: 'row', gap: 8 },
-  nameInput: { flex: 1, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9, fontSize: 14 },
-  saveNameBtn: { width: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
 
   inspiration: { fontSize: 12.5, lineHeight: 18, fontStyle: 'italic' },
 
