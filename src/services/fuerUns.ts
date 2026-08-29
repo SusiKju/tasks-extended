@@ -22,8 +22,8 @@ import {
   onSnapshot,
   Unsubscribe,
 } from 'firebase/firestore';
-import { addDays, startOfDay, parseISO, format, isBefore } from 'date-fns';
 import { db } from './firebase';
+import { localDateStr } from '../utils/dateFormat';
 
 export interface FuerUnsItem {
   id: string;
@@ -167,34 +167,8 @@ export function unreadFromPartner(items: FuerUnsItem[], myUid: string): FuerUnsI
   return items.filter((i) => i.addedByUid !== myUid && !i.readAt);
 }
 
-/**
- * Wie viele Nachrichten muss ich heute noch schicken, um aufzuholen? 1 pro Tag
- * ist die Grundpflicht; ein ausgelassener Tag erhöht die Schuld für den
- * nächsten Tag um 1 – kein "Vorrat" durch Mehrfachversenden an einem Tag,
- * der Rest wird pro Tag auf 0 gekappt statt als Gutschrift für später
- * mitgenommen. Steuert den Dashboard-Reminder (bleibt sichtbar, bis 0).
- * Zählt erst ab dem Tag der allerersten je verschickten Für-uns-Nachricht,
- * nicht ab Familien-Erstellung, damit ungenutzte Monate keine Schuld anhäufen.
- */
-export function owedTodayByMe(items: FuerUnsItem[], myUid: string): number {
-  if (items.length === 0) return 0;
-  const dayKey = (d: Date) => format(d, 'yyyy-MM-dd');
-
-  const sentCountByDay = new Map<string, number>();
-  let firstCreated = parseISO(items[0].createdAt);
-  for (const i of items) {
-    const created = parseISO(i.createdAt);
-    if (isBefore(created, firstCreated)) firstCreated = created;
-    if (i.addedByUid === myUid) {
-      const day = dayKey(created);
-      sentCountByDay.set(day, (sentCountByDay.get(day) ?? 0) + 1);
-    }
-  }
-
-  const today = dayKey(new Date());
-  let balance = 0;
-  for (let cursor = startOfDay(firstCreated); dayKey(cursor) <= today; cursor = addDays(cursor, 1)) {
-    balance = Math.max(0, balance + 1 - (sentCountByDay.get(dayKey(cursor)) ?? 0));
-  }
-  return balance;
+/** Habe ich (lokale Zeit) heute schon selbst etwas geschickt? Steuert den Dashboard-Reminder. */
+export function sentTodayByMe(items: FuerUnsItem[], myUid: string): boolean {
+  const today = localDateStr(new Date().toISOString());
+  return items.some((i) => i.addedByUid === myUid && localDateStr(i.createdAt) === today);
 }

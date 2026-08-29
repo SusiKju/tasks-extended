@@ -18,7 +18,7 @@ import {
   FuerUnsItem,
   subscribeToFuerUns,
   unreadFromPartner,
-  owedTodayByMe,
+  sentTodayByMe,
 } from '../services/fuerUns';
 
 export function useFuerUns() {
@@ -65,6 +65,6 @@ export function useFuerUns() {
     loadError,
     loaded,
     unreadCount: unread.length,
-    owedToday: myUid ? owedTodayByMe(items, myUid) : 0,
+    sentToday: myUid ? sentTodayByMe(items, myUid) : true,
   };
 }
