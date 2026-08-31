@@ -530,10 +530,13 @@ export default function SchuleScreen() {
           const slotKey = key(selectedDay, p.nr);
           const entry = timetable[slotKey];
           const skipsThisWeek = !!entry?.biweekly && !biweeklyActiveThisWeek;
+          // Auf Nutzerwunsch immer dezent, unabhängig von A-/B-Woche –
+          // Text/Label (skipsThisWeek-Logik unten) bleiben unverändert.
+          const isBiweekly = !!entry?.biweekly;
           return (
             <TouchableOpacity
               key={String(p.nr)}
-              style={[s.lessonCard, entry?.pause && s.lessonCardPause, skipsThisWeek && s.lessonCardSkipped]}
+              style={[s.lessonCard, entry?.pause && s.lessonCardPause, isBiweekly && s.lessonCardSkipped]}
               onPress={() => openEditor(p.nr, slotKey)}
               activeOpacity={isLinked ? 1 : 0.7}
               disabled={isLinked}
