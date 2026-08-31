@@ -176,13 +176,6 @@ service cloud.firestore {
         allow read, write: if isFamilyMember(familyId);
       }
 
-      // Server-Spiegel des Kinder-Modus pro Gerät (TE-59, siehe childDevice.ts).
-      // deviceId ist keine uid – jedes Familienmitglied darf lesen/schreiben,
-      // genau wie bei childrenConfig.
-      match /childDeviceById/{deviceId} {
-        allow read, write: if isFamilyMember(familyId);
-      }
-
       // App-Konfiguration (Erinnerungszeiten)
       match /config/{docId} {
         allow read, write: if isFamilyMember(familyId);

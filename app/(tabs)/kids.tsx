@@ -3,7 +3,6 @@ import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   TextInput, Alert, ActivityIndicator, RefreshControl, Modal, Pressable, Platform, Linking,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 /** Alert funktioniert auf Web nicht — window.confirm als Fallback */
 function crossAlert(title: string, message: string, onConfirm: () => void, destructive = false) {
@@ -25,7 +24,6 @@ function crossInfo(title: string, message: string) {
   }
 }
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
 import { useTheme } from '../../src/utils/theme';
 import { useStore } from '../../src/store';
 import {
@@ -38,7 +36,6 @@ import {
   getEmailReminderConfig, setEmailReminderConfig,
 } from '../../src/services/kinderTasks';
 import { useFamily } from '../../src/hooks/useFamily';
-import { markChildDeviceActive } from '../../src/services/childDevice';
 import {
   AllowanceMonth, subscribeToAllowanceMonths, monthKey, setAllowanceReceived,
   formatEuro, formatMonthLabel, nextAllowanceMonth, effectiveAllowance,
@@ -68,7 +65,6 @@ const ACTIVITY_UI: Record<ActivityAction, {
 export default function KinderScreen() {
   const { colors } = useTheme();
   const s = styles(colors);
-  const router = useRouter();
 
   const { familyId, children: familyChildren } = useFamily();
   const fid = familyId ?? '';
@@ -96,7 +92,6 @@ export default function KinderScreen() {
   const [mailingChild, setMailingChild] = useState<string | null>(null);
   const [sendingAllMail, setSendingAllMail] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [setupModalVisible, setSetupModalVisible] = useState(false);
   // Bearbeiten inkl. Belohnung (TE-63). rewardType=null → keine Belohnung.
   // groupId merken, damit Änderungen an Gruppenaufgaben auf alle Kopien wirken.
   const [editingTask, setEditingTask] = useState<{
@@ -1002,6 +997,14 @@ export default function KinderScreen() {
       </View>
       )}
 
+      {/* Schiedsrichter-Abschnitt (TE-85/TE-86) — nur falls für dieses Kind hinterlegt */}
+      {selectedChildConfig?.refereeInfo && (
+        <View style={s.section}>
+          <Text style={s.sectionTitle}>🟨 Schiedsrichter — {childName(selectedChild)}</Text>
+          <Text style={s.refereeText}>{selectedChildConfig.refereeInfo}</Text>
+        </View>
+      )}
+
         </>
       )}
         </>
@@ -1142,37 +1145,7 @@ export default function KinderScreen() {
         </Pressable>
       </Modal>
 
-      {/* Setup-Modal: Kind auswählen */}
-      <Modal visible={setupModalVisible} transparent animationType="fade">
-        <Pressable style={s.modalOverlay} onPress={() => setSetupModalVisible(false)}>
-          <Pressable style={s.modalBox} onPress={() => {}}>
-            <Text style={s.modalTitle}>Für wen ist dieses Gerät?</Text>
-            <Text style={s.modalHint}>Danach wechselt die App in den Kinder-Modus.</Text>
-            {familyChildren.map((child) => (
-              <TouchableOpacity
-                key={child.id}
-                style={s.modalChildBtn}
-                onPress={async () => {
-                  await AsyncStorage.setItem('kinder_child_id', child.id);
-                  await AsyncStorage.setItem('kinder_family_id', fid);
-                  // TE-59: Server-Spiegel, damit ein gezieltes Löschen nur des
-                  // lokalen Flags (Web: localStorage) den Kinder-Modus nicht
-                  // umgeht, solange die Auth-Session gültig bleibt.
-                  markChildDeviceActive(fid, child.id).catch(() => {});
-                  setSetupModalVisible(false);
-                  // Sofort in den Kinder-Modus wechseln (TE-64) – '/' rendert KindScreen.
-                  // Auch nach einem späteren Reload greift der Guard im RootLayout.
-                  router.replace('/');
-                }}
-              >
-                <Text style={s.modalChildBtnText}>{child.emoji ? `${child.emoji} ` : ''}{child.name}</Text>
-              </TouchableOpacity>
-            ))}
-          </Pressable>
-        </Pressable>
-      </Modal>
-
-      {/* Extras-Tab (TE-93): Push-/Mail-Aktionen an alle + Gerät einrichten.
+      {/* Extras-Tab (TE-93): Push-/Mail-Aktionen an alle.
           Vorher dauerhaft am Seitenende, jetzt nur im Extras-Tab sichtbar.
           "App-Push an alle" (Firestore-Trigger ohne Mail) entfernt (TE-163):
           funktionierte für diese Familie nur bei offener App, da der native
@@ -1243,12 +1216,6 @@ export default function KinderScreen() {
               </TouchableOpacity>
             </View>
           </View>
-
-          {/* Kinder-Gerät einrichten — bewusst dezent (TE-89), damit er nicht versehentlich angetippt wird */}
-          <TouchableOpacity style={s.setupBtn} onPress={() => setSetupModalVisible(true)}>
-            <Ionicons name="phone-portrait-outline" size={14} color={colors.textMuted} />
-            <Text style={s.setupBtnText}>Dieses Gerät als Kinder-Gerät einrichten</Text>
-          </TouchableOpacity>
         </View>
       )}
     </ScrollView>
@@ -1436,6 +1403,7 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
     allowanceStatusText: { fontSize: 12, fontWeight: '700' },
     row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     hint: { fontSize: 12, color: colors.textMuted },
+    refereeText: { fontSize: 14, color: colors.text, lineHeight: 20 },
     saveBtn: {
       backgroundColor: colors.accentNeon, borderRadius: 10,
       paddingVertical: 10, alignItems: 'center',
@@ -1469,18 +1437,7 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
     historyTitle: { fontSize: 14, color: colors.text },
     historyMeta: { fontSize: 11, color: colors.textMuted, marginTop: 1 },
     historyTime: { fontSize: 13, fontWeight: '600', color: colors.accentNeon },
-    setupBtn: {
-      flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6,
-      paddingVertical: 10, marginTop: 16,
-    },
-    setupBtnText: { fontSize: 12, color: colors.textMuted, fontWeight: '500' },
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
     modalBox: { backgroundColor: colors.surface, borderRadius: 20, padding: 24, width: 300, gap: 10 },
     modalTitle: { fontSize: 18, fontWeight: '700', color: colors.text, textAlign: 'center' },
-    modalHint: { fontSize: 13, color: colors.textMuted, textAlign: 'center', marginBottom: 4 },
-    modalChildBtn: {
-      backgroundColor: colors.inputBackground, borderRadius: 12,
-      paddingVertical: 14, alignItems: 'center', borderWidth: 1, borderColor: colors.border,
-    },
-    modalChildBtnText: { fontSize: 18, fontWeight: '700', color: colors.text },
   });

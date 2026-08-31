@@ -18,7 +18,6 @@ import { useSettingsSync } from '../src/hooks/useSettingsSync';
 import { useMailPinsSync } from '../src/hooks/useMailPinsSync';
 import { useImportantTasksSync } from '../src/hooks/useImportantTasksSync';
 import { handleRedirectResult } from '../src/services/firebaseAuth';
-import { getChildDeviceState } from '../src/services/childDevice';
 import { getOwnMember, getChildIdForEmail } from '../src/services/family';
 import { useAutoReloadOnNewVersion } from '../src/hooks/useAutoReloadOnNewVersion';
 import { AppContextProvider } from '../src/contexts/AppContext';
@@ -124,25 +123,6 @@ export default function RootLayout() {
   useEffect(() => {
     AsyncStorage.getItem('kinder_child_id').then((id) => setIsChildMode(!!id));
   }, [segments]);
-
-  // TE-59: Server-Spiegel-Abgleich. Schließt die bekannte Lücke, dass im Web
-  // localStorage (lokales Flag) und IndexedDB (Auth-Session) getrennte
-  // Stores sind – wer gezielt nur localStorage löscht, würde sonst mit
-  // gültiger Session als Elternteil erscheinen. Sagt der Server "aktiv" und
-  // das lokale Flag ist (noch) nicht gesetzt, wird es aus dem Server-Stand
-  // wiederhergestellt. Läuft erst NACH dem lokalen Read oben, greift also
-  // mit der Latenz eines Firestore-Reads – siehe TE-59-Konzeptdokument.
-  useEffect(() => {
-    if (!user || !familyId || isChildMode !== false) return;
-    getChildDeviceState(familyId).then((state) => {
-      if (state?.active && state.childId) {
-        AsyncStorage.multiSet([
-          ['kinder_child_id', state.childId],
-          ['kinder_family_id', familyId],
-        ]).then(() => setIsChildMode(true));
-      }
-    }).catch(() => {});
-  }, [user, familyId, isChildMode]);
 
   // Account-Rolle: meldet sich jemand mit einer als Kind-E-Mail hinterlegten
   // Adresse an (siehe firestore.rules → isRegisteredChildEmail), ist der
