@@ -79,6 +79,11 @@ export interface ChildConfig {
   emoji?: string | null;
   /** Monatliches Taschengeld in EUR (TE-52). null/undefined = nicht konfiguriert. */
   allowance?: number | null;
+  /**
+   * Freitext-Abschnitt "Schiedsrichter" (TE-85) für die Kind-Ansicht – Kontakt
+   * SR-Obmann, Lehrgangstermine etc. null/undefined = Abschnitt ausgeblendet.
+   */
+  refereeInfo?: string | null;
   createdAt: string;
 }
 
@@ -431,7 +436,7 @@ export async function addChild(
 export async function updateChild(
   familyId: string,
   childId: string,
-  updates: Partial<Pick<ChildConfig, 'name' | 'color' | 'emoji'>>
+  updates: Partial<Pick<ChildConfig, 'name' | 'color' | 'emoji' | 'refereeInfo'>>
 ): Promise<void> {
   const { updateDoc } = await import('firebase/firestore');
   await updateDoc(doc(childrenConfigCol(familyId), childId), updates);

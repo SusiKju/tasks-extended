@@ -113,6 +113,19 @@ export function SettingsScreen() {
     useState<Record<string, Record<string, AllowanceMonth>>>({});
   const [overrideDrafts, setOverrideDrafts] = useState<Record<string, string>>({});
   const [reasonDrafts, setReasonDrafts] = useState<Record<string, string>>({});
+  // Schiedsrichter-Abschnitt (TE-85): freier Text pro Kind, editierbar.
+  const [refereeDrafts, setRefereeDrafts] = useState<Record<string, string>>({});
+
+  const handleRefereeCommit = useCallback(async (child: ChildConfig, text: string) => {
+    if (!familyId) return;
+    const value = text.trim() || null;
+    if (value === (child.refereeInfo ?? null)) return; // keine Änderung
+    try {
+      await updateChild(familyId, child.id, { refereeInfo: value });
+    } catch (e: any) {
+      Alert.alert('Fehler', e?.message ?? 'Schiedsrichter-Info speichern fehlgeschlagen.');
+    }
+  }, [familyId]);
 
   const handleAllowanceCommit = useCallback(async (child: ChildConfig, text: string) => {
     if (!familyId) return;
@@ -1034,6 +1047,23 @@ export function SettingsScreen() {
                     />
                   </>
                 )}
+
+                <Text style={[styles.rowSubtitle, { marginTop: 12, marginBottom: 4 }]}>
+                  Schiedsrichter-Abschnitt (optional)
+                </Text>
+                <TextInput
+                  style={[styles.settingInput, { minHeight: 90, textAlignVertical: 'top' }]}
+                  value={refereeDrafts[childModal.child.id] ?? (childModal.child.refereeInfo ?? '')}
+                  onChangeText={(v) => setRefereeDrafts((d) => ({ ...d, [childModal.child!.id]: v }))}
+                  onBlur={() => handleRefereeCommit(childModal.child!, refereeDrafts[childModal.child!.id] ?? (childModal.child!.refereeInfo ?? ''))}
+                  placeholder="z.B. Kontakt SR-Obmann, Lehrgangstermine …"
+                  placeholderTextColor={colors.placeholder}
+                  multiline
+                />
+                <Text style={[styles.rowSubtitle, { marginTop: 4, fontSize: 12 }]}>
+                  Erscheint als eigener Abschnitt "Schiedsrichter" in der Kind-Ansicht. Leer lassen,
+                  um den Abschnitt auszublenden.
+                </Text>
               </>
             )}
 

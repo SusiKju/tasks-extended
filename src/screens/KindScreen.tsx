@@ -356,6 +356,17 @@ export default function KindScreen({ onExitChildMode }: Props) {
         </View>
       )}
 
+      {/* Schiedsrichter-Abschnitt (TE-85), nur falls für dieses Kind hinterlegt */}
+      {selectedChild?.refereeInfo && (
+        <View style={s.schoolCard}>
+          <Text style={s.schoolEmoji}>🟨</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={s.schoolLabel}>Schiedsrichter</Text>
+            <Text style={s.refereeText}>{selectedChild.refereeInfo}</Text>
+          </View>
+        </View>
+      )}
+
       {/* Tabelle (fussball.de) */}
       {standings.length > 0 && (
         <View style={s.schoolCard}>
@@ -628,6 +639,7 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
     schoolDot: { width: 7, height: 7, borderRadius: 4 },
     schoolChipText: { fontSize: 13, fontWeight: '700', color: colors.text },
     matchRow: { fontSize: 14, fontWeight: '600', color: colors.text, marginTop: 6 },
+    refereeText: { fontSize: 14, color: colors.text, marginTop: 4, lineHeight: 20 },
     tableRow: { flexDirection: 'row', alignItems: 'center', marginTop: 6, gap: 6 },
     tableCellRank: { fontSize: 13, color: colors.textSecondary, width: 22 },
     tableCellClub: { fontSize: 13, color: colors.text, flex: 1 },
