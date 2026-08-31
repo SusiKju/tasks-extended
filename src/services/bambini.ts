@@ -46,6 +46,8 @@ export interface Child {
   whatsapp: boolean;
   /** Offiziell im Verein angemeldet, unabhängig von `registeredSince` (TE-46). */
   vereinAngemeldet: boolean;
+  /** Schnuppertraining – ganz neu, evtl. nur zum Reinschnuppern, noch keine festen Daten (TE-84). */
+  schnuppertraining: boolean;
 }
 
 /** Quickfilter-Auswahl im Bambini-Tab (TE-20), pro User persistiert. */
@@ -95,15 +97,22 @@ function sanitizeChild(c: any): Child | null {
     info: String(c?.info ?? ''),
     whatsapp: !!c?.whatsapp,
     vereinAngemeldet: !!c?.vereinAngemeldet,
+    schnuppertraining: !!c?.schnuppertraining,
   };
 }
 
 /**
- * Sortierung: jüngste Jahrgänge oben (absteigend nach Geburtsjahr), Jahrgang
- * 2018 also ganz unten; innerhalb eines Jahrgangs alphabetisch (TE-21).
+ * Sortierung: Schnuppertraining-Kinder zuerst (TE-84), dann jüngste Jahrgänge
+ * oben (absteigend nach Geburtsjahr), Jahrgang 2018 also ganz unten;
+ * innerhalb eines Jahrgangs alphabetisch (TE-21).
  */
 function sortChildren(list: Child[]): Child[] {
-  return [...list].sort((a, b) => b.birthYear - a.birthYear || a.name.localeCompare(b.name, 'de'));
+  return [...list].sort(
+    (a, b) =>
+      Number(b.schnuppertraining) - Number(a.schnuppertraining) ||
+      b.birthYear - a.birthYear ||
+      a.name.localeCompare(b.name, 'de'),
+  );
 }
 
 export async function loadBambini(familyId: string): Promise<Child[]> {
@@ -208,6 +217,7 @@ export async function migrateRosterToBambini(familyId: string): Promise<void> {
         info: '',
         whatsapp: false,
         vereinAngemeldet: false,
+        schnuppertraining: false,
       });
     });
   });

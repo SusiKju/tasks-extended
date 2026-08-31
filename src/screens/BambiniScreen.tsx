@@ -110,6 +110,7 @@ export function BambiniScreen() {
   const [infoInput, setInfoInput] = useState('');
   const [whatsappInput, setWhatsappInput] = useState(false);
   const [vereinAngemeldetInput, setVereinAngemeldetInput] = useState(false);
+  const [schnuppertrainingInput, setSchnuppertrainingInput] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
 
   // TE-44: freie Notizen (Trainingsideen o. Ä.), gleiches Auto-Save-Verhalten
@@ -175,7 +176,7 @@ export function BambiniScreen() {
   );
 
   const openNew = () => {
-    setEditing({ id: '', name: '', birthYear: 0, registeredSince: '', stopped: false, parentName: '', lastName: '', info: '', whatsapp: false, vereinAngemeldet: false });
+    setEditing({ id: '', name: '', birthYear: 0, registeredSince: '', stopped: false, parentName: '', lastName: '', info: '', whatsapp: false, vereinAngemeldet: false, schnuppertraining: false });
     setNameInput('');
     setYearInput('');
     setSinceInput('');
@@ -185,6 +186,7 @@ export function BambiniScreen() {
     setInfoInput('');
     setWhatsappInput(false);
     setVereinAngemeldetInput(false);
+    setSchnuppertrainingInput(false);
   };
 
   const openEdit = (c: Child) => {
@@ -198,6 +200,7 @@ export function BambiniScreen() {
     setInfoInput(c.info);
     setWhatsappInput(c.whatsapp);
     setVereinAngemeldetInput(c.vereinAngemeldet);
+    setSchnuppertrainingInput(c.schnuppertraining);
   };
 
   const closeModal = () => setEditing(null);
@@ -220,6 +223,7 @@ export function BambiniScreen() {
       info: infoInput.trim(),
       whatsapp: whatsappInput,
       vereinAngemeldet: vereinAngemeldetInput,
+      schnuppertraining: schnuppertrainingInput,
     };
 
     if (editing && editing.id) {
@@ -387,6 +391,7 @@ export function BambiniScreen() {
                       ) : null}
                     </View>
                     <View style={s.badgeSlot}>
+                      {c.schnuppertraining ? <Text style={s.badgeSchnupper}>Schnupper</Text> : null}
                       {tier ? <Text style={s.badgeNeu}>neu</Text> : null}
                       {c.stopped ? <Text style={s.badgeStopped}>aufgehört</Text> : null}
                     </View>
@@ -502,6 +507,15 @@ export function BambiniScreen() {
                 color={vereinAngemeldetInput ? colors.accent : colors.textSecondary}
               />
               <Text style={[s.checkLabel, { color: colors.text }]}>Im Verein angemeldet</Text>
+            </Pressable>
+
+            <Pressable style={s.checkRow} onPress={() => setSchnuppertrainingInput((v) => !v)}>
+              <Ionicons
+                name={schnuppertrainingInput ? 'checkbox' : 'square-outline'}
+                size={22}
+                color={schnuppertrainingInput ? colors.accent : colors.textSecondary}
+              />
+              <Text style={[s.checkLabel, { color: colors.text }]}>Schnuppertraining</Text>
             </Pressable>
 
             <TextInput
@@ -670,6 +684,16 @@ function makeStyles(c: ThemeColors) {
     badgeNeu: {
       color: c.accentFg,
       backgroundColor: c.accent,
+      fontSize: 10,
+      fontWeight: '700',
+      overflow: 'hidden',
+      borderRadius: 6,
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+    },
+    badgeSchnupper: {
+      color: c.successFg,
+      backgroundColor: c.success,
       fontSize: 10,
       fontWeight: '700',
       overflow: 'hidden',
