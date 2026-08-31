@@ -356,11 +356,16 @@ export function BambiniScreen() {
                     <Text style={s.groupHint}>betreut {zeitraum.von}–{zeitraum.bis}</Text>
                   ) : null}
                 </View>
-                {g.items.map((c) => {
+                {g.items.map((c, idx) => {
                   const tier = c.stopped ? null : neuTier(c.registeredSince);
+                  const prev = g.items[idx - 1];
+                  const showSchnupperHeading = c.schnuppertraining && (idx === 0 || !prev.schnuppertraining);
+                  const showSchnupperDivider = !c.schnuppertraining && idx > 0 && prev.schnuppertraining;
                   return (
+                  <React.Fragment key={c.id}>
+                  {showSchnupperHeading ? <Text style={s.schnupperHeading}>Schnuppertraining</Text> : null}
+                  {showSchnupperDivider ? <View style={s.schnupperDivider} /> : null}
                   <Pressable
-                    key={c.id}
                     style={[
                       s.row,
                       status === 'aktiv' && s.rowActive,
@@ -391,7 +396,6 @@ export function BambiniScreen() {
                       ) : null}
                     </View>
                     <View style={s.badgeSlot}>
-                      {c.schnuppertraining ? <Text style={s.badgeSchnupper}>Schnupper</Text> : null}
                       {tier ? <Text style={s.badgeNeu}>neu</Text> : null}
                       {c.stopped ? <Text style={s.badgeStopped}>aufgehört</Text> : null}
                     </View>
@@ -400,6 +404,7 @@ export function BambiniScreen() {
                       <Ionicons name="trash-outline" size={18} color={colors.textSecondary} />
                     </Pressable>
                   </Pressable>
+                  </React.Fragment>
                   );
                 })}
                 </View>
@@ -691,15 +696,18 @@ function makeStyles(c: ThemeColors) {
       paddingHorizontal: 6,
       paddingVertical: 2,
     },
-    badgeSchnupper: {
-      color: c.successFg,
-      backgroundColor: c.success,
-      fontSize: 10,
+    schnupperHeading: {
+      color: c.success,
+      fontSize: 11,
       fontWeight: '700',
-      overflow: 'hidden',
-      borderRadius: 6,
-      paddingHorizontal: 6,
-      paddingVertical: 2,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+      marginBottom: 6,
+    },
+    schnupperDivider: {
+      height: 1,
+      backgroundColor: c.border,
+      marginVertical: 10,
     },
     rowYear: { color: c.textSecondary, fontSize: 13, fontWeight: '600' },
     rowDel: { padding: 2 },
