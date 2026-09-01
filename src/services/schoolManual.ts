@@ -12,9 +12,9 @@
  * einheitliches Feld-Set (Titel/Datum/Notiz) statt separater Typen mit
  * eigenen Feldern (Fach, Ort, Uhrzeit) – ein "+" reicht zum Anlegen.
  *
- * Reihenfolge der offenen Einträge: neuestes Anlegen/Bearbeiten (`updatedAt`)
- * zuerst, bewusst nicht manuell sortierbar – Nachrücken passiert einfach
- * durchs Bearbeiten.
+ * Reihenfolge der offenen Einträge: Einträge mit Datum chronologisch (nächster
+ * Termin zuerst), danach Einträge ohne Datum nach neuestem Anlegen/Bearbeiten
+ * (`updatedAt`) – bewusst nicht manuell sortierbar.
  *
  * Abhaken und Löschen sind beide nicht destruktiv: `done`/`deletedAt` blenden
  * einen Eintrag nur aus der offenen Liste aus, der Eintrag bleibt im Array
