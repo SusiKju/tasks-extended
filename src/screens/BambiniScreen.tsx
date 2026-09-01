@@ -275,9 +275,15 @@ export function BambiniScreen() {
     return true;
   });
 
-  // Nach Jahrgang gruppieren (children kommen bereits sortiert).
+  // TE-90: Schnuppertraining-Kinder (Wackelkandidaten) bilden einen eigenen
+  // Block ohne Jahrgangsbezug, unabhängig sortiert. Der Rest wird wie gehabt
+  // nach Jahrgang gruppiert (children kommen bereits sortiert).
+  const schnupperItems = filtered
+    .filter((c) => c.schnuppertraining)
+    .sort((a, b) => a.name.localeCompare(b.name, 'de'));
   const groups: { year: number; items: Child[] }[] = [];
   filtered.forEach((c) => {
+    if (c.schnuppertraining) return;
     const g = groups.find((x) => x.year === c.birthYear);
     if (g) g.items.push(c);
     else groups.push({ year: c.birthYear, items: [c] });
@@ -294,6 +300,51 @@ export function BambiniScreen() {
   yearCounts.sort((a, b) => a.year - b.year);
   const yearSummary = yearCounts.map(({ year, count }) => `${year || '—'}: ${count}`).join(', ');
   const overviewText = `${children.length} Kinder · ${stoppedCount} aufgehört${yearSummary ? ' · ' + yearSummary : ''}`;
+
+  const renderChildRow = (c: Child, status: 'aktiv' | 'gewechselt' | null, gewechselt: boolean) => {
+    const tier = c.stopped ? null : neuTier(c.registeredSince);
+    return (
+      <Pressable
+        style={[
+          s.row,
+          status === 'aktiv' && s.rowActive,
+          gewechselt && s.rowMoved,
+          tier ? { borderLeftWidth: 4, borderLeftColor: colors.accent + NEU_TIER_ALPHA[tier] } : null,
+        ]}
+        onPress={() => openEdit(c)}
+      >
+        <View style={s.rowMain}>
+          <Text style={[s.rowName, c.stopped && s.rowNameStopped]} numberOfLines={1}>{c.name}</Text>
+          {c.registeredSince ? (
+            <Text style={s.rowSub}>seit {formatDE(c.registeredSince)}</Text>
+          ) : null}
+        </View>
+        <View style={s.iconSlot}>
+          {c.whatsapp ? (
+            <Ionicons name="logo-whatsapp" size={18} color={colors.textSecondary} accessibilityLabel="In WhatsApp-Gruppe" />
+          ) : null}
+        </View>
+        <View style={s.iconSlot}>
+          {!c.vereinAngemeldet ? (
+            <Ionicons name="ellipse" size={10} color={NOT_ANGEMELDET_RED} accessibilityLabel="Nicht im Verein angemeldet" />
+          ) : null}
+        </View>
+        <View style={s.iconSlot}>
+          {c.info ? (
+            <Ionicons name="information-circle-outline" size={18} color={colors.textSecondary} accessibilityLabel="Info vorhanden" />
+          ) : null}
+        </View>
+        <View style={s.badgeSlot}>
+          {tier ? <Text style={s.badgeNeu}>neu</Text> : null}
+          {c.stopped ? <Text style={s.badgeStopped}>aufgehört</Text> : null}
+        </View>
+        <Text style={s.rowYear}>{c.birthYear || '—'}</Text>
+        <Pressable onPress={() => removeEntry(c)} hitSlop={8} style={s.rowDel} accessibilityLabel="Löschen">
+          <Ionicons name="trash-outline" size={18} color={colors.textSecondary} />
+        </Pressable>
+      </Pressable>
+    );
+  };
 
   return (
     <View style={s.container}>
@@ -358,10 +409,19 @@ export function BambiniScreen() {
           <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
             {children.length === 0 ? (
               <Text style={s.empty}>Noch keine Kinder. Mit „+" anlegen.</Text>
-            ) : groups.length === 0 ? (
+            ) : groups.length === 0 && schnupperItems.length === 0 ? (
               <Text style={s.empty}>Keine Treffer.</Text>
             ) : (
-              groups.map((g) => {
+              <>
+              {schnupperItems.length > 0 ? (
+                <View style={s.group}>
+                  <Text style={s.schnupperHeading}>Schnuppertraining</Text>
+                  {schnupperItems.map((c) => (
+                    <WobbleRow key={c.id}>{renderChildRow(c, null, false)}</WobbleRow>
+                  ))}
+                </View>
+              ) : null}
+              {groups.map((g) => {
                 const status = g.year ? getJahrgangStatus(g.year) : null;
                 const gewechselt = status === 'gewechselt';
                 const zeitraum = g.year ? getBetreuungsZeitraum(g.year) : null;
@@ -376,65 +436,13 @@ export function BambiniScreen() {
                     <Text style={s.groupHint}>betreut {zeitraum.von}–{zeitraum.bis}</Text>
                   ) : null}
                 </View>
-                {g.items.map((c, idx) => {
-                  const tier = c.stopped ? null : neuTier(c.registeredSince);
-                  const prev = g.items[idx - 1];
-                  const showSchnupperHeading = c.schnuppertraining && (idx === 0 || !prev.schnuppertraining);
-                  const showSchnupperDivider = !c.schnuppertraining && idx > 0 && prev.schnuppertraining;
-                  return (
-                  <React.Fragment key={c.id}>
-                  {showSchnupperHeading ? <Text style={s.schnupperHeading}>Schnuppertraining</Text> : null}
-                  {showSchnupperDivider ? <View style={s.schnupperDivider} /> : null}
-                  {(() => {
-                    const row = (
-                      <Pressable
-                        style={[
-                          s.row,
-                          status === 'aktiv' && s.rowActive,
-                          gewechselt && s.rowMoved,
-                          tier ? { borderLeftWidth: 4, borderLeftColor: colors.accent + NEU_TIER_ALPHA[tier] } : null,
-                        ]}
-                        onPress={() => openEdit(c)}
-                      >
-                        <View style={s.rowMain}>
-                          <Text style={[s.rowName, c.stopped && s.rowNameStopped]} numberOfLines={1}>{c.name}</Text>
-                          {c.registeredSince ? (
-                            <Text style={s.rowSub}>seit {formatDE(c.registeredSince)}</Text>
-                          ) : null}
-                        </View>
-                        <View style={s.iconSlot}>
-                          {c.whatsapp ? (
-                            <Ionicons name="logo-whatsapp" size={18} color={colors.textSecondary} accessibilityLabel="In WhatsApp-Gruppe" />
-                          ) : null}
-                        </View>
-                        <View style={s.iconSlot}>
-                          {!c.vereinAngemeldet ? (
-                            <Ionicons name="ellipse" size={10} color={NOT_ANGEMELDET_RED} accessibilityLabel="Nicht im Verein angemeldet" />
-                          ) : null}
-                        </View>
-                        <View style={s.iconSlot}>
-                          {c.info ? (
-                            <Ionicons name="information-circle-outline" size={18} color={colors.textSecondary} accessibilityLabel="Info vorhanden" />
-                          ) : null}
-                        </View>
-                        <View style={s.badgeSlot}>
-                          {tier ? <Text style={s.badgeNeu}>neu</Text> : null}
-                          {c.stopped ? <Text style={s.badgeStopped}>aufgehört</Text> : null}
-                        </View>
-                        <Text style={s.rowYear}>{c.birthYear || '—'}</Text>
-                        <Pressable onPress={() => removeEntry(c)} hitSlop={8} style={s.rowDel} accessibilityLabel="Löschen">
-                          <Ionicons name="trash-outline" size={18} color={colors.textSecondary} />
-                        </Pressable>
-                      </Pressable>
-                    );
-                    return c.schnuppertraining ? <WobbleRow key={c.id}>{row}</WobbleRow> : row;
-                  })()}
-                  </React.Fragment>
-                  );
-                })}
+                {g.items.map((c) => (
+                  <React.Fragment key={c.id}>{renderChildRow(c, status, gewechselt)}</React.Fragment>
+                ))}
                 </View>
                 );
-              })
+              })}
+              </>
             )}
 
             {/* TE-47: Beitragshöhe aus der Beitragsordnung 2026 (serkowitzer-fsv.de),
@@ -728,11 +736,6 @@ function makeStyles(c: ThemeColors) {
       textTransform: 'uppercase',
       letterSpacing: 0.5,
       marginBottom: 6,
-    },
-    schnupperDivider: {
-      height: 1,
-      backgroundColor: c.border,
-      marginVertical: 10,
     },
     rowYear: { color: c.textSecondary, fontSize: 13, fontWeight: '600' },
     rowDel: { padding: 2 },
