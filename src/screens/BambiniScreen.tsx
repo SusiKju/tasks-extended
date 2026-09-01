@@ -49,6 +49,7 @@ const NEU_TIER_ALPHA: Record<NeuTier, string> = { 2: 'FF', 4: 'B3', 8: '80', 16:
 /** Bewusst nicht über colors.danger (wird in mono() vergraut) – wie NotesScreen IMPORTANT_RED. */
 const NOT_ANGEMELDET_RED = '#EF4444';
 const WHATSAPP_GREEN = '#25D366';
+const INFO_YELLOW = '#F5B301';
 import { getJahrgangStatus, getBetreuungsZeitraum } from '../utils/bambiniSeason';
 
 /** ISO 'YYYY-MM-DD' → 'DD.MM.YYYY' (string-basiert, ohne Zeitzonen-Fallen). */
@@ -314,7 +315,7 @@ export function BambiniScreen() {
           s.row,
           status === 'aktiv' && s.rowActive,
           gewechselt && s.rowMoved,
-          tier ? { borderLeftWidth: 4, borderLeftColor: colors.accent + NEU_TIER_ALPHA[tier] } : null,
+          { borderLeftWidth: 4, borderLeftColor: tier ? colors.accent + NEU_TIER_ALPHA[tier] : 'transparent' },
         ]}
         onPress={() => openEdit(c)}
       >
@@ -326,17 +327,17 @@ export function BambiniScreen() {
         </View>
         <View style={s.iconSlot}>
           {c.whatsapp ? (
-            <Ionicons name="logo-whatsapp" size={16} color={WHATSAPP_GREEN} accessibilityLabel="In WhatsApp-Gruppe" />
+            <Ionicons name="logo-whatsapp" size={20} color={WHATSAPP_GREEN} accessibilityLabel="In WhatsApp-Gruppe" />
           ) : null}
         </View>
         <View style={s.iconSlot}>
           {!c.vereinAngemeldet ? (
-            <Ionicons name="alert-circle" size={16} color={NOT_ANGEMELDET_RED} accessibilityLabel="Nicht im Verein angemeldet" />
+            <Ionicons name="alert-circle" size={20} color={NOT_ANGEMELDET_RED} accessibilityLabel="Nicht im Verein angemeldet" />
           ) : null}
         </View>
         <View style={s.iconSlot}>
           {c.info ? (
-            <Ionicons name="information-circle-outline" size={16} color={colors.textSecondary} accessibilityLabel="Info vorhanden" />
+            <Ionicons name="information-circle" size={20} color={INFO_YELLOW} accessibilityLabel="Info vorhanden" />
           ) : null}
         </View>
         <View style={s.badgeSlot}>
@@ -716,7 +717,7 @@ function makeStyles(c: ThemeColors) {
     rowNameStopped: { textDecorationLine: 'line-through', color: c.textSecondary },
     // Feste Spaltenbreite pro Icon/Badge, sonst rutscht die Spalte je nach Zeile
     // (nicht jedes Kind hat WhatsApp/Info/Badge) hin und her ("Treppeneffekt").
-    iconSlot: { width: 16, alignItems: 'center' },
+    iconSlot: { width: 20, alignItems: 'center' },
     badgeSlot: { width: 62, alignItems: 'flex-start' },
     rowSub: { color: c.textSecondary, fontSize: 11, marginTop: 0 },
     badgeStopped: {
