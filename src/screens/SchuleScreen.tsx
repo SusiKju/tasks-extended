@@ -448,19 +448,24 @@ export default function SchuleScreen() {
   const manualKlassenbuchContent = (
     <View style={s.section}>
       <View style={s.listCard}>
-        {/* Alles linksbündig; Aufgaben zusätzlich mit Haken links, Termine/Info
-            ohne Haken, aber mit Info-Icon am rechten Rand. */}
+        {/* Alles linksbündig, Icon/Haken jeweils am Zeilenanfang: Aufgabe hat
+            eine Checkbox (braucht kein zusätzliches Icon), Termin (mit Datum)
+            und reine Info (ohne Datum) bekommen je ein eigenes Icon. */}
         {openItems.map((item) => (
           <TouchableOpacity key={item.id} style={s.listRow} onPress={() => openEditItem(item)}>
             {item.isInfo ? (
               <>
+                <Ionicons
+                  name={item.date ? 'calendar-outline' : 'information-circle-outline'}
+                  size={18}
+                  color={colors.textMuted}
+                />
                 <View style={s.journalBody}>
                   <Text style={s.journalText}>{item.title}</Text>
                   <Text style={s.lessonMeta}>
                     {[item.date && journalDayLabel(item.date), item.notes, editedLabel(item)].filter(Boolean).join(' · ')}
                   </Text>
                 </View>
-                <Ionicons name="information-circle-outline" size={18} color={colors.textMuted} />
               </>
             ) : (
               <>
