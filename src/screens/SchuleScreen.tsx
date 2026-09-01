@@ -96,6 +96,7 @@ export default function SchuleScreen() {
   const [fRaum, setFRaum] = useState('');
   const [fLehrer, setFLehrer] = useState('');
   const [fBiweekly, setFBiweekly] = useState(false);
+  const [fOptional, setFOptional] = useState(false);
   const [editingTime, setEditingTime] = useState<{ nr: number | string; start: string; end: string } | null>(null);
 
   useEffect(() => {
@@ -196,7 +197,13 @@ export default function SchuleScreen() {
   const infoFacts = infoFactsByChild[selectedChild] ?? [];
   const schoolItems = schoolItemsByChild[selectedChild] ?? [];
   const openItems = React.useMemo(
-    () => schoolItems.filter((i) => !i.done && !i.deletedAt).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
+    () => schoolItems.filter((i) => !i.done && !i.deletedAt).sort((a, b) => {
+      // Termine (mit Datum) chronologisch nach oben, nächster Termin zuerst;
+      // Einträge ohne Datum danach, dort weiterhin neueste Bearbeitung zuerst.
+      if (a.date && b.date) return a.date.localeCompare(b.date);
+      if (!!a.date !== !!b.date) return a.date ? -1 : 1;
+      return b.updatedAt.localeCompare(a.updatedAt);
+    }),
     [schoolItems]
   );
   // Abgehakte UND gelöschte Einträge landen hier statt im offenen Bereich –
@@ -266,6 +273,7 @@ export default function SchuleScreen() {
     setFRaum(entry?.raum ?? '');
     setFLehrer(entry?.lehrer ?? '');
     setFBiweekly(entry?.biweekly ?? false);
+    setFOptional(entry?.optional ?? false);
     setEditing({ nr, slotKey });
   }, [timetable, isLinked]);
 
@@ -275,11 +283,11 @@ export default function SchuleScreen() {
     if (!editing || !fid || !selectedChild) return;
     const fach = fFach.trim();
     const entry: TimetableEntry | null = fach
-      ? { fach, raum: fRaum.trim(), lehrer: fLehrer.trim(), ...(fBiweekly ? { biweekly: true } : {}) }
+      ? { fach, raum: fRaum.trim(), lehrer: fLehrer.trim(), ...(fBiweekly ? { biweekly: true } : {}), ...(fOptional ? { optional: true } : {}) }
       : null;
     await setTimetableEntry(fid, selectedChild, editing.slotKey, entry);
     setEditing(null);
-  }, [editing, fid, selectedChild, fFach, fRaum, fLehrer, fBiweekly]);
+  }, [editing, fid, selectedChild, fFach, fRaum, fLehrer, fBiweekly, fOptional]);
 
   const handleClear = useCallback(async () => {
     if (!editing || !fid || !selectedChild) return;
@@ -533,10 +541,11 @@ export default function SchuleScreen() {
           // Auf Nutzerwunsch immer dezent, unabhängig von A-/B-Woche –
           // Text/Label (skipsThisWeek-Logik unten) bleiben unverändert.
           const isBiweekly = !!entry?.biweekly;
+          const isOptional = !!entry?.optional;
           return (
             <TouchableOpacity
               key={String(p.nr)}
-              style={[s.lessonCard, entry?.pause && s.lessonCardPause, isBiweekly && s.lessonCardSkipped]}
+              style={[s.lessonCard, entry?.pause && s.lessonCardPause, (isBiweekly || isOptional) && s.lessonCardSkipped]}
               onPress={() => openEditor(p.nr, slotKey)}
               activeOpacity={isLinked ? 1 : 0.7}
               disabled={isLinked}
@@ -557,11 +566,11 @@ export default function SchuleScreen() {
                     <View style={[s.lessonDot, { backgroundColor: entry.pause ? colors.warning : subjectColor(entry.fach) }]} />
                     <Text style={[s.lessonFach, entry.pause && s.lessonFachPause]}>{entry.fach}</Text>
                   </View>
-                  {(skipsThisWeek || entry.raum || entry.lehrer || entry.biweekly) && (
+                  {(skipsThisWeek || entry.raum || entry.lehrer || entry.biweekly || entry.optional) && (
                     <Text style={s.lessonMeta}>
                       {skipsThisWeek
                         ? 'entfällt diese Woche · 14-tägig'
-                        : [entry.raum, entry.lehrer, entry.biweekly && '14-tägig'].filter(Boolean).join(' · ')}
+                        : [entry.raum, entry.lehrer, entry.biweekly && '14-tägig', entry.optional && 'nach Einladung'].filter(Boolean).join(' · ')}
                     </Text>
                   )}
                 </View>
@@ -574,6 +583,16 @@ export default function SchuleScreen() {
             </TouchableOpacity>
           );
         })}
+        {(selectedDay === 0 || selectedDay === 2) &&
+          familyChildren.find((c) => c.id === selectedChild)?.name === 'Hannes' && (
+          <View style={s.spielzeugtagCard}>
+            <Text style={s.spielzeugtagEmoji}>🧸</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={s.spielzeugtagTitle}>Spielzeugtag im Hort</Text>
+              <Text style={s.spielzeugtagSubtitle}>Nach der Schule – Lieblingsspielzeug einpacken!</Text>
+            </View>
+          </View>
+        )}
       </View>
     </>
   );
@@ -808,6 +827,10 @@ export default function SchuleScreen() {
             <TouchableOpacity style={s.checkboxRow} onPress={() => setFBiweekly((v) => !v)}>
               <Ionicons name={fBiweekly ? 'checkbox' : 'square-outline'} size={18} color={fBiweekly ? colors.accentNeon : colors.textMuted} />
               <Text style={s.checkboxRowText}>Nur alle 2 Wochen (14-tägig)</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={s.checkboxRow} onPress={() => setFOptional((v) => !v)}>
+              <Ionicons name={fOptional ? 'checkbox' : 'square-outline'} size={18} color={fOptional ? colors.accentNeon : colors.textMuted} />
+              <Text style={s.checkboxRowText}>Nur nach Einladung (unregelmäßig)</Text>
             </TouchableOpacity>
             <View style={s.modalActions}>
               <TouchableOpacity onPress={handleClear}>
@@ -1178,6 +1201,16 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
     lessonEmpty: { fontSize: 13, color: colors.textMuted, fontStyle: 'italic' },
     lessonCardPause: { borderColor: colors.warning },
     lessonCardSkipped: { opacity: 0.45 },
+    // Spielzeugtag-Hinweis (Hannes, Hort): bewusst bunt und mit dickerem
+    // Rahmen, damit er sich von den neutralen Stunden-Karten abhebt.
+    spielzeugtagCard: {
+      flexDirection: 'row', alignItems: 'center', gap: 12,
+      backgroundColor: '#F5A62322', borderRadius: 12, paddingVertical: 10, paddingHorizontal: 12,
+      borderWidth: 1.5, borderColor: '#F5A623', marginTop: 4,
+    },
+    spielzeugtagEmoji: { fontSize: 26 },
+    spielzeugtagTitle: { fontSize: 14.5, fontWeight: '800', color: colors.text },
+    spielzeugtagSubtitle: { fontSize: 11.5, color: colors.textMuted, marginTop: 1 },
     lessonFachPause: { color: colors.warning, fontStyle: 'italic' },
     pauseRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 4, paddingVertical: 0 },
     pauseText: { fontSize: 11, color: colors.textMuted, fontStyle: 'italic' },
@@ -1230,6 +1263,9 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
       justifyContent: 'flex-end', gap: 3, marginBottom: 8,
     },
     factLine: { fontSize: 11, color: colors.textMuted },
+    spielzeugtagBanner: {
+      fontSize: 12, color: colors.textSecondary, textAlign: 'center', marginBottom: 8,
+    },
     // Zurückhaltender Link ganz unten zum Bearbeiten der Kontakte/Kurzinfos.
     factsFooter: {
       flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5,
