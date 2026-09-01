@@ -48,6 +48,7 @@ const NEU_TIER_ALPHA: Record<NeuTier, string> = { 2: 'FF', 4: 'B3', 8: '80', 16:
 
 /** Bewusst nicht über colors.danger (wird in mono() vergraut) – wie NotesScreen IMPORTANT_RED. */
 const NOT_ANGEMELDET_RED = '#EF4444';
+const WHATSAPP_GREEN = '#25D366';
 import { getJahrgangStatus, getBetreuungsZeitraum } from '../utils/bambiniSeason';
 
 /** ISO 'YYYY-MM-DD' → 'DD.MM.YYYY' (string-basiert, ohne Zeitzonen-Fallen). */
@@ -320,24 +321,25 @@ export function BambiniScreen() {
         <View style={s.rowMain}>
           <Text style={[s.rowName, c.stopped && s.rowNameStopped]} numberOfLines={1}>{c.name}</Text>
           {c.registeredSince ? (
-            <Text style={s.rowSub}>seit {formatDE(c.registeredSince)}</Text>
+            <Text style={s.rowSub} numberOfLines={1}>seit {formatDE(c.registeredSince)}</Text>
           ) : null}
         </View>
         <View style={s.iconSlot}>
           {c.whatsapp ? (
-            <Ionicons name="logo-whatsapp" size={18} color={colors.textSecondary} accessibilityLabel="In WhatsApp-Gruppe" />
+            <Ionicons name="logo-whatsapp" size={16} color={WHATSAPP_GREEN} accessibilityLabel="In WhatsApp-Gruppe" />
           ) : null}
         </View>
-        <View style={s.nichtAngemeldetSlot}>
-          {!c.vereinAngemeldet ? <Text style={s.badgeNichtAngemeldet}>nicht angemeldet</Text> : null}
+        <View style={s.iconSlot}>
+          {!c.vereinAngemeldet ? (
+            <Ionicons name="alert-circle" size={16} color={NOT_ANGEMELDET_RED} accessibilityLabel="Nicht im Verein angemeldet" />
+          ) : null}
         </View>
         <View style={s.iconSlot}>
           {c.info ? (
-            <Ionicons name="information-circle-outline" size={18} color={colors.textSecondary} accessibilityLabel="Info vorhanden" />
+            <Ionicons name="information-circle-outline" size={16} color={colors.textSecondary} accessibilityLabel="Info vorhanden" />
           ) : null}
         </View>
         <View style={s.badgeSlot}>
-          {tier ? <Text style={s.badgeNeu}>neu</Text> : null}
           {c.stopped ? <Text style={s.badgeStopped}>aufgehört</Text> : null}
         </View>
         <Text style={s.rowYear}>{c.birthYear || '—'}</Text>
@@ -698,49 +700,28 @@ function makeStyles(c: ThemeColors) {
     row: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 10,
+      gap: 8,
       backgroundColor: c.surface,
       borderWidth: 1,
       borderColor: c.border,
       borderRadius: 10,
-      paddingVertical: 10,
+      paddingVertical: 6,
       paddingHorizontal: 12,
-      marginBottom: 6,
+      marginBottom: 4,
     },
     rowActive: { borderColor: c.border, borderWidth: 1.5 },
     rowMoved: { borderColor: c.border + '40' },
     rowMain: { flex: 1 },
-    rowName: { color: c.text, fontSize: 15, fontWeight: '600' },
+    rowName: { color: c.text, fontSize: 14, fontWeight: '600' },
     rowNameStopped: { textDecorationLine: 'line-through', color: c.textSecondary },
     // Feste Spaltenbreite pro Icon/Badge, sonst rutscht die Spalte je nach Zeile
     // (nicht jedes Kind hat WhatsApp/Info/Badge) hin und her ("Treppeneffekt").
-    iconSlot: { width: 18, alignItems: 'center' },
+    iconSlot: { width: 16, alignItems: 'center' },
     badgeSlot: { width: 62, alignItems: 'flex-start' },
-    nichtAngemeldetSlot: { width: 100, alignItems: 'flex-start' },
-    badgeNichtAngemeldet: {
-      color: '#fff',
-      backgroundColor: NOT_ANGEMELDET_RED,
-      fontSize: 10,
-      fontWeight: '700',
-      overflow: 'hidden',
-      borderRadius: 6,
-      paddingHorizontal: 6,
-      paddingVertical: 2,
-    },
-    rowSub: { color: c.textSecondary, fontSize: 11, marginTop: 1 },
+    rowSub: { color: c.textSecondary, fontSize: 11, marginTop: 0 },
     badgeStopped: {
       color: c.warningFg,
       backgroundColor: c.warning,
-      fontSize: 10,
-      fontWeight: '700',
-      overflow: 'hidden',
-      borderRadius: 6,
-      paddingHorizontal: 6,
-      paddingVertical: 2,
-    },
-    badgeNeu: {
-      color: c.accentFg,
-      backgroundColor: c.accent,
       fontSize: 10,
       fontWeight: '700',
       overflow: 'hidden',
