@@ -639,6 +639,21 @@ export function DashboardScreen() {
     [schoolTasksByChild, familyChildren]
   );
 
+  // Schul-Termine (isInfo mit Datum) der nächsten 3 Tage, kindübergreifend für
+  // die Kurzübersicht – chronologisch, nächster Termin zuerst.
+  const IN_3_DAYS = useMemo(() => format(new Date(Date.now() + 3 * 86400000), 'yyyy-MM-dd'), []);
+  const upcomingSchoolTermine = useMemo(() => {
+    const out: { item: SchoolItem; childId: string }[] = [];
+    for (const child of familyChildren) {
+      for (const item of schoolItemsByChild[child.id] ?? []) {
+        if (item.isInfo && item.date && !item.done && !item.deletedAt && item.date >= TODAY && item.date <= IN_3_DAYS) {
+          out.push({ item, childId: child.id });
+        }
+      }
+    }
+    return out.sort((a, b) => a.item.date.localeCompare(b.item.date));
+  }, [schoolItemsByChild, familyChildren, IN_3_DAYS]);
+
   // TE-138: Tasks-Gruppierung fürs Dashboard entfernt – Tasks erscheinen nur
   // noch im Tasks-Tab, nicht mehr auf dem Dashboard.
 
@@ -988,7 +1003,7 @@ export function DashboardScreen() {
           nichts offen hat. Die drei Schnell-Anlegen-Icons (vorher je ein
           "+" pro Unterüberschrift, TE-152) sitzen jetzt gemeinsam rechts
           im Kopf – Funktion bleibt erhalten, nur kompakter. */}
-      {(showBlock('googleTasks') || showBlock('scratchpad') || showBlock('quickNotes')) && (() => {
+      {(showBlock('googleTasks') || showBlock('scratchpad') || showBlock('quickNotes') || showBlock('schoolTasks')) && (() => {
         const emptyLabels: string[] = [];
         if (showBlock('googleTasks') && dashboardTasks.length === 0) emptyLabels.push('Google Tasks');
         if (showBlock('scratchpad') && personalNotes.length === 0) emptyLabels.push('Personal Tasks');
@@ -1071,6 +1086,21 @@ export function DashboardScreen() {
                   <Text style={[styles.dezentCategory, { color: colors.textMuted }]}>Notiz</Text>
                 </Pressable>
               ))}
+              {showBlock('schoolTasks') && upcomingSchoolTermine.slice(0, 6).map(({ item, childId }) => {
+                const due = taskDue(item.date);
+                return (
+                  <Pressable
+                    key={`st-${item.id}`}
+                    onPress={() => router.push({ pathname: '/(tabs)/schule', params: { child: childId } } as any)}
+                    style={({ pressed }) => [styles.dezentRow, styles.rowDivider, { opacity: pressed ? 0.6 : 1 }]}
+                  >
+                    <View style={[styles.dezentBullet, { backgroundColor: childColor(childId) }]} />
+                    <Ionicons name="book-outline" size={13} color={colors.textMuted} />
+                    <Text style={styles.dezentText} numberOfLines={1}>{item.title}</Text>
+                    {due && <Text style={[styles.dueBadge, due.overdue && styles.dueBadgeOverdue]}>{due.label}</Text>}
+                  </Pressable>
+                );
+              })}
               {emptySummary && (
                 <Text style={[styles.dezentEmptySummary, { color: colors.textMuted }]}>{emptySummary}</Text>
               )}
