@@ -331,7 +331,7 @@ export default function SchuleScreen() {
   const [historyOpen, setHistoryOpen] = useState(false);
 
   const openNewItem = useCallback(() => {
-    setItemTitle(''); setItemDate(''); setItemNotes(''); setItemIsInfo(false);
+    setItemTitle(''); setItemDate(''); setItemNotes(''); setItemIsInfo(true);
     setEditingItem('new');
   }, []);
 
@@ -448,16 +448,15 @@ export default function SchuleScreen() {
   const manualKlassenbuchContent = (
     <View style={s.section}>
       <View style={s.listCard}>
-        {/* Aufgaben linksbündig (Haken links, Text folgt), Info-Einträge
-            rechtsbündig (Text rechtsbündig, Icon am rechten Rand) – Ausrichtung
-            selbst macht den Unterschied zwischen "abhakbar" und "nur Info" sichtbar. */}
+        {/* Alles linksbündig; Aufgaben zusätzlich mit Haken links, Termine/Info
+            ohne Haken, aber mit Info-Icon am rechten Rand. */}
         {openItems.map((item) => (
           <TouchableOpacity key={item.id} style={s.listRow} onPress={() => openEditItem(item)}>
             {item.isInfo ? (
               <>
                 <View style={s.journalBody}>
-                  <Text style={[s.journalText, s.textRight]}>{item.title}</Text>
-                  <Text style={[s.lessonMeta, s.textRight]}>
+                  <Text style={s.journalText}>{item.title}</Text>
+                  <Text style={s.lessonMeta}>
                     {[item.date && journalDayLabel(item.date), item.notes, editedLabel(item)].filter(Boolean).join(' · ')}
                   </Text>
                 </View>
@@ -897,7 +896,7 @@ export default function SchuleScreen() {
       </Modal>
 
       {/* Eintrags-Editor-Modal – ein Feld-Set für alles (Titel/Datum/Notiz),
-          "Nur Info" nimmt dem Eintrag den Haken. */}
+          "Aufgabe" gibt dem Eintrag den Haken (Default: Termin ohne Haken). */}
       <Modal visible={!!editingItem} transparent animationType="fade">
         <Pressable style={s.modalOverlay} onPress={closeItemEditor}>
           <Pressable style={s.modalBox} onPress={() => {}}>
@@ -933,8 +932,8 @@ export default function SchuleScreen() {
               returnKeyType="done"
             />
             <TouchableOpacity style={s.checkboxRow} onPress={() => setItemIsInfo((v) => !v)}>
-              <Ionicons name={itemIsInfo ? 'checkbox' : 'square-outline'} size={18} color={itemIsInfo ? colors.accentNeon : colors.textMuted} />
-              <Text style={s.checkboxRowText}>Nur Info (kein Haken zum Abhaken)</Text>
+              <Ionicons name={itemIsInfo ? 'square-outline' : 'checkbox'} size={18} color={itemIsInfo ? colors.textMuted : colors.accentNeon} />
+              <Text style={s.checkboxRowText}>Aufgabe (mit Haken zum Abhaken)</Text>
             </TouchableOpacity>
 
             <View style={s.modalActions}>
@@ -1248,7 +1247,6 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
     journalDate: { width: 80, fontSize: 11.5, color: colors.textMuted, paddingTop: 1 },
     journalBody: { flex: 1, minWidth: 0 },
     journalText: { fontSize: 13, color: colors.text },
-    textRight: { textAlign: 'right' },
     // Kontakte & Kurzinfos: eine Zeile, Bezeichnung fett+gedimmt, Wert normal.
     factText: { fontSize: 13, color: colors.text, flex: 1 },
     factLabel: { fontWeight: '700', color: colors.textSecondary },
