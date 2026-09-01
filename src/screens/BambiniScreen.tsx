@@ -315,10 +315,12 @@ export function BambiniScreen() {
           s.row,
           status === 'aktiv' && s.rowActive,
           gewechselt && s.rowMoved,
-          { borderLeftWidth: 4, borderLeftColor: tier ? colors.accent + NEU_TIER_ALPHA[tier] : 'transparent' },
         ]}
         onPress={() => openEdit(c)}
       >
+        {tier ? (
+          <View pointerEvents="none" style={[s.newTierBar, { backgroundColor: colors.accent + NEU_TIER_ALPHA[tier] }]} />
+        ) : null}
         <View style={s.rowMain}>
           <Text style={[s.rowName, c.stopped && s.rowNameStopped]} numberOfLines={1}>{c.name}</Text>
           {c.registeredSince ? (
@@ -709,9 +711,14 @@ function makeStyles(c: ThemeColors) {
       paddingVertical: 6,
       paddingHorizontal: 12,
       marginBottom: 4,
+      position: 'relative',
+      overflow: 'hidden',
     },
     rowActive: { borderColor: c.border, borderWidth: 1.5 },
     rowMoved: { borderColor: c.border + '40' },
+    // Overlay statt border-left: hält die Border auf allen vier Seiten für
+    // jede Zeile identisch, unabhängig davon ob sie "neu" markiert ist.
+    newTierBar: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 4 },
     rowMain: { flex: 1 },
     rowName: { color: c.text, fontSize: 14, fontWeight: '600' },
     rowNameStopped: { textDecorationLine: 'line-through', color: c.textSecondary },
