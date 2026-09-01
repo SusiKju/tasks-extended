@@ -56,6 +56,8 @@ export interface BambiniFilters {
   years: number[];
   /** null = alle, true = nur aufgehört, false = nur aktiv. */
   stopped: boolean | null;
+  /** null = alle, true = nur Wackelkandidaten, false = ohne Wackelkandidaten. */
+  wackelkandidat: boolean | null;
 }
 
 export const makeId = (): string => String(uuid.v4());
@@ -141,7 +143,8 @@ export async function loadBambiniFilters(familyId: string): Promise<BambiniFilte
     ? raw.years.filter((y: any) => Number.isFinite(y)).map((y: number) => Math.trunc(y))
     : [];
   const stopped = raw?.stopped === true ? true : raw?.stopped === false ? false : null;
-  return { years, stopped };
+  const wackelkandidat = raw?.wackelkandidat === true ? true : raw?.wackelkandidat === false ? false : null;
+  return { years, stopped, wackelkandidat };
 }
 
 /** Quickfilter-Auswahl (TE-20) speichern. */

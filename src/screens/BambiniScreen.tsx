@@ -115,6 +115,8 @@ export function BambiniScreen() {
   // stoppedFilter: null = alle, true = nur aufgehört, false = nur aktiv (nicht aufgehört).
   const [yearFilter, setYearFilter] = useState<number[]>([]);
   const [stoppedFilter, setStoppedFilter] = useState<boolean | null>(null);
+  // wackelkandidatFilter: null = alle, true = nur Wackelkandidaten, false = ohne Wackelkandidaten.
+  const [wackelkandidatFilter, setWackelkandidatFilter] = useState<boolean | null>(null);
   // Erst nach dem initialen Laden aus Firestore speichern wir Änderungen zurück,
   // sonst würde der leere Default-State die gespeicherte Auswahl überschreiben.
   const filtersLoaded = useRef(false);
@@ -167,6 +169,7 @@ export function BambiniScreen() {
       setChildren(list);
       setYearFilter(filters.years);
       setStoppedFilter(filters.stopped);
+      setWackelkandidatFilter(filters.wackelkandidat);
     } catch (e) {
       console.warn('Bambini laden fehlgeschlagen', e);
     } finally {
@@ -182,10 +185,10 @@ export function BambiniScreen() {
   // TE-20: Filterwechsel in Firestore spiegeln (erst nach dem initialen Laden).
   useEffect(() => {
     if (!filtersLoaded.current || !fid) return;
-    saveBambiniFilters(fid, { years: yearFilter, stopped: stoppedFilter }).catch((e) =>
+    saveBambiniFilters(fid, { years: yearFilter, stopped: stoppedFilter, wackelkandidat: wackelkandidatFilter }).catch((e) =>
       console.warn('Bambini-Filter speichern fehlgeschlagen', e),
     );
-  }, [fid, yearFilter, stoppedFilter]);
+  }, [fid, yearFilter, stoppedFilter, wackelkandidatFilter]);
 
   const persist = useCallback(
     (next: Child[]) => {
@@ -272,6 +275,7 @@ export function BambiniScreen() {
     }
     if (yearFilter.length > 0 && !yearFilter.includes(c.birthYear)) return false;
     if (stoppedFilter !== null && c.stopped !== stoppedFilter) return false;
+    if (wackelkandidatFilter !== null && c.schnuppertraining !== wackelkandidatFilter) return false;
     return true;
   });
 
@@ -386,6 +390,12 @@ export function BambiniScreen() {
               >
                 <Text style={[s.filterChipText, stoppedFilter === true && s.filterChipTextActive]}>Aufgehört</Text>
               </Pressable>
+              <Pressable
+                style={[s.filterChip, wackelkandidatFilter === true && s.filterChipActive]}
+                onPress={() => setWackelkandidatFilter((v) => (v === true ? null : true))}
+              >
+                <Text style={[s.filterChipText, wackelkandidatFilter === true && s.filterChipTextActive]}>Wackelkandidaten</Text>
+              </Pressable>
               {yearCounts.map(({ year }) => (
                 <Pressable
                   key={year}
@@ -402,7 +412,7 @@ export function BambiniScreen() {
             </ScrollView>
           ) : null}
 
-          {yearFilter.length > 0 || stoppedFilter !== null ? (
+          {yearFilter.length > 0 || stoppedFilter !== null || wackelkandidatFilter !== null ? (
             <Text style={s.resultCount}>{filtered.length} Treffer</Text>
           ) : null}
 
@@ -415,7 +425,7 @@ export function BambiniScreen() {
               <>
               {schnupperItems.length > 0 ? (
                 <View style={s.group}>
-                  <Text style={s.schnupperHeading}>Schnuppertraining</Text>
+                  <Text style={s.schnupperHeading}>Wackelkandidaten</Text>
                   {schnupperItems.map((c) => (
                     <WobbleRow key={c.id}>{renderChildRow(c, null, false)}</WobbleRow>
                   ))}
@@ -553,7 +563,7 @@ export function BambiniScreen() {
                 size={22}
                 color={schnuppertrainingInput ? colors.accent : colors.textSecondary}
               />
-              <Text style={[s.checkLabel, { color: colors.text }]}>Schnuppertraining</Text>
+              <Text style={[s.checkLabel, { color: colors.text }]}>Wackelkandidat</Text>
             </Pressable>
 
             <TextInput
