@@ -21,6 +21,7 @@ import {
   Platform,
   KeyboardAvoidingView,
   Linking,
+  Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, ThemeColors } from '../utils/theme';
@@ -78,6 +79,25 @@ function confirmDelete(name: string, onConfirm: () => void) {
       { text: 'Löschen', style: 'destructive', onPress: onConfirm },
     ]);
   }
+}
+
+/** Wackelanimation für Schnuppertraining-Kinder ("Wackelkandidaten"). */
+function WobbleRow({ children }: { children: React.ReactNode }) {
+  const rotate = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(rotate, { toValue: 1, duration: 100, useNativeDriver: true }),
+        Animated.timing(rotate, { toValue: -1, duration: 200, useNativeDriver: true }),
+        Animated.timing(rotate, { toValue: 0, duration: 100, useNativeDriver: true }),
+        Animated.timing(rotate, { toValue: 0, duration: 1400, useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [rotate]);
+  const rotateDeg = rotate.interpolate({ inputRange: [-1, 1], outputRange: ['-2.5deg', '2.5deg'] });
+  return <Animated.View style={{ transform: [{ rotate: rotateDeg }] }}>{children}</Animated.View>;
 }
 
 export function BambiniScreen() {
@@ -365,45 +385,50 @@ export function BambiniScreen() {
                   <React.Fragment key={c.id}>
                   {showSchnupperHeading ? <Text style={s.schnupperHeading}>Schnuppertraining</Text> : null}
                   {showSchnupperDivider ? <View style={s.schnupperDivider} /> : null}
-                  <Pressable
-                    style={[
-                      s.row,
-                      status === 'aktiv' && s.rowActive,
-                      gewechselt && s.rowMoved,
-                      tier ? { borderLeftWidth: 4, borderLeftColor: colors.accent + NEU_TIER_ALPHA[tier] } : null,
-                    ]}
-                    onPress={() => openEdit(c)}
-                  >
-                    <View style={s.rowMain}>
-                      <Text style={[s.rowName, c.stopped && s.rowNameStopped]} numberOfLines={1}>{c.name}</Text>
-                      {c.registeredSince ? (
-                        <Text style={s.rowSub}>seit {formatDE(c.registeredSince)}</Text>
-                      ) : null}
-                    </View>
-                    <View style={s.iconSlot}>
-                      {c.whatsapp ? (
-                        <Ionicons name="logo-whatsapp" size={18} color={colors.textSecondary} accessibilityLabel="In WhatsApp-Gruppe" />
-                      ) : null}
-                    </View>
-                    <View style={s.iconSlot}>
-                      {!c.vereinAngemeldet ? (
-                        <Ionicons name="ellipse" size={10} color={NOT_ANGEMELDET_RED} accessibilityLabel="Nicht im Verein angemeldet" />
-                      ) : null}
-                    </View>
-                    <View style={s.iconSlot}>
-                      {c.info ? (
-                        <Ionicons name="information-circle-outline" size={18} color={colors.textSecondary} accessibilityLabel="Info vorhanden" />
-                      ) : null}
-                    </View>
-                    <View style={s.badgeSlot}>
-                      {tier ? <Text style={s.badgeNeu}>neu</Text> : null}
-                      {c.stopped ? <Text style={s.badgeStopped}>aufgehört</Text> : null}
-                    </View>
-                    <Text style={s.rowYear}>{c.birthYear || '—'}</Text>
-                    <Pressable onPress={() => removeEntry(c)} hitSlop={8} style={s.rowDel} accessibilityLabel="Löschen">
-                      <Ionicons name="trash-outline" size={18} color={colors.textSecondary} />
-                    </Pressable>
-                  </Pressable>
+                  {(() => {
+                    const row = (
+                      <Pressable
+                        style={[
+                          s.row,
+                          status === 'aktiv' && s.rowActive,
+                          gewechselt && s.rowMoved,
+                          tier ? { borderLeftWidth: 4, borderLeftColor: colors.accent + NEU_TIER_ALPHA[tier] } : null,
+                        ]}
+                        onPress={() => openEdit(c)}
+                      >
+                        <View style={s.rowMain}>
+                          <Text style={[s.rowName, c.stopped && s.rowNameStopped]} numberOfLines={1}>{c.name}</Text>
+                          {c.registeredSince ? (
+                            <Text style={s.rowSub}>seit {formatDE(c.registeredSince)}</Text>
+                          ) : null}
+                        </View>
+                        <View style={s.iconSlot}>
+                          {c.whatsapp ? (
+                            <Ionicons name="logo-whatsapp" size={18} color={colors.textSecondary} accessibilityLabel="In WhatsApp-Gruppe" />
+                          ) : null}
+                        </View>
+                        <View style={s.iconSlot}>
+                          {!c.vereinAngemeldet ? (
+                            <Ionicons name="ellipse" size={10} color={NOT_ANGEMELDET_RED} accessibilityLabel="Nicht im Verein angemeldet" />
+                          ) : null}
+                        </View>
+                        <View style={s.iconSlot}>
+                          {c.info ? (
+                            <Ionicons name="information-circle-outline" size={18} color={colors.textSecondary} accessibilityLabel="Info vorhanden" />
+                          ) : null}
+                        </View>
+                        <View style={s.badgeSlot}>
+                          {tier ? <Text style={s.badgeNeu}>neu</Text> : null}
+                          {c.stopped ? <Text style={s.badgeStopped}>aufgehört</Text> : null}
+                        </View>
+                        <Text style={s.rowYear}>{c.birthYear || '—'}</Text>
+                        <Pressable onPress={() => removeEntry(c)} hitSlop={8} style={s.rowDel} accessibilityLabel="Löschen">
+                          <Ionicons name="trash-outline" size={18} color={colors.textSecondary} />
+                        </Pressable>
+                      </Pressable>
+                    );
+                    return c.schnuppertraining ? <WobbleRow key={c.id}>{row}</WobbleRow> : row;
+                  })()}
                   </React.Fragment>
                   );
                 })}
