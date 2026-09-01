@@ -521,7 +521,7 @@ export function BambiniScreen() {
             <Pressable style={s.dateField} onPress={() => setShowDatePicker(true)}>
               <Ionicons name="calendar-outline" size={18} color={colors.textSecondary} />
               <Text style={[s.dateFieldText, { color: sinceInput ? colors.text : colors.placeholder }]}>
-                {sinceInput ? `Angemeldet seit ${formatDE(sinceInput)}` : 'Angemeldet seit …'}
+                {sinceInput ? `Das erste Mal da seit ${formatDE(sinceInput)}` : 'Das erste Mal da seit …'}
               </Text>
               {sinceInput ? (
                 <Pressable onPress={() => setSinceInput('')} hitSlop={8} accessibilityLabel="Datum entfernen">

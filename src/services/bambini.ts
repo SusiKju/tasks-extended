@@ -32,7 +32,7 @@ export interface Child {
   name: string;
   /** Geburtsjahr, z. B. 2019. 0 = unbekannt. */
   birthYear: number;
-  /** Angemeldet seit – ISO 'YYYY-MM-DD', optional ('' = nicht gesetzt) (TE-22). */
+  /** Das erste Mal da (erstes Training) – ISO 'YYYY-MM-DD', optional ('' = nicht gesetzt) (TE-22). */
   registeredSince: string;
   /** Hat aufgehört (TE-22). */
   stopped: boolean;
