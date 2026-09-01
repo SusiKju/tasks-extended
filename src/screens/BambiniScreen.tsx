@@ -328,10 +328,8 @@ export function BambiniScreen() {
             <Ionicons name="logo-whatsapp" size={18} color={colors.textSecondary} accessibilityLabel="In WhatsApp-Gruppe" />
           ) : null}
         </View>
-        <View style={s.iconSlot}>
-          {!c.vereinAngemeldet ? (
-            <Ionicons name="ellipse" size={10} color={NOT_ANGEMELDET_RED} accessibilityLabel="Nicht im Verein angemeldet" />
-          ) : null}
+        <View style={s.nichtAngemeldetSlot}>
+          {!c.vereinAngemeldet ? <Text style={s.badgeNichtAngemeldet}>nicht angemeldet</Text> : null}
         </View>
         <View style={s.iconSlot}>
           {c.info ? (
@@ -718,6 +716,17 @@ function makeStyles(c: ThemeColors) {
     // (nicht jedes Kind hat WhatsApp/Info/Badge) hin und her ("Treppeneffekt").
     iconSlot: { width: 18, alignItems: 'center' },
     badgeSlot: { width: 62, alignItems: 'flex-start' },
+    nichtAngemeldetSlot: { width: 100, alignItems: 'flex-start' },
+    badgeNichtAngemeldet: {
+      color: '#fff',
+      backgroundColor: NOT_ANGEMELDET_RED,
+      fontSize: 10,
+      fontWeight: '700',
+      overflow: 'hidden',
+      borderRadius: 6,
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+    },
     rowSub: { color: c.textSecondary, fontSize: 11, marginTop: 1 },
     badgeStopped: {
       color: c.warningFg,
