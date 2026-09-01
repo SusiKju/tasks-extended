@@ -332,7 +332,7 @@ export function BambiniScreen() {
         </View>
         <View style={s.iconSlot}>
           {!c.vereinAngemeldet ? (
-            <Ionicons name="alert-circle" size={20} color={NOT_ANGEMELDET_RED} accessibilityLabel="Nicht im Verein angemeldet" />
+            <Ionicons name="document-text" size={20} color={NOT_ANGEMELDET_RED} accessibilityLabel="Nicht im Verein angemeldet" />
           ) : null}
         </View>
         <View style={s.iconSlot}>
