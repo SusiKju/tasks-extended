@@ -494,16 +494,7 @@ export function BambiniScreen() {
               <View style={s.markedBox}>
                 <Text style={s.markedBoxTitle}>Nächste Aufgaben</Text>
                 {markedNotizItems.map((n) => (
-                  <View key={n.id} style={s.markedRow}>
-                    <Ionicons name="star" size={18} color="#F2C518" />
-                    <Text style={s.markedText} numberOfLines={1}>{n.text}</Text>
-                    <Pressable onPress={() => toggleNotizMarked(n.id)} hitSlop={8} accessibilityLabel="Erledigt (Markierung entfernen)">
-                      <Ionicons name="checkmark-circle-outline" size={20} color={colors.textSecondary} />
-                    </Pressable>
-                    <Pressable onPress={() => deleteNotizItem(n.id)} hitSlop={8} accessibilityLabel="Löschen">
-                      <Ionicons name="trash-outline" size={18} color={colors.textSecondary} />
-                    </Pressable>
-                  </View>
+                  <Text key={n.id} style={s.markedText} numberOfLines={1}>{n.text}</Text>
                 ))}
               </View>
             ) : null}
@@ -975,8 +966,7 @@ function makeStyles(c: ThemeColors) {
       marginBottom: 16,
     },
     markedBoxTitle: { color: '#F2C518', fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 },
-    markedRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6 },
-    markedText: { flex: 1, color: c.text, fontSize: 14 },
+    markedText: { color: c.text, fontSize: 14, paddingVertical: 6 },
     input: {
       backgroundColor: c.inputBackground,
       borderWidth: 1,
