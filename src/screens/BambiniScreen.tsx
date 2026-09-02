@@ -311,6 +311,8 @@ export function BambiniScreen() {
     setTrainingsideeEditId(null);
   }, [trainingsideeEditId, trainingsideeEditText, trainingsideenItems, persistTrainingsideenItems]);
 
+  const markedTrainingsideenItems = trainingsideenItems.filter((n) => n.marked);
+
   const reload = useCallback(async () => {
     if (!fid) {
       setChildren([]);
@@ -320,7 +322,12 @@ export function BambiniScreen() {
     setLoading(true);
     try {
       await migrateRosterToBambini(fid);
-      const [list, filters, notiz] = await Promise.all([loadBambini(fid), loadBambiniFilters(fid), loadBambiniNotizItems(fid)]);
+      const [list, filters, notiz, trainingsideen] = await Promise.all([
+        loadBambini(fid),
+        loadBambiniFilters(fid),
+        loadBambiniNotizItems(fid),
+        loadBambiniTrainingsideenItems(fid),
+      ]);
       setChildren(list);
       setYearFilter(filters.years);
       setStoppedFilter(filters.stopped);
@@ -329,6 +336,7 @@ export function BambiniScreen() {
       setSortReversed(filters.sortReversed);
       setFiltersOpen(filters.filtersOpen);
       setNotizItems(notiz);
+      setTrainingsideenItems(trainingsideen);
     } catch (e) {
       console.warn('Bambini laden fehlgeschlagen', e);
     } finally {
@@ -611,6 +619,18 @@ export function BambiniScreen() {
                 {markedNotizItems.map((n) => (
                   <View key={n.id} style={s.markedItemRow}>
                     <View style={s.markedDot} />
+                    <Text style={s.markedText} numberOfLines={1}>{n.text}</Text>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+
+            {/* TE-113: markierte Trainingsideen als blaue Alert-Box, gleiches Blau wie der Trainingsideen-FAB. */}
+            {markedTrainingsideenItems.length > 0 ? (
+              <View style={[s.markedBox, s.markedBoxBlau]}>
+                {markedTrainingsideenItems.map((n) => (
+                  <View key={n.id} style={s.markedItemRow}>
+                    <View style={[s.markedDot, s.markedDotBlau]} />
                     <Text style={s.markedText} numberOfLines={1}>{n.text}</Text>
                   </View>
                 ))}
@@ -1249,6 +1269,8 @@ function makeStyles(c: ThemeColors) {
     markedItemRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6 },
     markedDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#F2C518' },
     markedText: { flex: 1, color: c.text, fontSize: 14 },
+    markedBoxBlau: { backgroundColor: '#4A9EFF26', borderColor: '#4A9EFF' },
+    markedDotBlau: { backgroundColor: '#4A9EFF' },
     input: {
       backgroundColor: c.inputBackground,
       borderWidth: 1,
