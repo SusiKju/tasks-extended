@@ -156,6 +156,8 @@ export function BambiniScreen() {
   const [notizItems, setNotizItems] = useState<NotizItem[]>([]);
   const [notizInput, setNotizInput] = useState('');
   const [notizHistoryOpenId, setNotizHistoryOpenId] = useState<string | null>(null);
+  const [notizEditId, setNotizEditId] = useState<string | null>(null);
+  const [notizEditText, setNotizEditText] = useState('');
 
   const openNotizen = useCallback(() => {
     setNotizInput('');
@@ -196,6 +198,31 @@ export function BambiniScreen() {
   const deleteNotizItem = useCallback((id: string) => {
     persistNotizItems(notizItems.filter((n) => n.id !== id));
   }, [notizItems, persistNotizItems]);
+
+  const startEditNotiz = useCallback((n: NotizItem) => {
+    setNotizEditId(n.id);
+    setNotizEditText(n.text);
+  }, []);
+
+  const cancelEditNotiz = useCallback(() => setNotizEditId(null), []);
+
+  const saveEditNotiz = useCallback(() => {
+    const text = notizEditText.trim();
+    const editing = notizItems.find((n) => n.id === notizEditId);
+    if (!editing || !text || text === editing.text) {
+      setNotizEditId(null);
+      return;
+    }
+    const now = new Date().toISOString();
+    persistNotizItems(
+      notizItems.map((n) =>
+        n.id === notizEditId
+          ? { ...n, text, history: [...n.history, { ts: now, text: `bearbeitet (vorher: "${editing.text}")` }] }
+          : n,
+      ),
+    );
+    setNotizEditId(null);
+  }, [notizEditId, notizEditText, notizItems, persistNotizItems]);
 
   const markedNotizItems = notizItems.filter((n) => n.marked);
 
@@ -689,10 +716,34 @@ export function BambiniScreen() {
                       >
                         <Ionicons name={n.marked ? 'star' : 'star-outline'} size={20} color="#F2C518" />
                       </Pressable>
-                      <Text style={s.notizItemText}>{n.text}</Text>
-                      <Pressable onPress={() => deleteNotizItem(n.id)} hitSlop={8} accessibilityLabel="Löschen">
-                        <Ionicons name="trash-outline" size={18} color={colors.textSecondary} />
-                      </Pressable>
+                      {notizEditId === n.id ? (
+                        <>
+                          <TextInput
+                            style={[s.input, s.notizEditInput]}
+                            value={notizEditText}
+                            onChangeText={setNotizEditText}
+                            onSubmitEditing={saveEditNotiz}
+                            returnKeyType="done"
+                            autoFocus
+                          />
+                          <Pressable onPress={saveEditNotiz} hitSlop={8} accessibilityLabel="Speichern">
+                            <Ionicons name="checkmark" size={20} color={colors.accent} />
+                          </Pressable>
+                          <Pressable onPress={cancelEditNotiz} hitSlop={8} accessibilityLabel="Abbrechen">
+                            <Ionicons name="close" size={18} color={colors.textSecondary} />
+                          </Pressable>
+                        </>
+                      ) : (
+                        <>
+                          <Text style={s.notizItemText}>{n.text}</Text>
+                          <Pressable onPress={() => startEditNotiz(n)} hitSlop={8} accessibilityLabel="Bearbeiten">
+                            <Ionicons name="pencil-outline" size={18} color={colors.textSecondary} />
+                          </Pressable>
+                          <Pressable onPress={() => deleteNotizItem(n.id)} hitSlop={8} accessibilityLabel="Löschen">
+                            <Ionicons name="trash-outline" size={18} color={colors.textSecondary} />
+                          </Pressable>
+                        </>
+                      )}
                     </View>
                     <Pressable onPress={() => setNotizHistoryOpenId((v) => (v === n.id ? null : n.id))}>
                       <Text style={s.notizItemMeta}>{formatDateTimeDE(n.createdAt)}</Text>
@@ -906,6 +957,7 @@ function makeStyles(c: ThemeColors) {
     notizItemRow: { paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: c.border, gap: 4 },
     notizItemMain: { flexDirection: 'row', alignItems: 'center', gap: 8 },
     notizItemText: { flex: 1, color: c.text, fontSize: 15 },
+    notizEditInput: { flex: 1, paddingVertical: 4, fontSize: 15 },
     notizItemMeta: { color: c.textSecondary, fontSize: 12, marginLeft: 28 },
     notizHistory: { marginLeft: 28, marginTop: 2, gap: 2 },
     notizHistoryEntry: { color: c.textSecondary, fontSize: 11 },
