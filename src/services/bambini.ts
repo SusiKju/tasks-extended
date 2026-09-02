@@ -65,6 +65,8 @@ export interface BambiniFilters {
   sortMode: BambiniSortMode;
   /** Sortierrichtung umgekehrt (TE-109). */
   sortReversed: boolean;
+  /** Filter-/Sortierbereich (Suche, Quickfilter, Sortierung) eingeblendet (TE-110). */
+  filtersOpen: boolean;
 }
 
 export const makeId = (): string => String(uuid.v4());
@@ -153,7 +155,8 @@ export async function loadBambiniFilters(familyId: string): Promise<BambiniFilte
   const wackelkandidat = raw?.wackelkandidat === true ? true : raw?.wackelkandidat === false ? false : null;
   const sortMode: BambiniSortMode = raw?.sortMode === 'erstesmal' ? 'erstesmal' : 'jahrgang';
   const sortReversed = !!raw?.sortReversed;
-  return { years, stopped, wackelkandidat, sortMode, sortReversed };
+  const filtersOpen = raw?.filtersOpen !== false;
+  return { years, stopped, wackelkandidat, sortMode, sortReversed, filtersOpen };
 }
 
 /** Quickfilter-Auswahl (TE-20) speichern. */

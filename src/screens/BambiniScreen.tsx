@@ -21,7 +21,6 @@ import {
   Platform,
   KeyboardAvoidingView,
   Linking,
-  Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, ThemeColors } from '../utils/theme';
@@ -101,25 +100,6 @@ const SORT_OPTIONS: { value: BambiniSortMode; label: string }[] = [
   { value: 'erstesmal', label: 'Dabei seit' },
 ];
 
-/** Wackelanimation für Schnuppertraining-Kinder ("Wackelkandidaten"). */
-function WobbleRow({ children }: { children: React.ReactNode }) {
-  const rotate = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(rotate, { toValue: 1, duration: 100, useNativeDriver: true }),
-        Animated.timing(rotate, { toValue: -1, duration: 200, useNativeDriver: true }),
-        Animated.timing(rotate, { toValue: 0, duration: 100, useNativeDriver: true }),
-        Animated.timing(rotate, { toValue: 0, duration: 1400, useNativeDriver: true }),
-      ])
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [rotate]);
-  const rotateDeg = rotate.interpolate({ inputRange: [-1, 1], outputRange: ['-2.5deg', '2.5deg'] });
-  return <Animated.View style={{ transform: [{ rotate: rotateDeg }] }}>{children}</Animated.View>;
-}
-
 export function BambiniScreen() {
   const { colors } = useTheme();
   const { familyId } = useFamily();
@@ -142,6 +122,9 @@ export function BambiniScreen() {
   const [sortMode, setSortMode] = useState<BambiniSortMode>('jahrgang');
   const [sortReversed, setSortReversed] = useState(false);
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
+  // TE-110: Such-/Filter-/Sortierbereich ein-/ausblendbar, sitzt inline über der
+  // Liste (kein Modal) – Zustand ebenfalls family-weit persistiert.
+  const [filtersOpen, setFiltersOpen] = useState(true);
   // Erst nach dem initialen Laden aus Firestore speichern wir Änderungen zurück,
   // sonst würde der leere Default-State die gespeicherte Auswahl überschreiben.
   const filtersLoaded = useRef(false);
@@ -262,6 +245,7 @@ export function BambiniScreen() {
       setWackelkandidatFilter(filters.wackelkandidat);
       setSortMode(filters.sortMode);
       setSortReversed(filters.sortReversed);
+      setFiltersOpen(filters.filtersOpen);
       setNotizItems(notiz);
     } catch (e) {
       console.warn('Bambini laden fehlgeschlagen', e);
@@ -284,8 +268,9 @@ export function BambiniScreen() {
       wackelkandidat: wackelkandidatFilter,
       sortMode,
       sortReversed,
+      filtersOpen,
     }).catch((e) => console.warn('Bambini-Filter speichern fehlgeschlagen', e));
-  }, [fid, yearFilter, stoppedFilter, wackelkandidatFilter, sortMode, sortReversed]);
+  }, [fid, yearFilter, stoppedFilter, wackelkandidatFilter, sortMode, sortReversed, filtersOpen]);
 
   const persist = useCallback(
     (next: Child[]) => {
@@ -404,7 +389,7 @@ export function BambiniScreen() {
   const yearSummary = yearCounts.map(({ year, count }) => `${year || '—'}: ${count}`).join(', ');
   const overviewText = `${children.length} Kinder · ${stoppedCount} aufgehört${yearSummary ? ' · ' + yearSummary : ''}`;
 
-  const renderChildRow = (c: Child, status: 'aktiv' | 'gewechselt' | null, gewechselt: boolean) => {
+  const renderChildRow = (c: Child, index: number, status: 'aktiv' | 'gewechselt' | null, gewechselt: boolean) => {
     const tier = c.stopped ? null : neuTier(c.registeredSince);
     return (
       <Pressable
@@ -412,12 +397,14 @@ export function BambiniScreen() {
           s.row,
           status === 'aktiv' && s.rowActive,
           gewechselt && s.rowMoved,
+          c.schnuppertraining && s.rowSchnupper,
         ]}
         onPress={() => openEdit(c)}
       >
         {tier ? (
           <View pointerEvents="none" style={[s.newTierBar, { backgroundColor: colors.accent + NEU_TIER_ALPHA[tier] }]} />
         ) : null}
+        <Text style={s.rowIndex}>{index + 1}.</Text>
         <View style={s.rowMain}>
           <Text style={[s.rowName, c.stopped && s.rowNameStopped]} numberOfLines={1}>{c.name}</Text>
           {c.registeredSince ? (
@@ -454,76 +441,89 @@ export function BambiniScreen() {
       ) : (
         <>
           {children.length > 0 ? (
-            <Text style={s.overview}>{overviewText}</Text>
-          ) : null}
-
-          {children.length > 0 ? (
-            <SearchInput
-              value={query}
-              onChangeText={setQuery}
-              placeholder="Suchen (ab 3 Zeichen)"
-              colors={colors}
-              style={s.searchInputMargin}
-            />
-          ) : null}
-
-          {children.length > 0 ? (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={s.quickFiltersScroll}
-              contentContainerStyle={s.quickFilters}
-              keyboardShouldPersistTaps="handled"
-            >
+            <View style={s.filterToggleRow}>
+              <Text style={s.overview} numberOfLines={2}>{overviewText}</Text>
               <Pressable
-                style={[s.filterChip, stoppedFilter === false && s.filterChipActive]}
-                onPress={() => setStoppedFilter((v) => (v === false ? null : false))}
+                style={[s.filterToggleBtn, filtersOpen && s.filterToggleBtnActive]}
+                onPress={() => setFiltersOpen((v) => !v)}
+                accessibilityLabel={filtersOpen ? 'Filter schließen' : 'Filter anzeigen'}
               >
-                <Text style={[s.filterChipText, stoppedFilter === false && s.filterChipTextActive]}>Aktiv</Text>
-              </Pressable>
-              <Pressable
-                style={[s.filterChip, stoppedFilter === true && s.filterChipActive]}
-                onPress={() => setStoppedFilter((v) => (v === true ? null : true))}
-              >
-                <Text style={[s.filterChipText, stoppedFilter === true && s.filterChipTextActive]}>Aufgehört</Text>
-              </Pressable>
-              <Pressable
-                style={[s.filterChip, wackelkandidatFilter === true && s.filterChipActive]}
-                onPress={() => setWackelkandidatFilter((v) => (v === true ? null : true))}
-              >
-                <Text style={[s.filterChipText, wackelkandidatFilter === true && s.filterChipTextActive]}>Wackelkandidaten</Text>
-              </Pressable>
-              {yearCounts.map(({ year }) => (
-                <Pressable
-                  key={year}
-                  style={[s.filterChip, yearFilter.includes(year) && s.filterChipActive]}
-                  onPress={() =>
-                    setYearFilter((v) => (v.includes(year) ? v.filter((y) => y !== year) : [...v, year]))
-                  }
-                >
-                  <Text style={[s.filterChipText, yearFilter.includes(year) && s.filterChipTextActive]}>
-                    {year || 'Ohne Jahrgang'}
-                  </Text>
-                </Pressable>
-              ))}
-            </ScrollView>
-          ) : null}
-
-          {children.length > 0 ? (
-            <View style={s.sortRow}>
-              <Text style={s.sortLabel}>Sortierung</Text>
-              <Pressable style={s.sortButton} onPress={() => setSortMenuOpen(true)} accessibilityLabel="Sortierung wählen">
-                <Text style={s.sortButtonText} numberOfLines={1}>
-                  {SORT_OPTIONS.find((o) => o.value === sortMode)?.label}
-                </Text>
-                <Ionicons name={sortReversed ? 'arrow-up' : 'arrow-down'} size={14} color={colors.textSecondary} />
-                <Ionicons name="chevron-down" size={14} color={colors.textSecondary} />
+                <Ionicons
+                  name={filtersOpen ? 'close' : 'options-outline'}
+                  size={18}
+                  color={filtersOpen ? colors.accentFg : colors.textSecondary}
+                />
               </Pressable>
             </View>
           ) : null}
 
-          {yearFilter.length > 0 || stoppedFilter !== null || wackelkandidatFilter !== null ? (
-            <Text style={s.resultCount}>{filtered.length} Treffer</Text>
+          {/* TE-110: Such-/Filter-/Sortierbereich – sitzt inline über der Liste (kein
+              eigener Layer), ein-/ausblendbar über den Filter-Button oben. */}
+          {children.length > 0 && filtersOpen ? (
+            <>
+              <SearchInput
+                value={query}
+                onChangeText={setQuery}
+                placeholder="Suchen (ab 3 Zeichen)"
+                colors={colors}
+                style={s.searchInputMargin}
+              />
+
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={s.quickFiltersScroll}
+                contentContainerStyle={s.quickFilters}
+                keyboardShouldPersistTaps="handled"
+              >
+                <Pressable
+                  style={[s.filterChip, stoppedFilter === false && s.filterChipActive]}
+                  onPress={() => setStoppedFilter((v) => (v === false ? null : false))}
+                >
+                  <Text style={[s.filterChipText, stoppedFilter === false && s.filterChipTextActive]}>Aktiv</Text>
+                </Pressable>
+                <Pressable
+                  style={[s.filterChip, stoppedFilter === true && s.filterChipActive]}
+                  onPress={() => setStoppedFilter((v) => (v === true ? null : true))}
+                >
+                  <Text style={[s.filterChipText, stoppedFilter === true && s.filterChipTextActive]}>Aufgehört</Text>
+                </Pressable>
+                <Pressable
+                  style={[s.filterChip, wackelkandidatFilter === true && s.filterChipActive]}
+                  onPress={() => setWackelkandidatFilter((v) => (v === true ? null : true))}
+                >
+                  <Text style={[s.filterChipText, wackelkandidatFilter === true && s.filterChipTextActive]}>Wackelkandidaten</Text>
+                </Pressable>
+                {yearCounts.map(({ year }) => (
+                  <Pressable
+                    key={year}
+                    style={[s.filterChip, yearFilter.includes(year) && s.filterChipActive]}
+                    onPress={() =>
+                      setYearFilter((v) => (v.includes(year) ? v.filter((y) => y !== year) : [...v, year]))
+                    }
+                  >
+                    <Text style={[s.filterChipText, yearFilter.includes(year) && s.filterChipTextActive]}>
+                      {year || 'Ohne Jahrgang'}
+                    </Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+
+              <View style={s.sortRow}>
+                <Text style={s.sortLabel}>Sortierung</Text>
+                <Pressable style={s.sortButton} onPress={() => setSortMenuOpen(true)} accessibilityLabel="Sortierung wählen">
+                  <Text style={s.sortButtonText} numberOfLines={1}>
+                    {SORT_OPTIONS.find((o) => o.value === sortMode)?.label}
+                  </Text>
+                  <Ionicons name={sortReversed ? 'arrow-up' : 'arrow-down'} size={14} color={colors.textSecondary} />
+                  <Ionicons name="chevron-down" size={14} color={colors.textSecondary} />
+                </Pressable>
+              </View>
+
+              {yearFilter.length > 0 || stoppedFilter !== null || wackelkandidatFilter !== null ? (
+                <Text style={s.resultCount}>{filtered.length} Treffer</Text>
+              ) : null}
+            </>
           ) : null}
 
           <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
@@ -544,15 +544,10 @@ export function BambiniScreen() {
             ) : sorted.length === 0 ? (
               <Text style={s.empty}>Keine Treffer.</Text>
             ) : (
-              sorted.map((c) => {
+              sorted.map((c, index) => {
                 const status = c.birthYear ? getJahrgangStatus(c.birthYear) : null;
                 const gewechselt = status === 'gewechselt';
-                const row = renderChildRow(c, status, gewechselt);
-                return c.schnuppertraining ? (
-                  <WobbleRow key={c.id}>{row}</WobbleRow>
-                ) : (
-                  <React.Fragment key={c.id}>{row}</React.Fragment>
-                );
+                return <React.Fragment key={c.id}>{renderChildRow(c, index, status, gewechselt)}</React.Fragment>;
               })
             )}
 
@@ -848,14 +843,33 @@ function makeStyles(c: ThemeColors) {
     scroll: { padding: 12, paddingBottom: 96 },
     empty: { color: c.textSecondary, textAlign: 'center', marginTop: 40, fontSize: 14 },
 
-    // TE-97: kompakte Übersicht über alle Kinder, reiner Text ohne Button-Optik.
-    overview: {
-      color: c.textSecondary,
-      fontSize: 12,
-      fontWeight: '600',
+    // TE-110: Übersicht + Filter-Toggle in einer Zeile.
+    filterToggleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 8,
       marginHorizontal: 12,
       marginTop: 10,
     },
+    // TE-97: kompakte Übersicht über alle Kinder, reiner Text ohne Button-Optik.
+    overview: {
+      flex: 1,
+      color: c.textSecondary,
+      fontSize: 12,
+      fontWeight: '600',
+    },
+    filterToggleBtn: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: c.inputBackground,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    filterToggleBtnActive: { backgroundColor: c.accent, borderColor: c.accent },
 
     // TE-98: SearchInput-Komponente mit globalem Design.
     searchInputMargin: {
@@ -936,9 +950,13 @@ function makeStyles(c: ThemeColors) {
     },
     rowActive: { borderColor: c.border, borderWidth: 1.5 },
     rowMoved: { borderColor: c.border + '40' },
+    // TE-110: Wackelkandidaten früher per Wobble-Animation hervorgehoben, jetzt
+    // stattdessen einfach etwas transparenter.
+    rowSchnupper: { opacity: 0.55 },
     // Overlay statt border-left: hält die Border auf allen vier Seiten für
     // jede Zeile identisch, unabhängig davon ob sie "neu" markiert ist.
     newTierBar: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 4 },
+    rowIndex: { color: c.textSecondary, fontSize: 12, fontWeight: '600', width: 24, textAlign: 'right' },
     rowMain: { flex: 1 },
     rowName: { color: c.text, fontSize: 14, fontWeight: '600' },
     rowNameStopped: { textDecorationLine: 'line-through', color: c.textSecondary },
