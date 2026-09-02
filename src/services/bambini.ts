@@ -206,6 +206,22 @@ export async function loadBambiniNotizItems(familyId: string): Promise<NotizItem
   return migrated;
 }
 
+/** Trainingsideen-Items (TE-113) speichern – eigenes Feld im selben Dokument wie die Kinder. */
+export async function saveBambiniTrainingsideenItems(familyId: string, items: NotizItem[]): Promise<void> {
+  const clean = items
+    .map(sanitizeNotizItem)
+    .filter((n: NotizItem | null): n is NotizItem => n !== null);
+  await setDoc(bambiniDoc(familyId), { trainingsideenItems: clean }, { merge: true });
+}
+
+/** Trainingsideen-Items (TE-113) laden – gleiche Struktur wie die Notiz-Items, eigene Liste. */
+export async function loadBambiniTrainingsideenItems(familyId: string): Promise<NotizItem[]> {
+  const snap = await getDoc(bambiniDoc(familyId));
+  const raw = snap.exists() ? (snap.data() as any) : undefined;
+  const rawItems = Array.isArray(raw?.trainingsideenItems) ? raw.trainingsideenItems : [];
+  return rawItems.map(sanitizeNotizItem).filter((n: NotizItem | null): n is NotizItem => n !== null);
+}
+
 /** Kinder eines Jahrgangs filtern (exakt bzw. ab Jahr), ohne aufgehörte. */
 export function childrenForJahrgang(
   children: Child[],

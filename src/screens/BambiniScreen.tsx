@@ -37,6 +37,8 @@ import {
   saveBambiniFilters,
   loadBambiniNotizItems,
   saveBambiniNotizItems,
+  loadBambiniTrainingsideenItems,
+  saveBambiniTrainingsideenItems,
   NotizItem,
   makeId,
   BambiniSortMode,
@@ -225,6 +227,89 @@ export function BambiniScreen() {
   }, [notizEditId, notizEditText, notizItems, persistNotizItems]);
 
   const markedNotizItems = notizItems.filter((n) => n.marked);
+
+  // TE-113: zweite freie Item-Liste, gleiche Mechanik wie die Notizen oben,
+  // eigener Speicherort (trainingsideenItems) für Trainingsideen zum aktuellen Training.
+  const [trainingsideenOpen, setTrainingsideenOpen] = useState(false);
+  const [trainingsideenItems, setTrainingsideenItems] = useState<NotizItem[]>([]);
+  const [trainingsideeInput, setTrainingsideeInput] = useState('');
+  const [trainingsideeHistoryOpenId, setTrainingsideeHistoryOpenId] = useState<string | null>(null);
+  const [trainingsideeEditId, setTrainingsideeEditId] = useState<string | null>(null);
+  const [trainingsideeEditText, setTrainingsideeEditText] = useState('');
+
+  const openTrainingsideen = useCallback(() => {
+    setTrainingsideeInput('');
+    setTrainingsideenOpen(true);
+    if (!fid) return;
+    loadBambiniTrainingsideenItems(fid)
+      .then(setTrainingsideenItems)
+      .catch((e) => console.warn('Trainingsideen laden fehlgeschlagen', e));
+  }, [fid]);
+
+  const closeTrainingsideen = useCallback(() => setTrainingsideenOpen(false), []);
+
+  const persistTrainingsideenItems = useCallback((items: NotizItem[]) => {
+    setTrainingsideenItems(items);
+    if (fid) saveBambiniTrainingsideenItems(fid, items).catch((e) => console.warn('Trainingsideen speichern fehlgeschlagen', e));
+  }, [fid]);
+
+  const addTrainingsideeItem = useCallback(() => {
+    const text = trainingsideeInput.trim();
+    if (!text) return;
+    const now = new Date().toISOString();
+    const item: NotizItem = { id: makeId(), text, marked: false, createdAt: now, history: [{ ts: now, text: 'erstellt' }] };
+    persistTrainingsideenItems([item, ...trainingsideenItems]);
+    setTrainingsideeInput('');
+  }, [trainingsideeInput, trainingsideenItems, persistTrainingsideenItems]);
+
+  const toggleTrainingsideeMarked = useCallback((id: string) => {
+    const now = new Date().toISOString();
+    persistTrainingsideenItems(
+      trainingsideenItems.map((n) =>
+        n.id === id
+          ? { ...n, marked: !n.marked, history: [...n.history, { ts: now, text: n.marked ? 'Markierung entfernt' : 'markiert' }] }
+          : n,
+      ),
+    );
+  }, [trainingsideenItems, persistTrainingsideenItems]);
+
+  const deleteTrainingsideeItem = useCallback((id: string) => {
+    persistTrainingsideenItems(trainingsideenItems.filter((n) => n.id !== id));
+  }, [trainingsideenItems, persistTrainingsideenItems]);
+
+  const moveTrainingsideeItem = useCallback((id: string, direction: -1 | 1) => {
+    const idx = trainingsideenItems.findIndex((n) => n.id === id);
+    const swapIdx = idx + direction;
+    if (idx < 0 || swapIdx < 0 || swapIdx >= trainingsideenItems.length) return;
+    const next = [...trainingsideenItems];
+    [next[idx], next[swapIdx]] = [next[swapIdx], next[idx]];
+    persistTrainingsideenItems(next);
+  }, [trainingsideenItems, persistTrainingsideenItems]);
+
+  const startEditTrainingsidee = useCallback((n: NotizItem) => {
+    setTrainingsideeEditId(n.id);
+    setTrainingsideeEditText(n.text);
+  }, []);
+
+  const cancelEditTrainingsidee = useCallback(() => setTrainingsideeEditId(null), []);
+
+  const saveEditTrainingsidee = useCallback(() => {
+    const text = trainingsideeEditText.trim();
+    const editing = trainingsideenItems.find((n) => n.id === trainingsideeEditId);
+    if (!editing || !text || text === editing.text) {
+      setTrainingsideeEditId(null);
+      return;
+    }
+    const now = new Date().toISOString();
+    persistTrainingsideenItems(
+      trainingsideenItems.map((n) =>
+        n.id === trainingsideeEditId
+          ? { ...n, text, history: [...n.history, { ts: now, text: `bearbeitet (vorher: "${editing.text}")` }] }
+          : n,
+      ),
+    );
+    setTrainingsideeEditId(null);
+  }, [trainingsideeEditId, trainingsideeEditText, trainingsideenItems, persistTrainingsideenItems]);
 
   const reload = useCallback(async () => {
     if (!fid) {
@@ -581,6 +666,11 @@ export function BambiniScreen() {
         <Ionicons name="document-text" size={24} color="#3A2E00" />
       </Pressable>
 
+      {/* TE-113: vierter FAB, eigene Liste für Trainingsideen zum aktuellen Training. */}
+      <Pressable style={s.fabTrainingsideen} onPress={openTrainingsideen} accessibilityLabel="Trainingsideen öffnen">
+        <Ionicons name="bulb" size={24} color="#0A2A4A" />
+      </Pressable>
+
       <Pressable style={s.fab} onPress={openNew} accessibilityLabel="Kind hinzufügen">
         <Ionicons name="add" size={28} color={colors.accentFg} />
       </Pressable>
@@ -785,6 +875,100 @@ export function BambiniScreen() {
               />
               <Pressable onPress={addNotizItem} style={[s.btn, s.notizAddBtn, { backgroundColor: colors.accent }]} accessibilityLabel="Notiz hinzufügen">
                 <Ionicons name="add" size={20} color={colors.accentFg} />
+              </Pressable>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      <Modal visible={trainingsideenOpen} transparent animationType="fade" onRequestClose={closeTrainingsideen}>
+        <KeyboardAvoidingView style={s.overlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <View style={[s.card, s.notizenCard, s.trainingsideenCard]}>
+            <View style={s.notizenHeader}>
+              <Ionicons name="bulb" size={18} color="#4A9EFF" />
+              <Text style={[s.cardTitle, s.notizenTitle]}>Trainingsideen</Text>
+              <Pressable onPress={closeTrainingsideen} hitSlop={12} accessibilityLabel="Schließen">
+                <Ionicons name="close" size={22} color={colors.textSecondary} />
+              </Pressable>
+            </View>
+            <ScrollView style={s.notizenList} keyboardShouldPersistTaps="handled">
+              {trainingsideenItems.length === 0 ? (
+                <Text style={s.empty}>Noch keine Trainingsideen.</Text>
+              ) : (
+                trainingsideenItems.map((n, idx) => (
+                  <View key={n.id} style={s.notizItemRow}>
+                    <View style={s.notizItemMain}>
+                      <View style={s.notizReorder}>
+                        <Pressable onPress={() => moveTrainingsideeItem(n.id, -1)} disabled={idx === 0} hitSlop={4} accessibilityLabel="Nach oben verschieben">
+                          <Ionicons name="chevron-up" size={14} color={idx === 0 ? colors.border : colors.textSecondary} />
+                        </Pressable>
+                        <Pressable onPress={() => moveTrainingsideeItem(n.id, 1)} disabled={idx === trainingsideenItems.length - 1} hitSlop={4} accessibilityLabel="Nach unten verschieben">
+                          <Ionicons name="chevron-down" size={14} color={idx === trainingsideenItems.length - 1 ? colors.border : colors.textSecondary} />
+                        </Pressable>
+                      </View>
+                      <Pressable
+                        onPress={() => toggleTrainingsideeMarked(n.id)}
+                        hitSlop={8}
+                        accessibilityLabel={n.marked ? 'Markierung entfernen' : 'Als wichtig markieren'}
+                      >
+                        <Ionicons name={n.marked ? 'star' : 'star-outline'} size={20} color="#4A9EFF" />
+                      </Pressable>
+                      {trainingsideeEditId === n.id ? (
+                        <>
+                          <TextInput
+                            style={[s.input, s.notizEditInput]}
+                            value={trainingsideeEditText}
+                            onChangeText={setTrainingsideeEditText}
+                            onSubmitEditing={saveEditTrainingsidee}
+                            returnKeyType="done"
+                            autoFocus
+                          />
+                          <Pressable onPress={saveEditTrainingsidee} hitSlop={8} accessibilityLabel="Speichern">
+                            <Ionicons name="checkmark" size={20} color={colors.accent} />
+                          </Pressable>
+                          <Pressable onPress={cancelEditTrainingsidee} hitSlop={8} accessibilityLabel="Abbrechen">
+                            <Ionicons name="close" size={18} color={colors.textSecondary} />
+                          </Pressable>
+                        </>
+                      ) : (
+                        <>
+                          <Text style={s.notizItemText}>{n.text}</Text>
+                          <Pressable onPress={() => startEditTrainingsidee(n)} hitSlop={8} accessibilityLabel="Bearbeiten">
+                            <Ionicons name="pencil-outline" size={18} color={colors.textSecondary} />
+                          </Pressable>
+                          <Pressable onPress={() => deleteTrainingsideeItem(n.id)} hitSlop={8} accessibilityLabel="Löschen">
+                            <Ionicons name="trash-outline" size={18} color={colors.textSecondary} />
+                          </Pressable>
+                        </>
+                      )}
+                    </View>
+                    <Pressable onPress={() => setTrainingsideeHistoryOpenId((v) => (v === n.id ? null : n.id))}>
+                      <Text style={s.notizItemMeta}>{formatDateTimeDE(n.createdAt)}</Text>
+                    </Pressable>
+                    {trainingsideeHistoryOpenId === n.id ? (
+                      <View style={s.notizHistory}>
+                        {n.history.map((h, i) => (
+                          <Text key={i} style={s.notizHistoryEntry}>{formatDateTimeDE(h.ts)} · {h.text}</Text>
+                        ))}
+                      </View>
+                    ) : null}
+                  </View>
+                ))
+              )}
+            </ScrollView>
+
+            <View style={s.notizAddRow}>
+              <TextInput
+                style={[s.input, s.notizAddInput]}
+                value={trainingsideeInput}
+                onChangeText={setTrainingsideeInput}
+                placeholder="Neue Trainingsidee…"
+                placeholderTextColor={colors.placeholder}
+                onSubmitEditing={addTrainingsideeItem}
+                returnKeyType="done"
+              />
+              <Pressable onPress={addTrainingsideeItem} style={[s.btn, s.notizAddBtn, { backgroundColor: '#4A9EFF' }]} accessibilityLabel="Trainingsidee hinzufügen">
+                <Ionicons name="add" size={20} color="#0A2A4A" />
               </Pressable>
             </View>
           </View>
@@ -1016,10 +1200,29 @@ function makeStyles(c: ThemeColors) {
       elevation: 6,
     },
 
+    // TE-113: vierter FAB links neben Notizen, öffnet den Trainingsideen-Dialog.
+    fabTrainingsideen: {
+      position: 'absolute',
+      right: 222,
+      bottom: 24,
+      width: 56,
+      height: 56,
+      borderRadius: 28,
+      backgroundColor: '#4A9EFF',
+      alignItems: 'center',
+      justifyContent: 'center',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.3,
+      shadowRadius: 6,
+      elevation: 6,
+    },
+
     overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center', padding: 24 },
     card: { width: '100%', maxWidth: 360, backgroundColor: c.surface, borderRadius: 16, borderWidth: 1, borderColor: c.border, padding: 18, gap: 12 },
     cardTitle: { color: c.text, fontSize: 17, fontWeight: '700' },
     notizenCard: { maxWidth: 420, height: '70%' },
+    trainingsideenCard: { borderColor: '#4A9EFF' },
     notizenHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
     notizenTitle: { flex: 1 },
     notizenList: { flex: 1 },
