@@ -199,6 +199,15 @@ export function BambiniScreen() {
     persistNotizItems(notizItems.filter((n) => n.id !== id));
   }, [notizItems, persistNotizItems]);
 
+  const moveNotizItem = useCallback((id: string, direction: -1 | 1) => {
+    const idx = notizItems.findIndex((n) => n.id === id);
+    const swapIdx = idx + direction;
+    if (idx < 0 || swapIdx < 0 || swapIdx >= notizItems.length) return;
+    const next = [...notizItems];
+    [next[idx], next[swapIdx]] = [next[swapIdx], next[idx]];
+    persistNotizItems(next);
+  }, [notizItems, persistNotizItems]);
+
   const startEditNotiz = useCallback((n: NotizItem) => {
     setNotizEditId(n.id);
     setNotizEditText(n.text);
@@ -492,7 +501,6 @@ export function BambiniScreen() {
             {/* TE-101/TE-103: markierte Notiz-Items (wichtig/nächste Aufgabe) als gelbe Alert-Box, gleiches Gelb wie der Notizen-FAB. */}
             {markedNotizItems.length > 0 ? (
               <View style={s.markedBox}>
-                <Text style={s.markedBoxTitle}>Nächste Aufgaben</Text>
                 {markedNotizItems.map((n) => (
                   <View key={n.id} style={s.markedItemRow}>
                     <View style={s.markedDot} />
@@ -707,9 +715,17 @@ export function BambiniScreen() {
               {notizItems.length === 0 ? (
                 <Text style={s.empty}>Noch keine Notizen.</Text>
               ) : (
-                notizItems.map((n) => (
+                notizItems.map((n, idx) => (
                   <View key={n.id} style={s.notizItemRow}>
                     <View style={s.notizItemMain}>
+                      <View style={s.notizReorder}>
+                        <Pressable onPress={() => moveNotizItem(n.id, -1)} disabled={idx === 0} hitSlop={4} accessibilityLabel="Nach oben verschieben">
+                          <Ionicons name="chevron-up" size={14} color={idx === 0 ? colors.border : colors.textSecondary} />
+                        </Pressable>
+                        <Pressable onPress={() => moveNotizItem(n.id, 1)} disabled={idx === notizItems.length - 1} hitSlop={4} accessibilityLabel="Nach unten verschieben">
+                          <Ionicons name="chevron-down" size={14} color={idx === notizItems.length - 1 ? colors.border : colors.textSecondary} />
+                        </Pressable>
+                      </View>
                       <Pressable
                         onPress={() => toggleNotizMarked(n.id)}
                         hitSlop={8}
@@ -956,6 +972,7 @@ function makeStyles(c: ThemeColors) {
     notizenList: { flex: 1 },
     notizItemRow: { paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: c.border, gap: 4 },
     notizItemMain: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    notizReorder: { gap: 2 },
     notizItemText: { flex: 1, color: c.text, fontSize: 15 },
     notizEditInput: { flex: 1, paddingVertical: 4, fontSize: 15 },
     notizItemMeta: { color: c.textSecondary, fontSize: 12, marginLeft: 28 },
@@ -970,11 +987,9 @@ function makeStyles(c: ThemeColors) {
       borderColor: '#F2C518',
       borderRadius: 10,
       paddingHorizontal: 12,
-      paddingTop: 8,
-      paddingBottom: 2,
+      paddingVertical: 2,
       marginBottom: 16,
     },
-    markedBoxTitle: { color: '#F2C518', fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 },
     markedItemRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6 },
     markedDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#F2C518' },
     markedText: { flex: 1, color: c.text, fontSize: 14 },
