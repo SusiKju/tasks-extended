@@ -56,17 +56,6 @@ function formatDE(iso: string): string {
   return y && m && d ? `${d}.${m}.${y}` : '';
 }
 
-/** ISO-Zeitstempel → 'DD.MM.YYYY HH:MM' fürs Notiz-Item. */
-function formatDateTimeDE(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '';
-  const dd = String(d.getDate()).padStart(2, '0');
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const hh = String(d.getHours()).padStart(2, '0');
-  const min = String(d.getMinutes()).padStart(2, '0');
-  return `${dd}.${mm}.${d.getFullYear()} ${hh}:${min}`;
-}
-
 /** ISO 'YYYY-MM-DD' → lokales Date (für den Picker-Startwert). */
 function parseISO(iso: string): Date | null {
   const [y, m, d] = iso.split('-').map(Number);
@@ -145,10 +134,13 @@ export function BambiniScreen() {
   // TE-101: Notiz-Items (wichtig/nächste Aufgabe markierbar), löste die
   // Freitext-Notizen (TE-44) ab. Jede Aktion speichert sofort, damit die
   // Markierungen auf der Startseite live stimmen.
+  // TE-113: Löschen ist seither weich (deletedAt statt Entfernen aus dem
+  // Array) – der Verlauf-Dialog (gleiches Muster wie SchuleScreen) zeigt
+  // gelöschte Items und macht sie wiederherstellbar.
   const [notizenOpen, setNotizenOpen] = useState(false);
   const [notizItems, setNotizItems] = useState<NotizItem[]>([]);
   const [notizInput, setNotizInput] = useState('');
-  const [notizHistoryOpenId, setNotizHistoryOpenId] = useState<string | null>(null);
+  const [notizHistoryOpen, setNotizHistoryOpen] = useState(false);
   const [notizEditId, setNotizEditId] = useState<string | null>(null);
   const [notizEditText, setNotizEditText] = useState('');
 
@@ -172,33 +164,31 @@ export function BambiniScreen() {
     const text = notizInput.trim();
     if (!text) return;
     const now = new Date().toISOString();
-    const item: NotizItem = { id: makeId(), text, marked: false, createdAt: now, history: [{ ts: now, text: 'erstellt' }] };
+    const item: NotizItem = { id: makeId(), text, marked: false, createdAt: now, deletedAt: null };
     persistNotizItems([item, ...notizItems]);
     setNotizInput('');
   }, [notizInput, notizItems, persistNotizItems]);
 
   const toggleNotizMarked = useCallback((id: string) => {
-    const now = new Date().toISOString();
-    persistNotizItems(
-      notizItems.map((n) =>
-        n.id === id
-          ? { ...n, marked: !n.marked, history: [...n.history, { ts: now, text: n.marked ? 'Markierung entfernt' : 'markiert' }] }
-          : n,
-      ),
-    );
+    persistNotizItems(notizItems.map((n) => (n.id === id ? { ...n, marked: !n.marked } : n)));
   }, [notizItems, persistNotizItems]);
 
   const deleteNotizItem = useCallback((id: string) => {
-    persistNotizItems(notizItems.filter((n) => n.id !== id));
+    const now = new Date().toISOString();
+    persistNotizItems(notizItems.map((n) => (n.id === id ? { ...n, deletedAt: now } : n)));
+  }, [notizItems, persistNotizItems]);
+
+  const restoreNotizItem = useCallback((id: string) => {
+    persistNotizItems(notizItems.map((n) => (n.id === id ? { ...n, deletedAt: null } : n)));
   }, [notizItems, persistNotizItems]);
 
   const moveNotizItem = useCallback((id: string, direction: -1 | 1) => {
-    const idx = notizItems.findIndex((n) => n.id === id);
+    const active = notizItems.filter((n) => !n.deletedAt);
+    const idx = active.findIndex((n) => n.id === id);
     const swapIdx = idx + direction;
-    if (idx < 0 || swapIdx < 0 || swapIdx >= notizItems.length) return;
-    const next = [...notizItems];
-    [next[idx], next[swapIdx]] = [next[swapIdx], next[idx]];
-    persistNotizItems(next);
+    if (idx < 0 || swapIdx < 0 || swapIdx >= active.length) return;
+    [active[idx], active[swapIdx]] = [active[swapIdx], active[idx]];
+    persistNotizItems([...active, ...notizItems.filter((n) => n.deletedAt)]);
   }, [notizItems, persistNotizItems]);
 
   const startEditNotiz = useCallback((n: NotizItem) => {
@@ -215,25 +205,22 @@ export function BambiniScreen() {
       setNotizEditId(null);
       return;
     }
-    const now = new Date().toISOString();
-    persistNotizItems(
-      notizItems.map((n) =>
-        n.id === notizEditId
-          ? { ...n, text, history: [...n.history, { ts: now, text: `bearbeitet (vorher: "${editing.text}")` }] }
-          : n,
-      ),
-    );
+    persistNotizItems(notizItems.map((n) => (n.id === notizEditId ? { ...n, text } : n)));
     setNotizEditId(null);
   }, [notizEditId, notizEditText, notizItems, persistNotizItems]);
 
-  const markedNotizItems = notizItems.filter((n) => n.marked);
+  const activeNotizItems = notizItems.filter((n) => !n.deletedAt);
+  const deletedNotizItems = notizItems
+    .filter((n) => n.deletedAt)
+    .sort((a, b) => (b.deletedAt as string).localeCompare(a.deletedAt as string));
+  const markedNotizItems = activeNotizItems.filter((n) => n.marked);
 
   // TE-113: zweite freie Item-Liste, gleiche Mechanik wie die Notizen oben,
   // eigener Speicherort (trainingsideenItems) für Trainingsideen zum aktuellen Training.
   const [trainingsideenOpen, setTrainingsideenOpen] = useState(false);
   const [trainingsideenItems, setTrainingsideenItems] = useState<NotizItem[]>([]);
   const [trainingsideeInput, setTrainingsideeInput] = useState('');
-  const [trainingsideeHistoryOpenId, setTrainingsideeHistoryOpenId] = useState<string | null>(null);
+  const [trainingsideeHistoryOpen, setTrainingsideeHistoryOpen] = useState(false);
   const [trainingsideeEditId, setTrainingsideeEditId] = useState<string | null>(null);
   const [trainingsideeEditText, setTrainingsideeEditText] = useState('');
 
@@ -257,33 +244,31 @@ export function BambiniScreen() {
     const text = trainingsideeInput.trim();
     if (!text) return;
     const now = new Date().toISOString();
-    const item: NotizItem = { id: makeId(), text, marked: false, createdAt: now, history: [{ ts: now, text: 'erstellt' }] };
+    const item: NotizItem = { id: makeId(), text, marked: false, createdAt: now, deletedAt: null };
     persistTrainingsideenItems([item, ...trainingsideenItems]);
     setTrainingsideeInput('');
   }, [trainingsideeInput, trainingsideenItems, persistTrainingsideenItems]);
 
   const toggleTrainingsideeMarked = useCallback((id: string) => {
-    const now = new Date().toISOString();
-    persistTrainingsideenItems(
-      trainingsideenItems.map((n) =>
-        n.id === id
-          ? { ...n, marked: !n.marked, history: [...n.history, { ts: now, text: n.marked ? 'Markierung entfernt' : 'markiert' }] }
-          : n,
-      ),
-    );
+    persistTrainingsideenItems(trainingsideenItems.map((n) => (n.id === id ? { ...n, marked: !n.marked } : n)));
   }, [trainingsideenItems, persistTrainingsideenItems]);
 
   const deleteTrainingsideeItem = useCallback((id: string) => {
-    persistTrainingsideenItems(trainingsideenItems.filter((n) => n.id !== id));
+    const now = new Date().toISOString();
+    persistTrainingsideenItems(trainingsideenItems.map((n) => (n.id === id ? { ...n, deletedAt: now } : n)));
+  }, [trainingsideenItems, persistTrainingsideenItems]);
+
+  const restoreTrainingsideeItem = useCallback((id: string) => {
+    persistTrainingsideenItems(trainingsideenItems.map((n) => (n.id === id ? { ...n, deletedAt: null } : n)));
   }, [trainingsideenItems, persistTrainingsideenItems]);
 
   const moveTrainingsideeItem = useCallback((id: string, direction: -1 | 1) => {
-    const idx = trainingsideenItems.findIndex((n) => n.id === id);
+    const active = trainingsideenItems.filter((n) => !n.deletedAt);
+    const idx = active.findIndex((n) => n.id === id);
     const swapIdx = idx + direction;
-    if (idx < 0 || swapIdx < 0 || swapIdx >= trainingsideenItems.length) return;
-    const next = [...trainingsideenItems];
-    [next[idx], next[swapIdx]] = [next[swapIdx], next[idx]];
-    persistTrainingsideenItems(next);
+    if (idx < 0 || swapIdx < 0 || swapIdx >= active.length) return;
+    [active[idx], active[swapIdx]] = [active[swapIdx], active[idx]];
+    persistTrainingsideenItems([...active, ...trainingsideenItems.filter((n) => n.deletedAt)]);
   }, [trainingsideenItems, persistTrainingsideenItems]);
 
   const startEditTrainingsidee = useCallback((n: NotizItem) => {
@@ -300,18 +285,15 @@ export function BambiniScreen() {
       setTrainingsideeEditId(null);
       return;
     }
-    const now = new Date().toISOString();
-    persistTrainingsideenItems(
-      trainingsideenItems.map((n) =>
-        n.id === trainingsideeEditId
-          ? { ...n, text, history: [...n.history, { ts: now, text: `bearbeitet (vorher: "${editing.text}")` }] }
-          : n,
-      ),
-    );
+    persistTrainingsideenItems(trainingsideenItems.map((n) => (n.id === trainingsideeEditId ? { ...n, text } : n)));
     setTrainingsideeEditId(null);
   }, [trainingsideeEditId, trainingsideeEditText, trainingsideenItems, persistTrainingsideenItems]);
 
-  const markedTrainingsideenItems = trainingsideenItems.filter((n) => n.marked);
+  const activeTrainingsideenItems = trainingsideenItems.filter((n) => !n.deletedAt);
+  const deletedTrainingsideenItems = trainingsideenItems
+    .filter((n) => n.deletedAt)
+    .sort((a, b) => (b.deletedAt as string).localeCompare(a.deletedAt as string));
+  const markedTrainingsideenItems = activeTrainingsideenItems.filter((n) => n.marked);
 
   const reload = useCallback(async () => {
     if (!fid) {
@@ -808,191 +790,239 @@ export function BambiniScreen() {
       </Modal>
 
       <Modal visible={notizenOpen} transparent animationType="fade" onRequestClose={closeNotizen}>
-        <KeyboardAvoidingView style={s.overlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <View style={[s.card, s.notizenCard]}>
+        <Pressable style={s.overlay} onPress={closeNotizen}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+            <Pressable style={[s.card, s.notizenCard]} onPress={() => {}}>
+              <View style={s.notizenHeader}>
+                <Ionicons name="document-text" size={18} color="#F2C518" />
+                <Text style={[s.cardTitle, s.notizenTitle]}>Notizen</Text>
+                <Pressable onPress={() => setNotizHistoryOpen(true)} hitSlop={10} accessibilityLabel="Verlauf">
+                  <Ionicons name="time-outline" size={20} color={colors.textMuted} />
+                </Pressable>
+                <Pressable onPress={closeNotizen} hitSlop={12} accessibilityLabel="Schließen">
+                  <Ionicons name="close" size={22} color={colors.textSecondary} />
+                </Pressable>
+              </View>
+              <ScrollView style={s.notizenList} keyboardShouldPersistTaps="handled">
+                {activeNotizItems.length === 0 ? (
+                  <Text style={s.empty}>Noch keine Notizen.</Text>
+                ) : (
+                  activeNotizItems.map((n, idx) => (
+                    <View key={n.id} style={s.notizItemRow}>
+                      <View style={s.notizItemMain}>
+                        <View style={s.notizReorder}>
+                          <Pressable onPress={() => moveNotizItem(n.id, -1)} disabled={idx === 0} hitSlop={4} accessibilityLabel="Nach oben verschieben">
+                            <Ionicons name="chevron-up" size={14} color={idx === 0 ? colors.border : colors.textSecondary} />
+                          </Pressable>
+                          <Pressable onPress={() => moveNotizItem(n.id, 1)} disabled={idx === activeNotizItems.length - 1} hitSlop={4} accessibilityLabel="Nach unten verschieben">
+                            <Ionicons name="chevron-down" size={14} color={idx === activeNotizItems.length - 1 ? colors.border : colors.textSecondary} />
+                          </Pressable>
+                        </View>
+                        <Pressable
+                          onPress={() => toggleNotizMarked(n.id)}
+                          hitSlop={8}
+                          accessibilityLabel={n.marked ? 'Markierung entfernen' : 'Als wichtig markieren'}
+                        >
+                          <Ionicons name={n.marked ? 'star' : 'star-outline'} size={20} color="#F2C518" />
+                        </Pressable>
+                        {notizEditId === n.id ? (
+                          <>
+                            <TextInput
+                              style={[s.input, s.notizEditInput]}
+                              value={notizEditText}
+                              onChangeText={setNotizEditText}
+                              onSubmitEditing={saveEditNotiz}
+                              returnKeyType="done"
+                              autoFocus
+                            />
+                            <Pressable onPress={saveEditNotiz} hitSlop={8} accessibilityLabel="Speichern">
+                              <Ionicons name="checkmark" size={20} color={colors.accent} />
+                            </Pressable>
+                            <Pressable onPress={cancelEditNotiz} hitSlop={8} accessibilityLabel="Abbrechen">
+                              <Ionicons name="close" size={18} color={colors.textSecondary} />
+                            </Pressable>
+                          </>
+                        ) : (
+                          <>
+                            <Text style={s.notizItemText}>{n.text}</Text>
+                            <Pressable onPress={() => startEditNotiz(n)} hitSlop={8} accessibilityLabel="Bearbeiten">
+                              <Ionicons name="pencil-outline" size={18} color={colors.textSecondary} />
+                            </Pressable>
+                            <Pressable onPress={() => deleteNotizItem(n.id)} hitSlop={8} accessibilityLabel="Löschen">
+                              <Ionicons name="trash-outline" size={18} color={colors.textSecondary} />
+                            </Pressable>
+                          </>
+                        )}
+                      </View>
+                    </View>
+                  ))
+                )}
+              </ScrollView>
+
+              <View style={s.notizAddRow}>
+                <TextInput
+                  style={[s.input, s.notizAddInput]}
+                  value={notizInput}
+                  onChangeText={setNotizInput}
+                  placeholder="Neue Notiz…"
+                  placeholderTextColor={colors.placeholder}
+                  onSubmitEditing={addNotizItem}
+                  returnKeyType="done"
+                />
+                <Pressable onPress={addNotizItem} style={[s.btn, s.notizAddBtn, { backgroundColor: colors.accent }]} accessibilityLabel="Notiz hinzufügen">
+                  <Ionicons name="add" size={20} color={colors.accentFg} />
+                </Pressable>
+              </View>
+            </Pressable>
+          </KeyboardAvoidingView>
+        </Pressable>
+      </Modal>
+
+      {/* TE-113: Verlauf-Dialog für gelöschte Notizen, gleiches Muster wie im Schule-Tab. */}
+      <Modal visible={notizHistoryOpen} transparent animationType="fade" onRequestClose={() => setNotizHistoryOpen(false)}>
+        <Pressable style={s.overlay} onPress={() => setNotizHistoryOpen(false)}>
+          <Pressable style={s.historyBox} onPress={() => {}}>
             <View style={s.notizenHeader}>
-              <Ionicons name="document-text" size={18} color="#F2C518" />
-              <Text style={[s.cardTitle, s.notizenTitle]}>Notizen</Text>
-              <Pressable onPress={closeNotizen} hitSlop={12} accessibilityLabel="Schließen">
+              <Text style={s.cardTitle}>Verlauf</Text>
+              <Pressable onPress={() => setNotizHistoryOpen(false)} hitSlop={12} accessibilityLabel="Schließen">
                 <Ionicons name="close" size={22} color={colors.textSecondary} />
               </Pressable>
             </View>
-            <ScrollView style={s.notizenList} keyboardShouldPersistTaps="handled">
-              {notizItems.length === 0 ? (
-                <Text style={s.empty}>Noch keine Notizen.</Text>
-              ) : (
-                notizItems.map((n, idx) => (
-                  <View key={n.id} style={s.notizItemRow}>
-                    <View style={s.notizItemMain}>
-                      <View style={s.notizReorder}>
-                        <Pressable onPress={() => moveNotizItem(n.id, -1)} disabled={idx === 0} hitSlop={4} accessibilityLabel="Nach oben verschieben">
-                          <Ionicons name="chevron-up" size={14} color={idx === 0 ? colors.border : colors.textSecondary} />
-                        </Pressable>
-                        <Pressable onPress={() => moveNotizItem(n.id, 1)} disabled={idx === notizItems.length - 1} hitSlop={4} accessibilityLabel="Nach unten verschieben">
-                          <Ionicons name="chevron-down" size={14} color={idx === notizItems.length - 1 ? colors.border : colors.textSecondary} />
-                        </Pressable>
-                      </View>
-                      <Pressable
-                        onPress={() => toggleNotizMarked(n.id)}
-                        hitSlop={8}
-                        accessibilityLabel={n.marked ? 'Markierung entfernen' : 'Als wichtig markieren'}
-                      >
-                        <Ionicons name={n.marked ? 'star' : 'star-outline'} size={20} color="#F2C518" />
-                      </Pressable>
-                      {notizEditId === n.id ? (
-                        <>
-                          <TextInput
-                            style={[s.input, s.notizEditInput]}
-                            value={notizEditText}
-                            onChangeText={setNotizEditText}
-                            onSubmitEditing={saveEditNotiz}
-                            returnKeyType="done"
-                            autoFocus
-                          />
-                          <Pressable onPress={saveEditNotiz} hitSlop={8} accessibilityLabel="Speichern">
-                            <Ionicons name="checkmark" size={20} color={colors.accent} />
-                          </Pressable>
-                          <Pressable onPress={cancelEditNotiz} hitSlop={8} accessibilityLabel="Abbrechen">
-                            <Ionicons name="close" size={18} color={colors.textSecondary} />
-                          </Pressable>
-                        </>
-                      ) : (
-                        <>
-                          <Text style={s.notizItemText}>{n.text}</Text>
-                          <Pressable onPress={() => startEditNotiz(n)} hitSlop={8} accessibilityLabel="Bearbeiten">
-                            <Ionicons name="pencil-outline" size={18} color={colors.textSecondary} />
-                          </Pressable>
-                          <Pressable onPress={() => deleteNotizItem(n.id)} hitSlop={8} accessibilityLabel="Löschen">
-                            <Ionicons name="trash-outline" size={18} color={colors.textSecondary} />
-                          </Pressable>
-                        </>
-                      )}
-                    </View>
-                    <Pressable onPress={() => setNotizHistoryOpenId((v) => (v === n.id ? null : n.id))}>
-                      <Text style={s.notizItemMeta}>{formatDateTimeDE(n.createdAt)}</Text>
+            {deletedNotizItems.length === 0 ? (
+              <Text style={s.empty}>Noch nichts gelöscht.</Text>
+            ) : (
+              <ScrollView style={{ maxHeight: 420 }}>
+                {deletedNotizItems.map((n) => (
+                  <View key={n.id} style={s.historyRow}>
+                    <Ionicons name="trash" size={18} color={colors.danger} />
+                    <Text style={s.historyTitle} numberOfLines={2}>{n.text}</Text>
+                    <Pressable onPress={() => restoreNotizItem(n.id)} hitSlop={8} accessibilityLabel="Wiederherstellen">
+                      <Ionicons name="arrow-undo-circle-outline" size={20} color={colors.accentNeon} />
                     </Pressable>
-                    {notizHistoryOpenId === n.id ? (
-                      <View style={s.notizHistory}>
-                        {n.history.map((h, i) => (
-                          <Text key={i} style={s.notizHistoryEntry}>{formatDateTimeDE(h.ts)} · {h.text}</Text>
-                        ))}
-                      </View>
-                    ) : null}
                   </View>
-                ))
-              )}
-            </ScrollView>
-
-            <View style={s.notizAddRow}>
-              <TextInput
-                style={[s.input, s.notizAddInput]}
-                value={notizInput}
-                onChangeText={setNotizInput}
-                placeholder="Neue Notiz…"
-                placeholderTextColor={colors.placeholder}
-                onSubmitEditing={addNotizItem}
-                returnKeyType="done"
-              />
-              <Pressable onPress={addNotizItem} style={[s.btn, s.notizAddBtn, { backgroundColor: colors.accent }]} accessibilityLabel="Notiz hinzufügen">
-                <Ionicons name="add" size={20} color={colors.accentFg} />
-              </Pressable>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
+                ))}
+              </ScrollView>
+            )}
+          </Pressable>
+        </Pressable>
       </Modal>
 
       <Modal visible={trainingsideenOpen} transparent animationType="fade" onRequestClose={closeTrainingsideen}>
-        <KeyboardAvoidingView style={s.overlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <View style={[s.card, s.notizenCard, s.trainingsideenCard]}>
+        <Pressable style={s.overlay} onPress={closeTrainingsideen}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+            <Pressable style={[s.card, s.notizenCard, s.trainingsideenCard]} onPress={() => {}}>
+              <View style={s.notizenHeader}>
+                <Ionicons name="bulb" size={18} color="#4A9EFF" />
+                <Text style={[s.cardTitle, s.notizenTitle]}>Trainingsideen</Text>
+                <Pressable onPress={() => setTrainingsideeHistoryOpen(true)} hitSlop={10} accessibilityLabel="Verlauf">
+                  <Ionicons name="time-outline" size={20} color={colors.textMuted} />
+                </Pressable>
+                <Pressable onPress={closeTrainingsideen} hitSlop={12} accessibilityLabel="Schließen">
+                  <Ionicons name="close" size={22} color={colors.textSecondary} />
+                </Pressable>
+              </View>
+              <ScrollView style={s.notizenList} keyboardShouldPersistTaps="handled">
+                {activeTrainingsideenItems.length === 0 ? (
+                  <Text style={s.empty}>Noch keine Trainingsideen.</Text>
+                ) : (
+                  activeTrainingsideenItems.map((n, idx) => (
+                    <View key={n.id} style={s.notizItemRow}>
+                      <View style={s.notizItemMain}>
+                        <View style={s.notizReorder}>
+                          <Pressable onPress={() => moveTrainingsideeItem(n.id, -1)} disabled={idx === 0} hitSlop={4} accessibilityLabel="Nach oben verschieben">
+                            <Ionicons name="chevron-up" size={14} color={idx === 0 ? colors.border : colors.textSecondary} />
+                          </Pressable>
+                          <Pressable onPress={() => moveTrainingsideeItem(n.id, 1)} disabled={idx === activeTrainingsideenItems.length - 1} hitSlop={4} accessibilityLabel="Nach unten verschieben">
+                            <Ionicons name="chevron-down" size={14} color={idx === activeTrainingsideenItems.length - 1 ? colors.border : colors.textSecondary} />
+                          </Pressable>
+                        </View>
+                        <Pressable
+                          onPress={() => toggleTrainingsideeMarked(n.id)}
+                          hitSlop={8}
+                          accessibilityLabel={n.marked ? 'Markierung entfernen' : 'Als wichtig markieren'}
+                        >
+                          <Ionicons name={n.marked ? 'star' : 'star-outline'} size={20} color="#4A9EFF" />
+                        </Pressable>
+                        {trainingsideeEditId === n.id ? (
+                          <>
+                            <TextInput
+                              style={[s.input, s.notizEditInput]}
+                              value={trainingsideeEditText}
+                              onChangeText={setTrainingsideeEditText}
+                              onSubmitEditing={saveEditTrainingsidee}
+                              returnKeyType="done"
+                              autoFocus
+                            />
+                            <Pressable onPress={saveEditTrainingsidee} hitSlop={8} accessibilityLabel="Speichern">
+                              <Ionicons name="checkmark" size={20} color={colors.accent} />
+                            </Pressable>
+                            <Pressable onPress={cancelEditTrainingsidee} hitSlop={8} accessibilityLabel="Abbrechen">
+                              <Ionicons name="close" size={18} color={colors.textSecondary} />
+                            </Pressable>
+                          </>
+                        ) : (
+                          <>
+                            <Text style={s.notizItemText}>{n.text}</Text>
+                            <Pressable onPress={() => startEditTrainingsidee(n)} hitSlop={8} accessibilityLabel="Bearbeiten">
+                              <Ionicons name="pencil-outline" size={18} color={colors.textSecondary} />
+                            </Pressable>
+                            <Pressable onPress={() => deleteTrainingsideeItem(n.id)} hitSlop={8} accessibilityLabel="Löschen">
+                              <Ionicons name="trash-outline" size={18} color={colors.textSecondary} />
+                            </Pressable>
+                          </>
+                        )}
+                      </View>
+                    </View>
+                  ))
+                )}
+              </ScrollView>
+
+              <View style={s.notizAddRow}>
+                <TextInput
+                  style={[s.input, s.notizAddInput]}
+                  value={trainingsideeInput}
+                  onChangeText={setTrainingsideeInput}
+                  placeholder="Neue Trainingsidee…"
+                  placeholderTextColor={colors.placeholder}
+                  onSubmitEditing={addTrainingsideeItem}
+                  returnKeyType="done"
+                />
+                <Pressable onPress={addTrainingsideeItem} style={[s.btn, s.notizAddBtn, { backgroundColor: '#4A9EFF' }]} accessibilityLabel="Trainingsidee hinzufügen">
+                  <Ionicons name="add" size={20} color="#0A2A4A" />
+                </Pressable>
+              </View>
+            </Pressable>
+          </KeyboardAvoidingView>
+        </Pressable>
+      </Modal>
+
+      {/* TE-113: Verlauf-Dialog für gelöschte Trainingsideen. */}
+      <Modal visible={trainingsideeHistoryOpen} transparent animationType="fade" onRequestClose={() => setTrainingsideeHistoryOpen(false)}>
+        <Pressable style={s.overlay} onPress={() => setTrainingsideeHistoryOpen(false)}>
+          <Pressable style={s.historyBox} onPress={() => {}}>
             <View style={s.notizenHeader}>
-              <Ionicons name="bulb" size={18} color="#4A9EFF" />
-              <Text style={[s.cardTitle, s.notizenTitle]}>Trainingsideen</Text>
-              <Pressable onPress={closeTrainingsideen} hitSlop={12} accessibilityLabel="Schließen">
+              <Text style={s.cardTitle}>Verlauf</Text>
+              <Pressable onPress={() => setTrainingsideeHistoryOpen(false)} hitSlop={12} accessibilityLabel="Schließen">
                 <Ionicons name="close" size={22} color={colors.textSecondary} />
               </Pressable>
             </View>
-            <ScrollView style={s.notizenList} keyboardShouldPersistTaps="handled">
-              {trainingsideenItems.length === 0 ? (
-                <Text style={s.empty}>Noch keine Trainingsideen.</Text>
-              ) : (
-                trainingsideenItems.map((n, idx) => (
-                  <View key={n.id} style={s.notizItemRow}>
-                    <View style={s.notizItemMain}>
-                      <View style={s.notizReorder}>
-                        <Pressable onPress={() => moveTrainingsideeItem(n.id, -1)} disabled={idx === 0} hitSlop={4} accessibilityLabel="Nach oben verschieben">
-                          <Ionicons name="chevron-up" size={14} color={idx === 0 ? colors.border : colors.textSecondary} />
-                        </Pressable>
-                        <Pressable onPress={() => moveTrainingsideeItem(n.id, 1)} disabled={idx === trainingsideenItems.length - 1} hitSlop={4} accessibilityLabel="Nach unten verschieben">
-                          <Ionicons name="chevron-down" size={14} color={idx === trainingsideenItems.length - 1 ? colors.border : colors.textSecondary} />
-                        </Pressable>
-                      </View>
-                      <Pressable
-                        onPress={() => toggleTrainingsideeMarked(n.id)}
-                        hitSlop={8}
-                        accessibilityLabel={n.marked ? 'Markierung entfernen' : 'Als wichtig markieren'}
-                      >
-                        <Ionicons name={n.marked ? 'star' : 'star-outline'} size={20} color="#4A9EFF" />
-                      </Pressable>
-                      {trainingsideeEditId === n.id ? (
-                        <>
-                          <TextInput
-                            style={[s.input, s.notizEditInput]}
-                            value={trainingsideeEditText}
-                            onChangeText={setTrainingsideeEditText}
-                            onSubmitEditing={saveEditTrainingsidee}
-                            returnKeyType="done"
-                            autoFocus
-                          />
-                          <Pressable onPress={saveEditTrainingsidee} hitSlop={8} accessibilityLabel="Speichern">
-                            <Ionicons name="checkmark" size={20} color={colors.accent} />
-                          </Pressable>
-                          <Pressable onPress={cancelEditTrainingsidee} hitSlop={8} accessibilityLabel="Abbrechen">
-                            <Ionicons name="close" size={18} color={colors.textSecondary} />
-                          </Pressable>
-                        </>
-                      ) : (
-                        <>
-                          <Text style={s.notizItemText}>{n.text}</Text>
-                          <Pressable onPress={() => startEditTrainingsidee(n)} hitSlop={8} accessibilityLabel="Bearbeiten">
-                            <Ionicons name="pencil-outline" size={18} color={colors.textSecondary} />
-                          </Pressable>
-                          <Pressable onPress={() => deleteTrainingsideeItem(n.id)} hitSlop={8} accessibilityLabel="Löschen">
-                            <Ionicons name="trash-outline" size={18} color={colors.textSecondary} />
-                          </Pressable>
-                        </>
-                      )}
-                    </View>
-                    <Pressable onPress={() => setTrainingsideeHistoryOpenId((v) => (v === n.id ? null : n.id))}>
-                      <Text style={s.notizItemMeta}>{formatDateTimeDE(n.createdAt)}</Text>
+            {deletedTrainingsideenItems.length === 0 ? (
+              <Text style={s.empty}>Noch nichts gelöscht.</Text>
+            ) : (
+              <ScrollView style={{ maxHeight: 420 }}>
+                {deletedTrainingsideenItems.map((n) => (
+                  <View key={n.id} style={s.historyRow}>
+                    <Ionicons name="trash" size={18} color={colors.danger} />
+                    <Text style={s.historyTitle} numberOfLines={2}>{n.text}</Text>
+                    <Pressable onPress={() => restoreTrainingsideeItem(n.id)} hitSlop={8} accessibilityLabel="Wiederherstellen">
+                      <Ionicons name="arrow-undo-circle-outline" size={20} color={colors.accentNeon} />
                     </Pressable>
-                    {trainingsideeHistoryOpenId === n.id ? (
-                      <View style={s.notizHistory}>
-                        {n.history.map((h, i) => (
-                          <Text key={i} style={s.notizHistoryEntry}>{formatDateTimeDE(h.ts)} · {h.text}</Text>
-                        ))}
-                      </View>
-                    ) : null}
                   </View>
-                ))
-              )}
-            </ScrollView>
-
-            <View style={s.notizAddRow}>
-              <TextInput
-                style={[s.input, s.notizAddInput]}
-                value={trainingsideeInput}
-                onChangeText={setTrainingsideeInput}
-                placeholder="Neue Trainingsidee…"
-                placeholderTextColor={colors.placeholder}
-                onSubmitEditing={addTrainingsideeItem}
-                returnKeyType="done"
-              />
-              <Pressable onPress={addTrainingsideeItem} style={[s.btn, s.notizAddBtn, { backgroundColor: '#4A9EFF' }]} accessibilityLabel="Trainingsidee hinzufügen">
-                <Ionicons name="add" size={20} color="#0A2A4A" />
-              </Pressable>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
+                ))}
+              </ScrollView>
+            )}
+          </Pressable>
+        </Pressable>
       </Modal>
 
       <DatePickerModal
@@ -1251,12 +1281,13 @@ function makeStyles(c: ThemeColors) {
     notizReorder: { gap: 2 },
     notizItemText: { flex: 1, color: c.text, fontSize: 15 },
     notizEditInput: { flex: 1, paddingVertical: 4, fontSize: 15 },
-    notizItemMeta: { color: c.textSecondary, fontSize: 12, marginLeft: 28 },
-    notizHistory: { marginLeft: 28, marginTop: 2, gap: 2 },
-    notizHistoryEntry: { color: c.textSecondary, fontSize: 11 },
     notizAddRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
     notizAddInput: { flex: 1 },
     notizAddBtn: { paddingHorizontal: 14 },
+    // TE-113: Verlauf-Dialog (gelöschte Items, wiederherstellbar) – gleiches Design wie im Schule-Tab.
+    historyBox: { backgroundColor: c.surface, borderRadius: 20, padding: 20, width: 340, maxWidth: '92%', gap: 10, borderWidth: 1, borderColor: c.border },
+    historyRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, borderBottomWidth: 1, borderColor: c.border },
+    historyTitle: { flex: 1, fontSize: 14, color: c.text },
     markedBox: {
       backgroundColor: '#F2C51826',
       borderWidth: 1,

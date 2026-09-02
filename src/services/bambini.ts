@@ -144,12 +144,6 @@ export async function saveBambiniFilters(familyId: string, filters: BambiniFilte
   await setDoc(bambiniDoc(familyId), { filters }, { merge: true });
 }
 
-/** Ein Change-Log-Eintrag eines Notiz-Items (TE-101), z. B. "markiert". */
-export interface NotizHistoryEvent {
-  ts: string;
-  text: string;
-}
-
 /** Einzelnes Notiz-Item im Bambini-Tab (TE-101, löste die Freitext-Notizen TE-44 ab). */
 export interface NotizItem {
   id: string;
@@ -157,23 +151,19 @@ export interface NotizItem {
   /** "Fleck" – markiert als wichtig/nächste Aufgabe, erscheint dann auf der Bambini-Startseite. */
   marked: boolean;
   createdAt: string;
-  history: NotizHistoryEvent[];
+  /** Weiches Löschen (TE-113): Item bleibt erhalten, taucht nur noch im Verlauf-Dialog auf und ist von dort wiederherstellbar. null = aktiv. */
+  deletedAt: string | null;
 }
 
 function sanitizeNotizItem(n: any): NotizItem | null {
   const text = String(n?.text ?? '').trim();
   if (!text) return null;
-  const history = Array.isArray(n?.history)
-    ? n.history
-        .map((h: any) => ({ ts: String(h?.ts ?? ''), text: String(h?.text ?? '') }))
-        .filter((h: NotizHistoryEvent) => h.ts && h.text)
-    : [];
   return {
     id: String(n?.id ?? '') || makeId(),
     text,
     marked: !!n?.marked,
     createdAt: String(n?.createdAt ?? '') || new Date().toISOString(),
-    history,
+    deletedAt: n?.deletedAt ? String(n.deletedAt) : null,
   };
 }
 
@@ -200,7 +190,7 @@ export async function loadBambiniNotizItems(familyId: string): Promise<NotizItem
   if (!legacyText) return [];
   const now = new Date().toISOString();
   const migrated: NotizItem[] = [
-    { id: makeId(), text: legacyText, marked: false, createdAt: now, history: [{ ts: now, text: 'aus Freitext-Notizen übernommen' }] },
+    { id: makeId(), text: legacyText, marked: false, createdAt: now, deletedAt: null },
   ];
   await saveBambiniNotizItems(familyId, migrated);
   return migrated;
