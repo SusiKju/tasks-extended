@@ -152,16 +152,66 @@ export async function saveBambiniFilters(familyId: string, filters: BambiniFilte
   await setDoc(bambiniDoc(familyId), { filters }, { merge: true });
 }
 
-/** Freitext-Notizen (TE-44) laden – liegt im selben Dokument wie die Kinder. */
-export async function loadBambiniNotizen(familyId: string): Promise<string> {
-  const snap = await getDoc(bambiniDoc(familyId));
-  const raw = snap.exists() ? (snap.data() as any)?.notizen : undefined;
-  return typeof raw === 'string' ? raw : '';
+/** Ein Change-Log-Eintrag eines Notiz-Items (TE-101), z. B. "markiert". */
+export interface NotizHistoryEvent {
+  ts: string;
+  text: string;
 }
 
-/** Freitext-Notizen (TE-44) speichern, z. B. Trainingsideen. */
-export async function saveBambiniNotizen(familyId: string, notizen: string): Promise<void> {
-  await setDoc(bambiniDoc(familyId), { notizen }, { merge: true });
+/** Einzelnes Notiz-Item im Bambini-Tab (TE-101, löste die Freitext-Notizen TE-44 ab). */
+export interface NotizItem {
+  id: string;
+  text: string;
+  /** "Fleck" – markiert als wichtig/nächste Aufgabe, erscheint dann auf der Bambini-Startseite. */
+  marked: boolean;
+  createdAt: string;
+  history: NotizHistoryEvent[];
+}
+
+function sanitizeNotizItem(n: any): NotizItem | null {
+  const text = String(n?.text ?? '').trim();
+  if (!text) return null;
+  const history = Array.isArray(n?.history)
+    ? n.history
+        .map((h: any) => ({ ts: String(h?.ts ?? ''), text: String(h?.text ?? '') }))
+        .filter((h: NotizHistoryEvent) => h.ts && h.text)
+    : [];
+  return {
+    id: String(n?.id ?? '') || makeId(),
+    text,
+    marked: !!n?.marked,
+    createdAt: String(n?.createdAt ?? '') || new Date().toISOString(),
+    history,
+  };
+}
+
+/** Notiz-Items (TE-101) speichern – liegt im selben Dokument wie die Kinder. */
+export async function saveBambiniNotizItems(familyId: string, items: NotizItem[]): Promise<void> {
+  const clean = items
+    .map(sanitizeNotizItem)
+    .filter((n: NotizItem | null): n is NotizItem => n !== null);
+  await setDoc(bambiniDoc(familyId), { notizItems: clean }, { merge: true });
+}
+
+/**
+ * Notiz-Items (TE-101) laden. Migriert einmalig die alte Freitext-Notiz (TE-44,
+ * Feld `notizen`) als erstes unmarkiertes Item, damit nichts verloren geht.
+ */
+export async function loadBambiniNotizItems(familyId: string): Promise<NotizItem[]> {
+  const snap = await getDoc(bambiniDoc(familyId));
+  const raw = snap.exists() ? (snap.data() as any) : undefined;
+  const rawItems = Array.isArray(raw?.notizItems) ? raw.notizItems : null;
+  if (rawItems) {
+    return rawItems.map(sanitizeNotizItem).filter((n: NotizItem | null): n is NotizItem => n !== null);
+  }
+  const legacyText = typeof raw?.notizen === 'string' ? raw.notizen.trim() : '';
+  if (!legacyText) return [];
+  const now = new Date().toISOString();
+  const migrated: NotizItem[] = [
+    { id: makeId(), text: legacyText, marked: false, createdAt: now, history: [{ ts: now, text: 'aus Freitext-Notizen übernommen' }] },
+  ];
+  await saveBambiniNotizItems(familyId, migrated);
+  return migrated;
 }
 
 /** Kinder eines Jahrgangs filtern (exakt bzw. ab Jahr), ohne aufgehörte. */

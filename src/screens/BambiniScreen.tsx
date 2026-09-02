@@ -36,8 +36,9 @@ import {
   migrateRosterToBambini,
   loadBambiniFilters,
   saveBambiniFilters,
-  loadBambiniNotizen,
-  saveBambiniNotizen,
+  loadBambiniNotizItems,
+  saveBambiniNotizItems,
+  NotizItem,
   makeId,
   neuTier,
   NeuTier,
@@ -56,6 +57,17 @@ import { getJahrgangStatus, getBetreuungsZeitraum } from '../utils/bambiniSeason
 function formatDE(iso: string): string {
   const [y, m, d] = iso.split('-');
   return y && m && d ? `${d}.${m}.${y}` : '';
+}
+
+/** ISO-Zeitstempel → 'DD.MM.YYYY HH:MM' fürs Notiz-Item. */
+function formatDateTimeDE(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const hh = String(d.getHours()).padStart(2, '0');
+  const min = String(d.getMinutes()).padStart(2, '0');
+  return `${dd}.${mm}.${d.getFullYear()} ${hh}:${min}`;
 }
 
 /** ISO 'YYYY-MM-DD' → lokales Date (für den Picker-Startwert). */
@@ -137,26 +149,55 @@ export function BambiniScreen() {
   const [schnuppertrainingInput, setSchnuppertrainingInput] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
 
-  // TE-44: freie Notizen (Trainingsideen o. Ä.), gleiches Auto-Save-Verhalten
-  // wie der Fußball-Notizdialog – Schließen speichert im Hintergrund.
+  // TE-101: Notiz-Items (wichtig/nächste Aufgabe markierbar), löste die
+  // Freitext-Notizen (TE-44) ab. Jede Aktion speichert sofort, damit die
+  // Markierungen auf der Startseite live stimmen.
   const [notizenOpen, setNotizenOpen] = useState(false);
-  const [notizenDraft, setNotizenDraft] = useState('');
-  const notizenEditedRef = useRef(false);
+  const [notizItems, setNotizItems] = useState<NotizItem[]>([]);
+  const [notizInput, setNotizInput] = useState('');
+  const [notizHistoryOpenId, setNotizHistoryOpenId] = useState<string | null>(null);
 
   const openNotizen = useCallback(() => {
-    notizenEditedRef.current = false;
-    setNotizenDraft('');
+    setNotizInput('');
     setNotizenOpen(true);
     if (!fid) return;
-    loadBambiniNotizen(fid)
-      .then((text) => { if (!notizenEditedRef.current) setNotizenDraft(text); })
+    loadBambiniNotizItems(fid)
+      .then(setNotizItems)
       .catch((e) => console.warn('Bambini-Notizen laden fehlgeschlagen', e));
   }, [fid]);
 
-  const closeNotizen = useCallback(() => {
-    setNotizenOpen(false);
-    if (fid) saveBambiniNotizen(fid, notizenDraft).catch((e) => console.warn('Bambini-Notizen speichern fehlgeschlagen', e));
-  }, [fid, notizenDraft]);
+  const closeNotizen = useCallback(() => setNotizenOpen(false), []);
+
+  const persistNotizItems = useCallback((items: NotizItem[]) => {
+    setNotizItems(items);
+    if (fid) saveBambiniNotizItems(fid, items).catch((e) => console.warn('Bambini-Notizen speichern fehlgeschlagen', e));
+  }, [fid]);
+
+  const addNotizItem = useCallback(() => {
+    const text = notizInput.trim();
+    if (!text) return;
+    const now = new Date().toISOString();
+    const item: NotizItem = { id: makeId(), text, marked: false, createdAt: now, history: [{ ts: now, text: 'erstellt' }] };
+    persistNotizItems([item, ...notizItems]);
+    setNotizInput('');
+  }, [notizInput, notizItems, persistNotizItems]);
+
+  const toggleNotizMarked = useCallback((id: string) => {
+    const now = new Date().toISOString();
+    persistNotizItems(
+      notizItems.map((n) =>
+        n.id === id
+          ? { ...n, marked: !n.marked, history: [...n.history, { ts: now, text: n.marked ? 'Markierung entfernt' : 'markiert' }] }
+          : n,
+      ),
+    );
+  }, [notizItems, persistNotizItems]);
+
+  const deleteNotizItem = useCallback((id: string) => {
+    persistNotizItems(notizItems.filter((n) => n.id !== id));
+  }, [notizItems, persistNotizItems]);
+
+  const markedNotizItems = notizItems.filter((n) => n.marked);
 
   const reload = useCallback(async () => {
     if (!fid) {
@@ -167,11 +208,12 @@ export function BambiniScreen() {
     setLoading(true);
     try {
       await migrateRosterToBambini(fid);
-      const [list, filters] = await Promise.all([loadBambini(fid), loadBambiniFilters(fid)]);
+      const [list, filters, notiz] = await Promise.all([loadBambini(fid), loadBambiniFilters(fid), loadBambiniNotizItems(fid)]);
       setChildren(list);
       setYearFilter(filters.years);
       setStoppedFilter(filters.stopped);
       setWackelkandidatFilter(filters.wackelkandidat);
+      setNotizItems(notiz);
     } catch (e) {
       console.warn('Bambini laden fehlgeschlagen', e);
     } finally {
@@ -420,6 +462,25 @@ export function BambiniScreen() {
           ) : null}
 
           <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
+            {/* TE-101: markierte Notiz-Items (wichtig/nächste Aufgabe) auf der Startseite. */}
+            {markedNotizItems.length > 0 ? (
+              <View style={s.group}>
+                <Text style={s.groupTitle}>Nächste Aufgaben</Text>
+                {markedNotizItems.map((n) => (
+                  <View key={n.id} style={s.markedRow}>
+                    <Ionicons name="star" size={18} color="#F2C518" />
+                    <Text style={s.markedText} numberOfLines={1}>{n.text}</Text>
+                    <Pressable onPress={() => toggleNotizMarked(n.id)} hitSlop={8} accessibilityLabel="Erledigt (Markierung entfernen)">
+                      <Ionicons name="checkmark-circle-outline" size={20} color={colors.textSecondary} />
+                    </Pressable>
+                    <Pressable onPress={() => deleteNotizItem(n.id)} hitSlop={8} accessibilityLabel="Löschen">
+                      <Ionicons name="trash-outline" size={18} color={colors.textSecondary} />
+                    </Pressable>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+
             {children.length === 0 ? (
               <Text style={s.empty}>Noch keine Kinder. Mit „+" anlegen.</Text>
             ) : groups.length === 0 && schnupperItems.length === 0 ? (
@@ -614,16 +675,54 @@ export function BambiniScreen() {
                 <Ionicons name="close" size={22} color={colors.textSecondary} />
               </Pressable>
             </View>
-            <TextInput
-              style={[s.input, s.notizenInput]}
-              value={notizenDraft}
-              onChangeText={(t) => { notizenEditedRef.current = true; setNotizenDraft(t); }}
-              placeholder="Trainingsideen, Hinweise, …"
-              placeholderTextColor={colors.placeholder}
-              multiline
-              textAlignVertical="top"
-              autoFocus
-            />
+            <ScrollView style={s.notizenList} keyboardShouldPersistTaps="handled">
+              {notizItems.length === 0 ? (
+                <Text style={s.empty}>Noch keine Notizen.</Text>
+              ) : (
+                notizItems.map((n) => (
+                  <View key={n.id} style={s.notizItemRow}>
+                    <View style={s.notizItemMain}>
+                      <Pressable
+                        onPress={() => toggleNotizMarked(n.id)}
+                        hitSlop={8}
+                        accessibilityLabel={n.marked ? 'Markierung entfernen' : 'Als wichtig markieren'}
+                      >
+                        <Ionicons name={n.marked ? 'star' : 'star-outline'} size={20} color="#F2C518" />
+                      </Pressable>
+                      <Text style={s.notizItemText}>{n.text}</Text>
+                      <Pressable onPress={() => deleteNotizItem(n.id)} hitSlop={8} accessibilityLabel="Löschen">
+                        <Ionicons name="trash-outline" size={18} color={colors.textSecondary} />
+                      </Pressable>
+                    </View>
+                    <Pressable onPress={() => setNotizHistoryOpenId((v) => (v === n.id ? null : n.id))}>
+                      <Text style={s.notizItemMeta}>{formatDateTimeDE(n.createdAt)}</Text>
+                    </Pressable>
+                    {notizHistoryOpenId === n.id ? (
+                      <View style={s.notizHistory}>
+                        {n.history.map((h, i) => (
+                          <Text key={i} style={s.notizHistoryEntry}>{formatDateTimeDE(h.ts)} · {h.text}</Text>
+                        ))}
+                      </View>
+                    ) : null}
+                  </View>
+                ))
+              )}
+            </ScrollView>
+
+            <View style={s.notizAddRow}>
+              <TextInput
+                style={[s.input, s.notizAddInput]}
+                value={notizInput}
+                onChangeText={setNotizInput}
+                placeholder="Neue Notiz…"
+                placeholderTextColor={colors.placeholder}
+                onSubmitEditing={addNotizItem}
+                returnKeyType="done"
+              />
+              <Pressable onPress={addNotizItem} style={[s.btn, s.notizAddBtn, { backgroundColor: colors.accent }]} accessibilityLabel="Notiz hinzufügen">
+                <Ionicons name="add" size={20} color={colors.accentFg} />
+              </Pressable>
+            </View>
           </View>
         </KeyboardAvoidingView>
       </Modal>
@@ -803,7 +902,18 @@ function makeStyles(c: ThemeColors) {
     notizenCard: { maxWidth: 420, height: '70%' },
     notizenHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
     notizenTitle: { flex: 1 },
-    notizenInput: { flex: 1, fontSize: 15, lineHeight: 21 },
+    notizenList: { flex: 1 },
+    notizItemRow: { paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: c.border, gap: 4 },
+    notizItemMain: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    notizItemText: { flex: 1, color: c.text, fontSize: 15 },
+    notizItemMeta: { color: c.textSecondary, fontSize: 12, marginLeft: 28 },
+    notizHistory: { marginLeft: 28, marginTop: 2, gap: 2 },
+    notizHistoryEntry: { color: c.textSecondary, fontSize: 11 },
+    notizAddRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+    notizAddInput: { flex: 1 },
+    notizAddBtn: { paddingHorizontal: 14 },
+    markedRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6 },
+    markedText: { flex: 1, color: c.text, fontSize: 14 },
     input: {
       backgroundColor: c.inputBackground,
       borderWidth: 1,
