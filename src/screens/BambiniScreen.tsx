@@ -39,13 +39,8 @@ import {
   saveBambiniNotizItems,
   NotizItem,
   makeId,
-  neuTier,
-  NeuTier,
   BambiniSortMode,
 } from '../services/bambini';
-
-/** Deckkraft des linken Hervorhebungs-Rands je Tier – frischer = kräftiger. */
-const NEU_TIER_ALPHA: Record<NeuTier, string> = { 2: 'FF', 4: 'B3', 8: '80', 16: '4D' };
 
 /** Bewusst nicht über colors.danger (wird in mono() vergraut) – wie NotesScreen IMPORTANT_RED. */
 const NOT_ANGEMELDET_RED = '#EF4444';
@@ -390,7 +385,6 @@ export function BambiniScreen() {
   const overviewText = `${children.length} Kinder · ${stoppedCount} aufgehört${yearSummary ? ' · ' + yearSummary : ''}`;
 
   const renderChildRow = (c: Child, index: number, status: 'aktiv' | 'gewechselt' | null, gewechselt: boolean) => {
-    const tier = c.stopped ? null : neuTier(c.registeredSince);
     return (
       <Pressable
         style={[
@@ -401,9 +395,6 @@ export function BambiniScreen() {
         ]}
         onPress={() => openEdit(c)}
       >
-        {tier ? (
-          <View pointerEvents="none" style={[s.newTierBar, { backgroundColor: colors.accent + NEU_TIER_ALPHA[tier] }]} />
-        ) : null}
         <Text style={s.rowIndex}>{index + 1}.</Text>
         <View style={s.rowMain}>
           <Text style={[s.rowName, c.stopped && s.rowNameStopped]} numberOfLines={1}>{c.name}</Text>
@@ -953,9 +944,6 @@ function makeStyles(c: ThemeColors) {
     // TE-110: Wackelkandidaten früher per Wobble-Animation hervorgehoben, jetzt
     // stattdessen einfach etwas transparenter.
     rowSchnupper: { opacity: 0.55 },
-    // Overlay statt border-left: hält die Border auf allen vier Seiten für
-    // jede Zeile identisch, unabhängig davon ob sie "neu" markiert ist.
-    newTierBar: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 4 },
     rowIndex: { color: c.textSecondary, fontSize: 12, fontWeight: '600', width: 24, textAlign: 'right' },
     rowMain: { flex: 1 },
     rowName: { color: c.text, fontSize: 14, fontWeight: '600' },

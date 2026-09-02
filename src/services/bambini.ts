@@ -14,7 +14,6 @@
  */
 
 import uuid from 'react-native-uuid';
-import { differenceInCalendarDays } from 'date-fns';
 import { db } from './firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import {
@@ -70,25 +69,6 @@ export interface BambiniFilters {
 }
 
 export const makeId = (): string => String(uuid.v4());
-
-/** Gestaffelte Schwellen für die "neu dabei"-Hervorhebung, in Wochen. */
-export const NEU_TIER_WEEKS = [2, 4, 8, 16] as const;
-export type NeuTier = (typeof NEU_TIER_WEEKS)[number];
-
-/**
- * Kleinste Wochen-Schwelle (2/4/8/16), die seit `registeredSince` noch nicht
- * überschritten ist – für die gestaffelte Hervorhebung neuer Spieler in der
- * Liste. Liefert null ohne Datum, bei ungültigem Datum, bei einem Datum in
- * der Zukunft oder wenn mehr als 16 Wochen vergangen sind.
- */
-export function neuTier(registeredSince: string, now: Date = new Date()): NeuTier | null {
-  const [y, m, d] = registeredSince.split('-').map(Number);
-  if (!y || !m || !d) return null;
-  const days = differenceInCalendarDays(now, new Date(y, m - 1, d));
-  if (days < 0) return null;
-  const weeks = days / 7;
-  return NEU_TIER_WEEKS.find((max) => weeks <= max) ?? null;
-}
 
 const bambiniDoc = (familyId: string) => doc(db, 'families', familyId, 'config', 'bambini');
 
