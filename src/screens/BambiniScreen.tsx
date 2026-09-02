@@ -51,7 +51,7 @@ const NEU_TIER_ALPHA: Record<NeuTier, string> = { 2: 'FF', 4: 'B3', 8: '80', 16:
 const NOT_ANGEMELDET_RED = '#EF4444';
 const WHATSAPP_GREEN = '#25D366';
 const INFO_YELLOW = '#F5B301';
-import { getJahrgangStatus, getBetreuungsZeitraum } from '../utils/bambiniSeason';
+import { getJahrgangStatus } from '../utils/bambiniSeason';
 
 /** ISO 'YYYY-MM-DD' → 'DD.MM.YYYY' (string-basiert, ohne Zeitzonen-Fallen). */
 function formatDE(iso: string): string {
@@ -95,6 +95,13 @@ function confirmDelete(name: string, onConfirm: () => void) {
   }
 }
 
+type SortMode = 'jahrgang' | 'erstesmal';
+
+const SORT_OPTIONS: { value: SortMode; label: string }[] = [
+  { value: 'jahrgang', label: 'Alphabetisch nach Jahrgang' },
+  { value: 'erstesmal', label: 'Das 1. Mal da' },
+];
+
 /** Wackelanimation für Schnuppertraining-Kinder ("Wackelkandidaten"). */
 function WobbleRow({ children }: { children: React.ReactNode }) {
   const rotate = useRef(new Animated.Value(0)).current;
@@ -131,6 +138,10 @@ export function BambiniScreen() {
   const [stoppedFilter, setStoppedFilter] = useState<boolean | null>(null);
   // wackelkandidatFilter: null = alle, true = nur Wackelkandidaten, false = ohne Wackelkandidaten.
   const [wackelkandidatFilter, setWackelkandidatFilter] = useState<boolean | null>(null);
+  // TE-109: Sortierung der flachen Liste (keine Jahrgangs-Überschriften mehr) – lokal,
+  // nicht persistiert.
+  const [sortMode, setSortMode] = useState<SortMode>('jahrgang');
+  const [sortMenuOpen, setSortMenuOpen] = useState(false);
   // Erst nach dem initialen Laden aus Firestore speichern wir Änderungen zurück,
   // sonst würde der leere Default-State die gespeicherte Auswahl überschreiben.
   const filtersLoaded = useRef(false);
@@ -362,18 +373,16 @@ export function BambiniScreen() {
     return true;
   });
 
-  // TE-90: Schnuppertraining-Kinder (Wackelkandidaten) bilden einen eigenen
-  // Block ohne Jahrgangsbezug, unabhängig sortiert. Der Rest wird wie gehabt
-  // nach Jahrgang gruppiert (children kommen bereits sortiert).
-  const schnupperItems = filtered
-    .filter((c) => c.schnuppertraining)
-    .sort((a, b) => a.name.localeCompare(b.name, 'de'));
-  const groups: { year: number; items: Child[] }[] = [];
-  filtered.forEach((c) => {
-    if (c.schnuppertraining) return;
-    const g = groups.find((x) => x.year === c.birthYear);
-    if (g) g.items.push(c);
-    else groups.push({ year: c.birthYear, items: [c] });
+  // TE-109: flache Liste, keine Jahrgangs-Gruppierung mehr – Wackelkandidaten
+  // reihen sich mit ein (Jahrgang steht ohnehin auf jedem Item).
+  const sorted = [...filtered].sort((a, b) => {
+    if (sortMode === 'erstesmal') {
+      if (!a.registeredSince && !b.registeredSince) return a.name.localeCompare(b.name, 'de');
+      if (!a.registeredSince) return 1;
+      if (!b.registeredSince) return -1;
+      return a.registeredSince.localeCompare(b.registeredSince);
+    }
+    return b.birthYear - a.birthYear || a.name.localeCompare(b.name, 'de');
   });
 
   // TE-97: Übersicht über alle Kinder (ungefiltert, unabhängig von der Suche).
@@ -493,6 +502,18 @@ export function BambiniScreen() {
             </ScrollView>
           ) : null}
 
+          {children.length > 0 ? (
+            <View style={s.sortRow}>
+              <Text style={s.sortLabel}>Sortierung</Text>
+              <Pressable style={s.sortButton} onPress={() => setSortMenuOpen(true)} accessibilityLabel="Sortierung wählen">
+                <Text style={s.sortButtonText} numberOfLines={1}>
+                  {SORT_OPTIONS.find((o) => o.value === sortMode)?.label}
+                </Text>
+                <Ionicons name="chevron-down" size={14} color={colors.textSecondary} />
+              </Pressable>
+            </View>
+          ) : null}
+
           {yearFilter.length > 0 || stoppedFilter !== null || wackelkandidatFilter !== null ? (
             <Text style={s.resultCount}>{filtered.length} Treffer</Text>
           ) : null}
@@ -512,40 +533,19 @@ export function BambiniScreen() {
 
             {children.length === 0 ? (
               <Text style={s.empty}>Noch keine Kinder. Mit „+" anlegen.</Text>
-            ) : groups.length === 0 && schnupperItems.length === 0 ? (
+            ) : sorted.length === 0 ? (
               <Text style={s.empty}>Keine Treffer.</Text>
             ) : (
-              <>
-              {schnupperItems.length > 0 ? (
-                <View style={s.group}>
-                  <Text style={s.schnupperHeading}>Wackelkandidaten</Text>
-                  {schnupperItems.map((c) => (
-                    <WobbleRow key={c.id}>{renderChildRow(c, null, false)}</WobbleRow>
-                  ))}
-                </View>
-              ) : null}
-              {groups.map((g) => {
-                const status = g.year ? getJahrgangStatus(g.year) : null;
+              sorted.map((c) => {
+                const status = c.birthYear ? getJahrgangStatus(c.birthYear) : null;
                 const gewechselt = status === 'gewechselt';
-                const zeitraum = g.year ? getBetreuungsZeitraum(g.year) : null;
-                return (
-              <View key={g.year} style={s.group}>
-                <View style={s.groupTitleRow}>
-                  <Text style={[s.groupTitle, status === 'aktiv' && s.groupTitleActive, gewechselt && s.groupTitleMoved]}>
-                    {g.year ? `Jahrgang ${g.year}` : 'Ohne Jahrgang'}
-                    {gewechselt ? ' · F-Jugend' : ''}
-                  </Text>
-                  {zeitraum ? (
-                    <Text style={s.groupHint}>betreut {zeitraum.von}–{zeitraum.bis}</Text>
-                  ) : null}
-                </View>
-                {g.items.map((c) => (
-                  <React.Fragment key={c.id}>{renderChildRow(c, status, gewechselt)}</React.Fragment>
-                ))}
-                </View>
+                const row = renderChildRow(c, status, gewechselt);
+                return c.schnuppertraining ? (
+                  <WobbleRow key={c.id}>{row}</WobbleRow>
+                ) : (
+                  <React.Fragment key={c.id}>{row}</React.Fragment>
                 );
-              })}
-              </>
+              })
             )}
 
             {/* TE-47: Beitragshöhe aus der Beitragsordnung 2026 (serkowitzer-fsv.de),
@@ -802,6 +802,23 @@ export function BambiniScreen() {
         onCancel={() => setShowDatePicker(false)}
         colors={colors}
       />
+
+      <Modal visible={sortMenuOpen} transparent animationType="fade" onRequestClose={() => setSortMenuOpen(false)}>
+        <Pressable style={s.sortOverlay} onPress={() => setSortMenuOpen(false)}>
+          <View style={s.sortMenu}>
+            {SORT_OPTIONS.map((opt) => (
+              <Pressable
+                key={opt.value}
+                onPress={() => { setSortMode(opt.value); setSortMenuOpen(false); }}
+                style={[s.sortMenuItem, sortMode === opt.value && s.sortMenuItemActive]}
+              >
+                <Text style={s.sortMenuText}>{opt.label}</Text>
+                {sortMode === opt.value ? <Ionicons name="checkmark" size={16} color={colors.accent} /> : null}
+              </Pressable>
+            ))}
+          </View>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -834,6 +851,27 @@ function makeStyles(c: ThemeColors) {
     quickFiltersScroll: { flexGrow: 0, flexShrink: 0 },
     quickFilters: { flexDirection: 'row', gap: 8, marginHorizontal: 12, marginTop: 10 },
     resultCount: { color: c.textSecondary, fontSize: 12, fontWeight: '600', marginHorizontal: 12, marginTop: 6 },
+
+    // TE-109: Sortierungs-Dropdown über der (jetzt flachen) Liste.
+    sortRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 12, marginTop: 10 },
+    sortLabel: { color: c.textSecondary, fontSize: 12, fontWeight: '600' },
+    sortButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      backgroundColor: c.inputBackground,
+      borderWidth: 1,
+      borderColor: c.border,
+      borderRadius: 8,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+    },
+    sortButtonText: { color: c.text, fontSize: 13, fontWeight: '600' },
+    sortOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center', padding: 24 },
+    sortMenu: { width: '100%', maxWidth: 320, backgroundColor: c.surface, borderRadius: 12, borderWidth: 1, borderColor: c.border, padding: 6 },
+    sortMenuItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, paddingVertical: 12, borderRadius: 8 },
+    sortMenuItemActive: { backgroundColor: c.inputBackground },
+    sortMenuText: { color: c.text, fontSize: 15 },
     filterChip: {
       backgroundColor: c.inputBackground,
       borderWidth: 1,
@@ -861,12 +899,6 @@ function makeStyles(c: ThemeColors) {
     beitragTitle: { color: c.text, fontSize: 13, fontWeight: '600' },
     beitragSub: { color: c.textSecondary, fontSize: 11, marginTop: 2 },
 
-    group: { marginBottom: 16 },
-    groupTitleRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 6 },
-    groupTitle: { color: c.textSecondary, fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
-    groupTitleActive: { color: c.accent },
-    groupTitleMoved: { color: c.textMuted },
-    groupHint: { color: c.textMuted, fontSize: 11 },
     row: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -903,14 +935,6 @@ function makeStyles(c: ThemeColors) {
       borderRadius: 6,
       paddingHorizontal: 6,
       paddingVertical: 2,
-    },
-    schnupperHeading: {
-      color: c.success,
-      fontSize: 11,
-      fontWeight: '700',
-      textTransform: 'uppercase',
-      letterSpacing: 0.5,
-      marginBottom: 6,
     },
     rowYear: { color: c.textSecondary, fontSize: 13, fontWeight: '600' },
 
