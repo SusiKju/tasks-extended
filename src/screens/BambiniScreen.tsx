@@ -329,7 +329,10 @@ export function BambiniScreen() {
   };
 
   const removeEntry = (c: Child) => {
-    confirmDelete(c.name, () => persist(children.filter((x) => x.id !== c.id)));
+    confirmDelete(c.name, () => {
+      persist(children.filter((x) => x.id !== c.id));
+      if (editing?.id === c.id) closeModal();
+    });
   };
 
   // TE-96: Live-Filter ab drei Zeichen (Vor-/Nachname, Elternname, Jahrgang).
@@ -415,9 +418,6 @@ export function BambiniScreen() {
           {c.stopped ? <Text style={s.badgeStopped}>aufgehört</Text> : null}
         </View>
         <Text style={s.rowYear}>{c.birthYear || '—'}</Text>
-        <Pressable onPress={() => removeEntry(c)} hitSlop={8} style={s.rowDel} accessibilityLabel="Löschen">
-          <Ionicons name="trash-outline" size={18} color={colors.textSecondary} />
-        </Pressable>
       </Pressable>
     );
   };
@@ -494,7 +494,10 @@ export function BambiniScreen() {
               <View style={s.markedBox}>
                 <Text style={s.markedBoxTitle}>Nächste Aufgaben</Text>
                 {markedNotizItems.map((n) => (
-                  <Text key={n.id} style={s.markedText} numberOfLines={1}>{n.text}</Text>
+                  <View key={n.id} style={s.markedItemRow}>
+                    <View style={s.markedDot} />
+                    <Text style={s.markedText} numberOfLines={1}>{n.text}</Text>
+                  </View>
                 ))}
               </View>
             ) : null}
@@ -671,13 +674,20 @@ export function BambiniScreen() {
               multiline
             />
 
-            <View style={s.cardActions}>
-              <Pressable onPress={closeModal} style={[s.btn, s.btnGhost]}>
-                <Text style={[s.btnText, { color: colors.textSecondary }]}>Abbrechen</Text>
-              </Pressable>
-              <Pressable onPress={saveEntry} style={[s.btn, { backgroundColor: colors.accent }]}>
-                <Text style={[s.btnText, { color: colors.accentFg }]}>Speichern</Text>
-              </Pressable>
+            <View style={[s.cardActions, editing?.id ? s.cardActionsWithDelete : null]}>
+              {editing?.id ? (
+                <Pressable onPress={() => editing && removeEntry(editing)} hitSlop={8} accessibilityLabel="Kind löschen">
+                  <Ionicons name="trash-outline" size={20} color={colors.textSecondary} />
+                </Pressable>
+              ) : null}
+              <View style={s.cardActionsRight}>
+                <Pressable onPress={closeModal} style={[s.btn, s.btnGhost]}>
+                  <Text style={[s.btnText, { color: colors.textSecondary }]}>Abbrechen</Text>
+                </Pressable>
+                <Pressable onPress={saveEntry} style={[s.btn, { backgroundColor: colors.accent }]}>
+                  <Text style={[s.btnText, { color: colors.accentFg }]}>Speichern</Text>
+                </Pressable>
+              </View>
             </View>
           </View>
         </KeyboardAvoidingView>
@@ -887,7 +897,6 @@ function makeStyles(c: ThemeColors) {
       marginBottom: 6,
     },
     rowYear: { color: c.textSecondary, fontSize: 13, fontWeight: '600' },
-    rowDel: { padding: 2 },
 
     fab: {
       position: 'absolute',
@@ -966,7 +975,9 @@ function makeStyles(c: ThemeColors) {
       marginBottom: 16,
     },
     markedBoxTitle: { color: '#F2C518', fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 },
-    markedText: { color: c.text, fontSize: 14, paddingVertical: 6 },
+    markedItemRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6 },
+    markedDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#F2C518' },
+    markedText: { flex: 1, color: c.text, fontSize: 14 },
     input: {
       backgroundColor: c.inputBackground,
       borderWidth: 1,
@@ -993,6 +1004,8 @@ function makeStyles(c: ThemeColors) {
     checkRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 4 },
     checkLabel: { fontSize: 15, fontWeight: '500' },
     cardActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8, marginTop: 4 },
+    cardActionsWithDelete: { justifyContent: 'space-between', alignItems: 'center' },
+    cardActionsRight: { flexDirection: 'row', gap: 8 },
     btn: { paddingHorizontal: 18, paddingVertical: 10, borderRadius: 10 },
     btnGhost: { borderWidth: 1, borderColor: c.border },
     btnText: { fontSize: 15, fontWeight: '600' },
