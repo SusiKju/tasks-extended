@@ -50,6 +50,9 @@ export interface Child {
   schnuppertraining: boolean;
 }
 
+/** Sortierung der Bambini-Liste (TE-109): nach Jahrgang oder nach "dabei seit". */
+export type BambiniSortMode = 'jahrgang' | 'erstesmal';
+
 /** Quickfilter-Auswahl im Bambini-Tab (TE-20), pro User persistiert. */
 export interface BambiniFilters {
   /** Ausgewählte Jahrgänge (Mehrfachauswahl), leer = alle. */
@@ -58,6 +61,10 @@ export interface BambiniFilters {
   stopped: boolean | null;
   /** null = alle, true = nur Wackelkandidaten, false = ohne Wackelkandidaten. */
   wackelkandidat: boolean | null;
+  /** Sortiermodus der Liste (TE-109). */
+  sortMode: BambiniSortMode;
+  /** Sortierrichtung umgekehrt (TE-109). */
+  sortReversed: boolean;
 }
 
 export const makeId = (): string => String(uuid.v4());
@@ -144,7 +151,9 @@ export async function loadBambiniFilters(familyId: string): Promise<BambiniFilte
     : [];
   const stopped = raw?.stopped === true ? true : raw?.stopped === false ? false : null;
   const wackelkandidat = raw?.wackelkandidat === true ? true : raw?.wackelkandidat === false ? false : null;
-  return { years, stopped, wackelkandidat };
+  const sortMode: BambiniSortMode = raw?.sortMode === 'erstesmal' ? 'erstesmal' : 'jahrgang';
+  const sortReversed = !!raw?.sortReversed;
+  return { years, stopped, wackelkandidat, sortMode, sortReversed };
 }
 
 /** Quickfilter-Auswahl (TE-20) speichern. */

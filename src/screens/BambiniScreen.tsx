@@ -42,6 +42,7 @@ import {
   makeId,
   neuTier,
   NeuTier,
+  BambiniSortMode,
 } from '../services/bambini';
 
 /** Deckkraft des linken Hervorhebungs-Rands je Tier – frischer = kräftiger. */
@@ -95,11 +96,9 @@ function confirmDelete(name: string, onConfirm: () => void) {
   }
 }
 
-type SortMode = 'jahrgang' | 'erstesmal';
-
-const SORT_OPTIONS: { value: SortMode; label: string }[] = [
+const SORT_OPTIONS: { value: BambiniSortMode; label: string }[] = [
   { value: 'jahrgang', label: 'Alphabetisch nach Jahrgang' },
-  { value: 'erstesmal', label: 'Das 1. Mal da' },
+  { value: 'erstesmal', label: 'Dabei seit' },
 ];
 
 /** Wackelanimation für Schnuppertraining-Kinder ("Wackelkandidaten"). */
@@ -138,9 +137,10 @@ export function BambiniScreen() {
   const [stoppedFilter, setStoppedFilter] = useState<boolean | null>(null);
   // wackelkandidatFilter: null = alle, true = nur Wackelkandidaten, false = ohne Wackelkandidaten.
   const [wackelkandidatFilter, setWackelkandidatFilter] = useState<boolean | null>(null);
-  // TE-109: Sortierung der flachen Liste (keine Jahrgangs-Überschriften mehr) – lokal,
-  // nicht persistiert.
-  const [sortMode, setSortMode] = useState<SortMode>('jahrgang');
+  // TE-109: Sortierung der flachen Liste (keine Jahrgangs-Überschriften mehr) –
+  // family-weit persistiert, wie die übrigen Quickfilter (siehe filtersLoaded unten).
+  const [sortMode, setSortMode] = useState<BambiniSortMode>('jahrgang');
+  const [sortReversed, setSortReversed] = useState(false);
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
   // Erst nach dem initialen Laden aus Firestore speichern wir Änderungen zurück,
   // sonst würde der leere Default-State die gespeicherte Auswahl überschreiben.
@@ -260,6 +260,8 @@ export function BambiniScreen() {
       setYearFilter(filters.years);
       setStoppedFilter(filters.stopped);
       setWackelkandidatFilter(filters.wackelkandidat);
+      setSortMode(filters.sortMode);
+      setSortReversed(filters.sortReversed);
       setNotizItems(notiz);
     } catch (e) {
       console.warn('Bambini laden fehlgeschlagen', e);
@@ -276,10 +278,14 @@ export function BambiniScreen() {
   // TE-20: Filterwechsel in Firestore spiegeln (erst nach dem initialen Laden).
   useEffect(() => {
     if (!filtersLoaded.current || !fid) return;
-    saveBambiniFilters(fid, { years: yearFilter, stopped: stoppedFilter, wackelkandidat: wackelkandidatFilter }).catch((e) =>
-      console.warn('Bambini-Filter speichern fehlgeschlagen', e),
-    );
-  }, [fid, yearFilter, stoppedFilter, wackelkandidatFilter]);
+    saveBambiniFilters(fid, {
+      years: yearFilter,
+      stopped: stoppedFilter,
+      wackelkandidat: wackelkandidatFilter,
+      sortMode,
+      sortReversed,
+    }).catch((e) => console.warn('Bambini-Filter speichern fehlgeschlagen', e));
+  }, [fid, yearFilter, stoppedFilter, wackelkandidatFilter, sortMode, sortReversed]);
 
   const persist = useCallback(
     (next: Child[]) => {
@@ -384,6 +390,7 @@ export function BambiniScreen() {
     }
     return b.birthYear - a.birthYear || a.name.localeCompare(b.name, 'de');
   });
+  if (sortReversed) sorted.reverse();
 
   // TE-97: Übersicht über alle Kinder (ungefiltert, unabhängig von der Suche).
   const stoppedCount = children.filter((c) => c.stopped).length;
@@ -509,6 +516,7 @@ export function BambiniScreen() {
                 <Text style={s.sortButtonText} numberOfLines={1}>
                   {SORT_OPTIONS.find((o) => o.value === sortMode)?.label}
                 </Text>
+                <Ionicons name={sortReversed ? 'arrow-up' : 'arrow-down'} size={14} color={colors.textSecondary} />
                 <Ionicons name="chevron-down" size={14} color={colors.textSecondary} />
               </Pressable>
             </View>
@@ -816,6 +824,17 @@ export function BambiniScreen() {
                 {sortMode === opt.value ? <Ionicons name="checkmark" size={16} color={colors.accent} /> : null}
               </Pressable>
             ))}
+            <View style={s.sortDivider} />
+            <Pressable onPress={() => setSortReversed((v) => !v)} style={s.sortMenuItem}>
+              <View style={s.sortReverseRow}>
+                <Ionicons
+                  name={sortReversed ? 'checkbox' : 'square-outline'}
+                  size={20}
+                  color={sortReversed ? colors.accent : colors.textSecondary}
+                />
+                <Text style={s.sortMenuText}>Umgekehrte Reihenfolge</Text>
+              </View>
+            </Pressable>
           </View>
         </Pressable>
       </Modal>
@@ -872,6 +891,8 @@ function makeStyles(c: ThemeColors) {
     sortMenuItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, paddingVertical: 12, borderRadius: 8 },
     sortMenuItemActive: { backgroundColor: c.inputBackground },
     sortMenuText: { color: c.text, fontSize: 15 },
+    sortDivider: { height: 1, backgroundColor: c.border, marginVertical: 4 },
+    sortReverseRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
     filterChip: {
       backgroundColor: c.inputBackground,
       borderWidth: 1,
