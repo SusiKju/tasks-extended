@@ -110,8 +110,10 @@ export function BambiniScreen() {
   // stoppedFilter: null = alle, true = nur aufgehört, false = nur aktiv (nicht aufgehört).
   const [yearFilter, setYearFilter] = useState<number[]>([]);
   const [stoppedFilter, setStoppedFilter] = useState<boolean | null>(null);
-  // wackelkandidatFilter: null = alle, true = nur Wackelkandidaten, false = ohne Wackelkandidaten.
-  const [wackelkandidatFilter, setWackelkandidatFilter] = useState<boolean | null>(null);
+  // TE-112: Wackelkandidaten sind standardmäßig ausgeblendet und werden nur mit
+  // explizit aktiviertem Chip zusätzlich zu den übrigen Filtern (Jahrgang etc.)
+  // eingeblendet – kein exklusiver "nur Wackelkandidaten"-Modus mehr.
+  const [wackelkandidatFilter, setWackelkandidatFilter] = useState(false);
   // TE-109: Sortierung der flachen Liste (keine Jahrgangs-Überschriften mehr) –
   // family-weit persistiert, wie die übrigen Quickfilter (siehe filtersLoaded unten).
   const [sortMode, setSortMode] = useState<BambiniSortMode>('jahrgang');
@@ -355,7 +357,7 @@ export function BambiniScreen() {
     }
     if (yearFilter.length > 0 && !yearFilter.includes(c.birthYear)) return false;
     if (stoppedFilter !== null && c.stopped !== stoppedFilter) return false;
-    if (wackelkandidatFilter !== null && c.schnuppertraining !== wackelkandidatFilter) return false;
+    if (c.schnuppertraining && !wackelkandidatFilter) return false;
     return true;
   });
 
@@ -480,10 +482,10 @@ export function BambiniScreen() {
                   <Text style={[s.filterChipText, stoppedFilter === true && s.filterChipTextActive]}>Aufgehört</Text>
                 </Pressable>
                 <Pressable
-                  style={[s.filterChip, wackelkandidatFilter === true && s.filterChipActive]}
-                  onPress={() => setWackelkandidatFilter((v) => (v === true ? null : true))}
+                  style={[s.filterChip, wackelkandidatFilter && s.filterChipActive]}
+                  onPress={() => setWackelkandidatFilter((v) => !v)}
                 >
-                  <Text style={[s.filterChipText, wackelkandidatFilter === true && s.filterChipTextActive]}>Wackelkandidaten</Text>
+                  <Text style={[s.filterChipText, wackelkandidatFilter && s.filterChipTextActive]}>Wackelkandidaten</Text>
                 </Pressable>
                 {yearCounts.map(({ year }) => (
                   <Pressable
@@ -511,7 +513,7 @@ export function BambiniScreen() {
                 </Pressable>
               </View>
 
-              {yearFilter.length > 0 || stoppedFilter !== null || wackelkandidatFilter !== null ? (
+              {yearFilter.length > 0 || stoppedFilter !== null || wackelkandidatFilter ? (
                 <Text style={s.resultCount}>{filtered.length} Treffer</Text>
               ) : null}
             </>

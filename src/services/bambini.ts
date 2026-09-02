@@ -58,8 +58,8 @@ export interface BambiniFilters {
   years: number[];
   /** null = alle, true = nur aufgehört, false = nur aktiv. */
   stopped: boolean | null;
-  /** null = alle, true = nur Wackelkandidaten, false = ohne Wackelkandidaten. */
-  wackelkandidat: boolean | null;
+  /** Wackelkandidaten zusätzlich zu den übrigen Filtern einblenden (TE-112), Default false. */
+  wackelkandidat: boolean;
   /** Sortiermodus der Liste (TE-109). */
   sortMode: BambiniSortMode;
   /** Sortierrichtung umgekehrt (TE-109). */
@@ -132,7 +132,7 @@ export async function loadBambiniFilters(familyId: string): Promise<BambiniFilte
     ? raw.years.filter((y: any) => Number.isFinite(y)).map((y: number) => Math.trunc(y))
     : [];
   const stopped = raw?.stopped === true ? true : raw?.stopped === false ? false : null;
-  const wackelkandidat = raw?.wackelkandidat === true ? true : raw?.wackelkandidat === false ? false : null;
+  const wackelkandidat = raw?.wackelkandidat === true;
   const sortMode: BambiniSortMode = raw?.sortMode === 'erstesmal' ? 'erstesmal' : 'jahrgang';
   const sortReversed = !!raw?.sortReversed;
   const filtersOpen = raw?.filtersOpen !== false;
