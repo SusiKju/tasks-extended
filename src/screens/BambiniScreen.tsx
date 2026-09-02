@@ -489,10 +489,10 @@ export function BambiniScreen() {
           ) : null}
 
           <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
-            {/* TE-101: markierte Notiz-Items (wichtig/nächste Aufgabe) auf der Startseite. */}
+            {/* TE-101/TE-103: markierte Notiz-Items (wichtig/nächste Aufgabe) als gelbe Alert-Box, gleiches Gelb wie der Notizen-FAB. */}
             {markedNotizItems.length > 0 ? (
-              <View style={s.group}>
-                <Text style={s.groupTitle}>Nächste Aufgaben</Text>
+              <View style={s.markedBox}>
+                <Text style={s.markedBoxTitle}>Nächste Aufgaben</Text>
                 {markedNotizItems.map((n) => (
                   <View key={n.id} style={s.markedRow}>
                     <Ionicons name="star" size={18} color="#F2C518" />
@@ -964,6 +964,17 @@ function makeStyles(c: ThemeColors) {
     notizAddRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
     notizAddInput: { flex: 1 },
     notizAddBtn: { paddingHorizontal: 14 },
+    markedBox: {
+      backgroundColor: '#F2C51826',
+      borderWidth: 1,
+      borderColor: '#F2C518',
+      borderRadius: 10,
+      paddingHorizontal: 12,
+      paddingTop: 8,
+      paddingBottom: 2,
+      marginBottom: 16,
+    },
+    markedBoxTitle: { color: '#F2C518', fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 },
     markedRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6 },
     markedText: { flex: 1, color: c.text, fontSize: 14 },
     input: {
