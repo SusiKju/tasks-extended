@@ -791,7 +791,7 @@ export function BambiniScreen() {
 
       <Modal visible={notizenOpen} transparent animationType="fade" onRequestClose={closeNotizen}>
         <Pressable style={s.overlay} onPress={closeNotizen}>
-          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <KeyboardAvoidingView style={s.notizenKav} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
             <Pressable style={[s.card, s.notizenCard]} onPress={() => {}}>
               <View style={s.notizenHeader}>
                 <Ionicons name="document-text" size={18} color="#F2C518" />
@@ -909,7 +909,7 @@ export function BambiniScreen() {
 
       <Modal visible={trainingsideenOpen} transparent animationType="fade" onRequestClose={closeTrainingsideen}>
         <Pressable style={s.overlay} onPress={closeTrainingsideen}>
-          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <KeyboardAvoidingView style={s.notizenKav} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
             <Pressable style={[s.card, s.notizenCard, s.trainingsideenCard]} onPress={() => {}}>
               <View style={s.notizenHeader}>
                 <Ionicons name="bulb" size={18} color="#4A9EFF" />
@@ -1271,7 +1271,10 @@ function makeStyles(c: ThemeColors) {
     overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center', padding: 24 },
     card: { width: '100%', maxWidth: 360, backgroundColor: c.surface, borderRadius: 16, borderWidth: 1, borderColor: c.border, padding: 18, gap: 12 },
     cardTitle: { color: c.text, fontSize: 17, fontWeight: '700' },
-    notizenCard: { maxWidth: 420, height: '70%' },
+    // Notizen/Trainingsideen sollen den verfügbaren Platz (Overlay-Padding
+    // ausgenommen) voll ausnutzen statt einer kleinen, mittig schwebenden Box.
+    notizenKav: { width: '100%', height: '100%' },
+    notizenCard: { maxWidth: undefined, width: '100%', height: '100%' },
     trainingsideenCard: { borderColor: '#4A9EFF' },
     notizenHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
     notizenTitle: { flex: 1 },
