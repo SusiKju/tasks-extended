@@ -179,13 +179,24 @@ export function todayDayIndex(): number {
   return day >= 1 && day <= 5 ? day - 1 : -1;
 }
 
+/** Freitext-Konvention im manuell gepflegten Stundenplan: Nutzer trägt "/"
+ * als Fach ein, wenn eine Stunde kurzfristig/früh ausfällt (kein Sync-Signal
+ * dafür vorhanden, siehe besteSchule.ts – die Info entsteht direkt beim
+ * Fach-Eintragen). Zentrale Konstante statt verstreuter Slash-Vergleiche. */
+export const AUSFALL_FACH = '/';
+
+/** true, wenn eine Stunde laut Fach-Freitext ausfällt (siehe AUSFALL_FACH). */
+export function isAusfallstunde(entry: TimetableEntry | undefined): boolean {
+  return !!entry && entry.fach.trim() === AUSFALL_FACH;
+}
+
 /**
  * Weckmodus (TE-82): true, wenn die 1. Stunde tatsächlich stattfindet – also
- * geweckt werden muss. false bei fehlendem Eintrag, Pause-Eintrag oder einer
- * 14-tägigen Stunde, die diese Woche aussetzt.
+ * geweckt werden muss. false bei fehlendem Eintrag, Pause-Eintrag, Ausfallstunde
+ * (AUSFALL_FACH) oder einer 14-tägigen Stunde, die diese Woche aussetzt.
  */
 export function needsWakeUp(entry: TimetableEntry | undefined, biweeklyActiveThisWeek: boolean): boolean {
-  if (!entry || entry.pause) return false;
+  if (!entry || entry.pause || isAusfallstunde(entry)) return false;
   if (entry.biweekly && !biweeklyActiveThisWeek) return false;
   return true;
 }
