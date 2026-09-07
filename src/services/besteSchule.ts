@@ -151,9 +151,10 @@ interface RawSubject {
  */
 function mapGrade(raw: any): GradeEntry {
   const value = String(raw?.value ?? raw?.grade ?? raw?.note ?? raw?.mark ?? '?');
-  const type = raw?.type?.name ?? raw?.type ?? raw?.kind ?? undefined;
-  const date = raw?.date ?? raw?.given_at ?? raw?.created_at ?? undefined;
-  return { value, type, date, raw };
+  const type = raw?.type?.name ?? raw?.type ?? raw?.kind;
+  const date = raw?.date ?? raw?.given_at ?? raw?.created_at;
+  // Firestore lehnt `undefined`-Felder ab – nur setzen, wenn die Quelle sie liefert.
+  return { value, raw, ...(type !== undefined ? { type } : {}), ...(date !== undefined ? { date } : {}) };
 }
 
 /** Holt den aktuellen Notenstand eines Schülers, gruppiert nach Fach. */
