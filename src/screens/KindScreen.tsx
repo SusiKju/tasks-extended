@@ -7,7 +7,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  Alert, ActivityIndicator, Modal, TextInput, Pressable, Animated, Easing,
+  Alert, ActivityIndicator, Modal, TextInput, Pressable, Animated, Easing, Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -32,6 +32,8 @@ import { BambiniScreen } from './BambiniScreen';
 import { Match, Standing, subscribeToMatches, subscribeToTable } from '../services/fussballDe';
 
 const FAMILY_ID_KEY = 'kinder_family_id';
+// Schiedsrichter-Lehrgang (TE-85): fester Link statt Freitext, siehe SettingsScreen refereeInfo.
+const REFEREE_COURSE_URL = 'https://claude.ai/code/artifact/4146ef89-451a-41f2-bfcc-9b0787895549';
 import { Platform } from 'react-native';
 
 async function requestWebNotificationPermission(): Promise<void> {
@@ -310,6 +312,24 @@ export default function KindScreen({ onExitChildMode }: Props) {
         </View>
       </View>
 
+      {/* Schiedsrichter-Abschnitt (TE-85), nur falls für dieses Kind hinterlegt – prominent direkt unter dem Header */}
+      {selectedChild?.refereeInfo && (
+        <TouchableOpacity
+          style={s.refereeCard}
+          onPress={() => Linking.openURL(REFEREE_COURSE_URL)}
+          activeOpacity={0.8}
+        >
+          <View style={s.refereeIconWrap}>
+            <Text style={s.refereeIcon}>🟨</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={s.refereeTitle}>Schiedsrichter-Lehrgang</Text>
+            <Text style={s.refereeSubtitle}>Alle Infos & Termine ansehen</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={colors.accent} />
+        </TouchableOpacity>
+      )}
+
       {/* Heute in der Schule – immer sichtbar, direkt unter dem Header */}
       {todayIdx >= 0 && (
         <View style={s.schoolCard}>
@@ -348,17 +368,6 @@ export default function KindScreen({ onExitChildMode }: Props) {
                 {format(new Date(m.date), 'dd.MM.')} · {m.time} — {m.isHome ? `vs. ${m.away}` : `bei ${m.home}`}
               </Text>
             ))}
-          </View>
-        </View>
-      )}
-
-      {/* Schiedsrichter-Abschnitt (TE-85), nur falls für dieses Kind hinterlegt */}
-      {selectedChild?.refereeInfo && (
-        <View style={s.schoolCard}>
-          <Text style={s.schoolEmoji}>🟨</Text>
-          <View style={{ flex: 1 }}>
-            <Text style={s.schoolLabel}>Schiedsrichter</Text>
-            <Text style={s.refereeText}>{selectedChild.refereeInfo}</Text>
           </View>
         </View>
       )}
@@ -635,7 +644,20 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
     schoolDot: { width: 7, height: 7, borderRadius: 4 },
     schoolChipText: { fontSize: 13, fontWeight: '700', color: colors.text },
     matchRow: { fontSize: 14, fontWeight: '600', color: colors.text, marginTop: 6 },
-    refereeText: { fontSize: 14, color: colors.text, marginTop: 4, lineHeight: 20 },
+    // Schiedsrichter-Lehrgang-Link (TE-85)
+    refereeCard: {
+      flexDirection: 'row', alignItems: 'center', gap: 12,
+      marginHorizontal: 16, marginTop: 14, padding: 14,
+      backgroundColor: colors.surfaceHigh, borderRadius: 18,
+      borderWidth: 1.5, borderColor: colors.accent,
+    },
+    refereeIconWrap: {
+      width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center',
+      backgroundColor: colors.surface,
+    },
+    refereeIcon: { fontSize: 20 },
+    refereeTitle: { fontSize: 15, fontWeight: '800', color: colors.text },
+    refereeSubtitle: { fontSize: 13, color: colors.textSecondary, marginTop: 2 },
     tableRow: { flexDirection: 'row', alignItems: 'center', marginTop: 6, gap: 6 },
     tableCellRank: { fontSize: 13, color: colors.textSecondary, width: 22 },
     tableCellClub: { fontSize: 13, color: colors.text, flex: 1 },
