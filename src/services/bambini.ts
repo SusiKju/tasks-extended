@@ -43,6 +43,8 @@ export interface Child {
   info: string;
   /** In der WhatsApp-Gruppe der Eltern (TE-35). */
   whatsapp: boolean;
+  /** Kein WhatsApp, Kommunikation läuft per SMS. */
+  sms: boolean;
   /** Offiziell im Verein angemeldet, unabhängig von `registeredSince` (TE-46). */
   vereinAngemeldet: boolean;
   /** Schnuppertraining – ganz neu, evtl. nur zum Reinschnuppern, noch keine festen Daten (TE-84). */
@@ -87,6 +89,7 @@ function sanitizeChild(c: any): Child | null {
     lastName: String(c?.lastName ?? ''),
     info: String(c?.info ?? ''),
     whatsapp: !!c?.whatsapp,
+    sms: !!c?.sms,
     vereinAngemeldet: !!c?.vereinAngemeldet,
     schnuppertraining: !!c?.schnuppertraining,
   };
@@ -267,6 +270,7 @@ export async function migrateRosterToBambini(familyId: string): Promise<void> {
         lastName: '',
         info: '',
         whatsapp: false,
+        sms: false,
         vereinAngemeldet: false,
         schnuppertraining: false,
       });

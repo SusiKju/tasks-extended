@@ -47,6 +47,7 @@ import {
 /** Bewusst nicht über colors.danger (wird in mono() vergraut) – wie NotesScreen IMPORTANT_RED. */
 const NOT_ANGEMELDET_RED = '#EF4444';
 const WHATSAPP_GREEN = '#25D366';
+const SMS_BLUE = '#007AFF';
 const INFO_YELLOW = '#F5B301';
 import { getJahrgangStatus } from '../utils/bambiniSeason';
 
@@ -127,6 +128,7 @@ export function BambiniScreen() {
   const [lastNameInput, setLastNameInput] = useState('');
   const [infoInput, setInfoInput] = useState('');
   const [whatsappInput, setWhatsappInput] = useState(false);
+  const [smsInput, setSmsInput] = useState(false);
   const [vereinAngemeldetInput, setVereinAngemeldetInput] = useState(false);
   const [schnuppertrainingInput, setSchnuppertrainingInput] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -353,7 +355,7 @@ export function BambiniScreen() {
   );
 
   const openNew = () => {
-    setEditing({ id: '', name: '', birthYear: 0, registeredSince: '', stopped: false, parentName: '', lastName: '', info: '', whatsapp: false, vereinAngemeldet: false, schnuppertraining: false });
+    setEditing({ id: '', name: '', birthYear: 0, registeredSince: '', stopped: false, parentName: '', lastName: '', info: '', whatsapp: false, sms: false, vereinAngemeldet: false, schnuppertraining: false });
     setNameInput('');
     setYearInput('');
     setSinceInput('');
@@ -362,6 +364,7 @@ export function BambiniScreen() {
     setLastNameInput('');
     setInfoInput('');
     setWhatsappInput(false);
+    setSmsInput(false);
     setVereinAngemeldetInput(false);
     setSchnuppertrainingInput(false);
   };
@@ -376,6 +379,7 @@ export function BambiniScreen() {
     setLastNameInput(c.lastName);
     setInfoInput(c.info);
     setWhatsappInput(c.whatsapp);
+    setSmsInput(c.sms);
     setVereinAngemeldetInput(c.vereinAngemeldet);
     setSchnuppertrainingInput(c.schnuppertraining);
   };
@@ -399,6 +403,7 @@ export function BambiniScreen() {
       lastName: lastNameInput.trim(),
       info: infoInput.trim(),
       whatsapp: whatsappInput,
+      sms: smsInput,
       vereinAngemeldet: vereinAngemeldetInput,
       schnuppertraining: schnuppertrainingInput,
     };
@@ -482,6 +487,8 @@ export function BambiniScreen() {
         <View style={s.iconSlot}>
           {c.whatsapp ? (
             <Ionicons name="logo-whatsapp" size={20} color={WHATSAPP_GREEN} accessibilityLabel="In WhatsApp-Gruppe" />
+          ) : c.sms ? (
+            <Ionicons name="chatbox-ellipses" size={20} color={SMS_BLUE} accessibilityLabel="Kommunikation per SMS" />
           ) : null}
         </View>
         <View style={s.iconSlot}>
@@ -727,6 +734,15 @@ export function BambiniScreen() {
                 color={whatsappInput ? colors.accent : colors.textSecondary}
               />
               <Text style={[s.checkLabel, { color: colors.text }]}>In WhatsApp-Gruppe</Text>
+            </Pressable>
+
+            <Pressable style={s.checkRow} onPress={() => setSmsInput((v) => !v)}>
+              <Ionicons
+                name={smsInput ? 'checkbox' : 'square-outline'}
+                size={22}
+                color={smsInput ? colors.accent : colors.textSecondary}
+              />
+              <Text style={[s.checkLabel, { color: colors.text }]}>Kein WhatsApp, per SMS</Text>
             </Pressable>
 
             <Pressable style={s.checkRow} onPress={() => setVereinAngemeldetInput((v) => !v)}>
