@@ -46,6 +46,8 @@ import uuid from 'react-native-uuid';
 import { format } from 'date-fns';
 
 const TODAY = format(new Date(), 'yyyy-MM-dd');
+// Schiedsrichter-Lehrgang (TE-85/TE-86): fester Link statt Freitext im refereeInfo-Feld.
+const REFEREE_COURSE_URL = 'https://claude.ai/code/artifact/4146ef89-451a-41f2-bfcc-9b0787895549';
 
 type ThemeColors = ReturnType<typeof useTheme>['colors'];
 
@@ -629,6 +631,25 @@ export default function KinderScreen() {
         </View>
       )}
 
+      {/* Schiedsrichter-Abschnitt (TE-85/TE-86) — nur falls für dieses Kind hinterlegt,
+          prominent direkt unter der Kind-Auswahl statt am Seitenende */}
+      {!groupMode && selectedChildConfig?.refereeInfo && (
+        <TouchableOpacity
+          style={s.refereeCard}
+          onPress={() => Linking.openURL(REFEREE_COURSE_URL)}
+          activeOpacity={0.8}
+        >
+          <View style={s.refereeIconWrap}>
+            <Text style={s.refereeIcon}>🟨</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={s.refereeTitle}>Schiedsrichter — {childName(selectedChild)}</Text>
+            <Text style={s.refereeSubtitle}>Lehrgang: Infos & Termine ansehen</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={colors.accentNeon} />
+        </TouchableOpacity>
+      )}
+
       {/* Aufgabe hinzufügen — Einzel- oder Gruppenaufgabe (TE-56/TE-111) */}
       <View style={s.section}>
         <Text style={s.sectionTitle}>
@@ -995,14 +1016,6 @@ export default function KinderScreen() {
           ))
         )}
       </View>
-      )}
-
-      {/* Schiedsrichter-Abschnitt (TE-85/TE-86) — nur falls für dieses Kind hinterlegt */}
-      {selectedChildConfig?.refereeInfo && (
-        <View style={s.section}>
-          <Text style={s.sectionTitle}>🟨 Schiedsrichter — {childName(selectedChild)}</Text>
-          <Text style={s.refereeText}>{selectedChildConfig.refereeInfo}</Text>
-        </View>
       )}
 
         </>
@@ -1403,7 +1416,19 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
     allowanceStatusText: { fontSize: 12, fontWeight: '700' },
     row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     hint: { fontSize: 12, color: colors.textMuted },
-    refereeText: { fontSize: 14, color: colors.text, lineHeight: 20 },
+    // Schiedsrichter-Lehrgang-Link (TE-85/TE-86)
+    refereeCard: {
+      flexDirection: 'row', alignItems: 'center', gap: 12,
+      backgroundColor: colors.surface, borderRadius: 14, padding: 14,
+      borderWidth: 1.5, borderColor: colors.accentNeon,
+    },
+    refereeIconWrap: {
+      width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center',
+      backgroundColor: colors.surfaceHigh,
+    },
+    refereeIcon: { fontSize: 18 },
+    refereeTitle: { fontSize: 14, fontWeight: '700', color: colors.text },
+    refereeSubtitle: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
     saveBtn: {
       backgroundColor: colors.accentNeon, borderRadius: 10,
       paddingVertical: 10, alignItems: 'center',
