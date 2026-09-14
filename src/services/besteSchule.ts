@@ -143,16 +143,14 @@ interface RawSubject {
 }
 
 /**
- * ACHTUNG: Lennys Schuljahr hat gerade erst begonnen, `grades` war zum
- * Zeitpunkt der Implementierung leer – das Feld-Mapping einer einzelnen Note
- * (value/type/date) ist daher unverifiziert (bestes Wissen aus dem Muster
- * der übrigen Endpunkte). `raw` wird immer mitgespeichert, damit bei falscher
- * Zuordnung nichts verloren geht und wir es nachträglich korrigieren können.
+ * Feld-Mapping verifiziert anhand echter beste.schule-Daten: Fach und Art
+ * einer Note stecken nicht auf der Note selbst, sondern unter `collection`
+ * (der Leistungserhebung, zu der die Note gehört).
  */
 function mapGrade(raw: any): GradeEntry {
   const value = String(raw?.value ?? raw?.grade ?? raw?.note ?? raw?.mark ?? '?');
-  const type = raw?.type?.name ?? raw?.type ?? raw?.kind;
-  const date = raw?.date ?? raw?.given_at ?? raw?.created_at;
+  const type = raw?.collection?.type ?? raw?.type?.name ?? raw?.type ?? raw?.kind;
+  const date = raw?.given_at ?? raw?.date ?? raw?.created_at;
   // Firestore lehnt `undefined`-Felder ab – nur setzen, wenn die Quelle sie liefert.
   return { value, raw, ...(type !== undefined ? { type } : {}), ...(date !== undefined ? { date } : {}) };
 }
@@ -171,7 +169,9 @@ export async function fetchBesteSchuleGrades(token: string, studentId: string): 
   const bySubject: GradesMap = {};
   for (const s of subjects) bySubject[s.name] = [];
   for (const g of gradesRaw) {
-    const subjectName = g?.subject?.name ?? subjects.find((s) => s.id === g?.subject_id)?.name ?? 'Sonstiges';
+    const subjectId = g?.subject_id ?? g?.collection?.subject_id;
+    const subjectName =
+      g?.subject?.name ?? g?.collection?.subject?.name ?? subjects.find((s) => s.id === subjectId)?.name ?? 'Sonstiges';
     if (!bySubject[subjectName]) bySubject[subjectName] = [];
     bySubject[subjectName].push(mapGrade(g));
   }
