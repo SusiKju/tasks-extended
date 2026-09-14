@@ -8,6 +8,7 @@ import { useStore } from '../../src/store';
 import { DEFAULT_VISIBLE_TABS, TabKey } from '../../src/types';
 import { useFuerUns } from '../../src/hooks/useFuerUns';
 import { useSchuleNotifications } from '../../src/hooks/useSchuleNotifications';
+import { useSchuleSyncStatus } from '../../src/hooks/useSchuleSyncStatus';
 import { useMailNotifications } from '../../src/hooks/useMailNotifications';
 
 export default function TabsLayout() {
@@ -42,6 +43,7 @@ function TabsLayoutInner() {
   const visibleTabs = useStore((s) => s.settings.visibleTabs ?? DEFAULT_VISIBLE_TABS);
   const { unreadCount } = useFuerUns();
   const { unreadCount: schuleUnreadCount } = useSchuleNotifications();
+  const schuleSyncError = useSchuleSyncStatus((s) => s.hasError);
   const { unreadCount: mailUnreadCount } = useMailNotifications();
   // TE-49: Elternteil kann Tabs zwischen Dashboard und Settings einzeln ausblenden.
   const hrefFor = (key: TabKey) => (visibleTabs[key] === false ? null : undefined);
@@ -137,7 +139,9 @@ function TabsLayoutInner() {
         options={{
           title: 'Schule',
           href: hrefFor('schule'),
-          tabBarBadge: schuleUnreadCount > 0 ? schuleUnreadCount : undefined,
+          // Sync-Fehler hat Vorrang vor der Ungelesen-Zahl – "beste.schule
+          // meldet sich gerade nicht" ist dringlicher als "X neue Einträge".
+          tabBarBadge: schuleSyncError ? '!' : schuleUnreadCount > 0 ? schuleUnreadCount : undefined,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="school-outline" size={size} color={color} />
           ),

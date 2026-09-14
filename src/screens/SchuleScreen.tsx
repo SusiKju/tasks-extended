@@ -5,7 +5,7 @@
  * auf dem Handy immer der relevante Tag im Fokus steht.
  */
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   TextInput, Modal, Pressable, Linking,
@@ -35,6 +35,7 @@ import {
   ChildInfoFact, subscribeToInfoFacts, saveInfoFacts,
 } from '../services/schoolManual';
 import { DatePickerModal } from '../components/DatePickerModal';
+import { useSchuleSyncStatus } from '../hooks/useSchuleSyncStatus';
 
 type SyncState = { status: 'idle' | 'syncing' | 'done' | 'error'; message?: string };
 type ScreenView = 'plan' | 'noten' | 'klassenbuch';
@@ -209,6 +210,10 @@ export default function SchuleScreen() {
     () => unreadGradeIds(grades, gradesAckByChild[selectedChild] ?? []),
     [grades, gradesAckByChild, selectedChild]
   );
+  const totalGradeCount = React.useMemo(
+    () => Object.values(grades).reduce((n, entries) => n + entries.length, 0),
+    [grades]
+  );
   // Lehrer je Fach aus dem Stundenplan ableiten statt neu abzufragen – die
   // "lehrer"-Spalte pro Slot ist schon da (besteSchule.ts), nur noch nie
   // pro Fach gruppiert dargestellt.
@@ -276,27 +281,41 @@ export default function SchuleScreen() {
   // kein manuelles Aktualisieren nötig. Nur für Kinder mit hinterlegter
   // Schüler-ID (Einstellungen) – alle anderen bleiben rein manuell gepflegt.
   const [syncState, setSyncState] = useState<SyncState>({ status: 'idle' });
+  // Fehlerstatus zusätzlich global melden, damit der Schule-Tab unten ein
+  // Warnsymbol zeigen kann, auch wenn dieser Screen gerade nicht offen ist.
+  const updateSyncState = useCallback((next: SyncState) => {
+    setSyncState(next);
+    useSchuleSyncStatus.getState().setHasError(next.status === 'error');
+  }, []);
+  // Generation-Zähler statt eines einzelnen `cancelled`-Flags: verhindert, dass
+  // eine spät auflösende Anfrage (z. B. nach Kind-Wechsel oder manuellem
+  // Sync-Tap währenddessen) den Status einer inzwischen neueren Anfrage überschreibt.
+  const syncGenRef = useRef(0);
+  const runSync = useCallback(() => {
+    if (!isLinked || !fid || !selectedChild) return;
+    const gen = ++syncGenRef.current;
+    const guardedUpdate = (next: SyncState) => { if (syncGenRef.current === gen) updateSyncState(next); };
+    if (!settings.besteSchuleToken) {
+      guardedUpdate({ status: 'error', message: 'Kein beste.schule-Token hinterlegt (Einstellungen).' });
+      return;
+    }
+    guardedUpdate({ status: 'syncing' });
+    return Promise.all([
+      fetchBesteSchuleTimetable(settings.besteSchuleToken, linkedStudentId!)
+        .then((map) => replaceTimetable(fid, selectedChild, map)),
+      fetchBesteSchuleGrades(settings.besteSchuleToken, linkedStudentId!)
+        .then((map) => replaceGrades(fid, selectedChild, map)),
+      fetchBesteSchuleJournal(settings.besteSchuleToken, linkedStudentId!)
+        .then((data) => replaceJournal(fid, selectedChild, data)),
+    ])
+      .then(() => guardedUpdate({ status: 'done' }))
+      .catch((e) => guardedUpdate({ status: 'error', message: e?.message ?? String(e) }));
+  }, [isLinked, fid, selectedChild, settings.besteSchuleToken, linkedStudentId, updateSyncState]);
+
   useFocusEffect(
     useCallback(() => {
-      if (!isLinked || !fid || !selectedChild) return;
-      if (!settings.besteSchuleToken) {
-        setSyncState({ status: 'error', message: 'Kein beste.schule-Token hinterlegt (Einstellungen).' });
-        return;
-      }
-      let cancelled = false;
-      setSyncState({ status: 'syncing' });
-      Promise.all([
-        fetchBesteSchuleTimetable(settings.besteSchuleToken, linkedStudentId!)
-          .then((map) => replaceTimetable(fid, selectedChild, map)),
-        fetchBesteSchuleGrades(settings.besteSchuleToken, linkedStudentId!)
-          .then((map) => replaceGrades(fid, selectedChild, map)),
-        fetchBesteSchuleJournal(settings.besteSchuleToken, linkedStudentId!)
-          .then((data) => replaceJournal(fid, selectedChild, data)),
-      ])
-        .then(() => { if (!cancelled) setSyncState({ status: 'done' }); })
-        .catch((e) => { if (!cancelled) setSyncState({ status: 'error', message: e?.message ?? String(e) }); });
-      return () => { cancelled = true; };
-    }, [isLinked, fid, selectedChild, settings.besteSchuleToken, linkedStudentId])
+      runSync();
+    }, [runSync])
   );
 
   const openEditor = useCallback((nr: number | string, slotKey: string) => {
@@ -713,7 +732,9 @@ export default function SchuleScreen() {
           onPress={() => setView('noten')}
         >
           <View style={s.viewToggleBadgeRow}>
-            <Text style={[s.viewToggleText, view === 'noten' && s.viewToggleTextActive]}>Noten</Text>
+            <Text style={[s.viewToggleText, view === 'noten' && s.viewToggleTextActive]}>
+              Noten{totalGradeCount > 0 ? ` (${totalGradeCount})` : ''}
+            </Text>
             {unreadGrades.length > 0 && (
               <View style={s.viewToggleBadge}>
                 <Text style={s.viewToggleBadgeText}>{unreadGrades.length}</Text>
@@ -843,14 +864,26 @@ export default function SchuleScreen() {
           <Ionicons
             name={syncState.status === 'error' ? 'warning-outline' : syncState.status === 'syncing' ? 'sync-outline' : 'checkmark-circle-outline'}
             size={14}
-            color={syncState.status === 'error' ? colors.danger : colors.textSecondary}
+            // Hartkodiertes Rot statt colors.danger – siehe viewToggleBadge weiter unten.
+            color={syncState.status === 'error' ? '#EF4444' : colors.textSecondary}
           />
-          <Text style={[s.syncBannerText, syncState.status === 'error' && { color: colors.danger }]}>
+          <Text style={[s.syncBannerText, syncState.status === 'error' && { color: '#EF4444' }]}>
             {syncState.status === 'syncing' && 'Wird mit beste.schule synchronisiert…'}
             {syncState.status === 'done' && 'Synchronisiert mit beste.schule'}
             {syncState.status === 'error' && (syncState.message ?? 'Sync fehlgeschlagen')}
             {syncState.status === 'idle' && 'Synchronisiert mit beste.schule'}
           </Text>
+          <TouchableOpacity
+            onPress={runSync}
+            disabled={syncState.status === 'syncing'}
+            style={s.syncNowBtn}
+          >
+            <Ionicons
+              name="refresh-outline"
+              size={15}
+              color={syncState.status === 'syncing' ? colors.textMuted : colors.accentNeon}
+            />
+          </TouchableOpacity>
         </View>
       )}
 
@@ -1226,6 +1259,7 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
       marginTop: 10, paddingHorizontal: 4,
     },
     syncBannerError: {},
+    syncNowBtn: { marginLeft: 'auto', padding: 4 },
     syncBannerText: { fontSize: 12.5, color: colors.textSecondary },
     // Stundenplan/Noten-Umschalter
     viewToggle: {
