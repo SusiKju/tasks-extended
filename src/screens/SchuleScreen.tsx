@@ -1204,8 +1204,11 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
     viewToggleTextActive: { color: colors.accentFg },
     viewToggleBadgeRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
     viewToggleBadge: {
+      // Bewusst hartkodiertes Rot statt colors.danger: Theme ist monochrom
+      // (danger === weiß), ein echtes "ungelesen"-Signal muss dagegen immer
+      // rot bleiben – gleiches Muster wie IMPORTANT_RED in NotesScreen.tsx.
       minWidth: 16, height: 16, borderRadius: 8, paddingHorizontal: 3,
-      backgroundColor: colors.danger, alignItems: 'center', justifyContent: 'center',
+      backgroundColor: '#EF4444', alignItems: 'center', justifyContent: 'center',
     },
     viewToggleBadgeText: { fontSize: 10, fontWeight: '700', color: '#fff' },
     markReadBtn: {
