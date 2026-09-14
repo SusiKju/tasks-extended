@@ -80,6 +80,31 @@ export async function fetchRecentMails(
 }
 
 /**
+ * TE-Mail-Badge: Zählt ungelesene Mails im Posteingang, ohne pro Nachricht
+ * einzeln Metadaten zu laden (billiger als fetchRecentMails für einen reinen
+ * Badge-Wert).
+ */
+export async function fetchUnreadCount(
+  accessToken: string,
+  windowDays = 10
+): Promise<number> {
+  const days = Number.isFinite(windowDays) && windowDays > 0 ? windowDays : 10;
+  const windowStart = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  const after = Math.floor(windowStart.getTime() / 1000);
+
+  const res = await gmailFetch(
+    `/users/me/messages?labelIds=INBOX&labelIds=UNREAD&q=after:${after}&maxResults=1`,
+    accessToken
+  );
+  if (!res.ok) {
+    if (res.status === 401) throw new Error('UNAUTHORIZED');
+    throw new Error(`Gmail unread count failed: ${res.status}`);
+  }
+  const data = await res.json();
+  return data.resultSizeEstimate ?? 0;
+}
+
+/**
  * TE-38: Lädt einzelne Mails anhand ihrer IDs (für angepinnte Mails, die außerhalb
  * des Zeitfensters liegen und daher nicht im normalen Listen-Request auftauchen).
  * Nicht mehr existierende Mails (404) werden stillschweigend übersprungen.

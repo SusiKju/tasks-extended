@@ -8,6 +8,7 @@ import { useStore } from '../../src/store';
 import { DEFAULT_VISIBLE_TABS, TabKey } from '../../src/types';
 import { useFuerUns } from '../../src/hooks/useFuerUns';
 import { useSchuleNotifications } from '../../src/hooks/useSchuleNotifications';
+import { useMailNotifications } from '../../src/hooks/useMailNotifications';
 
 export default function TabsLayout() {
   // TE-57: eigenständige Kinder-Modus-Sperre zusätzlich zum Root-Guard
@@ -41,6 +42,7 @@ function TabsLayoutInner() {
   const visibleTabs = useStore((s) => s.settings.visibleTabs ?? DEFAULT_VISIBLE_TABS);
   const { unreadCount } = useFuerUns();
   const { unreadCount: schuleUnreadCount } = useSchuleNotifications();
+  const { unreadCount: mailUnreadCount } = useMailNotifications();
   // TE-49: Elternteil kann Tabs zwischen Dashboard und Settings einzeln ausblenden.
   const hrefFor = (key: TabKey) => (visibleTabs[key] === false ? null : undefined);
 
@@ -114,6 +116,7 @@ function TabsLayoutInner() {
         options={{
           title: 'Mail',
           href: hrefFor('mail'),
+          tabBarBadge: mailUnreadCount > 0 ? mailUnreadCount : undefined,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="mail-outline" size={size} color={color} />
           ),
