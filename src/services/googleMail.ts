@@ -93,7 +93,7 @@ export async function fetchUnreadCount(
   const after = Math.floor(windowStart.getTime() / 1000);
 
   const res = await gmailFetch(
-    `/users/me/messages?labelIds=INBOX&labelIds=UNREAD&q=after:${after}&maxResults=1`,
+    `/users/me/messages?labelIds=INBOX&labelIds=UNREAD&q=after:${after}&maxResults=50`,
     accessToken
   );
   if (!res.ok) {
@@ -101,7 +101,10 @@ export async function fetchUnreadCount(
     throw new Error(`Gmail unread count failed: ${res.status}`);
   }
   const data = await res.json();
-  return data.resultSizeEstimate ?? 0;
+  // resultSizeEstimate ignoriert bei Gmail häufig den q-Filter und liefert
+  // dadurch überhöhte Werte – die tatsächlich zurückgegebene Trefferliste
+  // ist die verlässliche Zählbasis.
+  return (data.messages ?? []).length;
 }
 
 /**
