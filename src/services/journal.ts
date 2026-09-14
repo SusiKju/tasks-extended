@@ -10,7 +10,7 @@
  * Vergangenes fällt automatisch raus.
  */
 
-import { doc, setDoc, updateDoc, onSnapshot, Unsubscribe } from 'firebase/firestore';
+import { doc, setDoc, updateDoc, arrayUnion, onSnapshot, Unsubscribe } from 'firebase/firestore';
 import { db } from './firebase';
 
 export interface JournalNote {
@@ -51,5 +51,44 @@ export async function replaceJournal(familyId: string, childId: string, data: Jo
     await updateDoc(ref, { journal: data });
   } catch {
     await setDoc(ref, { journal: data }, { merge: true });
+  }
+}
+
+/**
+ * beste.schule liefert für Klassenbuch-Einträge (anders als bei Noten) kein
+ * `read`-Flag – die "neu"-Erkennung muss deshalb lokal laufen. Da dedupe()
+ * in besteSchule.ts Einträge bereits über date|fach|text als identisch
+ * erkennt, dient derselbe Schlüssel hier als stabile ID fürs Ack-Tracking.
+ */
+function noteKey(n: JournalNote): string {
+  return `${n.date}|${n.fach}|${n.text}`;
+}
+
+export function unreadJournalKeys(data: JournalData, ackKeys: string[]): string[] {
+  const acked = new Set(ackKeys);
+  const keys = [...data.homework, ...data.substitutions].map(noteKey);
+  return [...new Set(keys)].filter((k) => !acked.has(k));
+}
+
+export function subscribeToJournalAck(
+  familyId: string,
+  childId: string,
+  onChange: (ackKeys: string[]) => void,
+): Unsubscribe {
+  return onSnapshot(
+    childDoc(familyId, childId),
+    (snap) => onChange((snap.data()?.journalAckKeys as string[] | undefined) ?? []),
+    () => onChange([]),
+  );
+}
+
+/** Markiert die übergebenen Klassenbuch-Einträge als gelesen. */
+export async function ackJournal(familyId: string, childId: string, keys: string[]): Promise<void> {
+  if (keys.length === 0) return;
+  const ref = childDoc(familyId, childId);
+  try {
+    await updateDoc(ref, { journalAckKeys: arrayUnion(...keys) });
+  } catch {
+    await setDoc(ref, { journalAckKeys: keys }, { merge: true });
   }
 }

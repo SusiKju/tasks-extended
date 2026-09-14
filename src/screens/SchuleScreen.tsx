@@ -24,7 +24,10 @@ import {
   applyPeriodTimes, subscribeToPeriodTimes, setPeriodTime, isBiweeklyActiveWeek, minutesBetween,
 } from '../services/timetable';
 import { GradesMap, subscribeToGrades, replaceGrades, subscribeToGradesAck, unreadGradeIds, ackGrades } from '../services/grades';
-import { JournalData, subscribeToJournal, replaceJournal } from '../services/journal';
+import {
+  JournalData, subscribeToJournal, replaceJournal,
+  subscribeToJournalAck, unreadJournalKeys, ackJournal,
+} from '../services/journal';
 import { fetchBesteSchuleTimetable, fetchBesteSchuleGrades, fetchBesteSchuleJournal } from '../services/besteSchule';
 import {
   SchoolItem, makeId,
@@ -76,6 +79,7 @@ export default function SchuleScreen() {
   const [gradesByChild, setGradesByChild] = useState<Record<string, GradesMap>>({});
   const [gradesAckByChild, setGradesAckByChild] = useState<Record<string, string[]>>({});
   const [journalByChild, setJournalByChild] = useState<Record<string, JournalData>>({});
+  const [journalAckByChild, setJournalAckByChild] = useState<Record<string, string[]>>({});
   const [schoolItemsByChild, setSchoolItemsByChild] = useState<Record<string, SchoolItem[]>>({});
   const [infoFactsByChild, setInfoFactsByChild] = useState<Record<string, ChildInfoFact[]>>({});
   const [selectedDay, setSelectedDay] = useState(() => {
@@ -172,6 +176,16 @@ export default function SchuleScreen() {
   useEffect(() => {
     if (!fid || familyChildren.length === 0) return;
     const unsubs = familyChildren.map((child) =>
+      subscribeToJournalAck(fid, child.id, (ackKeys) => {
+        setJournalAckByChild((prev) => ({ ...prev, [child.id]: ackKeys }));
+      })
+    );
+    return () => unsubs.forEach((u) => u());
+  }, [fid, familyChildren]);
+
+  useEffect(() => {
+    if (!fid || familyChildren.length === 0) return;
+    const unsubs = familyChildren.map((child) =>
       subscribeToSchoolItems(fid, child.id, (list) => {
         setSchoolItemsByChild((prev) => ({ ...prev, [child.id]: list }));
       })
@@ -209,6 +223,10 @@ export default function SchuleScreen() {
     return map;
   }, [timetable]);
   const journal = journalByChild[selectedChild] ?? EMPTY_JOURNAL;
+  const unreadJournal = React.useMemo(
+    () => unreadJournalKeys(journal, journalAckByChild[selectedChild] ?? []),
+    [journal, journalAckByChild, selectedChild]
+  );
   const infoFacts = infoFactsByChild[selectedChild] ?? [];
   const schoolItems = schoolItemsByChild[selectedChild] ?? [];
   const openItems = React.useMemo(
@@ -707,12 +725,28 @@ export default function SchuleScreen() {
           style={[s.viewToggleBtn, view === 'klassenbuch' && s.viewToggleBtnActive]}
           onPress={() => setView('klassenbuch')}
         >
-          <Text style={[s.viewToggleText, view === 'klassenbuch' && s.viewToggleTextActive]}>Klassenbuch</Text>
+          <View style={s.viewToggleBadgeRow}>
+            <Text style={[s.viewToggleText, view === 'klassenbuch' && s.viewToggleTextActive]}>Klassenbuch</Text>
+            {unreadJournal.length > 0 && (
+              <View style={s.viewToggleBadge}>
+                <Text style={s.viewToggleBadgeText}>{unreadJournal.length}</Text>
+              </View>
+            )}
+          </View>
         </TouchableOpacity>
       </View>
 
       {view === 'klassenbuch' ? (
         <View style={s.section}>
+          {unreadJournal.length > 0 && (
+            <TouchableOpacity
+              style={s.markReadBtn}
+              onPress={() => ackJournal(fid, selectedChild, unreadJournal)}
+            >
+              <Ionicons name="checkmark-done-outline" size={15} color={colors.accentNeon} />
+              <Text style={s.markReadBtnText}>Als gelesen markieren ({unreadJournal.length})</Text>
+            </TouchableOpacity>
+          )}
           <Text style={s.klassenbuchTitle}>Vertretungen</Text>
           {journal.substitutions.length === 0 ? (
             <Text style={s.lessonEmpty}>Keine Vertretungen bekannt.</Text>
