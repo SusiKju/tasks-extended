@@ -9,7 +9,7 @@
  * kein manuelles Noten-Eintragen in dieser Version.
  */
 
-import { doc, setDoc, updateDoc, onSnapshot, Unsubscribe } from 'firebase/firestore';
+import { doc, setDoc, updateDoc, arrayUnion, onSnapshot, Unsubscribe } from 'firebase/firestore';
 import { db } from './firebase';
 
 export interface GradeEntry {
@@ -49,5 +49,52 @@ export async function replaceGrades(familyId: string, childId: string, map: Grad
     await updateDoc(ref, { grades: map });
   } catch {
     await setDoc(ref, { grades: map }, { merge: true });
+  }
+}
+
+function gradeId(entry: GradeEntry): string | null {
+  const id = (entry.raw as { id?: string | number } | null)?.id;
+  return id != null ? String(id) : null;
+}
+
+/**
+ * Von beste.schule als ungelesen gemeldete Noten, die hier noch nicht per
+ * `ackGrades` bestätigt wurden. `replaceGrades` überschreibt bei jedem Sync
+ * die komplette `grades`-Map – der Gelesen-Status darf deshalb nicht darin
+ * stecken, sondern lebt separat in `gradesAckIds` auf demselben Dokument.
+ */
+export function unreadGradeIds(map: GradesMap, ackIds: string[]): string[] {
+  const acked = new Set(ackIds);
+  const ids: string[] = [];
+  for (const entries of Object.values(map)) {
+    for (const entry of entries) {
+      if ((entry.raw as { read?: boolean } | null)?.read !== false) continue;
+      const id = gradeId(entry);
+      if (id && !acked.has(id)) ids.push(id);
+    }
+  }
+  return ids;
+}
+
+export function subscribeToGradesAck(
+  familyId: string,
+  childId: string,
+  onChange: (ackIds: string[]) => void,
+): Unsubscribe {
+  return onSnapshot(
+    childDoc(familyId, childId),
+    (snap) => onChange((snap.data()?.gradesAckIds as string[] | undefined) ?? []),
+    () => onChange([]),
+  );
+}
+
+/** Markiert die übergebenen Noten als gelesen ("Als gelesen markieren"). */
+export async function ackGrades(familyId: string, childId: string, ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  const ref = childDoc(familyId, childId);
+  try {
+    await updateDoc(ref, { gradesAckIds: arrayUnion(...ids) });
+  } catch {
+    await setDoc(ref, { gradesAckIds: ids }, { merge: true });
   }
 }

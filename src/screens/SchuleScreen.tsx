@@ -23,7 +23,7 @@ import {
   key, todayDayIndex, subscribeToTimetable, setTimetableEntry, replaceTimetable,
   applyPeriodTimes, subscribeToPeriodTimes, setPeriodTime, isBiweeklyActiveWeek, minutesBetween,
 } from '../services/timetable';
-import { GradesMap, subscribeToGrades, replaceGrades } from '../services/grades';
+import { GradesMap, subscribeToGrades, replaceGrades, subscribeToGradesAck, unreadGradeIds, ackGrades } from '../services/grades';
 import { JournalData, subscribeToJournal, replaceJournal } from '../services/journal';
 import { fetchBesteSchuleTimetable, fetchBesteSchuleGrades, fetchBesteSchuleJournal } from '../services/besteSchule';
 import {
@@ -74,6 +74,7 @@ export default function SchuleScreen() {
   const [timetableByChild, setTimetableByChild] = useState<Record<string, TimetableMap>>({});
   const [periodTimesByChild, setPeriodTimesByChild] = useState<Record<string, PeriodTimesMap>>({});
   const [gradesByChild, setGradesByChild] = useState<Record<string, GradesMap>>({});
+  const [gradesAckByChild, setGradesAckByChild] = useState<Record<string, string[]>>({});
   const [journalByChild, setJournalByChild] = useState<Record<string, JournalData>>({});
   const [schoolItemsByChild, setSchoolItemsByChild] = useState<Record<string, SchoolItem[]>>({});
   const [infoFactsByChild, setInfoFactsByChild] = useState<Record<string, ChildInfoFact[]>>({});
@@ -151,6 +152,16 @@ export default function SchuleScreen() {
   useEffect(() => {
     if (!fid || familyChildren.length === 0) return;
     const unsubs = familyChildren.map((child) =>
+      subscribeToGradesAck(fid, child.id, (ackIds) => {
+        setGradesAckByChild((prev) => ({ ...prev, [child.id]: ackIds }));
+      })
+    );
+    return () => unsubs.forEach((u) => u());
+  }, [fid, familyChildren]);
+
+  useEffect(() => {
+    if (!fid || familyChildren.length === 0) return;
+    const unsubs = familyChildren.map((child) =>
       subscribeToJournal(fid, child.id, (data) => {
         setJournalByChild((prev) => ({ ...prev, [child.id]: data }));
       })
@@ -180,6 +191,10 @@ export default function SchuleScreen() {
 
   const timetable = timetableByChild[selectedChild] ?? {};
   const grades = gradesByChild[selectedChild] ?? {};
+  const unreadGrades = React.useMemo(
+    () => unreadGradeIds(grades, gradesAckByChild[selectedChild] ?? []),
+    [grades, gradesAckByChild, selectedChild]
+  );
   // Lehrer je Fach aus dem Stundenplan ableiten statt neu abzufragen – die
   // "lehrer"-Spalte pro Slot ist schon da (besteSchule.ts), nur noch nie
   // pro Fach gruppiert dargestellt.
@@ -679,7 +694,14 @@ export default function SchuleScreen() {
           style={[s.viewToggleBtn, view === 'noten' && s.viewToggleBtnActive]}
           onPress={() => setView('noten')}
         >
-          <Text style={[s.viewToggleText, view === 'noten' && s.viewToggleTextActive]}>Noten</Text>
+          <View style={s.viewToggleBadgeRow}>
+            <Text style={[s.viewToggleText, view === 'noten' && s.viewToggleTextActive]}>Noten</Text>
+            {unreadGrades.length > 0 && (
+              <View style={s.viewToggleBadge}>
+                <Text style={s.viewToggleBadgeText}>{unreadGrades.length}</Text>
+              </View>
+            )}
+          </View>
         </TouchableOpacity>
         <TouchableOpacity
           style={[s.viewToggleBtn, view === 'klassenbuch' && s.viewToggleBtnActive]}
@@ -736,6 +758,15 @@ export default function SchuleScreen() {
         </View>
       ) : view === 'noten' ? (
         <View style={s.section}>
+          {unreadGrades.length > 0 && (
+            <TouchableOpacity
+              style={s.markReadBtn}
+              onPress={() => ackGrades(fid, selectedChild, unreadGrades)}
+            >
+              <Ionicons name="checkmark-done-outline" size={15} color={colors.accentNeon} />
+              <Text style={s.markReadBtnText}>Als gelesen markieren ({unreadGrades.length})</Text>
+            </TouchableOpacity>
+          )}
           {Object.keys(grades).length === 0 ? (
             <Text style={s.lessonEmpty}>Noch keine Fächer synchronisiert.</Text>
           ) : (
@@ -1171,6 +1202,18 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
     viewToggleBtnActive: { backgroundColor: colors.accentNeon },
     viewToggleText: { fontSize: 13, fontWeight: '700', color: colors.textSecondary },
     viewToggleTextActive: { color: colors.accentFg },
+    viewToggleBadgeRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+    viewToggleBadge: {
+      minWidth: 16, height: 16, borderRadius: 8, paddingHorizontal: 3,
+      backgroundColor: colors.danger, alignItems: 'center', justifyContent: 'center',
+    },
+    viewToggleBadgeText: { fontSize: 10, fontWeight: '700', color: '#fff' },
+    markReadBtn: {
+      flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start',
+      paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, marginBottom: 10,
+      backgroundColor: colors.surfaceHigh, borderWidth: 1, borderColor: colors.border,
+    },
+    markReadBtnText: { fontSize: 12.5, fontWeight: '700', color: colors.accentNeon },
     // Noten
     gradeCard: {
       backgroundColor: colors.surface, borderRadius: 14, padding: 14,
