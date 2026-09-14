@@ -7,6 +7,7 @@ import { useTheme, neonGlow } from '../../src/utils/theme';
 import { useStore } from '../../src/store';
 import { DEFAULT_VISIBLE_TABS, TabKey } from '../../src/types';
 import { useFuerUns } from '../../src/hooks/useFuerUns';
+import { useSchuleNotifications } from '../../src/hooks/useSchuleNotifications';
 
 export default function TabsLayout() {
   // TE-57: eigenständige Kinder-Modus-Sperre zusätzlich zum Root-Guard
@@ -39,6 +40,7 @@ function TabsLayoutInner() {
   const { colors, isDark } = useTheme();
   const visibleTabs = useStore((s) => s.settings.visibleTabs ?? DEFAULT_VISIBLE_TABS);
   const { unreadCount } = useFuerUns();
+  const { unreadCount: schuleUnreadCount } = useSchuleNotifications();
   // TE-49: Elternteil kann Tabs zwischen Dashboard und Settings einzeln ausblenden.
   const hrefFor = (key: TabKey) => (visibleTabs[key] === false ? null : undefined);
 
@@ -132,6 +134,7 @@ function TabsLayoutInner() {
         options={{
           title: 'Schule',
           href: hrefFor('schule'),
+          tabBarBadge: schuleUnreadCount > 0 ? schuleUnreadCount : undefined,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="school-outline" size={size} color={color} />
           ),
