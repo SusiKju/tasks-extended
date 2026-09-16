@@ -270,6 +270,19 @@ service cloud.firestore {
       allow read, write: if isSignedIn() && request.auth.uid == uid;
     }
 
+    // ── Artefakte: von susikju-hub genutzt (eigenes Repo, gleiches Firebase-
+    // Projekt) ─────────────────────────────────────────────────────────────
+    // Freigabe pro Artefakt-Dokument über eine freie Personenliste (allowedUids),
+    // nicht über Familienmitgliedschaft. Lesende Web-App fragt IMMER mit
+    // `where('allowedUids', 'array-contains', uid)`, sonst lehnt Firestore die
+    // List-Query grundsätzlich ab (Regeln allein filtern keine offenen Listen).
+    // Geschrieben wird ausschließlich serverseitig vom Export-/Sync-Skript
+    // (Service-Account, umgeht Rules) – daher hier bewusst kein Client-Write.
+    match /artefakte/{artefaktId} {
+      allow read: if isSignedIn() && request.auth.uid in resource.data.allowedUids;
+      allow write: if false;
+    }
+
     // ── Alle anderen Dokumente: kein Zugriff ──────────────────────────────────
     match /{document=**} {
       allow read, write: if false;
