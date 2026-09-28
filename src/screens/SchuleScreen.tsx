@@ -36,6 +36,7 @@ import {
 } from '../services/schoolManual';
 import { DatePickerModal } from '../components/DatePickerModal';
 import { useSchuleSyncStatus } from '../hooks/useSchuleSyncStatus';
+import { normalizeUrl } from '../services/links';
 
 type SyncState = { status: 'idle' | 'syncing' | 'done' | 'error'; message?: string };
 type ScreenView = 'plan' | 'noten' | 'klassenbuch';
@@ -64,6 +65,21 @@ function isPhoneNumber(value: string): boolean {
   const trimmed = value.trim();
   if (!/^[+\d][\d\s()/-]*$/.test(trimmed)) return false;
   return trimmed.replace(/\D/g, '').length >= 6;
+}
+
+/** Erkennt E-Mail-Adressen in einem Kurzinfo-Wert, damit sie antippbar
+ *  zum Mailen werden – gleiches Muster wie isPhoneNumber(). */
+function isEmail(value: string): boolean {
+  return /^\S+@\S+\.\S+$/.test(value.trim());
+}
+
+/** Erkennt Webadressen (mit oder ohne Protokoll/www) in einem Kurzinfo-Wert,
+ *  damit sie antippbar zum Öffnen werden – gleiches Muster wie isPhoneNumber().
+ *  isEmail() geht vor, damit eine Mail-Adresse nicht zusätzlich als Link zählt. */
+function isWebUrl(value: string): boolean {
+  const trimmed = value.trim();
+  if (isEmail(trimmed)) return false;
+  return /^(https?:\/\/)?(www\.)?[a-z0-9-]+(\.[a-z0-9-]+)+(\/\S*)?$/i.test(trimmed);
 }
 
 export default function SchuleScreen() {
@@ -684,15 +700,38 @@ export default function SchuleScreen() {
           {infoFacts.map((f, i) => (
             <React.Fragment key={f.id}>
               {i > 0 && <Text style={s.factLine}>{'  ·  '}</Text>}
-              <Text style={s.factLine}>{f.value ? `${f.label}: ${f.value}` : f.label}</Text>
               {isPhoneNumber(f.value) && (
-                <TouchableOpacity
+                <Pressable
                   onPress={() => Linking.openURL(`tel:${f.value.replace(/[\s()/-]/g, '')}`)}
-                  hitSlop={10}
+                  style={s.factLinkPressable}
                   accessibilityLabel="Anrufen"
                 >
-                  <Ionicons name="call-outline" size={13} color={colors.textMuted} />
-                </TouchableOpacity>
+                  <Ionicons name="call-outline" size={16} color={colors.accentNeon} />
+                  <Text style={s.factLinkText}>{f.label}</Text>
+                </Pressable>
+              )}
+              {isEmail(f.value) && (
+                <Pressable
+                  onPress={() => Linking.openURL(`mailto:${f.value.trim()}`)}
+                  style={s.factLinkPressable}
+                  accessibilityLabel="E-Mail schreiben"
+                >
+                  <Ionicons name="mail-outline" size={16} color={colors.accentNeon} />
+                  <Text style={s.factLinkText}>{f.label}</Text>
+                </Pressable>
+              )}
+              {isWebUrl(f.value) && (
+                <Pressable
+                  onPress={() => Linking.openURL(normalizeUrl(f.value))}
+                  style={s.factLinkPressable}
+                  accessibilityLabel="Webseite öffnen"
+                >
+                  <Ionicons name="link-outline" size={16} color={colors.accentNeon} />
+                  <Text style={s.factLinkText}>{f.label}</Text>
+                </Pressable>
+              )}
+              {!isPhoneNumber(f.value) && !isEmail(f.value) && !isWebUrl(f.value) && (
+                <Text style={s.factLine}>{f.label}</Text>
               )}
             </React.Fragment>
           ))}
@@ -1143,21 +1182,50 @@ export default function SchuleScreen() {
                         <Ionicons name="chevron-down" size={16} color={i === infoFacts.length - 1 ? colors.border : colors.textSecondary} />
                       </Pressable>
                     </View>
-                    <TouchableOpacity
-                      style={s.factRowMain}
-                      onPress={() => { setFactsListOpen(false); openEditFact(fact); }}
-                    >
-                      <Text style={s.factText} numberOfLines={1}>
-                        <Text style={s.factLabel}>{fact.label}</Text>{fact.value ? `  ${fact.value}` : ''}
-                      </Text>
-                    </TouchableOpacity>
-                    {isPhoneNumber(fact.value) && (
-                      <TouchableOpacity
+                    {isPhoneNumber(fact.value) ? (
+                      <Pressable
+                        style={s.factModalLinkRow}
                         onPress={() => Linking.openURL(`tel:${fact.value.replace(/[\s()/-]/g, '')}`)}
-                        hitSlop={10}
                         accessibilityLabel="Anrufen"
                       >
-                        <Ionicons name="call-outline" size={16} color={colors.accentNeon} />
+                        <Ionicons name="call-outline" size={18} color={colors.accentNeon} />
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                          <Text style={s.factModalLinkLabel}>{fact.label}</Text>
+                          <Text style={s.factModalLinkValue} numberOfLines={1}>{fact.value}</Text>
+                        </View>
+                      </Pressable>
+                    ) : isEmail(fact.value) ? (
+                      <Pressable
+                        style={s.factModalLinkRow}
+                        onPress={() => Linking.openURL(`mailto:${fact.value.trim()}`)}
+                        accessibilityLabel="E-Mail schreiben"
+                      >
+                        <Ionicons name="mail-outline" size={18} color={colors.accentNeon} />
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                          <Text style={s.factModalLinkLabel}>{fact.label}</Text>
+                          <Text style={s.factModalLinkValue} numberOfLines={1}>{fact.value}</Text>
+                        </View>
+                      </Pressable>
+                    ) : isWebUrl(fact.value) ? (
+                      <Pressable
+                        style={s.factModalLinkRow}
+                        onPress={() => Linking.openURL(normalizeUrl(fact.value))}
+                        accessibilityLabel="Webseite öffnen"
+                      >
+                        <Ionicons name="link-outline" size={18} color={colors.accentNeon} />
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                          <Text style={s.factModalLinkLabel}>{fact.label}</Text>
+                          <Text style={s.factModalLinkValue} numberOfLines={1}>{fact.value}</Text>
+                        </View>
+                      </Pressable>
+                    ) : (
+                      <TouchableOpacity
+                        style={s.factRowMain}
+                        onPress={() => { setFactsListOpen(false); openEditFact(fact); }}
+                      >
+                        <Text style={s.factText} numberOfLines={1}>
+                          <Text style={s.factLabel}>{fact.label}</Text>{fact.value ? `  ${fact.value}` : ''}
+                        </Text>
                       </TouchableOpacity>
                     )}
                   </View>
@@ -1370,6 +1438,10 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
     factText: { fontSize: 13, color: colors.text, flex: 1 },
     factLabel: { fontWeight: '700', color: colors.textSecondary },
     factRowMain: { flex: 1 },
+    // Klickbare Kontakt-Zeilen in der Modal (Telefon/E-Mail/Web): Icon + Label + Wert
+    factModalLinkRow: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 4 },
+    factModalLinkLabel: { fontSize: 13, fontWeight: '700', color: colors.text },
+    factModalLinkValue: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
     moveCol: { justifyContent: 'center', marginRight: 2 },
     moveBtn: { paddingHorizontal: 2, paddingVertical: 1 },
     // Dezente Zusammenfassung oben rechts, kein Rahmen – bricht bei mehreren
@@ -1377,9 +1449,11 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
     // abzuschneiden.
     factLineRow: {
       flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center',
-      justifyContent: 'flex-end', gap: 3, marginBottom: 8,
+      justifyContent: 'flex-end', gap: 6, marginBottom: 8,
     },
-    factLine: { fontSize: 11, color: colors.textMuted },
+    factLine: { fontSize: 12, color: colors.textMuted },
+    factLinkPressable: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 4, paddingHorizontal: 8, borderRadius: 8 },
+    factLinkText: { fontSize: 13, fontWeight: '600', color: colors.text },
     spielzeugtagBanner: {
       fontSize: 12, color: colors.textSecondary, textAlign: 'center', marginBottom: 8,
     },
