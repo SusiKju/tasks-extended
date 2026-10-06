@@ -1,7 +1,7 @@
 /**
  * WeckmodusCard.tsx (TE-82)
  *
- * Zeigt morgens zwischen 5:00 und 10:00 Uhr an Schultagen (Mo-Fr) pro Kind, ob
+ * Zeigt morgens zwischen 5:00 und 9:00 Uhr an Schultagen (Mo-Fr) pro Kind, ob
  * die 1. Stunde stattfindet (aufstehen) oder frei ist (ausschlafen; mehrere
  * freie Stunden am Stück werden zusammengezählt, TE-9). Kinder
  * ohne jemals eingetragenen Stundenplan werden ausgeblendet – für sie gibt es
@@ -38,7 +38,7 @@ function statusText(free: number): string {
 }
 
 function inWakeWindow(d: Date): boolean {
-  return todayDayIndex() !== -1 && !isSchulfrei(d) && d.getHours() >= 5 && d.getHours() < 10;
+  return todayDayIndex() !== -1 && !isSchulfrei(d) && d.getHours() >= 5 && d.getHours() < 9;
 }
 
 export function WeckmodusCard({ colors }: { colors: ThemeColors }) {
@@ -75,7 +75,7 @@ export function WeckmodusCard({ colors }: { colors: ThemeColors }) {
 
   return (
     <View style={[styles.wrap, { borderColor: SOFT_BORDER, backgroundColor: colors.surface }]}>
-      <Text style={[styles.windowLabel, { color: colors.textMuted }]}>wird angezeigt von 5–10 Uhr</Text>
+      <Text style={[styles.windowLabel, { color: colors.textMuted }]}>wird angezeigt von 5–9 Uhr</Text>
       {rows.map(({ child, free }) => {
         const wakeUp = free === 0;
         return (
