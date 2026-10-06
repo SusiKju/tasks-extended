@@ -1345,7 +1345,8 @@ export function DashboardScreen() {
             onMore={() => router.push('/(tabs)/kids' as any)}
             colors={colors}
           />
-          <View style={styles.card}>
+          {/* TE-18: grüner Akzentbalken + Betrags-Pille, damit Geld nicht wie eine rote Aufgabenzeile aussieht. */}
+          <View style={[styles.card, { borderLeftWidth: 4, borderLeftColor: colors.success }]}>
             {openAllowanceChildren.map((child, i) => {
               const m = allowanceByChild[child.id]?.[dueMonthByChild[child.id]];
               const corrected = m?.overrideAmount != null;
@@ -1371,7 +1372,7 @@ export function DashboardScreen() {
                       </Text>
                     )}
                   </View>
-                  <Text style={[styles.dueBadge, styles.dueBadgeOverdue]}>
+                  <Text style={{ fontSize: 13, fontWeight: '800', color: '#000', backgroundColor: colors.success, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2, overflow: 'hidden' }}>
                     {formatEuro(amount)}
                   </Text>
                   <Ionicons name="pencil" size={13} color={colors.textMuted} style={{ marginLeft: 6 }} />
