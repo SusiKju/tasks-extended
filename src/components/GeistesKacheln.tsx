@@ -25,8 +25,6 @@ import {
   Platform,
   ActivityIndicator,
   Dimensions,
-  Image,
-  Linking,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { ThemeColors, SOFT_BORDER } from '../utils/theme';
@@ -43,19 +41,12 @@ import {
   deleteGeistesKachel,
 } from '../services/geistesKacheln';
 import { loadScratchpad, saveScratchpad } from '../services/scratchpadService';
-import {
-  ScratchEntry,
-  makeNoteId,
-  parseScratchpad,
-  parseScratchHistory,
-  serializeScratchpad,
-} from './Scratchpad';
+import { ScratchEntry, makeNoteId, parseScratchpad, serializeScratchpad } from './Scratchpad';
+import { LinkChip } from './LinkChip';
 import { autoIcon, iconColor } from '../utils/iconSuggest';
 
 // ─── Typen ────────────────────────────────────────────────────────────────────
 
-/** Status des aus dem Geistesblitz angelegten Personal Tasks. */
-type LinkedTask = { text: string; done: boolean } | null;
 
 // ─── Symbol ───────────────────────────────────────────────────────────────────
 
@@ -86,28 +77,6 @@ function extractLinks(text: string): { text: string; links: string[] } {
   return { text: rest, links };
 }
 
-function hostOf(url: string): string {
-  try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return url; }
-}
-
-function LinkChip({ url, color, colors, onRemove }: { url: string; color: string; colors: ThemeColors; onRemove: () => void }) {
-  const [iconFailed, setIconFailed] = useState(false);
-  const host = hostOf(url);
-  return (
-    <View style={[s.linkChip, { borderColor: color + '66', backgroundColor: color + '14' }]}>
-      <Pressable style={s.linkOpen} onPress={() => Linking.openURL(url)} accessibilityRole="link" accessibilityLabel={`Link öffnen: ${host}`}>
-        {iconFailed
-          ? <Ionicons name="link-outline" size={15} color={color} />
-          : <Image source={{ uri: `https://${host}/favicon.ico` }} style={s.favicon} onError={() => setIconFailed(true)} />}
-        <Text style={[s.linkText, { color: colors.text }]} numberOfLines={1}>{host}</Text>
-      </Pressable>
-      <Pressable style={s.linkRemove} onPress={onRemove} accessibilityLabel={`Link ${host} entfernen`}>
-        <Ionicons name="close" size={14} color={colors.textMuted} />
-      </Pressable>
-    </View>
-  );
-}
-
 // ─── Reifegrad ────────────────────────────────────────────────────────────────
 
 const STALE_DAYS = 7;
@@ -116,9 +85,8 @@ function stageIndex(stage: GeistesStage | undefined): number {
   return GEISTES_STAGES.findIndex((st) => st.key === (stage ?? 'funke'));
 }
 
-/** Braucht der Geistesblitz Aufmerksamkeit? Liegt lange ohne Aufgabe, oder die Aufgabe ist erledigt. */
-function needsStep(k: GeistesKachel, linked: LinkedTask): boolean {
-  if (k.stage === 'aufgabe') return !!linked?.done;
+/** Braucht der Geistesblitz Aufmerksamkeit? Liegt länger als STALE_DAYS, ohne zur Aufgabe geworden zu sein. */
+function needsStep(k: GeistesKachel): boolean {
   return Date.now() - new Date(k.createdAt).getTime() > STALE_DAYS * 86400000;
 }
 
@@ -167,15 +135,14 @@ const snapshot = (text: string, links: string[], label: string, stage: GeistesSt
 interface ModalProps {
   visible: boolean;
   editing: GeistesKachel | null;
-  linkedTask: LinkedTask;
   onSave: (text: string, icon: string, color: string, label: string, stage: GeistesStage, links: string[]) => Promise<void>;
-  onCreateTask: (step: string, dueDate: string | null) => Promise<void>;
+  onCreateTask: (step: string, dueDate: string | null, text: string, links: string[]) => Promise<void>;
   onDelete: () => Promise<void>;
   onClose: () => void;
   colors: ThemeColors;
 }
 
-function KachelModal({ visible, editing, linkedTask, onSave, onCreateTask, onDelete, onClose, colors }: ModalProps) {
+function KachelModal({ visible, editing, onSave, onCreateTask, onDelete, onClose, colors }: ModalProps) {
   const [text, setText] = useState('');
   const [label, setLabel] = useState('');
   const [links, setLinks] = useState<string[]>([]);
@@ -253,9 +220,9 @@ function KachelModal({ visible, editing, linkedTask, onSave, onCreateTask, onDel
     if (!hasContent || !step.trim()) return;
     setSaving(true);
     try {
+      // Alles wandert in die Aufgabe, der Geistesblitz wird danach gelöscht.
       const f = finalParts();
-      await onSave(f.text, icon, color, label, stage, f.links);
-      await onCreateTask(step, dueISO(due));
+      await onCreateTask(step, dueISO(due), f.text, f.links);
       onClose();
     } finally { setSaving(false); }
   };
@@ -265,8 +232,6 @@ function KachelModal({ visible, editing, linkedTask, onSave, onCreateTask, onDel
     try { await onDelete(); onClose(); }
     finally { setDeleting(false); }
   };
-
-  const taskOpen = stage === 'aufgabe' && linkedTask && !linkedTask.done;
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={dismiss}>
@@ -347,17 +312,7 @@ function KachelModal({ visible, editing, linkedTask, onSave, onCreateTask, onDel
                 })}
               </View>
 
-              {taskOpen ? (
-                <View style={[s.taskBox, { borderColor: color + '60' }]}>
-                  <Text style={[s.taskBoxLabel, { color }]}>AUFGABE LÄUFT</Text>
-                  <Text style={[s.taskBoxText, { color: colors.text }]}>{linkedTask!.text}</Text>
-                  <Text style={[s.hint, { color: colors.textMuted }]}>In Aufgaben. Ist sie erledigt, fragt der Geistesblitz nach dem nächsten Schritt.</Text>
-                </View>
-              ) : (
-                <>
-                  {stage === 'aufgabe' && linkedTask?.done && (
-                    <Text style={[s.doneNote, { color: colors.textSecondary }]}>✓ „{linkedTask.text}“ ist erledigt.</Text>
-                  )}
+              <>
                   <Text style={[s.pickerLabel, { color: colors.textMuted }]}>Nächster konkreter Schritt</Text>
                   <TextInput
                     style={[s.labelInput, { color: colors.text, borderColor: step.trim() ? color : color + '50' }]}
@@ -391,8 +346,8 @@ function KachelModal({ visible, editing, linkedTask, onSave, onCreateTask, onDel
                     <Text style={[s.saveBtnText, { color: '#111' }]}>Als Aufgabe anlegen</Text>
                     <Ionicons name="arrow-forward" size={16} color="#111" />
                   </Pressable>
-                </>
-              )}
+                  <Text style={[s.hint, { color: colors.textMuted }]}>Text und Links wandern mit in die Aufgabe, der Geistesblitz verschwindet dann hier.</Text>
+              </>
             </>
           )}
 
@@ -473,28 +428,19 @@ export function GeistesKacheln({ colors, isDark, areaWidth, columns, compact = f
   const [tiles, setTiles] = useState<GeistesKachel[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
   const [editing, setEditing] = useState<GeistesKachel | null>(null);
-  const scratchpad = useStore((st) => st.scratchpad);
-  const scratchpadHistory = useStore((st) => st.scratchpadHistory);
 
   const fid = familyId ?? '';
   const uid = user?.uid ?? '';
 
   useEffect(() => {
     if (!fid || !uid) return;
-    return subscribeToGeistesKacheln(fid, uid, setTiles);
+    // Bereits umgewandelte Geistesblitze (Altbestand vor TE-16, stage 'aufgabe')
+    // nicht mehr zeigen – neue werden beim Umwandeln gelöscht.
+    return subscribeToGeistesKacheln(fid, uid, (all) => setTiles(all.filter((k) => k.stage !== 'aufgabe')));
   }, [fid, uid]);
 
-  // Verknüpfte Personal Tasks: offen im Notizblock, abgehakt (done) oder
-  // gelöscht (liegt dann im Verlauf) = erledigt. Unbekannte Id → null.
-  const linkedById = useMemo(() => {
-    const map = new Map<string, LinkedTask>();
-    for (const e of parseScratchpad(scratchpad)) if (e.id) map.set(e.id, { text: e.text, done: !!e.done });
-    for (const h of parseScratchHistory(scratchpadHistory)) if (!map.has(h.id)) map.set(h.id, { text: h.text, done: true });
-    return map;
-  }, [scratchpad, scratchpadHistory]);
-  const linkedFor = useCallback((k: GeistesKachel | null): LinkedTask => (k?.taskId ? linkedById.get(k.taskId) ?? null : null), [linkedById]);
 
-  const attentionCount = tiles.filter((k) => needsStep(k, linkedFor(k))).length;
+  const attentionCount = tiles.filter(needsStep).length;
 
   const openNew    = useCallback(() => { setEditing(null); setModalVisible(true); }, []);
   const openEdit   = useCallback((k: GeistesKachel) => { setEditing(k); setModalVisible(true); }, []);
@@ -506,20 +452,28 @@ export function GeistesKacheln({ colors, isDark, areaWidth, columns, compact = f
     else         await addGeistesKachel(fid, uid, text, icon, color, trimmedLabel, links);
   }, [fid, uid, editing]);
 
-  // Nächsten Schritt als Personal Task (Notizblock-Eintrag) ganz oben anlegen.
+  // Geistesblitz → Personal Task (Notizblock-Eintrag) ganz oben: nächster
+  // Schritt als Titel, Ideentext als Notiz, Links mit. Danach wird der
+  // Geistesblitz gelöscht – die Aufgabe trägt alle Infos.
   // Frisch vom Server lesen: der lokale Store kann beim Kaltstart noch alt sein.
-  const handleCreateTask = useCallback(async (step: string, dueDate: string | null) => {
+  const handleCreateTask = useCallback(async (step: string, dueDate: string | null, text: string, links: string[]) => {
     if (!fid || !uid || !editing) return;
-    const id = makeNoteId();
     const prefix = editing.label?.trim();
-    const entry: ScratchEntry = { id, text: prefix ? `${prefix}: ${step.trim()}` : step.trim(), color: colorFor(symbolFor(editing), prefix ?? '', editing.text), dueDate };
+    const entry: ScratchEntry = {
+      id: makeNoteId(),
+      text: prefix ? `${prefix}: ${step.trim()}` : step.trim(),
+      color: colorFor(symbolFor(editing), prefix ?? '', editing.text),
+      dueDate,
+      note: text.trim() || null,
+      links,
+    };
     const current = parseScratchpad(await loadScratchpad(fid, uid));
     // parseScratchpad liefert bei leerem Notizblock einen id-losen Platzhalter.
     const isPlaceholder = current.length === 1 && !current[0].id && !current[0].text.trim();
     const raw = serializeScratchpad([entry, ...(isPlaceholder ? [] : current)]);
     useStore.getState().setScratchpad(raw);
     await saveScratchpad(fid, uid, raw);
-    await updateGeistesKachel(fid, uid, editing.id, { stage: 'aufgabe', taskId: id });
+    await deleteGeistesKachel(fid, uid, editing.id);
   }, [fid, uid, editing]);
 
   const handleDelete = useCallback(async () => {
@@ -596,7 +550,7 @@ export function GeistesKacheln({ colors, isDark, areaWidth, columns, compact = f
               size={stageIndex(k.stage) >= 2 ? Math.floor(tileSize * BIG_FACTOR) : tileSize}
               colors={colors}
               compact={compact}
-              attention={needsStep(k, linkedFor(k))}
+              attention={needsStep(k)}
             />
           ))}
           <Pressable
@@ -615,7 +569,6 @@ export function GeistesKacheln({ colors, isDark, areaWidth, columns, compact = f
       <KachelModal
         visible={modalVisible}
         editing={editing}
-        linkedTask={linkedFor(editing)}
         onSave={handleSave}
         onCreateTask={handleCreateTask}
         onDelete={handleDelete}
@@ -676,11 +629,6 @@ const s = StyleSheet.create({
   },
 
   linkRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  linkChip: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 999, maxWidth: '100%' },
-  linkOpen: { flexDirection: 'row', alignItems: 'center', gap: 7, paddingLeft: 10, paddingVertical: 8, flexShrink: 1 },
-  linkRemove: { paddingHorizontal: 10, paddingVertical: 8 },
-  favicon: { width: 16, height: 16, borderRadius: 3 },
-  linkText: { fontSize: 13, fontWeight: '600', flexShrink: 1 },
 
   labelInput: {
     borderWidth: 1.5, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10,
@@ -694,11 +642,7 @@ const s = StyleSheet.create({
   stageBar: { height: 4, borderRadius: 2, alignSelf: 'stretch' },
   stageText: { fontSize: 12 },
 
-  taskBox: { borderWidth: 1, borderRadius: 12, padding: 12, gap: 4 },
-  taskBoxLabel: { fontSize: 10.5, fontWeight: '800', letterSpacing: 0.8 },
-  taskBoxText: { fontSize: 15, fontWeight: '700' },
   hint: { fontSize: 12, lineHeight: 17 },
-  doneNote: { fontSize: 13 },
 
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 7 },

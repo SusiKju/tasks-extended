@@ -18,6 +18,7 @@ import { ThemeColors } from '../utils/theme';
 import { DatePickerModal } from './DatePickerModal';
 import { formatDate, isOverdue, isDueToday } from '../utils/dateFormat';
 import { useStore } from '../store';
+import { LinkChip } from './LinkChip';
 
 // TE-141/TE-3: Aufgaben (ehemals Personal Tasks) – pro Eintrag optional ein
 // Fälligkeitsdatum (lokaler Mittag als ISO-String, wie bei den normalen Tasks).
@@ -29,6 +30,10 @@ export interface ScratchEntry {
   color: string;
   done?: boolean;
   dueDate?: string | null;
+  /** TE-16: Zusatz-Notiz (z. B. Ideentext aus einem Geistesblitz), unter der Zeile angezeigt. */
+  note?: string | null;
+  /** TE-16: Links als kompakte Chips unter der Zeile. */
+  links?: string[];
 }
 
 // Rot für überfällige Daten.
@@ -78,6 +83,8 @@ export interface ScratchHistoryEntry {
   color: string;
   archivedAt: string;
   dueDate?: string | null;
+  note?: string | null;
+  links?: string[];
 }
 
 /** Maximale Anzahl Verlaufseinträge – ältere fallen hinten raus. */
@@ -298,6 +305,8 @@ export function Scratchpad({
     const note: ScratchEntry = {
       id: makeNoteId(), text: h.text, color: h.color,
       dueDate: h.dueDate ?? null,
+      note: h.note ?? null,
+      links: h.links,
     };
     // Eine einzelne leere Platzhalter-Notiz dabei ersetzen statt davor stapeln.
     const base = entries.length === 1 && entries[0].text === '' ? [] : entries;
@@ -411,6 +420,20 @@ export function Scratchpad({
               <Ionicons name="trash-outline" size={18} color={colors.textMuted} />
             </Pressable>
           </View>
+
+          {/* TE-16: aus einem Geistesblitz übernommene Notiz + Links. */}
+          {(entry.note || entry.links?.length) ? (
+            <View style={padStyles.extra}>
+              {entry.note ? (
+                <Text style={[padStyles.noteText, { color: colors.textMuted }]} numberOfLines={3}>{entry.note}</Text>
+              ) : null}
+              {entry.links?.length ? (
+                <View style={padStyles.linkRow}>
+                  {entry.links.map((u) => <LinkChip key={u} url={u} color={entry.color} colors={colors} small />)}
+                </View>
+              ) : null}
+            </View>
+          ) : null}
 
           {/* TE-141: Fälligkeits-Auswahl – Quick-Buttons wie bei den normalen Tasks. */}
           {dueIdx === storedIdx && (
@@ -545,6 +568,10 @@ const padStyles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 10,
   },
+  // TE-16: Notiz/Links unter der Zeile, eingerückt auf Höhe des Textes.
+  extra: { paddingLeft: 42, paddingRight: 10, paddingBottom: 8, gap: 6 },
+  noteText: { fontSize: 12.5, lineHeight: 17 },
+  linkRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   rowText: {
     flex: 1,
     minWidth: 0,

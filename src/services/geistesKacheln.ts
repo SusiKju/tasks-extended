@@ -18,7 +18,8 @@ import {
   Unsubscribe,
 } from 'firebase/firestore';
 
-/** Reifegrad eines Geistesblitzes; 'aufgabe' = nächster Schritt liegt als Personal Task vor. */
+/** Reifegrad eines Geistesblitzes. 'aufgabe' ist nur noch Ziel-Markierung: beim
+ *  Umwandeln wird der Geistesblitz gelöscht (TE-16); Altbestand wird ausgeblendet. */
 export type GeistesStage = 'funke' | 'gedanke' | 'plan' | 'aufgabe';
 export const GEISTES_STAGES: { key: GeistesStage; label: string }[] = [
   { key: 'funke', label: 'Funke' },
@@ -38,8 +39,6 @@ export interface GeistesKachel {
   createdAt: string;
   /** Fehlt bei Altbestand → 'funke'. */
   stage?: GeistesStage;
-  /** Id des daraus angelegten Personal Tasks (ScratchEntry.id). */
-  taskId?: string | null;
   /** Aus dem Text gezogene URLs – als kompakte Chips statt Langtext angezeigt. */
   links?: string[];
 }
@@ -95,7 +94,7 @@ export async function updateGeistesKachel(
   familyId: string,
   uid: string,
   id: string,
-  patch: Partial<Pick<GeistesKachel, 'text' | 'emoji' | 'color' | 'label' | 'stage' | 'taskId' | 'links'>>,
+  patch: Partial<Pick<GeistesKachel, 'text' | 'emoji' | 'color' | 'label' | 'stage' | 'links'>>,
 ): Promise<void> {
   await updateDoc(
     doc(db, 'families', familyId, 'geistesKachelByUser', uid, 'tiles', id),

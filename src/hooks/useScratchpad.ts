@@ -89,6 +89,9 @@ export function useScratchpad() {
       // TE-144: Fälligkeit mitführen, damit "wieder aktivieren" den Eintrag
       // vollständig wiederherstellt.
       dueDate: entry.dueDate ?? null,
+      // TE-16: aus Geistesblitzen übernommene Notiz + Links nicht verlieren.
+      note: entry.note ?? null,
+      links: entry.links,
     };
     persistHistory([archived, ...current].slice(0, SCRATCH_HISTORY_MAX));
   }, [persistHistory]);
