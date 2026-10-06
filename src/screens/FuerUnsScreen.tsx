@@ -14,7 +14,7 @@
  */
 
 import React, { useState, useCallback } from 'react';
-import { View, Text, TextInput, Pressable, StyleSheet, ActivityIndicator, ScrollView, Modal, Platform } from 'react-native';
+import { View, Text, TextInput, Pressable, StyleSheet, ActivityIndicator, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { format, parseISO } from 'date-fns';
 import { useTheme } from '../utils/theme';
@@ -30,12 +30,17 @@ import {
   FUER_UNS_REACTIONS,
   FUER_UNS_REACTIONS_EXTRA,
   FUER_UNS_COMBOS,
+  fuerUnsComboLabel,
+  pendingReplyFor,
 } from '../services/fuerUns';
 import { useFuerUns } from '../hooks/useFuerUns';
 
 function formatDateTime(iso: string): string {
   return format(parseISO(iso), 'dd.MM.yyyy, HH:mm');
 }
+
+/** Ab diesem Index in FUER_UNS_COMBOS beginnen die erotischen Kombos (Chip-Leiste hebt sie farbig ab). */
+const FIRST_HOT_COMBO = FUER_UNS_COMBOS.findIndex((c) => c.emoji === '🎲😈');
 
 const PLACEHOLDER =
   'Was möchtest du deinem Partner heute sagen? Etwas Liebes, etwas Erotisches, ' +
@@ -44,6 +49,7 @@ const PLACEHOLDER =
 export function FuerUnsScreen() {
   const { colors, isDark } = useTheme();
   const { familyId, myUid, myName, items, deletedItems, loadError } = useFuerUns();
+  const pendingReply = myUid ? pendingReplyFor(items, myUid) : null;
 
   const handleToggleRead = useCallback((item: FuerUnsItem) => {
     if (!familyId || item.addedByUid === myUid) return;
@@ -55,21 +61,28 @@ export function FuerUnsScreen() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [reactionPickerFor, setReactionPickerFor] = useState<string | null>(null);
   const [extraOpen, setExtraOpen] = useState(false);
-  const [draftEmoji, setDraftEmoji] = useState<string | null>(null);
-  const [comboSheetOpen, setComboSheetOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState('');
 
   const handleAdd = useCallback(async () => {
     const text = draft.trim();
-    if ((!text && !draftEmoji) || !myName || !myUid || !familyId) return;
+    if (!text || !myName || !myUid || !familyId) return;
     setDraft('');
-    const emoji = draftEmoji;
-    setDraftEmoji(null);
+    try {
+      await addFuerUnsMessage(familyId, text, myName, myUid);
+    } catch {}
+  }, [draft, myName, myUid, familyId]);
+
+  /** Kombo mit einem Tipp senden; als Antwort markiert sie die Partner-Nachricht gleich als gelesen. */
+  const sendCombo = useCallback(async (emoji: string, replyTo?: FuerUnsItem) => {
+    if (!myName || !myUid || !familyId) return;
+    const text = draft.trim();
+    setDraft('');
     try {
       await addFuerUnsMessage(familyId, text, myName, myUid, emoji);
+      if (replyTo && !replyTo.readAt) await setFuerUnsReadState(familyId, replyTo.id, true);
     } catch {}
-  }, [draft, myName, myUid, familyId, draftEmoji]);
+  }, [draft, myName, myUid, familyId]);
 
   const handleReact = useCallback(async (item: FuerUnsItem, emoji: string) => {
     setReactionPickerFor(null);
@@ -128,55 +141,52 @@ export function FuerUnsScreen() {
       <ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
         <Text style={[s.inspiration, { color: colors.textMuted }]}>{PLACEHOLDER}</Text>
 
-            {/* Fertige Icon-Kombos statt Einzelauswahl (TE-62), versteckt hinter
-                einem Bottom-Sheet-Dialog statt dauerhaft sichtbar (TE-63). */}
-            {draftEmoji ? (
-              <Pressable onPress={() => setComboSheetOpen(true)} style={[s.comboSelected, { borderColor: accent, backgroundColor: accent + '18' }]} hitSlop={4}>
-                <Text style={s.comboChipEmoji}>{draftEmoji}</Text>
-                <Text style={[s.comboSelectedLabel, { color: colors.text }]}>
-                  {FUER_UNS_COMBOS.find((c) => c.emoji === draftEmoji)?.label ?? ''}
+            {/* Antwort-Kombos: liegt der Ball bei mir, antworte ich mit einem Tipp. */}
+            {pendingReply && (
+              <View style={[s.replyBox, { borderColor: accent + '55', backgroundColor: accent + '10' }]}>
+                <Text style={[s.replyTitle, { color: colors.textMuted }]}>
+                  Antworte {pendingReply.item.addedBy} mit einem Tipp
                 </Text>
-                <Pressable onPress={() => setDraftEmoji(null)} hitSlop={8} style={{ marginLeft: 'auto' }}>
-                  <Ionicons name="close-circle" size={18} color={colors.textMuted} />
-                </Pressable>
-              </Pressable>
-            ) : (
-              <Pressable onPress={() => setComboSheetOpen(true)} style={[s.comboTrigger, { borderColor: colors.border }]} hitSlop={4}>
-                <Ionicons name="sparkles-outline" size={15} color={colors.textMuted} />
-                <Text style={[s.comboTriggerText, { color: colors.textMuted }]}>Icon-Kombo hinzufügen (optional)</Text>
-              </Pressable>
-            )}
-
-            <Modal visible={comboSheetOpen} transparent animationType="slide" onRequestClose={() => setComboSheetOpen(false)}>
-              <View style={s.overlay}>
-                <Pressable style={StyleSheet.absoluteFill} onPress={() => setComboSheetOpen(false)} />
-                <View style={[s.sheet, { backgroundColor: colors.surface, borderTopColor: accent }]}>
-                  <Text style={[s.sheetTitle, { color: colors.text }]}>Icon-Kombo wählen</Text>
-                  <ScrollView style={{ maxHeight: 380 }} showsVerticalScrollIndicator={false}>
-                    {FUER_UNS_COMBOS.map((c) => {
-                      const selected = draftEmoji === c.emoji;
-                      return (
-                        <Pressable
-                          key={c.emoji}
-                          onPress={() => { setDraftEmoji(selected ? null : c.emoji); setComboSheetOpen(false); }}
-                          style={[s.sheetRow, { borderColor: selected ? accent : colors.border, backgroundColor: selected ? accent + '18' : 'transparent' }]}
-                        >
-                          <Text style={s.comboChipEmoji}>{c.emoji}</Text>
-                          <Text style={[s.sheetRowLabel, { color: colors.text }]}>{c.label}</Text>
-                        </Pressable>
-                      );
-                    })}
-                  </ScrollView>
-                  <Pressable onPress={() => setComboSheetOpen(false)} style={s.sheetCloseBtn}>
-                    <Text style={[s.sheetCloseBtnText, { color: colors.textMuted }]}>Schließen</Text>
-                  </Pressable>
+                <Text style={[s.itemText, { color: colors.text, fontWeight: '700' }]}>
+                  {pendingReply.item.emoji} {fuerUnsComboLabel(pendingReply.item.emoji)}
+                </Text>
+                <View style={s.replyChips}>
+                  {pendingReply.replies.map((r) => (
+                    <Pressable
+                      key={r.emoji}
+                      onPress={() => sendCombo(r.emoji, pendingReply.item)}
+                      style={({ pressed }) => [s.comboChip, { borderColor: accent, backgroundColor: colors.surface, opacity: pressed ? 0.6 : 1 }]}
+                    >
+                      <Text style={s.comboChipEmoji}>{r.emoji}</Text>
+                      <Text style={[s.comboChipLabel, { color: colors.text }]}>{r.label}</Text>
+                    </Pressable>
+                  ))}
                 </View>
               </View>
-            </Modal>
+            )}
+
+            {/* Kombos als sichtbare Chip-Leiste: ein Tipp sendet sofort (mit dem
+                getippten Text, falls vorhanden). Ersetzt das Bottom-Sheet aus TE-63,
+                hinter dem die Vorauswahl kaum gefunden wurde. */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.comboBar}>
+              {FUER_UNS_COMBOS.map((c, i) => (
+                <Pressable
+                  key={c.emoji}
+                  onPress={() => sendCombo(c.emoji)}
+                  style={({ pressed }) => [
+                    s.comboChip,
+                    { borderColor: i >= FIRST_HOT_COMBO ? accent : colors.border, backgroundColor: i >= FIRST_HOT_COMBO ? accent + '14' : colors.surface, opacity: pressed ? 0.6 : 1 },
+                  ]}
+                >
+                  <Text style={s.comboChipEmoji}>{c.emoji}</Text>
+                  <Text style={[s.comboChipLabel, { color: colors.text }]} numberOfLines={1}>{c.label}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
 
             <TextInput
               style={[s.addInput, { color: colors.text, backgroundColor: colors.inputBackground, borderColor: colors.border }]}
-              placeholder="Deine Nachricht …"
+              placeholder="Oder selbst schreiben …"
               placeholderTextColor={colors.placeholder}
               value={draft}
               onChangeText={setDraft}
@@ -186,9 +196,9 @@ export function FuerUnsScreen() {
             />
             <View style={s.addBtnRow}>
               <Pressable
-                style={[s.addBtn, { backgroundColor: accent, opacity: draft.trim() || draftEmoji ? 1 : 0.4 }]}
+                style={[s.addBtn, { backgroundColor: accent, opacity: draft.trim() ? 1 : 0.4 }]}
                 onPress={handleAdd}
-                disabled={!draft.trim() && !draftEmoji}
+                disabled={!draft.trim()}
               >
                 <Ionicons name="send" size={18} color="#fff" />
               </Pressable>
@@ -235,7 +245,7 @@ export function FuerUnsScreen() {
                           )}
                           {item.emoji && (
                             <Text style={[s.comboLabel, { color: colors.textMuted }]}>
-                              {FUER_UNS_COMBOS.find((c) => c.emoji === item.emoji)?.label}
+                              {fuerUnsComboLabel(item.emoji)}
                             </Text>
                           )}
                           <View style={s.itemMetaRow}>
@@ -321,7 +331,7 @@ export function FuerUnsScreen() {
             {historyOpen && deletedItems.length > 0 && (
               <View style={[s.trashSection, { borderColor: colors.border }]}>
                 {deletedItems.map((item) => {
-                  const comboLabel = item.emoji ? FUER_UNS_COMBOS.find((c) => c.emoji === item.emoji)?.label : null;
+                  const comboLabel = fuerUnsComboLabel(item.emoji);
                   const trashLabel = [item.text, comboLabel].filter(Boolean).join(' · ');
                   return (
                   <View key={item.id} style={[s.trashRow, { borderBottomColor: colors.border }]}>
@@ -355,21 +365,14 @@ const s = StyleSheet.create({
 
   inspiration: { fontSize: 12.5, lineHeight: 18, fontStyle: 'italic' },
 
-  // Fertige Icon-Kombos beim Verfassen, versteckt hinter Bottom-Sheet (TE-62/TE-63)
-  comboTrigger: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', borderRadius: 14, borderWidth: 1, borderStyle: 'dashed', paddingHorizontal: 10, paddingVertical: 6 },
-  comboTriggerText: { fontSize: 12, fontWeight: '600' },
-  comboSelected: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 14, borderWidth: 1.5, paddingHorizontal: 10, paddingVertical: 8 },
-  comboSelectedLabel: { fontSize: 12.5, fontWeight: '600' },
+  // Kombo-Chip-Leiste + Antwort-Kombos
+  comboBar: { gap: 6, paddingVertical: 2 },
+  comboChip: { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 16, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 6, maxWidth: 260 },
   comboChipEmoji: { fontSize: 16 },
-
-  // Bottom-Sheet-Dialog (gleiches Pattern wie LinkModal in LinksScreen.tsx)
-  overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: '#00000099' },
-  sheet: { borderTopLeftRadius: 22, borderTopRightRadius: 22, borderTopWidth: 3, paddingHorizontal: 16, paddingBottom: Platform.OS === 'ios' ? 36 : 20, gap: 10, paddingTop: 20 },
-  sheetTitle: { fontSize: 16, fontWeight: '800', marginBottom: 2 },
-  sheetRow: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 12, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 11, marginBottom: 6 },
-  sheetRowLabel: { fontSize: 14, fontWeight: '600', flex: 1 },
-  sheetCloseBtn: { alignSelf: 'center', paddingVertical: 8, paddingHorizontal: 16 },
-  sheetCloseBtnText: { fontSize: 13, fontWeight: '600' },
+  comboChipLabel: { fontSize: 12.5, fontWeight: '600', flexShrink: 1 },
+  replyBox: { borderWidth: 1, borderRadius: 12, padding: 10, gap: 6 },
+  replyTitle: { fontSize: 11.5, fontWeight: '600' },
+  replyChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
 
   addInput: { width: '100%', borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, lineHeight: 20, minHeight: 130 },
   addBtnRow: { flexDirection: 'row', justifyContent: 'flex-end' },

@@ -76,6 +76,52 @@ export const FUER_UNS_COMBOS: { emoji: string; label: string }[] = [
   { emoji: '🌙✨', label: 'Lass uns heute Nacht was Neues ausprobieren' },
 ];
 
+/**
+ * Antwort-Kombos: auf eine Kombo des Partners antwortet man mit einem Tipp
+ * statt selbst zu formulieren. Jede Liste endet mit einem lieben Nein, damit
+ * Ablehnen genauso leicht ist wie Zusagen. Antworten werden wie normale
+ * Kombos als FuerUnsItem.emoji gespeichert (Text leer).
+ */
+const REPLY_LATER = { emoji: '🌙⏳', label: 'Heute Abend' };
+const REPLY_SOFT_NO = { emoji: '💭🤍', label: 'Nicht heute – aber halt den Gedanken fest' };
+const REPLY_LOVE = [
+  { emoji: '🥰💭', label: 'Ich an dich auch' },
+  { emoji: '🫂❤️', label: 'Fühl dich gedrückt' },
+];
+
+export const FUER_UNS_REPLIES: Record<string, { emoji: string; label: string }[]> = {
+  '❤️💭': REPLY_LOVE,
+  '🤗☕': [{ emoji: '☕🙋', label: 'Gern, gleich?' }, ...REPLY_LOVE],
+  '🌻😊': REPLY_LOVE,
+  '🎶💫': REPLY_LOVE,
+  '🥰🍫': [{ emoji: '😋❤️', label: 'Danke, du Schatz' }, ...REPLY_LOVE],
+  '🥺🫂': [{ emoji: '🫂🏃', label: 'Komm her, bin gleich da' }, REPLY_LOVE[1]],
+  '🎲😈': [{ emoji: '👀😈', label: 'Erzähl mehr …' }, REPLY_LATER, REPLY_SOFT_NO],
+  '⏱️🔥': [{ emoji: '🔥👍', label: 'Ja, jetzt' }, REPLY_LATER, REPLY_SOFT_NO],
+  '🍑💦': [{ emoji: '😏🔥', label: 'Geht mir genauso' }, REPLY_LATER, REPLY_SOFT_NO],
+  '🌙✨': [{ emoji: '✨🙋', label: 'Bin dabei' }, { emoji: '🤔💬', label: 'Was hast du im Kopf?' }, REPLY_SOFT_NO],
+};
+
+/** Klartext zu einer gespeicherten Kombo – egal ob Verfassen-Kombo oder Antwort-Kombo. */
+export function fuerUnsComboLabel(emoji: string | null | undefined): string | undefined {
+  if (!emoji) return undefined;
+  return (
+    FUER_UNS_COMBOS.find((c) => c.emoji === emoji) ??
+    Object.values(FUER_UNS_REPLIES).flat().find((c) => c.emoji === emoji)
+  )?.label;
+}
+
+/**
+ * Antwortvorschläge, solange der Ball bei mir liegt: die neueste Nachricht
+ * insgesamt ist vom Partner und trägt eine Kombo mit Antworten.
+ */
+export function pendingReplyFor(items: FuerUnsItem[], myUid: string) {
+  const latest = items[0];
+  if (!latest?.addedByUid || latest.addedByUid === myUid || !latest.emoji) return null;
+  const replies = FUER_UNS_REPLIES[latest.emoji];
+  return replies ? { item: latest, replies } : null;
+}
+
 const itemsCollection = (familyId: string) =>
   collection(db, 'families', familyId, 'shared', 'fuerUns', 'items');
 
