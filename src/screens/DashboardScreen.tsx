@@ -862,97 +862,191 @@ export function DashboardScreen() {
           Person – bleibt sichtbar bis ICH selbst heute etwas geschickt habe. */}
       {!!fuerUnsMyName && !fuerUnsSentToday && <FuerUnsReminderBanner colors={colors} />}
 
-      {/* TE-6: Heutige Termine direkt unter Geburtstag/Für-uns, vor Geistesblitzen/Countdowns */}
-      {/* ── Kalender ──
-          Bugfix (2026-07-22): Label-Sichtbarkeit hing an calEvents.length
-          (alle geladenen Termine), der Kartenkörper darunter zeigte aber nur
-          todayEvents. Bei Terminen, die zwar geladen sind, aber nicht heute
-          liegen, stand "HEUTIGE TERMINE" verwaist ohne jeden Inhalt da – ein
-          Vorher-schon-vorhandener Bug, nicht Teil des Redesigns. Beide
-          Bedingungen laufen jetzt konsistent über todayEvents. ── */}
-      {showBlock('calendar') && settings.googleCalendarEnabled && (
-        <View style={styles.section}>
-          {calLoading || todayEvents.length > 0 ? (
-            <SectionLabel title="Heutige Termine" colors={colors} />
-          ) : null}
-          {calLoading ? (
-            <View style={[styles.card, styles.loadingRow]}>
-              <ActivityIndicator color={mono(C.calendar)} size="small" />
-            </View>
-          ) : todayEvents.length === 0 ? null : (() => {
-            const renderEvent = (event: CalendarEvent, i: number, arr: CalendarEvent[], prominent: boolean) => {
-              const { time } = formatEventTime(event);
-              const eventColor = mono(event.color ?? C.calendar);
-              // Mono-Theme: echte Kalenderfarbe als Punkt zeigen (nicht graustufen),
-              // damit die Kategorie auf einen Blick erkennbar bleibt (TE-86).
-              const realColor = event.color ?? C.calendar;
-              // Dark-Mono: Termintext & Zeit immer strahlend weiß – das gedämpfte
-              // Grau (textSecondary) ist auf Schwarz schlecht lesbar (TE-88).
-              const eventTextColor = isMono
-                ? colors.text
-                : (prominent ? colors.text : colors.textSecondary);
-              return (
-                <View
-                  key={event.id}
-                  style={[
-                    prominent ? styles.calRowProminent : styles.calRowDimmed,
-                    i < arr.length - 1 && styles.rowDivider,
-                    // TE-6: private Termine klar abheben (Akzent-Tint + Balken links)
-                    event.isPrivate && { backgroundColor: colors.accent + '26', borderLeftWidth: 4, borderLeftColor: colors.accent },
-                  ]}
-                >
-                  {/* Mono: farbiger Punkt (echte Kalenderfarbe); sonst Farbbalken */}
-                  {isMono ? (
-                    <View style={[styles.calDot, {
-                      backgroundColor: realColor,
-                      width: prominent ? 12 : 10,
-                      height: prominent ? 12 : 10,
-                      opacity: prominent ? 1 : 0.7,
-                    }]} />
-                  ) : (
-                    <View style={[styles.calBar, {
-                      backgroundColor: eventColor,
-                      width: prominent ? 4 : 3,
-                      opacity: prominent ? 1 : 0.6,
-                    }]} />
-                  )}
-                  {/* Zeit */}
-                  <View style={prominent ? styles.calTimeLg : styles.calTimeSm}>
-                    <Text style={[
-                      prominent ? styles.calHourLg : styles.calHourSm,
-                      { color: eventTextColor }
-                    ]}>{time}</Text>
-                  </View>
-                  {/* Titel + Ort in einer Zeile (TE-116) */}
-                  <View style={{ flex: 1 }}>
-                    <Text
-                      style={[
-                        prominent ? styles.calTitleLg : styles.calTitleSm,
-                        { color: eventTextColor },
-                        event.isPrivate && { fontWeight: '800' },
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {event.isPrivate ? '🔒 ' : ''}{event.summary}
-                      {event.location && prominent ? ` · 📍 ${event.location}` : ''}
-                    </Text>
-                  </View>
-                </View>
-              );
-            };
+      {/* TE-25: „Heutige Termine" und „Kurzübersicht" sind ein gemeinsamer Block
+          „Heute" an der früheren Termine-Position (vor Geistesblitzen/Countdowns):
+          oben Termine + Einträge von heute (inkl. undatierter/überfälliger),
+          unter einem Trennstrich „Morgen" alles, was morgen fällig ist. ── */}
+      {((showBlock('calendar') && settings.googleCalendarEnabled) || showBlock('googleTasks') || showBlock('scratchpad') || showBlock('schoolTasks')) && (() => {
+        const showCal = showBlock('calendar') && settings.googleCalendarEnabled;
+        const tomorrowStr = format(new Date(Date.now() + 86400000), 'yyyy-MM-dd');
+        const isTomorrow = (d?: string | null) => !!d && localDateStr(d) === tomorrowStr;
 
-            return (
-              <View style={{ gap: 6 }}>
-                {todayEvents.length > 0 && (
-                  <View style={[styles.card, styles.todayEventsGlowCard, { elevation: 0 }]}>
-                    {todayEvents.map((e, i) => renderEvent(e, i, todayEvents, true))}
-                  </View>
-                )}
+        const renderEvent = (event: CalendarEvent, prominent: boolean) => {
+          const { time } = formatEventTime(event);
+          const eventColor = mono(event.color ?? C.calendar);
+          // Mono-Theme: echte Kalenderfarbe als Punkt zeigen (nicht graustufen),
+          // damit die Kategorie auf einen Blick erkennbar bleibt (TE-86).
+          const realColor = event.color ?? C.calendar;
+          // Dark-Mono: Termintext & Zeit immer strahlend weiß – das gedämpfte
+          // Grau (textSecondary) ist auf Schwarz schlecht lesbar (TE-88).
+          const eventTextColor = isMono
+            ? colors.text
+            : (prominent ? colors.text : colors.textSecondary);
+          return (
+            <View
+              key={event.id}
+              style={[
+                prominent ? styles.calRowProminent : styles.calRowDimmed,
+                styles.rowDivider,
+                // TE-6: private Termine klar abheben (Akzent-Tint + Balken links)
+                event.isPrivate && { backgroundColor: colors.accent + '26', borderLeftWidth: 4, borderLeftColor: colors.accent },
+              ]}
+            >
+              {/* Mono: farbiger Punkt (echte Kalenderfarbe); sonst Farbbalken */}
+              {isMono ? (
+                <View style={[styles.calDot, {
+                  backgroundColor: realColor,
+                  width: prominent ? 12 : 10,
+                  height: prominent ? 12 : 10,
+                  opacity: prominent ? 1 : 0.7,
+                }]} />
+              ) : (
+                <View style={[styles.calBar, {
+                  backgroundColor: eventColor,
+                  width: prominent ? 4 : 3,
+                  opacity: prominent ? 1 : 0.6,
+                }]} />
+              )}
+              {/* Zeit */}
+              <View style={prominent ? styles.calTimeLg : styles.calTimeSm}>
+                <Text style={[
+                  prominent ? styles.calHourLg : styles.calHourSm,
+                  { color: eventTextColor }
+                ]}>{time}</Text>
               </View>
-            );
-          })()}
-        </View>
-      )}
+              {/* Titel + Ort in einer Zeile (TE-116) */}
+              <View style={{ flex: 1 }}>
+                <Text
+                  style={[
+                    prominent ? styles.calTitleLg : styles.calTitleSm,
+                    { color: eventTextColor },
+                    event.isPrivate && { fontWeight: '800' },
+                  ]}
+                  numberOfLines={1}
+                >
+                  {event.isPrivate ? '🔒 ' : ''}{event.summary}
+                  {event.location && prominent ? ` · 📍 ${event.location}` : ''}
+                </Text>
+              </View>
+            </View>
+          );
+        };
+
+        const renderGT = (t: Task) => {
+          const due = taskDue(t.dueDate);
+          return (
+            <Pressable
+              key={`gt-${t.id}`}
+              onPress={() => router.push('/(tabs)/tasks' as any)}
+              style={({ pressed }) => [styles.dezentRow, styles.rowDivider, { opacity: pressed ? 0.6 : 1 }]}
+            >
+              <View style={[styles.dezentBullet, { backgroundColor: C.tasks }, t.important && { backgroundColor: C.important }]} />
+              <Text style={styles.dezentText} numberOfLines={1}>{t.title}</Text>
+              {due ? (
+                <Text style={[styles.dueBadge, due.overdue && styles.dueBadgeOverdue]}>{due.label}</Text>
+              ) : (
+                <Text style={[styles.dezentCategory, { color: colors.textMuted }]}>Google Task</Text>
+              )}
+            </Pressable>
+          );
+        };
+        const renderPT = (entry: (typeof personalNotes)[number], idx: number) => {
+          const due = entry.dueDate ? dueInfo({ date: localDateStr(entry.dueDate) }) : null;
+          const level = due?.level ?? 0;
+          return (
+            <Pressable
+              key={`pt-${entry.id ?? idx}`}
+              onPress={() => router.push('/(tabs)/tasks' as any)}
+              style={({ pressed }) => [styles.dezentRow, styles.rowDivider, { opacity: pressed ? 0.6 : 1, backgroundColor: OVERDUE_TINT[level] }]}
+            >
+              <View style={[styles.dezentBullet, { backgroundColor: C.personal }]} />
+              <Text style={[styles.dezentText, level >= 2 && styles.kidTaskOverdue]} numberOfLines={1}>{entry.text}</Text>
+              {due ? (
+                <Text style={[styles.dueBadge, due.overdue && styles.dueBadgeOverdue, level >= 2 && styles.dueBadgeSevere]}>{due.label}</Text>
+              ) : (
+                <Text style={[styles.dezentCategory, { color: colors.textMuted }]}>Aufgabe</Text>
+              )}
+            </Pressable>
+          );
+        };
+        const renderST = ({ item, childId }: (typeof upcomingSchoolTermine)[number]) => {
+          const due = taskDue(item.date);
+          return (
+            <Pressable
+              key={`st-${item.id}`}
+              onPress={() => router.push({ pathname: '/(tabs)/schule', params: { child: childId } } as any)}
+              style={({ pressed }) => [styles.dezentRow, styles.rowDivider, { opacity: pressed ? 0.6 : 1 }]}
+            >
+              <View style={[styles.dezentBullet, { backgroundColor: childColor(childId) }]} />
+              <Ionicons name="book-outline" size={13} color={colors.textMuted} />
+              <Text style={styles.dezentText} numberOfLines={1}>{item.title}</Text>
+              {due && <Text style={[styles.dueBadge, due.overdue && styles.dueBadgeOverdue]}>{due.label}</Text>}
+            </Pressable>
+          );
+        };
+
+        const gtList = showBlock('googleTasks') ? dashboardTasks.slice(0, 6) : [];
+        const ptList = showBlock('scratchpad') ? personalNotes : [];
+        const stList = showBlock('schoolTasks') ? upcomingSchoolTermine.slice(0, 6) : [];
+        const evTomorrow = showCal ? tomorrowEvents : [];
+        const gtTomorrow = gtList.filter((t) => isTomorrow(t.dueDate));
+        const ptTomorrow = ptList.filter((e) => isTomorrow(e.dueDate));
+        const stTomorrow = stList.filter((x) => isTomorrow(x.item.date));
+        const hasTomorrow = evTomorrow.length + gtTomorrow.length + ptTomorrow.length + stTomorrow.length > 0;
+
+        const emptyLabels: string[] = [];
+        if (showBlock('googleTasks') && dashboardTasks.length === 0) emptyLabels.push('Google Tasks');
+        if (showBlock('scratchpad') && personalNotes.length === 0) emptyLabels.push('Aufgaben');
+        const emptySummary = emptyLabels.length > 0
+          ? `${emptyLabels.join(' & ')}: aktuell nichts offen`
+          : null;
+
+        return (
+          <View>
+            <View style={labelStyles.row}>
+              <View style={labelStyles.titleRow}>
+                <Ionicons name="today-outline" size={13} color={colors.textMuted} />
+                <Text style={[labelStyles.title, { color: colors.textSecondary }]}>Heute</Text>
+              </View>
+              <View style={labelStyles.actions}>
+                {showBlock('scratchpad') && (
+                  <Pressable onPress={() => setQuickAddKind('personal')} hitSlop={8} accessibilityLabel="Aufgabe anlegen">
+                    <Ionicons name="checkbox-outline" size={16} color={colors.textSecondary} />
+                  </Pressable>
+                )}
+                {/* TE-3: Ideen erscheinen nicht auf dem Dashboard, lassen sich hier aber schnell festhalten. */}
+                <Pressable onPress={() => setQuickAddKind('notiz')} hitSlop={8} accessibilityLabel="Idee anlegen">
+                  <Ionicons name="bulb-outline" size={16} color={colors.textSecondary} />
+                </Pressable>
+              </View>
+            </View>
+
+            <View style={[styles.card, styles.todayEventsGlowCard, { elevation: 0 }]}>
+              {showCal && calLoading && (
+                <View style={styles.loadingRow}>
+                  <ActivityIndicator color={mono(C.calendar)} size="small" />
+                </View>
+              )}
+              {showCal && !calLoading && todayEvents.map((e) => renderEvent(e, true))}
+              {gtList.filter((t) => !isTomorrow(t.dueDate)).map(renderGT)}
+              {ptList.filter((e) => !isTomorrow(e.dueDate)).map(renderPT)}
+              {stList.filter((x) => !isTomorrow(x.item.date)).map(renderST)}
+              {emptySummary && (
+                <Text style={[styles.dezentEmptySummary, styles.rowDivider, { color: colors.textMuted }]}>{emptySummary}</Text>
+              )}
+              {hasTomorrow && (
+                <>
+                  <Text style={[styles.dezentCategory, { color: colors.textMuted, paddingHorizontal: 14, paddingTop: 10, paddingBottom: 4, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase' }]}>Morgen</Text>
+                  {!calLoading && evTomorrow.map((e) => renderEvent(e, false))}
+                  {gtTomorrow.map(renderGT)}
+                  {ptTomorrow.map(renderPT)}
+                  {stTomorrow.map(renderST)}
+                </>
+              )}
+            </View>
+          </View>
+        );
+      })()}
 
       {/* ── Geistesblitze (privat): direkt unter dem Geburtstag ──
           Bewusst ganz oben im privaten Block, damit ein Geistesblitz schnell
@@ -1004,104 +1098,6 @@ export function DashboardScreen() {
           </View>
         </Modal>
       )}
-
-      {/* ── Kurzübersicht (Redesign): Google Tasks, Personal Tasks, Notizen in
-          EINER flachen Liste statt drei fett überschriebener Unterabschnitte
-          mit farbigem Verlaufsbalken links – nur noch farbige Punkte pro
-          Zeile zeigen die Kategorie. Leere Kategorien verschwinden nicht
-          spurlos: eine einzelne dezente Zeile fasst zusammen, was gerade
-          nichts offen hat. Die drei Schnell-Anlegen-Icons (vorher je ein
-          "+" pro Unterüberschrift, TE-152) sitzen jetzt gemeinsam rechts
-          im Kopf – Funktion bleibt erhalten, nur kompakter. */}
-      {(showBlock('googleTasks') || showBlock('scratchpad') || showBlock('schoolTasks')) && (() => {
-        const emptyLabels: string[] = [];
-        if (showBlock('googleTasks') && dashboardTasks.length === 0) emptyLabels.push('Google Tasks');
-        if (showBlock('scratchpad') && personalNotes.length === 0) emptyLabels.push('Aufgaben');
-        const emptySummary = emptyLabels.length > 0
-          ? `${emptyLabels.join(' & ')}: aktuell nichts offen`
-          : null;
-
-        return (
-          <View>
-            <View style={labelStyles.row}>
-              <View style={labelStyles.titleRow}>
-                <Ionicons name="list-outline" size={13} color={colors.textMuted} />
-                <Text style={[labelStyles.title, { color: colors.textSecondary }]}>Kurzübersicht</Text>
-              </View>
-              <View style={labelStyles.actions}>
-                {showBlock('scratchpad') && (
-                  <Pressable onPress={() => setQuickAddKind('personal')} hitSlop={8} accessibilityLabel="Aufgabe anlegen">
-                    <Ionicons name="checkbox-outline" size={16} color={colors.textSecondary} />
-                  </Pressable>
-                )}
-                {/* TE-3: Ideen erscheinen nicht auf dem Dashboard, lassen sich hier aber schnell festhalten. */}
-                <Pressable onPress={() => setQuickAddKind('notiz')} hitSlop={8} accessibilityLabel="Idee anlegen">
-                  <Ionicons name="bulb-outline" size={16} color={colors.textSecondary} />
-                </Pressable>
-              </View>
-            </View>
-
-            <View style={styles.card}>
-              {showBlock('googleTasks') && dashboardTasks.slice(0, 6).map((t) => {
-                const due = taskDue(t.dueDate);
-                return (
-                  <Pressable
-                    key={`gt-${t.id}`}
-                    onPress={() => router.push('/(tabs)/tasks' as any)}
-                    style={({ pressed }) => [styles.dezentRow, styles.rowDivider, { opacity: pressed ? 0.6 : 1 }]}
-                  >
-                    <View style={[styles.dezentBullet, { backgroundColor: C.tasks }, t.important && { backgroundColor: C.important }]} />
-                    <Text style={styles.dezentText} numberOfLines={1}>{t.title}</Text>
-                    {due ? (
-                      <Text style={[styles.dueBadge, due.overdue && styles.dueBadgeOverdue]}>{due.label}</Text>
-                    ) : (
-                      <Text style={[styles.dezentCategory, { color: colors.textMuted }]}>Google Task</Text>
-                    )}
-                  </Pressable>
-                );
-              })}
-              {/* TE-3: alle passenden Aufgaben, Verzug gestuft wie bei den Kinder-Aufgaben (TE-14). */}
-              {showBlock('scratchpad') && personalNotes.map((entry, idx) => {
-                const due = entry.dueDate ? dueInfo({ date: localDateStr(entry.dueDate) }) : null;
-                const level = due?.level ?? 0;
-                return (
-                  <Pressable
-                    key={`pt-${entry.id ?? idx}`}
-                    onPress={() => router.push('/(tabs)/tasks' as any)}
-                    style={({ pressed }) => [styles.dezentRow, styles.rowDivider, { opacity: pressed ? 0.6 : 1, backgroundColor: OVERDUE_TINT[level] }]}
-                  >
-                    <View style={[styles.dezentBullet, { backgroundColor: C.personal }]} />
-                    <Text style={[styles.dezentText, level >= 2 && styles.kidTaskOverdue]} numberOfLines={1}>{entry.text}</Text>
-                    {due ? (
-                      <Text style={[styles.dueBadge, due.overdue && styles.dueBadgeOverdue, level >= 2 && styles.dueBadgeSevere]}>{due.label}</Text>
-                    ) : (
-                      <Text style={[styles.dezentCategory, { color: colors.textMuted }]}>Aufgabe</Text>
-                    )}
-                  </Pressable>
-                );
-              })}
-              {showBlock('schoolTasks') && upcomingSchoolTermine.slice(0, 6).map(({ item, childId }) => {
-                const due = taskDue(item.date);
-                return (
-                  <Pressable
-                    key={`st-${item.id}`}
-                    onPress={() => router.push({ pathname: '/(tabs)/schule', params: { child: childId } } as any)}
-                    style={({ pressed }) => [styles.dezentRow, styles.rowDivider, { opacity: pressed ? 0.6 : 1 }]}
-                  >
-                    <View style={[styles.dezentBullet, { backgroundColor: childColor(childId) }]} />
-                    <Ionicons name="book-outline" size={13} color={colors.textMuted} />
-                    <Text style={styles.dezentText} numberOfLines={1}>{item.title}</Text>
-                    {due && <Text style={[styles.dueBadge, due.overdue && styles.dueBadgeOverdue]}>{due.label}</Text>}
-                  </Pressable>
-                );
-              })}
-              {emptySummary && (
-                <Text style={[styles.dezentEmptySummary, { color: colors.textMuted }]}>{emptySummary}</Text>
-              )}
-            </View>
-          </View>
-        );
-      })()}
 
       {/* TE-152: Schnell-Anlegen-Modal für Aufgaben & Ideen – ein Textfeld,
           Absenden legt den Eintrag direkt an (kein voller Formular-Umweg). */}
