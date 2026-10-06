@@ -93,6 +93,13 @@ function feedDateGroup(dateStr: string | null | undefined): 'overdue' | 'today' 
   return dateStr === tomorrow ? 'tomorrow' : 'later';
 }
 
+/** TE-5: Kurzübersicht zeigt nur Einträge ohne Datum oder mit Datum heute/morgen. */
+function isUndatedOrSoon(dateStr?: string | null): boolean {
+  if (!dateStr) return true;
+  const d = localDateStr(dateStr);
+  return d === TODAY || d === format(new Date(Date.now() + 86400000), 'yyyy-MM-dd');
+}
+
 // ─── Colors ───────────────────────────────────────────────────────────────────
 const C = {
   tasks:    '#3B82F6',   // Blau – Google Tasks
@@ -489,7 +496,7 @@ export function DashboardScreen() {
   const dashboardTasks = useMemo<Task[]>(
     () =>
       tasks
-        .filter((t) => !t.completed)
+        .filter((t) => !t.completed && isUndatedOrSoon(t.dueDate))
         .sort((a, b) => {
           if (!!a.important !== !!b.important) return a.important ? -1 : 1;
           const da = a.dueDate ? new Date(a.dueDate).getTime() : Infinity;
@@ -507,7 +514,7 @@ export function DashboardScreen() {
     () =>
       sortScratch(
         parseScratchpad(scratchpad).filter(
-          (e) => e.text.trim() !== '' && !e.done && (e.important || isDueToday(e.dueDate ?? null) || isOverdue(e.dueDate ?? null)),
+          (e) => e.text.trim() !== '' && !e.done && (e.important || isDueToday(e.dueDate ?? null)) && isUndatedOrSoon(e.dueDate),
         ),
       ),
     [scratchpad],
@@ -639,20 +646,19 @@ export function DashboardScreen() {
     [schoolTasksByChild, familyChildren]
   );
 
-  // Schul-Termine (isInfo mit Datum) der nächsten 3 Tage, kindübergreifend für
+  // Schul-Termine (isInfo mit Datum) von heute/morgen, kindübergreifend für
   // die Kurzübersicht – chronologisch, nächster Termin zuerst.
-  const IN_3_DAYS = useMemo(() => format(new Date(Date.now() + 3 * 86400000), 'yyyy-MM-dd'), []);
   const upcomingSchoolTermine = useMemo(() => {
     const out: { item: SchoolItem; childId: string }[] = [];
     for (const child of familyChildren) {
       for (const item of schoolItemsByChild[child.id] ?? []) {
-        if (item.isInfo && item.date && !item.done && !item.deletedAt && item.date >= TODAY && item.date <= IN_3_DAYS) {
+        if (item.isInfo && item.date && !item.done && !item.deletedAt && isUndatedOrSoon(item.date)) {
           out.push({ item, childId: child.id });
         }
       }
     }
     return out.sort((a, b) => a.item.date.localeCompare(b.item.date));
-  }, [schoolItemsByChild, familyChildren, IN_3_DAYS]);
+  }, [schoolItemsByChild, familyChildren]);
 
   // TE-138: Tasks-Gruppierung fürs Dashboard entfernt – Tasks erscheinen nur
   // noch im Tasks-Tab, nicht mehr auf dem Dashboard.
