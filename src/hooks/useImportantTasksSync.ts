@@ -23,7 +23,7 @@
  *     neue Menge nach Firestore geschrieben.
  *
  * Zentral in app/_layout.tsx eingehängt, damit der Sync unabhängig vom
- * aktiven Screen läuft – analog zu useSettingsSync (TE-49) / useMailPinsSync (TE-50).
+ * aktiven Screen läuft – analog zu useSettingsSync (TE-49).
  */
 
 import { useEffect, useRef } from 'react';

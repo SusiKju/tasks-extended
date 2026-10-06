@@ -16,8 +16,6 @@ interface TaskState {
   /** TE-112: Verlauf gelöschter Scratchpad-Notizen, serialisiert als JSON-String. */
   scratchpadHistory: string;
   deletedGoogleEventIds: string[];
-  /** TE-38: Gmail-Message-IDs der angepinnten Mails (immer oben im Mail-Tab). */
-  pinnedMailIds: string[];
 
   // Task actions
   addTask: (task: Task) => void;
@@ -58,12 +56,6 @@ interface TaskState {
 
   // Settings actions
   updateSettings: (updates: Partial<AppSettings>) => void;
-
-  // Mail actions (TE-38)
-  togglePinnedMail: (id: string) => void;
-  unpinMail: (id: string) => void;
-  /** TE-50: ganze Pin-Liste setzen (Hydration aus Firestore). */
-  setPinnedMailIds: (ids: string[]) => void;
 
   /** TE-123: Wichtig-Label aus Firestore anwenden (Menge der googleEventIds). */
   applyImportantTaskGoogleIds: (ids: string[]) => void;
@@ -109,7 +101,6 @@ const DEFAULT_SETTINGS: AppSettings = {
   selectedCalendarIds: [],
   childEmails: {},
   myName: null,
-  mailWindowDays: 7,
   parentPin: null,
   dashboardBlocks: { ...DEFAULT_DASHBOARD_BLOCKS },
   visibleTabs: { ...DEFAULT_VISIBLE_TABS },
@@ -132,7 +123,6 @@ export const useStore = create<TaskState>()(
       scratchpadUpdatedAt: new Date(0).toISOString(),
       scratchpadHistory: '',
       deletedGoogleEventIds: [],
-      pinnedMailIds: [],
 
       addTask: (task) =>
         set((state) => ({ tasks: [task, ...state.tasks] })),
@@ -255,20 +245,6 @@ export const useStore = create<TaskState>()(
 
       updateSettings: (updates) =>
         set((state) => ({ settings: { ...state.settings, ...updates } })),
-
-      togglePinnedMail: (id) =>
-        set((state) => ({
-          pinnedMailIds: state.pinnedMailIds.includes(id)
-            ? state.pinnedMailIds.filter((x) => x !== id)
-            : [...state.pinnedMailIds, id],
-        })),
-
-      unpinMail: (id) =>
-        set((state) => ({
-          pinnedMailIds: state.pinnedMailIds.filter((x) => x !== id),
-        })),
-
-      setPinnedMailIds: (ids) => set({ pinnedMailIds: ids }),
 
       applyImportantTaskGoogleIds: (ids) =>
         set((state) => {

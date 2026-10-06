@@ -76,12 +76,6 @@ export interface AppSettings {
   childEmails: Partial<Record<string, string>>;
   /** Anzeigename für die geteilte Notizliste (TE-121), z. B. "Matthias" oder "Sabine". */
   myName: string | null;
-  /**
-   * TE-37/TE-43: Zeitfenster für den Mail-Tab in Tagen. Mails älter als N Tage
-   * werden ausgeblendet. Default 7. Angepinnte Mails (TE-38) ignorieren dieses
-   * Fenster. Erlaubte Werte: siehe MAIL_WINDOW_OPTIONS.
-   */
-  mailWindowDays: number;
   /** TE-60: PIN zum Verlassen des Kinder-Modus. null = Fallback '1234'. */
   parentPin: string | null;
   /**
@@ -142,8 +136,7 @@ export type DashboardBlockKey =
   | 'sharedList'
   | 'schoolTasks'
   | 'kidsTasks'
-  | 'allowance'
-  | 'mail';
+  | 'allowance';
 
 export const DASHBOARD_BLOCKS: { key: DashboardBlockKey; label: string; description: string }[] = [
   { key: 'weckmodus',     label: 'Weckmodus',           description: 'Morgens 5–10 Uhr an Schultagen: muss ein Kind zur 1. Stunde aufstehen oder ist sie frei?' },
@@ -161,7 +154,6 @@ export const DASHBOARD_BLOCKS: { key: DashboardBlockKey; label: string; descript
   { key: 'schoolTasks',   label: 'Schulaufgaben',       description: 'Manuell im Klassenbuch angelegte Aufgaben aller Kinder (ohne Info-Einträge).' },
   { key: 'kidsTasks',     label: 'Aufgaben der Kinder', description: 'Heutige Aufgaben aller Kinder.' },
   { key: 'allowance',     label: 'Taschengeld',         description: 'Kinder, deren Taschengeld für den laufenden Monat noch offen ist.' },
-  { key: 'mail',          label: 'Posteingang',         description: 'Angepinnte und ungelesene Mails.' },
 ];
 
 /** TE-77: Default-Sichtbarkeit – alle Dashboard-Blöcke aktiv, außer 'feed' (neu, Opt-in). */
@@ -175,12 +167,11 @@ export const DEFAULT_DASHBOARD_BLOCKS: Record<DashboardBlockKey, boolean> =
  * TE-49: Vom Elternteil ein-/ausschaltbare Tabs zwischen Dashboard und
  * Settings (die beiden Anker-Tabs selbst sind nicht abschaltbar).
  */
-export type TabKey = 'tasks' | 'links' | 'mail' | 'kids' | 'schule' | 'bambini' | 'fuerUns';
+export type TabKey = 'tasks' | 'links' | 'kids' | 'schule' | 'bambini' | 'fuerUns';
 
 export const TOGGLEABLE_TABS: { key: TabKey; label: string; description: string }[] = [
   { key: 'tasks',   label: 'Tasks',   description: 'Aufgabenliste.' },
   { key: 'links',   label: 'Links',   description: 'Schnellleiste mit Links.' },
-  { key: 'mail',    label: 'Mail',    description: 'Posteingang.' },
   { key: 'kids',    label: 'Kinder',  description: 'Kinder-Übersicht mit Taschengeld und Aufgaben.' },
   { key: 'schule',  label: 'Schule',  description: 'beste.schule-Anbindung.' },
   { key: 'bambini', label: 'Bambini', description: 'Fußball-Training.' },
@@ -193,9 +184,6 @@ export const DEFAULT_VISIBLE_TABS: Record<TabKey, boolean> =
     (acc, t) => { acc[t.key] = true; return acc; },
     {} as Record<TabKey, boolean>
   );
-
-/** TE-37/TE-43: Auswählbare Zeitfenster (in Tagen) für den Mail-Tab. */
-export const MAIL_WINDOW_OPTIONS = [3, 7, 14, 30, 75] as const;
 
 /** Einziges verbliebenes Thema der Fokus-Kachel – nur noch für den erzwungenen
  *  Fußball-Notizdialog im Bambini-Tab (Yoga/Garten entfernt). */

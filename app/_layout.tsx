@@ -15,7 +15,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFirebaseAuth } from '../src/hooks/useFirebaseAuth';
 import { useFamily } from '../src/hooks/useFamily';
 import { useSettingsSync } from '../src/hooks/useSettingsSync';
-import { useMailPinsSync } from '../src/hooks/useMailPinsSync';
 import { useImportantTasksSync } from '../src/hooks/useImportantTasksSync';
 import { handleRedirectResult } from '../src/services/firebaseAuth';
 import { getOwnMember, getChildIdForEmail } from '../src/services/family';
@@ -48,8 +47,6 @@ export default function RootLayout() {
 
   // TE-49: App-Settings geräteübergreifend mit Firestore synchronisieren.
   useSettingsSync();
-  // TE-50: Angepinnte E-Mails geräteübergreifend mit Firestore synchronisieren.
-  useMailPinsSync();
   // TE-123: Wichtig-Label der Tasks geräteübergreifend mit Firestore synchronisieren.
   useImportantTasksSync();
   const syncTasksRef = useRef(syncTasks);

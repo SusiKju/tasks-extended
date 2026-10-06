@@ -2,7 +2,7 @@
  * FeedBlock.tsx
  *
  * "Mein Tag" – konfigurierbarer Dashboard-Block (DashboardBlockKey 'feed').
- * Vereint alle "zu erledigenden"/anstehenden Dinge (Tasks, Kinder-Aufgaben, Mail,
+ * Vereint alle "zu erledigenden"/anstehenden Dinge (Tasks, Kinder-Aufgaben,
  * Termine, Geburtstage, Geteilte Liste, Geistesblitze, Notizblock, Taschengeld)
  * als EINE durchgehende Liste – schlank, ohne Zeitgruppen-Header/-Karten.
  * Jede Kategorie hat ein eigenes, farbiges Icon (gut unterscheidbar in beiden
@@ -39,7 +39,6 @@ export type FeedCategory =
   | 'calendar'
   | 'task'
   | 'kidsTask'
-  | 'mail'
   | 'sharedList'
   | 'geistesblitz'
   | 'note'
@@ -78,7 +77,6 @@ const CATEGORY_ICON: Record<FeedCategory, IconName> = {
   calendar: 'calendar-outline',
   task: 'checkbox-outline',
   kidsTask: 'school-outline',
-  mail: 'mail-outline',
   sharedList: 'share-social-outline',
   geistesblitz: 'bulb-outline',
   note: 'document-text-outline',
@@ -94,7 +92,6 @@ const CATEGORY_COLOR: Record<FeedCategory, string> = {
   calendar: '#60a5fa', // blau
   task: '#34d399', // grün
   kidsTask: '#a78bfa', // violett
-  mail: '#38bdf8', // hellblau
   sharedList: '#fbbf24', // amber
   geistesblitz: '#fde047', // gelb
   note: '#fb923c', // orange
@@ -110,20 +107,16 @@ const CATEGORY_PRIORITY: Record<FeedCategory, number> = {
   calendar: 1,
   task: 2,
   kidsTask: 3,
-  mail: 4,
-  sharedList: 5,
-  geistesblitz: 6,
-  note: 7,
-  allowance: 8,
+  sharedList: 4,
+  geistesblitz: 5,
+  note: 6,
+  allowance: 7,
 };
 
 const GROUP_ORDER: FeedGroupKey[] = ['overdue', 'today', 'tomorrow', 'later'];
 
 function sortItems(items: FeedItem[]): FeedItem[] {
   return [...items].sort((a, b) => {
-    // Tasks gewinnen im Standard immer vor Mails, unabhängig von wichtig/überfällig.
-    if (a.category === 'task' && b.category === 'mail') return -1;
-    if (a.category === 'mail' && b.category === 'task') return 1;
     const flaggedA = a.overdue || a.important;
     const flaggedB = b.overdue || b.important;
     if (!!flaggedA !== !!flaggedB) return flaggedA ? -1 : 1;
@@ -295,7 +288,7 @@ export function FeedBlock({
             {flagged ? (
               <View style={styles.badge}>
                 <Text selectable={false} style={styles.badgeText}>
-                  {item.overdue ? 'Überfällig' : item.category === 'mail' ? 'Pinned' : 'Wichtig'}
+                  {item.overdue ? 'Überfällig' : 'Wichtig'}
                 </Text>
               </View>
             ) : null}

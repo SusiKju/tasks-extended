@@ -25,7 +25,6 @@ import { useFirebaseAuth } from '../hooks/useFirebaseAuth';
 import { useGoogleTasksSync } from '../hooks/useGoogleTasksSync';
 import { useGoogleContactsBirthdaysSync } from '../hooks/useGoogleContactsBirthdaysSync';
 import { isOverdue, isDueToday, localDateStr } from '../utils/dateFormat';
-import { fetchRecentMails, fetchMailsByIds, MailMessage } from '../services/googleMail';
 import { listUpcomingEvents, CalendarEvent, getValidAccessToken } from '../services/googleCalendar';
 import { listStarredDriveFiles, DriveFile } from '../services/googleDrive';
 import {
@@ -122,22 +121,6 @@ const C = {
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function parseDisplayFrom(from: string): string {
-  const match = from.match(/^"?([^"<]+)"?\s*<?[^>]*>?$/);
-  return match ? match[1].trim() : from.replace(/<[^>]+>/, '').trim() || from;
-}
-
-function formatMailDate(dateStr: string): string {
-  if (!dateStr) return '';
-  try {
-    const d = new Date(dateStr);
-    const now = new Date();
-    return d.toDateString() === now.toDateString()
-      ? d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })
-      : d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
-  } catch { return ''; }
-}
 
 function formatEventTime(e: CalendarEvent): { day: string; time: string } {
   if (e.allDay) return { day: dayLabel(new Date(e.start)), time: 'Ganztägig' };
@@ -239,7 +222,7 @@ export function DashboardScreen() {
   const childName = (id: string) => familyChildren.find((c) => c.id === id)?.name ?? id;
   const childColor = (id: string) => familyChildren.find((c) => c.id === id)?.color ?? CHILD_COLOR_FALLBACK;
   const childEmoji = (id: string) => familyChildren.find((c) => c.id === id)?.emoji ?? null;
-  const { settings, birthdays: storeBirthdays, pinnedMailIds, tasks } = useStore();
+  const { settings, birthdays: storeBirthdays, tasks } = useStore();
   // TE-104: Notizblock-Wert + Firestore-Abo zentral aus dem Hook. Das Dashboard
   // zeigt ihn nur an (readOnly); bearbeitet wird er im Tasks-Tab.
   // TE-152: `onChange` wird zusätzlich fürs Schnell-Anlegen über das Plus-Icon
@@ -279,24 +262,6 @@ export function DashboardScreen() {
   const [quickAddKind, setQuickAddKind] = useState<'personal' | 'notiz' | null>(null);
   const [quickAddText, setQuickAddText] = useState('');
 
-  // TE-41/TE-75: Fenster-Mails + angepinnte Mails (auch außerhalb des Fensters) laden.
-  // Das Fenster folgt settings.mailWindowDays (wie MailScreen, TE-37), damit ein
-  // geändertes Zeitfenster die angeheftete Mails nicht aus der Card verdrängt.
-  const loadDashboardMails = useCallback(async (token: string) => {
-    setMailLoading(true);
-    try {
-      const windowMails = await fetchRecentMails(token, settings.mailWindowDays);
-      const have = new Set(windowMails.map((m) => m.id));
-      const missingPinned = pinnedMailIds.filter((id) => !have.has(id));
-      const extra = missingPinned.length ? await fetchMailsByIds(token, missingPinned) : [];
-      setMails([...extra, ...windowMails]);
-    } catch {
-      // still – Card bleibt beim letzten Stand
-    } finally {
-      setMailLoading(false);
-    }
-  }, [pinnedMailIds, settings.mailWindowDays]);
-
   // TE-168: Als Favorit markierte Google-Drive-Dateien für die Kurzübersicht.
   // 401 = abgelaufenes Token → einmal mit frischem Token retryen, analog zum
   // Geburtstage-Sync (useGoogleContactsBirthdaysSync).
@@ -324,9 +289,8 @@ export function DashboardScreen() {
         syncTasks().catch(() => {}),
         syncBirthdays().catch(() => {}),
       ]);
-      // Mails + Kalender neu laden
+      // Drive + Kalender neu laden
       if (settings.googleAccessToken) {
-        loadDashboardMails(settings.googleAccessToken);
         loadDriveFavorites(settings.googleAccessToken);
         if (settings.googleCalendarEnabled) {
           setCalLoading(true);
@@ -345,37 +309,13 @@ export function DashboardScreen() {
       spinAnim.setValue(0);
       setSyncing(false);
     }
-  }, [syncing, syncTasks, syncBirthdays, settings, loadDashboardMails, loadDriveFavorites]);
+  }, [syncing, syncTasks, syncBirthdays, settings, loadDriveFavorites]);
 
   const styles = useMemo(() => makeStyles(colors, isDark), [colors, isDark]);
 
-  const [mails, setMails] = useState<MailMessage[]>([]);
-  const [mailLoading, setMailLoading] = useState(false);
   const [calEvents, setCalEvents] = useState<CalendarEvent[]>([]);
   const [calLoading, setCalLoading] = useState(false);
   const [driveFavorites, setDriveFavorites] = useState<DriveFile[]>([]);
-
-  // TE-41: Auf dem Dashboard nur angepinnte + ungelesene Mails, angepinnte oben.
-  const pinnedSet = useMemo(() => new Set(pinnedMailIds), [pinnedMailIds]);
-  const dashboardMails = useMemo(() => {
-    return mails
-      .filter((m) => pinnedSet.has(m.id) || m.unread)
-      .sort((a, b) => {
-        const pa = pinnedSet.has(a.id) ? 0 : 1;
-        const pb = pinnedSet.has(b.id) ? 0 : 1;
-        if (pa !== pb) return pa - pb;
-        return new Date(b.date).getTime() - new Date(a.date).getTime();
-      })
-      .slice(0, 5);
-  }, [mails, pinnedSet]);
-
-  // TE-84: Im "Mein Tag"-Feed sollen nur tatsächlich gepinnte Mails erscheinen,
-  // anders als die Dashboard-Mail-Card (pinned+unread, TE-41).
-  const feedPinnedMails = useMemo(() => {
-    return mails
-      .filter((m) => pinnedSet.has(m.id))
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [mails, pinnedSet]);
 
   // Heutige Aufgaben aller Kinder (TE-110) – ein Echtzeit-Listener pro Kind,
   // analog zum Kids-Tab. Abschnitt erscheint nur, wenn mindestens eine Aufgabe da ist.
@@ -708,19 +648,6 @@ export function DashboardScreen() {
       }
     }
 
-    // Posteingang (TE-84: nur gepinnt) – kein eigenes Fälligkeitsdatum → "Ohne Termin".
-    for (const m of feedPinnedMails) {
-      items.push({
-        key: `mail:${m.id}`,
-        category: 'mail',
-        group: 'later',
-        title: parseDisplayFrom(m.from),
-        subtitle: m.subject || '(Kein Betreff)',
-        important: true,
-        onPress: () => router.push('/(tabs)/mail' as any),
-      });
-    }
-
     // Kalender-Termine (nur heute – Termine für morgen werden im Feed nicht angezeigt).
     for (const e of todayEvents) {
       items.push({
@@ -802,18 +729,13 @@ export function DashboardScreen() {
 
     return items;
   }, [
-    familyChildren, childTasks, feedPinnedMails, pinnedSet,
+    familyChildren, childTasks,
     todayEvents, todayBirthdays, feedSharedNotes,
     feedGeistesKacheln, openAllowanceChildren, dueMonthByChild, router,
     scratchpad, isMono, isDark, colors,
   ]);
 
-  useEffect(() => {
-    if (!settings.googleAccessToken) return;
-    loadDashboardMails(settings.googleAccessToken);
-  }, [settings.googleAccessToken, loadDashboardMails]);
-
-  // TE-168: Drive-Favoriten beim Laden automatisch ziehen – analog zu Mails/
+  // TE-168: Drive-Favoriten beim Laden automatisch ziehen – analog zum
   // Kalender. Nur wenn der Block überhaupt sichtbar ist (kein unnötiger Call).
   useEffect(() => {
     if (!settings.googleAccessToken || !showBlock('driveFavorites')) return;
@@ -829,8 +751,8 @@ export function DashboardScreen() {
       .finally(() => setCalLoading(false));
   }, [settings.googleAccessToken, settings.googleCalendarEnabled, settings.selectedCalendarIds]);
 
-  // Geburtstage beim Laden automatisch aus Google Contacts ziehen – analog zu
-  // Mails/Kalender. Ohne diesen Effekt wurde die Datenbasis nur beim Login oder
+  // Geburtstage beim Laden automatisch aus Google Contacts ziehen – analog zum
+  // Kalender. Ohne diesen Effekt wurde die Datenbasis nur beim Login oder
   // manuellen Sync befüllt, sodass die Geburtstags-Card beim normalen App-Start
   // leer blieb, obwohl ein Kontakt heute Geburtstag hat.
   useEffect(() => {
@@ -1218,76 +1140,6 @@ export function DashboardScreen() {
           </View>
         </View>
       </Modal>
-
-      {/* ── Posteingang (privat) ── */}
-      {showBlock('mail') && settings.googleAccessToken && (
-        <View style={styles.section}>
-          <SectionLabel
-            title="Posteingang"
-            icon="mail-outline"
-            onMore={() => router.push('/(tabs)/mail')}
-            colors={colors}
-          />
-          <View style={styles.card}>
-            {mailLoading ? (
-              <View style={styles.loadingRow}>
-                <ActivityIndicator color={colors.textMuted} size="small" />
-              </View>
-            ) : dashboardMails.length === 0 ? (
-              <View style={styles.emptyRow}>
-                <Ionicons name="checkmark-circle-outline" size={16} color={colors.success} />
-                <Text style={styles.emptyText}>Keine angepinnten oder ungelesenen Mails</Text>
-              </View>
-            ) : (
-              dashboardMails.map((mail, i) => {
-                const pinned = pinnedSet.has(mail.id);
-                return (
-                  <View
-                    key={mail.id}
-                    style={[styles.mailRow, i < dashboardMails.length - 1 && styles.rowDivider]}
-                  >
-                    <View style={[styles.mailAvatar, { backgroundColor: colors.surfaceHigh }]}>
-                      <Text style={[styles.mailAvatarText, { color: colors.textSecondary }]}>
-                        {parseDisplayFrom(mail.from).charAt(0).toUpperCase()}
-                      </Text>
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <View style={styles.mailMeta}>
-                        <Text
-                          style={[styles.mailFrom, { color: colors.text }, mail.unread && { fontWeight: '800' }]}
-                          numberOfLines={1}
-                        >
-                          {parseDisplayFrom(mail.from)}
-                        </Text>
-                        <Text style={[styles.mailDate, { color: colors.textMuted }]}>
-                          {formatMailDate(mail.date)}
-                        </Text>
-                      </View>
-                      <View style={[styles.mailMeta, { alignItems: 'center', marginBottom: 0 }]}>
-                        <Text
-                          style={[
-                            styles.mailSubject,
-                            { color: mail.unread ? colors.text : colors.textSecondary, flex: 1 },
-                          ]}
-                          numberOfLines={1}
-                        >
-                          {mail.subject || '(Kein Betreff)'}
-                        </Text>
-                        {pinned && (
-                          <Ionicons name="bookmark" size={12} color={colors.accentNeon} style={{ marginLeft: 6 }} />
-                        )}
-                        {mail.unread && !pinned && (
-                          <View style={[styles.unreadDot, { backgroundColor: colors.accentNeon }]} />
-                        )}
-                      </View>
-                    </View>
-                  </View>
-                );
-              })
-            )}
-          </View>
-        </View>
-      )}
 
       {/* ── Schnellzugriff (privat): Links + Drive-Favoriten (TE-168) in einer
           gemeinsamen, horizontal scrollenden Zeile. ── */}
@@ -1736,28 +1588,6 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
       borderLeftWidth: 1,
       overflow: 'hidden',
     },
-
-    // Mail
-    mailRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingHorizontal: 14,
-      paddingVertical: 11,
-      gap: 10,
-    },
-    mailAvatar: {
-      width: 30,
-      height: 30,
-      borderRadius: 15,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    mailAvatarText: { fontSize: 12, fontWeight: '700' },
-    mailMeta: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 },
-    mailFrom: { fontSize: 13, fontWeight: '600', flex: 1, marginRight: 6 },
-    mailDate: { fontSize: 11 },
-    mailSubject: { fontSize: 12 },
-    unreadDot: { width: 7, height: 7, borderRadius: 3.5, marginLeft: 6 },
 
     // Calendar
     calRowProminent: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 12, gap: 10 },

@@ -17,7 +17,7 @@ import Constants from 'expo-constants';
 import { Ionicons } from '@expo/vector-icons';
 import { useStore } from '../store';
 import { useTheme, ThemeColors, neonGlow } from '../utils/theme';
-import { MAIL_WINDOW_OPTIONS, DASHBOARD_BLOCKS, DEFAULT_DASHBOARD_BLOCKS, TOGGLEABLE_TABS, DEFAULT_VISIBLE_TABS } from '../types';
+import { DASHBOARD_BLOCKS, DEFAULT_DASHBOARD_BLOCKS, TOGGLEABLE_TABS, DEFAULT_VISIBLE_TABS } from '../types';
 
 import {
   signInWithGoogle,
@@ -1107,40 +1107,6 @@ export function SettingsScreen() {
         </Pressable>
       </Modal>
 
-
-      {/* E-Mail (TE-37) */}
-      <View style={styles.section}>
-        <Text style={styles.sectionHeader}>E-Mail</Text>
-        <View style={[styles.row, { flexDirection: 'column', alignItems: 'flex-start', gap: 8 }]}>
-          <View style={{ width: '100%' as any }}>
-            <Text style={styles.rowTitle}>Zeitfenster</Text>
-            <Text style={styles.rowSubtitle}>
-              Nur Mails der letzten {settings.mailWindowDays} Tage anzeigen.
-            </Text>
-          </View>
-          <View style={styles.thresholdButtons}>
-            {MAIL_WINDOW_OPTIONS.map((days) => {
-              const active = settings.mailWindowDays === days;
-              return (
-                <Pressable
-                  key={days}
-                  style={({ pressed }) => [
-                    styles.thresholdBtn,
-                    active && styles.thresholdBtnActive,
-                    pressed && { opacity: 0.7 },
-                  ]}
-                  onPress={() => updateSettings({ mailWindowDays: days })}
-                >
-                  <Text style={[styles.thresholdBtnText, active && styles.thresholdBtnTextActive]}>
-                    {days} Tage
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </View>
-      </View>
-
       {/* Dashboard-Blöcke (TE-77) */}
       <View style={styles.section}>
         <Text style={styles.sectionHeader}>Dashboard</Text>
@@ -1275,18 +1241,6 @@ function makeStyles(c: ThemeColors) {
       borderWidth: 1, borderColor: c.border, borderRadius: 8,
       paddingHorizontal: 10, paddingVertical: 6,
     },
-    thresholdButtons: { flexDirection: 'row', gap: 6 },
-    thresholdBtn: {
-      paddingHorizontal: 10,
-      paddingVertical: 5,
-      borderRadius: 10,
-      borderWidth: 1,
-      borderColor: c.border,
-      backgroundColor: c.surfaceHigh,
-    },
-    thresholdBtnActive: { backgroundColor: c.accent, borderColor: c.accent },
-    thresholdBtnText: { fontSize: 12, color: c.textSecondary },
-    thresholdBtnTextActive: { color: c.accentFg, fontWeight: '600' },
     calendarInfo: {
       backgroundColor: c.surface,
       borderRadius: 12,
