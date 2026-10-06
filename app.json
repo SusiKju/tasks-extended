@@ -2,7 +2,7 @@
   "expo": {
     "name": "TasksExtended",
     "slug": "tasks-extended",
-    "version": "2.34.0",
+    "version": "2.35.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",

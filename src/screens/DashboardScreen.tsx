@@ -53,18 +53,27 @@ import { DashboardBlockKey, QuickNote, Task } from '../types';
 
 // Fallback-Farbe falls Kind keine Farbe gesetzt hat
 const CHILD_COLOR_FALLBACK = '#4f86f7';
-import { format } from 'date-fns';
+import { format, differenceInCalendarDays, parseISO } from 'date-fns';
 
 const TODAY = format(new Date(), 'yyyy-MM-dd');
 
-/** Fälligkeitsanzeige (TE-119): "heute" / "TT.MM." mit Markierung für überschrittene Termine. */
-function dueInfo(task?: ChildTask): { label: string; overdue: boolean } | null {
+/**
+ * Fälligkeitsanzeige (TE-119): "heute" / "TT.MM." mit Markierung für überschrittene Termine.
+ * TE-14: `level` (0–3) wächst mit der Verzugsdauer (1–2 Tage / 3–6 / ab 7) und steuert
+ * die Hervorhebung; bei Verzug zeigt das Label zusätzlich die Tage.
+ */
+function dueInfo(task?: ChildTask): { label: string; overdue: boolean; level: 0 | 1 | 2 | 3 } | null {
   if (!task) return null;
   const overdue = !task.done && task.date < TODAY;
-  if (task.date === TODAY) return { label: 'heute', overdue: false };
+  if (task.date === TODAY) return { label: 'heute', overdue: false, level: 0 };
   const [, m, d] = task.date.split('-');
-  return { label: `${d}.${m}.`, overdue };
+  if (!overdue) return { label: `${d}.${m}.`, overdue, level: 0 };
+  const days = differenceInCalendarDays(parseISO(TODAY), parseISO(task.date));
+  return { label: `${d}.${m}. · ${days} Tg.`, overdue, level: days >= 7 ? 3 : days >= 3 ? 2 : 1 };
 }
+
+/** TE-14: Zeilen-Tönung je Verzugsstufe (Rot, steigende Deckkraft). */
+const OVERDUE_TINT = ['transparent', 'rgba(255,59,48,0.08)', 'rgba(255,59,48,0.16)', 'rgba(255,59,48,0.26)'];
 
 /** TE-150: Fälligkeit für Google/Personal Tasks: "heute" / "TT.MM." mit
  * Overdue-Markierung – analog zu dueInfo() für Kinder-Aufgaben. `dateStr` kann
@@ -617,7 +626,9 @@ export function DashboardScreen() {
   const individualByChild = useMemo(() => {
     const out: Record<string, ChildTask[]> = {};
     for (const child of familyChildren) {
-      out[child.id] = (childTasks[child.id] ?? []).filter((t) => !t.groupId);
+      // TE-14: überfällige zuerst, die am längsten überfälligen ganz oben.
+      out[child.id] = (childTasks[child.id] ?? []).filter((t) => !t.groupId)
+        .sort((a, b) => Number(!!a.done) - Number(!!b.done) || a.date.localeCompare(b.date));
     }
     return out;
   }, [childTasks, familyChildren]);
@@ -1429,7 +1440,7 @@ export function DashboardScreen() {
                       <Pressable
                         key={task.id}
                         onPress={() => router.push('/(tabs)/kids' as any)}
-                        style={({ pressed }) => [styles.kidRow, styles.rowDivider, { opacity: pressed ? 0.6 : 1 }]}
+                        style={({ pressed }) => [styles.kidRow, styles.rowDivider, { opacity: pressed ? 0.6 : 1, backgroundColor: OVERDUE_TINT[due?.level ?? 0] }]}
                       >
                         <Ionicons
                           name={task.done ? 'checkmark-circle' : task.rejected ? 'close-circle' : 'ellipse-outline'}
@@ -1443,12 +1454,13 @@ export function DashboardScreen() {
                             task.done && styles.kidTaskDone,
                             task.rejected && { color: colors.danger },
                           ]}
+                            (due?.level ?? 0) >= 2 && styles.kidTaskOverdue,
                           numberOfLines={1}
                         >
                           {task.title}
                         </Text>
                         {due && (
-                          <Text style={[styles.dueBadge, due.overdue && styles.dueBadgeOverdue]}>
+                          <Text style={[styles.dueBadge, due.overdue && styles.dueBadgeOverdue, due.level >= 2 && styles.dueBadgeSevere]}>
                             {due.label}
                           </Text>
                         )}
@@ -1481,7 +1493,7 @@ export function DashboardScreen() {
                     <Pressable
                       key={e.childId}
                       onPress={() => router.push('/(tabs)/kids' as any)}
-                      style={({ pressed }) => [styles.kidRow, styles.rowDivider, { opacity: pressed ? 0.6 : 1 }]}
+                      style={({ pressed }) => [styles.kidRow, styles.rowDivider, { opacity: pressed ? 0.6 : 1, backgroundColor: OVERDUE_TINT[dueInfo(e.task)?.level ?? 0] }]}
                     >
                       <Ionicons
                         name={e.task.done ? 'checkmark-circle' : e.task.rejected ? 'close-circle' : 'ellipse-outline'}
@@ -1860,6 +1872,9 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
     // (Nutzer hat die Umstellung explizit bestätigt).
     dueBadgeOverdue: { color: C.important },
     // Redesign: Kind-/Gruppen-Kopfzeile als normale Zeile innerhalb der
+    // TE-14: ab 3 Tagen Verzug größer; Titel dann fett.
+    dueBadgeSevere: { fontSize: 13, fontWeight: '800' },
+    kidTaskOverdue: { fontWeight: '800' },
     // flachen Card (vorher: eigener, unbordered Label-Block über einer
     // separat umrandeten Mini-Karte pro Kind).
     kidHeaderRow: {
