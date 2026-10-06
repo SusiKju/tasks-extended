@@ -5,12 +5,15 @@
  * Pfad: families/{familyId}/personalNotesByUser/{uid}/notes/{noteId}
  *
  * Ersetzt die bisherige Google-Drive-Synchronisation aus useGoogleDriveNotesSync.
+ *
+ * TE-3: Nur noch Altbestand – die Notizen werden beim Öffnen des Tasks-Tabs
+ * einmalig zu Ideen migriert (IdeasSection) und hier gelöscht.
  */
 
 import { db } from './firebase';
 import {
   collection, doc,
-  addDoc, setDoc, deleteDoc,
+  deleteDoc,
   onSnapshot,
 } from 'firebase/firestore';
 import { Note } from '../types';
@@ -35,32 +38,6 @@ export function subscribeToPersonalNotes(
       callback([]);
     },
   );
-}
-
-/** Erstellt eine neue Notiz und gibt die generierte Firestore-ID zurück. */
-export async function addPersonalNote(
-  familyId: string,
-  uid: string,
-  note: Omit<Note, 'id'>,
-): Promise<string> {
-  // Firebase 11 hangs silently when undefined values are present in the document.
-  const clean = Object.fromEntries(
-    Object.entries(note).filter(([, v]) => v !== undefined)
-  ) as Omit<Note, 'id'>;
-  const col = collection(db, 'families', familyId, 'personalNotesByUser', uid, 'notes');
-  const ref = await addDoc(col, clean);
-  return ref.id;
-}
-
-/** Aktualisiert eine bestehende Notiz. */
-export async function updatePersonalNote(
-  familyId: string,
-  uid: string,
-  noteId: string,
-  updates: Partial<Note>,
-): Promise<void> {
-  const ref = doc(db, 'families', familyId, 'personalNotesByUser', uid, 'notes', noteId);
-  await setDoc(ref, { ...updates, updatedAt: new Date().toISOString() }, { merge: true });
 }
 
 /** Löscht eine Notiz. */

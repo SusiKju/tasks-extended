@@ -243,25 +243,6 @@ export default function RootLayout() {
         <Stack.Screen name="login" options={{ headerShown: false }} />
         <Stack.Screen name="family-setup" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen
-          name="task/new"
-          options={{
-            title: 'Neuer Task',
-            presentation: 'modal',
-            headerStyle: { backgroundColor: colors.header },
-            headerTintColor: colors.accent,
-            headerTitleStyle: { color: colors.text },
-          }}
-        />
-        <Stack.Screen
-          name="task/[id]"
-          options={{
-            title: '',
-            headerStyle: { backgroundColor: colors.header },
-            headerTintColor: colors.accent,
-            headerBackTitle: 'Zurück',
-          }}
-        />
       </Stack>
     </AppContextProvider>
   );

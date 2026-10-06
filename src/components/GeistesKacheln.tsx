@@ -351,7 +351,7 @@ function KachelModal({ visible, editing, linkedTask, onSave, onCreateTask, onDel
                 <View style={[s.taskBox, { borderColor: color + '60' }]}>
                   <Text style={[s.taskBoxLabel, { color }]}>AUFGABE LÄUFT</Text>
                   <Text style={[s.taskBoxText, { color: colors.text }]}>{linkedTask!.text}</Text>
-                  <Text style={[s.hint, { color: colors.textMuted }]}>In Personal Tasks. Ist sie erledigt, fragt der Geistesblitz nach dem nächsten Schritt.</Text>
+                  <Text style={[s.hint, { color: colors.textMuted }]}>In Aufgaben. Ist sie erledigt, fragt der Geistesblitz nach dem nächsten Schritt.</Text>
                 </View>
               ) : (
                 <>

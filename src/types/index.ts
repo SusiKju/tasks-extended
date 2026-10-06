@@ -134,7 +134,6 @@ export type DashboardBlockKey =
   | 'feed'
   | 'googleTasks'
   | 'scratchpad'
-  | 'quickNotes'
   | 'driveFavorites'
   | 'links'
   | 'geistesblitze'
@@ -152,8 +151,7 @@ export const DASHBOARD_BLOCKS: { key: DashboardBlockKey; label: string; descript
   { key: 'weather',       label: 'Wetter',              description: 'Wettervorhersage neben dem Sync-Button.' },
   { key: 'feed',          label: 'Mein Tag',            description: 'Alle anstehenden Dinge als eine Liste, mit dezentem Icon je Kategorie.' },
   { key: 'googleTasks',   label: 'Google Tasks',        description: 'Offene Google Tasks, zeilenweise über den Links.' },
-  { key: 'scratchpad',    label: 'Personal Tasks',      description: 'Persönliche Tasks mit Wichtig-Label und Fälligkeitsdatum.' },
-  { key: 'quickNotes',    label: 'Schnelle Notizen',    description: 'Kurze Notizen ohne Datum aus dem Notizen-Tab.' },
+  { key: 'scratchpad',    label: 'Aufgaben',            description: 'Eigene Aufgaben: ohne Datum, fällig heute/morgen oder überfällig.' },
   { key: 'driveFavorites',label: 'Drive-Favoriten',     description: 'Als Favorit markierte Google-Drive-Dateien.' },
   { key: 'links',         label: 'Links',               description: 'Schnellleiste mit deinen Links.' },
   { key: 'geistesblitze', label: 'Geistesblitze',       description: 'Persönliche Gedanken-Kacheln.' },
@@ -209,16 +207,13 @@ export interface NoteChecklistItem {
 }
 
 /**
- * TE-148: Schnelle Notiz – bewusst minimal (nur Text, kein Datum, keine Farbe/
- * Gruppe/Checkliste). Eigener, einfacher Abschnitt oberhalb der komplexen Notizen
- * im Notizen-Tab; zusätzlich als eigener Dashboard-Block sichtbar.
+ * TE-148/TE-3: Idee (ehemals „schnelle Notiz") – bewusst minimal, nur Text.
+ * Bereich „Ideen" im Tasks-Tab; lässt sich in eine Aufgabe umwandeln.
  */
 export interface QuickNote {
   id: string;
   text: string;
   createdAt: string;
-  /** TE-160: Wichtig-Label – nur wichtige Schnellnotizen erscheinen im Dashboard. */
-  important?: boolean;
 }
 
 export interface Note {
@@ -241,6 +236,4 @@ export interface Note {
 
 export type RootStackParamList = {
   '(tabs)': undefined;
-  'task/[id]': { id: string };
-  'task/new': undefined;
 };

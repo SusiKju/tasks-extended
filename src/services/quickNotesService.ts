@@ -41,31 +41,24 @@ export function subscribeToQuickNotes(
   );
 }
 
-/** Erstellt eine neue schnelle Notiz und gibt die generierte Firestore-ID zurück. */
+/**
+ * Erstellt eine neue schnelle Notiz (TE-3: „Idee") und gibt die ID zurück.
+ * `opts.id` setzt die Doc-ID fest – für die idempotente Migration alter Notizen.
+ */
 export async function addQuickNote(
   familyId: string,
   uid: string,
   text: string,
-  important?: boolean,
+  opts: { id?: string; createdAt?: string } = {},
 ): Promise<string> {
   const col = collection(db, 'families', familyId, 'quickNotesByUser', uid, 'notes');
-  const ref = await addDoc(col, {
-    text,
-    createdAt: new Date().toISOString(),
-    ...(important ? { important: true } : {}),
-  });
+  const data = { text, createdAt: opts.createdAt ?? new Date().toISOString() };
+  if (opts.id) {
+    await setDoc(doc(col, opts.id), data);
+    return opts.id;
+  }
+  const ref = await addDoc(col, data);
   return ref.id;
-}
-
-/** Aktualisiert Text und/oder Wichtig-Label einer schnellen Notiz. */
-export async function updateQuickNote(
-  familyId: string,
-  uid: string,
-  noteId: string,
-  updates: Partial<Pick<QuickNote, 'text' | 'important'>>,
-): Promise<void> {
-  const ref = doc(db, 'families', familyId, 'quickNotesByUser', uid, 'notes', noteId);
-  await setDoc(ref, updates, { merge: true });
 }
 
 /** Löscht eine schnelle Notiz. */

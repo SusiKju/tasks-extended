@@ -20,7 +20,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useStore } from '../store';
 import { useTheme, ThemeColors, readableTextOn, neonGlow, SOFT_BORDER } from '../utils/theme';
 import { useScratchpad } from '../hooks/useScratchpad';
-import { parseScratchpad, serializeScratchpad, sortScratch, makeNoteId } from '../components/Scratchpad';
+import { parseScratchpad, prependScratch, sortScratch } from '../components/Scratchpad';
 import { useFirebaseAuth } from '../hooks/useFirebaseAuth';
 import { useGoogleTasksSync } from '../hooks/useGoogleTasksSync';
 import { useGoogleContactsBirthdaysSync } from '../hooks/useGoogleContactsBirthdaysSync';
@@ -47,9 +47,9 @@ import { FeedBlock, FeedItem } from '../components/FeedBlock';
 import { subscribeToFeedOrder, saveFeedOrder, FeedOrder } from '../services/feedOrderService';
 import { subscribeToFeedHighlight, saveFeedHighlight } from '../services/feedHighlightService';
 import { SharedNoteItem, subscribeToSharedNotes } from '../services/sharedNotes';
-import { addQuickNote, subscribeToQuickNotes } from '../services/quickNotesService';
+import { addQuickNote } from '../services/quickNotesService';
 import { GeistesKachel, subscribeToGeistesKacheln } from '../services/geistesKacheln';
-import { DashboardBlockKey, QuickNote, Task } from '../types';
+import { DashboardBlockKey, Task } from '../types';
 
 // Fallback-Farbe falls Kind keine Farbe gesetzt hat
 const CHILD_COLOR_FALLBACK = '#4f86f7';
@@ -62,7 +62,7 @@ const TODAY = format(new Date(), 'yyyy-MM-dd');
  * TE-14: `level` (0–3) wächst mit der Verzugsdauer (1–2 Tage / 3–6 / ab 7) und steuert
  * die Hervorhebung; bei Verzug zeigt das Label zusätzlich die Tage.
  */
-function dueInfo(task?: ChildTask): { label: string; overdue: boolean; level: 0 | 1 | 2 | 3 } | null {
+function dueInfo(task?: { date: string; done?: boolean }): { label: string; overdue: boolean; level: 0 | 1 | 2 | 3 } | null {
   if (!task) return null;
   const overdue = !task.done && task.date < TODAY;
   if (task.date === TODAY) return { label: 'heute', overdue: false, level: 0 };
@@ -115,7 +115,7 @@ const C = {
   calendar: '#4285F4',   // Google Kalender Blau
   important:'#FF3B30',   // Rot
   overdue:  '#FF3B30',
-  personal: '#8B5CF6',   // Violett – Personal Tasks
+  personal: '#8B5CF6',   // Violett – Aufgaben
   notes:    '#F59E0B',   // Amber – Notizen
   drive:    '#0F9D58',   // Google-Drive-Grün – Drive-Favoriten
   shared:   '#2DD4BF',   // Türkis – Kennzeichnet den geteilten Bereich (Redesign)
@@ -485,21 +485,6 @@ export function DashboardScreen() {
     return unsub;
   }, [fid]);
 
-  // TE-148: Schnelle Notizen (eigener Dashboard-Block, nur Anzeige – bearbeitet
-  // wird im Notizen-Tab). Neueste zuerst; auf dem Dashboard gekappt.
-  const [quickNotes, setQuickNotes] = useState<QuickNote[]>([]);
-  useEffect(() => {
-    if (!fid || !user?.uid) return;
-    const unsub = subscribeToQuickNotes(fid, user.uid, setQuickNotes, () => setQuickNotes([]));
-    return unsub;
-  }, [fid, user?.uid]);
-
-  // TE-160: Nur wichtige Schnellnotizen erscheinen im Dashboard.
-  const importantQuickNotes = useMemo(
-    () => quickNotes.filter((n) => n.important),
-    [quickNotes],
-  );
-
   // TE-150: Google Tasks fürs Dashboard – offene Tasks, wichtig zuerst, dann nach
   // Fälligkeit. Zeilenweise & dezent über den Links dargestellt (Klick → Tasks-Tab).
   const dashboardTasks = useMemo<Task[]>(
@@ -515,15 +500,13 @@ export function DashboardScreen() {
     [tasks],
   );
 
-  // TE-150/TE-160: Personal Tasks (Notizblock/Scratchpad) – offene Einträge,
-  // intelligent sortiert (wichtig/Fälligkeit), erledigte raus. Auf dem Dashboard
-  // nur wichtige oder bereits fällige (heute/überfällig) Einträge – zukünftige,
-  // nicht als wichtig markierte Einträge bleiben dem Tasks-Tab vorbehalten.
+  // TE-3: Aufgaben (Scratchpad) – alle ohne Datum, dazu fällig heute/morgen
+  // oder überfällig. Später fällige bleiben dem Tasks-Tab vorbehalten.
   const personalNotes = useMemo(
     () =>
       sortScratch(
         parseScratchpad(scratchpad).filter(
-          (e) => e.text.trim() !== '' && !e.done && (e.important || isDueToday(e.dueDate ?? null)) && isUndatedOrSoon(e.dueDate),
+          (e) => e.text.trim() !== '' && !e.done && (isUndatedOrSoon(e.dueDate) || isOverdue(e.dueDate ?? null)),
         ),
       ),
     [scratchpad],
@@ -537,11 +520,7 @@ export function DashboardScreen() {
     const text = quickAddText.trim();
     if (!text) { setQuickAddKind(null); return; }
     if (quickAddKind === 'personal') {
-      const current = parseScratchpad(scratchpad).filter((e) => e.text.trim() !== '');
-      saveScratchpadText(serializeScratchpad([
-        { id: makeNoteId(), text, color: '#9E9E9E' },
-        ...current,
-      ]));
+      saveScratchpadText(prependScratch(scratchpad, text));
     } else if (quickAddKind === 'notiz') {
       if (fid && user?.uid) addQuickNote(fid, user.uid, text).catch(() => {});
     }
@@ -1112,11 +1091,10 @@ export function DashboardScreen() {
           nichts offen hat. Die drei Schnell-Anlegen-Icons (vorher je ein
           "+" pro Unterüberschrift, TE-152) sitzen jetzt gemeinsam rechts
           im Kopf – Funktion bleibt erhalten, nur kompakter. */}
-      {(showBlock('googleTasks') || showBlock('scratchpad') || showBlock('quickNotes') || showBlock('schoolTasks')) && (() => {
+      {(showBlock('googleTasks') || showBlock('scratchpad') || showBlock('schoolTasks')) && (() => {
         const emptyLabels: string[] = [];
         if (showBlock('googleTasks') && dashboardTasks.length === 0) emptyLabels.push('Google Tasks');
-        if (showBlock('scratchpad') && personalNotes.length === 0) emptyLabels.push('Personal Tasks');
-        if (showBlock('quickNotes') && importantQuickNotes.length === 0) emptyLabels.push('Notizen');
+        if (showBlock('scratchpad') && personalNotes.length === 0) emptyLabels.push('Aufgaben');
         const emptySummary = emptyLabels.length > 0
           ? `${emptyLabels.join(' & ')}: aktuell nichts offen`
           : null;
@@ -1129,21 +1107,15 @@ export function DashboardScreen() {
                 <Text style={[labelStyles.title, { color: colors.textSecondary }]}>Kurzübersicht</Text>
               </View>
               <View style={labelStyles.actions}>
-                {showBlock('googleTasks') && (
-                  <Pressable onPress={() => router.push('/task/new' as any)} hitSlop={8} accessibilityLabel="Google Task anlegen">
-                    <Ionicons name="checkmark-circle-outline" size={16} color={colors.textSecondary} />
-                  </Pressable>
-                )}
                 {showBlock('scratchpad') && (
-                  <Pressable onPress={() => setQuickAddKind('personal')} hitSlop={8} accessibilityLabel="Personal Task anlegen">
-                    <Ionicons name="create-outline" size={16} color={colors.textSecondary} />
+                  <Pressable onPress={() => setQuickAddKind('personal')} hitSlop={8} accessibilityLabel="Aufgabe anlegen">
+                    <Ionicons name="checkbox-outline" size={16} color={colors.textSecondary} />
                   </Pressable>
                 )}
-                {showBlock('quickNotes') && (
-                  <Pressable onPress={() => setQuickAddKind('notiz')} hitSlop={8} accessibilityLabel="Notiz anlegen">
-                    <Ionicons name="document-text-outline" size={16} color={colors.textSecondary} />
-                  </Pressable>
-                )}
+                {/* TE-3: Ideen erscheinen nicht auf dem Dashboard, lassen sich hier aber schnell festhalten. */}
+                <Pressable onPress={() => setQuickAddKind('notiz')} hitSlop={8} accessibilityLabel="Idee anlegen">
+                  <Ionicons name="bulb-outline" size={16} color={colors.textSecondary} />
+                </Pressable>
               </View>
             </View>
 
@@ -1166,35 +1138,26 @@ export function DashboardScreen() {
                   </Pressable>
                 );
               })}
-              {showBlock('scratchpad') && personalNotes.slice(0, 6).map((entry, idx) => {
-                const due = taskDue(entry.dueDate);
+              {/* TE-3: alle passenden Aufgaben, Verzug gestuft wie bei den Kinder-Aufgaben (TE-14). */}
+              {showBlock('scratchpad') && personalNotes.map((entry, idx) => {
+                const due = entry.dueDate ? dueInfo({ date: localDateStr(entry.dueDate) }) : null;
+                const level = due?.level ?? 0;
                 return (
                   <Pressable
                     key={`pt-${entry.id ?? idx}`}
                     onPress={() => router.push('/(tabs)/tasks' as any)}
-                    style={({ pressed }) => [styles.dezentRow, styles.rowDivider, { opacity: pressed ? 0.6 : 1 }]}
+                    style={({ pressed }) => [styles.dezentRow, styles.rowDivider, { opacity: pressed ? 0.6 : 1, backgroundColor: OVERDUE_TINT[level] }]}
                   >
-                    <View style={[styles.dezentBullet, { backgroundColor: C.personal }, entry.important && { backgroundColor: C.important }]} />
-                    <Text style={styles.dezentText} numberOfLines={1}>{entry.text}</Text>
+                    <View style={[styles.dezentBullet, { backgroundColor: C.personal }]} />
+                    <Text style={[styles.dezentText, level >= 2 && styles.kidTaskOverdue]} numberOfLines={1}>{entry.text}</Text>
                     {due ? (
-                      <Text style={[styles.dueBadge, due.overdue && styles.dueBadgeOverdue]}>{due.label}</Text>
+                      <Text style={[styles.dueBadge, due.overdue && styles.dueBadgeOverdue, level >= 2 && styles.dueBadgeSevere]}>{due.label}</Text>
                     ) : (
-                      <Text style={[styles.dezentCategory, { color: colors.textMuted }]}>Personal</Text>
+                      <Text style={[styles.dezentCategory, { color: colors.textMuted }]}>Aufgabe</Text>
                     )}
                   </Pressable>
                 );
               })}
-              {showBlock('quickNotes') && importantQuickNotes.slice(0, 6).map((n) => (
-                <Pressable
-                  key={`qn-${n.id}`}
-                  onPress={() => router.push('/(tabs)/tasks' as any)}
-                  style={({ pressed }) => [styles.dezentRow, styles.rowDivider, { opacity: pressed ? 0.6 : 1 }]}
-                >
-                  <View style={[styles.dezentBullet, { backgroundColor: C.important }]} />
-                  <Text style={styles.dezentText} numberOfLines={1}>{n.text}</Text>
-                  <Text style={[styles.dezentCategory, { color: colors.textMuted }]}>Notiz</Text>
-                </Pressable>
-              ))}
               {showBlock('schoolTasks') && upcomingSchoolTermine.slice(0, 6).map(({ item, childId }) => {
                 const due = taskDue(item.date);
                 return (
@@ -1218,7 +1181,7 @@ export function DashboardScreen() {
         );
       })()}
 
-      {/* TE-152: Schnell-Anlegen-Modal für Personal Tasks & Notizen – ein Textfeld,
+      {/* TE-152: Schnell-Anlegen-Modal für Aufgaben & Ideen – ein Textfeld,
           Absenden legt den Eintrag direkt an (kein voller Formular-Umweg). */}
       <Modal
         visible={quickAddKind !== null}
@@ -1234,7 +1197,7 @@ export function DashboardScreen() {
           />
           <View style={[styles.quickAddCard, { backgroundColor: colors.background }]}>
             <Text style={[styles.feedModalTitle, { color: colors.text }]}>
-              {quickAddKind === 'personal' ? 'Neuer Personal Task' : 'Neue Notiz'}
+              {quickAddKind === 'personal' ? 'Neue Aufgabe' : 'Neue Idee'}
             </Text>
             <TextInput
               value={quickAddText}

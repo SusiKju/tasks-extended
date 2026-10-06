@@ -86,9 +86,8 @@ export function useScratchpad() {
       text: entry.text,
       color: entry.color,
       archivedAt: new Date().toISOString(),
-      // TE-144: Wichtig-Label & Fälligkeit mitführen, damit "wieder aktivieren"
-      // den Eintrag vollständig wiederherstellt.
-      important: entry.important,
+      // TE-144: Fälligkeit mitführen, damit "wieder aktivieren" den Eintrag
+      // vollständig wiederherstellt.
       dueDate: entry.dueDate ?? null,
     };
     persistHistory([archived, ...current].slice(0, SCRATCH_HISTORY_MAX));

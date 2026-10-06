@@ -5,45 +5,29 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  Alert,
-  Platform,
 } from 'react-native';
-import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useStore } from '../store';
 import { TaskCard } from '../components/TaskCard';
-import { Task } from '../types';
 import { isOverdue } from '../utils/dateFormat';
 import { useTheme, ThemeColors, neonGlow } from '../utils/theme';
-import { updateGoogleTask, listTaskLists } from '../services/googleCalendar';
-import { useGoogleTasksSync } from '../hooks/useGoogleTasksSync';
-import { Scratchpad } from '../components/Scratchpad';
+import { Scratchpad, ScratchEntry, prependScratch } from '../components/Scratchpad';
 import { useScratchpad } from '../hooks/useScratchpad';
-import { NotesSection } from './NotesScreen';
-
-function confirmDelete(title: string, onConfirm: () => void) {
-  if (Platform.OS === 'web') {
-    if ((window as any).confirm(`"${title}" löschen?`)) onConfirm();
-  } else {
-    Alert.alert('Task löschen', `"${title}" endgültig löschen?`, [
-      { text: 'Abbrechen', style: 'cancel' },
-      { text: 'Löschen', style: 'destructive', onPress: onConfirm },
-    ]);
-  }
-}
+import { IdeasSection } from '../components/IdeasSection';
+import { addQuickNote } from '../services/quickNotesService';
+import { useFamily } from '../hooks/useFamily';
+import { useFirebaseAuth } from '../hooks/useFirebaseAuth';
 
 type FilterMode = 'all' | 'open' | 'overdue' | 'done';
 
 export function TaskListScreen() {
-  const router = useRouter();
-  const { tasks, settings, toggleTask, deleteTask, deleteTasks } = useStore();
-  const { syncTasks } = useGoogleTasksSync();
-  const [filter, setFilter] = useState<FilterMode>('open');
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const tasks = useStore((st) => st.tasks);
   const { colors, isDark } = useTheme();
   const styles = useMemo(() => makeStyles(colors, isDark), [colors, isDark]);
+  const { familyId } = useFamily();
+  const { user } = useFirebaseAuth();
 
-  // TE-104: persönlicher Notizblock – hier voll bearbeitbar (auf dem Dashboard nur Anzeige).
+  // TE-104: persönliche Aufgaben (Scratchpad) – hier voll bearbeitbar.
   const {
     scratchpad,
     onChange: onScratchpadChange,
@@ -54,112 +38,39 @@ export function TaskListScreen() {
   } = useScratchpad();
   const scratchAddRef = useRef<(() => void) | null>(null);
 
-  const toggleSelection = useCallback((id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }, []);
+  // TE-3: Idee → Aufgabe. Frischer Store-Wert statt Closure, damit eine
+  // gerade getippte Aufgabe nicht überschrieben wird.
+  // ponytail: Aufgaben-Save ist 1,5 s debounced, die Idee wird sofort gelöscht –
+  // wird die App in diesem Fenster beendet, ist der Text weg. Flush-Save, falls das auffällt.
+  const ideaToTask = useCallback((text: string) => {
+    onScratchpadChange(prependScratch(useStore.getState().scratchpad, text));
+  }, [onScratchpadChange]);
 
-  const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
+  // TE-3: Aufgabe → Idee (Datum entfällt, Ideen haben keins).
+  const taskToIdea = useCallback((entry: ScratchEntry) => {
+    if (!familyId || !user?.uid) return;
+    addQuickNote(familyId, user.uid, entry.text).catch(() => {});
+  }, [familyId, user?.uid]);
 
-  const handleToggle = useCallback(async (task: Task) => {
-    const newCompleted = !task.completed;
-    toggleTask(task.id);
-
-    if (!settings.googleCalendarEnabled || !settings.googleAccessToken || !task.googleEventId) return;
-
-    const token = settings.googleAccessToken;
-
-    // Push completion status to Google Tasks API
-    const lists = await listTaskLists(token).catch(() => []);
-    const taskListId = lists[0]?.id;
-    if (taskListId) {
-      await updateGoogleTask(token, taskListId, task.googleEventId, {
-        status: newCompleted ? 'completed' : 'needsAction',
-      }).catch(() => {});
-    }
-  }, [toggleTask, settings]);
-
-  const handleSingleDelete = useCallback(
-    (id: string, title: string) => {
-      confirmDelete(title, () => {
-        deleteTask(id);
-        setSelectedIds((prev) => { const n = new Set(prev); n.delete(id); return n; });
-        setTimeout(() => syncTasks().catch(() => {}), 300);
-      });
-    },
-    [deleteTask, syncTasks]
-  );
-
+  const [filter, setFilter] = useState<FilterMode>('open');
   const filtered = useMemo(() => {
-    let list = tasks;
-
-    if (filter === 'open') list = list.filter((t) => !t.completed);
-    if (filter === 'overdue') list = list.filter((t) => isOverdue(t.dueDate) && !t.completed);
-    if (filter === 'done') list = list.filter((t) => t.completed);
-
-    return list;
+    if (filter === 'open') return tasks.filter((t) => !t.completed);
+    if (filter === 'overdue') return tasks.filter((t) => isOverdue(t.dueDate) && !t.completed);
+    if (filter === 'done') return tasks.filter((t) => t.completed);
+    return tasks;
   }, [tasks, filter]);
-
-  const allFilteredSelected =
-    filtered.length > 0 && filtered.every((t) => selectedIds.has(t.id));
-
-  const handleSelectAll = useCallback(() => {
-    if (allFilteredSelected) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(filtered.map((t) => t.id)));
-    }
-  }, [allFilteredSelected, filtered]);
-
-  const handleBulkDelete = useCallback(() => {
-    const count = selectedIds.size;
-    const label = `${count} Task${count !== 1 ? 's' : ''} löschen?`;
-    const doDelete = () => {
-      deleteTasks(Array.from(selectedIds));
-      clearSelection();
-      setTimeout(() => syncTasks().catch(() => {}), 300);
-    };
-    if (Platform.OS === 'web') {
-      if ((window as any).confirm(label)) doDelete();
-    } else {
-      Alert.alert('Tasks löschen', label, [
-        { text: 'Abbrechen', style: 'cancel' },
-        { text: 'Löschen', style: 'destructive', onPress: doDelete },
-      ]);
-    }
-  }, [selectedIds, deleteTasks, clearSelection, syncTasks]);
-
-  const hasSelection = selectedIds.size > 0;
 
   return (
     <View style={styles.container}>
-      {/* TE-106: Notizblock- und Tasks-Bereich als zwei klar getrennte, gleich
-          gestaltete Boxen in einem ScrollView. Die Task-Liste liegt innerhalb
-          der Tasks-Box, damit der Bereich als geschlossene Einheit lesbar ist. */}
-      <ScrollView
-        contentContainerStyle={[styles.scrollContent, hasSelection && styles.listWithBulkBar]}
-        keyboardShouldPersistTaps="handled"
-      >
-        {/* ── Tasks-Bereich ── */}
+      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+        {/* ── Google Tasks (TE-3: nur Anzeige, gepflegt wird in Google) ── */}
         <View style={styles.groupCard}>
           <View style={styles.groupHeader}>
-            <Ionicons name="checkmark-circle-outline" size={18} color={colors.text} />
+            <Ionicons name="logo-google" size={16} color={colors.text} />
             <Text style={styles.groupTitle}>Google Tasks</Text>
-            <TouchableOpacity
-              onPress={() => router.push('/task/new')}
-              style={styles.bigAddBtn}
-              activeOpacity={0.85}
-            >
-              <Ionicons name="add" size={26} color={isDark ? colors.accentNeon : '#fff'} />
-            </TouchableOpacity>
           </View>
 
           <View style={styles.groupBody}>
-            {/* Kompakter Status-Filter (kein Gruppen-/Label-Filter mehr, TE-106) */}
             <View style={styles.filterRow}>
               {(['all', 'open', 'overdue', 'done'] as FilterMode[]).map((f) => {
                 const isActive = filter === f;
@@ -193,39 +104,27 @@ export function TaskListScreen() {
               })}
             </View>
 
-            {/* Verschmolzene, gerahmte Task-Liste – gleicher Look wie der Notizblock (TE-109) */}
             {filtered.length === 0 ? (
               <View style={styles.emptyInline}>
                 <Ionicons name="checkmark-done-circle-outline" size={44} color={colors.textMuted} />
-                <Text style={styles.emptyTitle}>Keine Tasks</Text>
-                <Text style={styles.emptySubtitle}>Tippe auf + um einen neuen Task anzulegen</Text>
+                <Text style={styles.emptyTitle}>Keine Google Tasks</Text>
+                <Text style={styles.emptySubtitle}>Angelegt wird in Google Tasks – hier erscheinen sie nach dem Sync.</Text>
               </View>
             ) : (
               <View style={styles.mergedList}>
                 {filtered.map((item, i) => (
-                  <TaskCard
-                    key={item.id}
-                    task={item}
-                    onPress={() => router.push(`/task/${item.id}` as any)}
-                    onToggle={() => handleToggle(item)}
-                    onDelete={() => handleSingleDelete(item.id, item.title)}
-                    isSelected={selectedIds.has(item.id)}
-                    onSelectToggle={() => toggleSelection(item.id)}
-                    isLast={i === filtered.length - 1}
-                  />
+                  <TaskCard key={item.id} task={item} isLast={i === filtered.length - 1} />
                 ))}
               </View>
             )}
           </View>
         </View>
 
-        {/* ── Notizblock-Bereich ── */}
-        {/* TE-23: kein flex:1/groupCardGrow mehr – die Notizen-Card folgt jetzt
-            darunter, die Personal-Tasks-Card soll sie nicht mehr nach unten drücken. */}
+        {/* ── Aufgaben (TE-3: ehemals Personal Tasks) ── */}
         <View style={styles.groupCard}>
           <View style={styles.groupHeader}>
-            <Ionicons name="document-text-outline" size={18} color={colors.text} />
-            <Text style={styles.groupTitle}>Personal Tasks</Text>
+            <Ionicons name="checkbox-outline" size={18} color={colors.text} />
+            <Text style={styles.groupTitle}>Aufgaben</Text>
             <TouchableOpacity
               onPress={() => scratchAddRef.current?.()}
               style={styles.bigAddBtn}
@@ -245,38 +144,14 @@ export function TaskListScreen() {
               onArchive={archiveNote}
               onRemoveHistory={removeHistory}
               onClearHistory={clearHistory}
+              onToIdea={taskToIdea}
             />
           </View>
         </View>
 
-        {/* ── Notizen-Bereich (TE-23: ehemals eigener "Notizen"-Tab) ── */}
-        <NotesSection />
+        {/* ── Ideen (TE-3: ehemals Notizen) ── */}
+        <IdeasSection onToTask={ideaToTask} />
       </ScrollView>
-
-      {hasSelection && (
-        <View style={styles.bulkBar}>
-          <TouchableOpacity style={styles.bulkSelectAll} onPress={handleSelectAll}>
-            <Ionicons
-              name={allFilteredSelected ? 'checkbox' : 'square-outline'}
-              size={20}
-              color={allFilteredSelected ? colors.accent : colors.textSecondary}
-            />
-            <Text style={styles.bulkSelectAllText}>
-              {allFilteredSelected ? 'Alle abwählen' : 'Alle auswählen'}
-            </Text>
-          </TouchableOpacity>
-
-          <View style={styles.bulkRight}>
-            <TouchableOpacity onPress={clearSelection}>
-              <Text style={styles.bulkCancelText}>Abbrechen</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.bulkDeleteBtn} onPress={handleBulkDelete}>
-              <Ionicons name="trash-outline" size={16} color="#fff" />
-              <Text style={styles.bulkDeleteText}>{selectedIds.size} löschen</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
     </View>
   );
 }
@@ -325,7 +200,6 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
       color: isDark ? c.accentNeon : '#fff',
       fontWeight: '600',
     },
-    listWithBulkBar: { paddingBottom: 90 },
     // TE-105/TE-106: gemeinsamer Box-Look für die zwei klar getrennten Bereiche.
     groupCard: {
       marginHorizontal: 12,
@@ -383,53 +257,6 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
       color: c.textSecondary,
       textAlign: 'center',
       paddingHorizontal: 40,
-    },
-    bulkBar: {
-      position: 'absolute',
-      bottom: 0,
-      left: 0,
-      right: 0,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingHorizontal: 16,
-      paddingTop: 12,
-      paddingBottom: 28,
-      backgroundColor: c.surface,
-      borderTopWidth: 1,
-      borderTopColor: c.border,
-    },
-    bulkSelectAll: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 6,
-    },
-    bulkSelectAllText: {
-      fontSize: 14,
-      color: c.textSecondary,
-    },
-    bulkRight: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 12,
-    },
-    bulkCancelText: {
-      fontSize: 14,
-      color: c.textSecondary,
-    },
-    bulkDeleteBtn: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 6,
-      backgroundColor: c.danger,
-      paddingHorizontal: 14,
-      paddingVertical: 8,
-      borderRadius: 20,
-    },
-    bulkDeleteText: {
-      fontSize: 14,
-      fontWeight: '600',
-      color: c.dangerFg,
     },
   });
 }

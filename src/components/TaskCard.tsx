@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Task } from '../types';
 import { GroupBadge } from './GroupBadge';
@@ -9,16 +9,13 @@ import { useTheme, ThemeColors } from '../utils/theme';
 
 interface Props {
   task: Task;
-  onPress: () => void;
-  onToggle: () => void;
-  onDelete: () => void;
-  isSelected?: boolean;
-  onSelectToggle?: () => void;
   // TE-109: letzte Zeile in der verschmolzenen Liste bekommt keine Trennlinie.
   isLast?: boolean;
 }
 
-export function TaskCard({ task, onPress, onToggle, onDelete, isSelected, onSelectToggle, isLast }: Props) {
+// TE-3: Google Tasks sind nur noch Anzeige – angelegt, abgehakt und gelöscht
+// wird ausschließlich in Google, die App holt sie per Sync nur ab.
+export function TaskCard({ task, isLast }: Props) {
   const { groups, settings } = useStore();
   const { colors, isDark } = useTheme();
   const styles = useMemo(() => makeStyles(colors, isDark), [colors, isDark]);
@@ -27,12 +24,9 @@ export function TaskCard({ task, onPress, onToggle, onDelete, isSelected, onSele
   const overdue = isOverdue(task.dueDate) && !task.completed;
   const dueToday = isDueToday(task.dueDate) && !task.completed;
 
-  const leftBorderColor = isSelected
-    ? colors.accent
-    : task.completed
+  const leftBorderColor = task.completed
     ? 'transparent'
-    // TE-124: wichtige Tasks bekommen denselben roten Akzent-Balken wie überfällige.
-    : task.important || overdue
+    : overdue
     ? colors.danger
     : dueToday
     ? colors.warning
@@ -41,26 +35,21 @@ export function TaskCard({ task, onPress, onToggle, onDelete, isSelected, onSele
   const isHighlighted = leftBorderColor !== 'transparent';
 
   return (
-    <TouchableOpacity
+    <View
       style={[
         styles.card,
         !isLast && styles.rowDivider,
-        task.completed && !isSelected && styles.completed,
+        task.completed && styles.completed,
         // TE-108: flache Listenzeile – nur ein dünner Akzent-Balken links bei
-        // überfällig/heute/ausgewählt, sonst keine eigene Umrandung.
+        // überfällig/heute, sonst keine eigene Umrandung.
         { borderLeftColor: leftBorderColor, borderLeftWidth: isHighlighted ? 3 : 0 },
-        isSelected && styles.selectedCard,
       ]}
-      onPress={onPress}
-      activeOpacity={0.7}
     >
-      <TouchableOpacity style={styles.toggleBtn} onPress={onToggle} hitSlop={8}>
-        <Ionicons
-          name={task.completed ? 'checkmark-circle' : 'ellipse-outline'}
-          size={24}
-          color={task.completed ? colors.success : colors.textMuted}
-        />
-      </TouchableOpacity>
+      <Ionicons
+        name={task.completed ? 'checkmark-circle' : 'ellipse-outline'}
+        size={24}
+        color={task.completed ? colors.success : colors.textMuted}
+      />
 
       <View style={styles.content}>
         <Text style={[styles.title, task.completed && styles.completedText]} numberOfLines={2}>
@@ -74,14 +63,6 @@ export function TaskCard({ task, onPress, onToggle, onDelete, isSelected, onSele
         ) : null}
 
         <View style={styles.meta}>
-          {/* TE-120: Wichtig-Label für manuell als wichtig markierte Tasks. */}
-          {task.important ? (
-            <View style={styles.importantBadge}>
-              <Ionicons name="flag" size={10} color={colors.dangerFg} />
-              <Text style={styles.importantBadgeText}>Wichtig</Text>
-            </View>
-          ) : null}
-
           {group ? <GroupBadge group={group} small /> : null}
 
           {task.dueDate ? (
@@ -102,33 +83,9 @@ export function TaskCard({ task, onPress, onToggle, onDelete, isSelected, onSele
               </Text>
             </View>
           ) : null}
-
-          {(task.attachments ?? []).length > 0 ? (
-            <View style={styles.dateRow}>
-              <Ionicons name="attach-outline" size={12} color={colors.textSecondary} />
-              <Text style={styles.date}>{task.attachments.length}</Text>
-            </View>
-          ) : null}
-
-          {task.googleEventId ? (
-            <Ionicons name="calendar" size={12} color={colors.accent} />
-          ) : null}
         </View>
       </View>
-
-      <View style={styles.actions}>
-        <TouchableOpacity onPress={onDelete} hitSlop={8} style={styles.actionBtn}>
-          <Ionicons name="trash-outline" size={18} color={colors.textMuted} />
-        </TouchableOpacity>
-        <TouchableOpacity onPress={onSelectToggle} hitSlop={8} style={styles.actionBtn}>
-          <Ionicons
-            name={isSelected ? 'checkbox' : 'square-outline'}
-            size={18}
-            color={isSelected ? colors.accent : colors.textMuted}
-          />
-        </TouchableOpacity>
-      </View>
-    </TouchableOpacity>
+    </View>
   );
 }
 
@@ -150,11 +107,6 @@ function makeStyles(c: ThemeColors, _isDark: boolean) {
     completed: {
       opacity: 0.55,
     },
-    selectedCard: {
-      backgroundColor: c.accent + '15',
-      borderRadius: 8,
-    },
-    toggleBtn: {},
     content: {
       flex: 1,
       gap: 2,
@@ -183,32 +135,9 @@ function makeStyles(c: ThemeColors, _isDark: boolean) {
       alignItems: 'center',
       gap: 3,
     },
-    importantBadge: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 3,
-      paddingHorizontal: 6,
-      paddingVertical: 2,
-      borderRadius: 8,
-      backgroundColor: c.danger,
-      alignSelf: 'flex-start',
-    },
-    importantBadgeText: {
-      fontSize: 10,
-      fontWeight: '700',
-      color: c.dangerFg,
-    },
     date: {
       fontSize: 11,
       color: c.textSecondary,
-    },
-    actions: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 4,
-    },
-    actionBtn: {
-      padding: 2,
     },
   });
 }

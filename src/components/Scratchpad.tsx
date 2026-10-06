@@ -19,19 +19,20 @@ import { DatePickerModal } from './DatePickerModal';
 import { formatDate, isOverdue, isDueToday } from '../utils/dateFormat';
 import { useStore } from '../store';
 
-// TE-141: Personal Tasks – pro Eintrag optional ein Wichtig-Label und ein
+// TE-141/TE-3: Aufgaben (ehemals Personal Tasks) – pro Eintrag optional ein
 // Fälligkeitsdatum (lokaler Mittag als ISO-String, wie bei den normalen Tasks).
+// Das frühere Wichtig-Label ist entfallen (TE-3); Altdaten tragen das Feld
+// evtl. noch, es wird ignoriert.
 export interface ScratchEntry {
   id?: string;
   text: string;
   color: string;
   done?: boolean;
-  important?: boolean;
   dueDate?: string | null;
 }
 
-// TE-141: Rot des Wichtig-Labels (Toggle + Punkt), identisch zum NotesScreen.
-const IMPORTANT_RED = '#EF4444';
+// Rot für überfällige Daten.
+const OVERDUE_RED = '#EF4444';
 
 // TE-141: ein Date auf lokalen Mittag normalisieren, damit Zeitzonen das Datum
 // nicht um einen Tag verschieben (gleiche Logik wie utils/dateFormat).
@@ -48,11 +49,10 @@ function dueRank(entry: ScratchEntry): number {
   return 2;
 }
 
-// TE-144: Vergleichsfunktion – wichtig zuerst, dann nach Fälligkeits-Gruppe,
+// TE-144: Vergleichsfunktion – nach Fälligkeits-Gruppe,
 // innerhalb einer Gruppe früheres Datum zuerst. Bewusst NICHT nach Text – Tippen
 // ändert die Sortierposition damit nie.
 export function scratchCompare(a: ScratchEntry, b: ScratchEntry): number {
-  if (!!a.important !== !!b.important) return a.important ? -1 : 1;
   const ra = dueRank(a), rb = dueRank(b);
   if (ra !== rb) return ra - rb;
   if (a.dueDate && b.dueDate) {
@@ -71,13 +71,12 @@ export function sortScratch(entries: ScratchEntry[]): ScratchEntry[] {
 }
 
 // TE-112/TE-144: ein im Verlauf archivierter Eintrag (gelöscht ODER erledigt).
-// important/dueDate werden mitgeführt, damit „wieder aktivieren" alles zurückholt.
+// dueDate wird mitgeführt, damit „wieder aktivieren" alles zurückholt.
 export interface ScratchHistoryEntry {
   id: string;
   text: string;
   color: string;
   archivedAt: string;
-  important?: boolean;
   dueDate?: string | null;
 }
 
@@ -140,9 +139,15 @@ export function serializeScratchpad(entries: ScratchEntry[]): string {
   return JSON.stringify(entries);
 }
 
+/** Neue Aufgabe oben einfügen (leere Platzhalter fallen dabei weg). */
+export function prependScratch(raw: string, text: string): string {
+  const current = parseScratchpad(raw).filter((e) => e.text.trim() !== '');
+  return serializeScratchpad([{ id: makeNoteId(), text, color: NOTE_DEFAULT_COLOR }, ...current]);
+}
+
 export function Scratchpad({
   value, onChange, isDark, colors, registerAdd, readOnly = false,
-  history = [], onArchive, onRemoveHistory, onClearHistory,
+  history = [], onArchive, onRemoveHistory, onClearHistory, onToIdea,
 }: {
   value: string;
   // Im readOnly-Modus nicht erforderlich – die Anzeige verändert nichts.
@@ -158,6 +163,9 @@ export function Scratchpad({
   onArchive?: (entry: ScratchEntry) => void;
   onRemoveHistory?: (id: string) => void;
   onClearHistory?: () => void;
+  // TE-3: Aufgabe in eine Idee umwandeln – Aufrufer legt die Idee an, hier wird
+  // der Eintrag (ohne Verlauf) entfernt.
+  onToIdea?: (entry: ScratchEntry) => void;
 }) {
   const entries = useMemo(() => parseScratchpad(value), [value]);
   const inputRefs = useRef<(any)[]>([]);
@@ -192,12 +200,14 @@ export function Scratchpad({
     emit(serializeScratchpad(entries.filter((_, i) => i !== idx)));
   }, [entries, emit, onArchive]);
 
-  // TE-141: Wichtig-Label umschalten. Die Anzeige sortiert sich selbst (siehe
-  // displayRows), daher hier nur das Feld setzen.
-  const toggleImportant = useCallback((idx: number) => {
-    const next = entries.map((e, i) => i === idx ? { ...e, important: !e.important } : e);
-    emit(serializeScratchpad(next));
-  }, [entries, emit]);
+  // TE-3: Aufgabe → Idee. Kein Verlaufseintrag, die Aufgabe lebt als Idee weiter.
+  const moveToIdea = useCallback((idx: number) => {
+    const entry = entries[idx];
+    if (!entry || entry.text.trim() === '') return;
+    onToIdea?.(entry);
+    const rest = entries.filter((_, i) => i !== idx);
+    emit(serializeScratchpad(rest.length > 0 ? rest : [{ id: makeNoteId(), text: '', color: NOTE_DEFAULT_COLOR }]));
+  }, [entries, emit, onToIdea]);
 
   // TE-141: Fälligkeitsdatum setzen (null = entfernen).
   const setDue = useCallback((idx: number, dueDate: string | null) => {
@@ -281,13 +291,13 @@ export function Scratchpad({
     setTimeout(() => inputRefs.current[Math.max(0, idx - 1)]?.focus(), 40);
   }, [entries, emit, updateEntry, onArchive]);
 
-  // TE-112/TE-144: archivierten Eintrag wieder aktivieren – inkl. Wichtig-Label
-  // und Fälligkeitsdatum. Danach neu sortieren, damit er an die richtige Stelle
+  // TE-112/TE-144: archivierten Eintrag wieder aktivieren – inkl.
+  // Fälligkeitsdatum. Danach neu sortieren, damit er an die richtige Stelle
   // rutscht (nicht stur oben).
   const restoreFromHistory = useCallback((h: ScratchHistoryEntry) => {
     const note: ScratchEntry = {
       id: makeNoteId(), text: h.text, color: h.color,
-      important: h.important, dueDate: h.dueDate ?? null,
+      dueDate: h.dueDate ?? null,
     };
     // Eine einzelne leere Platzhalter-Notiz dabei ersetzen statt davor stapeln.
     const base = entries.length === 1 && entries[0].text === '' ? [] : entries;
@@ -336,8 +346,6 @@ export function Scratchpad({
             >
               {entry.text}
             </Text>
-            {/* TE-141: Wichtig-Punkt auch im Dashboard-Lesemodus. */}
-            {entry.important ? <View style={padStyles.importantDotCompact} /> : null}
             <View style={[padStyles.colorDotCompact, { backgroundColor: entry.color }]} />
           </View>
         ))}
@@ -353,7 +361,7 @@ export function Scratchpad({
           key={entry.id ?? storedIdx}
           style={pos < displayRows.length - 1 ? { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border } : undefined}
         >
-          {/* Zeile im Task-Stil: runde Checkbox + Text + Wichtig/Datum/Farbe/Trash. */}
+          {/* Zeile im Task-Stil: runde Checkbox + Text + Datum/→Idee/Trash. */}
           <View style={padStyles.row}>
             {/* TE-144: Häkchen erledigt den Eintrag → ab in die History. */}
             <Pressable onPress={() => completeEntry(storedIdx)} hitSlop={8}>
@@ -370,7 +378,7 @@ export function Scratchpad({
               onChangeText={(t) => updateEntry(storedIdx, t)}
               onKeyPress={(e) => handleKeyPress(storedIdx, e)}
               onBlur={() => setDraftId((cur) => (cur === entry.id ? null : cur))}
-              placeholder={displayRows.length === 1 ? 'Personal Task…' : ''}
+              placeholder={displayRows.length === 1 ? 'Aufgabe…' : ''}
               placeholderTextColor={colors.placeholder}
               returnKeyType="done"
               blurOnSubmit
@@ -379,21 +387,13 @@ export function Scratchpad({
             {entry.dueDate ? (
               <Pressable onPress={() => setDueIdx((cur) => (cur === storedIdx ? null : storedIdx))} hitSlop={6}>
                 <Text
-                  style={[padStyles.dueText, { color: isOverdue(entry.dueDate) ? IMPORTANT_RED : colors.textMuted }]}
+                  style={[padStyles.dueText, { color: isOverdue(entry.dueDate) ? OVERDUE_RED : colors.textMuted }]}
                   numberOfLines={1}
                 >
                   {formatDate(entry.dueDate, dateFormat)}
                 </Text>
               </Pressable>
             ) : null}
-            {/* TE-141: Wichtig-Label umschalten. */}
-            <Pressable onPress={() => toggleImportant(storedIdx)} hitSlop={8} style={padStyles.iconBtn}>
-              <Ionicons
-                name={entry.important ? 'flag' : 'flag-outline'}
-                size={18}
-                color={entry.important ? IMPORTANT_RED : colors.textMuted}
-              />
-            </Pressable>
             {/* TE-141: Fälligkeits-Auswahl auf-/zuklappen. */}
             <Pressable onPress={() => setDueIdx((cur) => (cur === storedIdx ? null : storedIdx))} hitSlop={8} style={padStyles.iconBtn}>
               <Ionicons
@@ -402,6 +402,11 @@ export function Scratchpad({
                 color={entry.dueDate ? colors.text : colors.textMuted}
               />
             </Pressable>
+            {onToIdea && (
+              <Pressable onPress={() => moveToIdea(storedIdx)} hitSlop={8} style={padStyles.iconBtn} accessibilityLabel="In Idee umwandeln">
+                <Ionicons name="bulb-outline" size={18} color={colors.textMuted} />
+              </Pressable>
+            )}
             <Pressable onPress={() => removeEntry(storedIdx)} hitSlop={8} style={padStyles.trashBtn}>
               <Ionicons name="trash-outline" size={18} color={colors.textMuted} />
             </Pressable>
@@ -568,15 +573,7 @@ const padStyles = StyleSheet.create({
     borderRadius: 4,
     flexShrink: 0,
   },
-  // TE-141: roter Wichtig-Punkt im kompakten Lesemodus (Dashboard).
-  importantDotCompact: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: IMPORTANT_RED,
-    flexShrink: 0,
-  },
-  // TE-141: Icon-Button (Wichtig/Datum) im bearbeitbaren Block.
+  // TE-141: Icon-Button (Datum/→Idee) im bearbeitbaren Block.
   iconBtn: {
     padding: 2,
     flexShrink: 0,
