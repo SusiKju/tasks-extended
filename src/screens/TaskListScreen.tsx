@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useCallback, useRef } from 'react';
+import React, { useMemo, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,7 +9,6 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useStore } from '../store';
 import { TaskCard } from '../components/TaskCard';
-import { isOverdue } from '../utils/dateFormat';
 import { useTheme, ThemeColors, neonGlow } from '../utils/theme';
 import { Scratchpad, ScratchEntry, prependScratch } from '../components/Scratchpad';
 import { useScratchpad } from '../hooks/useScratchpad';
@@ -17,8 +16,6 @@ import { IdeasSection } from '../components/IdeasSection';
 import { addQuickNote } from '../services/quickNotesService';
 import { useFamily } from '../hooks/useFamily';
 import { useFirebaseAuth } from '../hooks/useFirebaseAuth';
-
-type FilterMode = 'all' | 'open' | 'overdue' | 'done';
 
 export function TaskListScreen() {
   const tasks = useStore((st) => st.tasks);
@@ -52,13 +49,8 @@ export function TaskListScreen() {
     addQuickNote(familyId, user.uid, entry.text).catch(() => {});
   }, [familyId, user?.uid]);
 
-  const [filter, setFilter] = useState<FilterMode>('open');
-  const filtered = useMemo(() => {
-    if (filter === 'open') return tasks.filter((t) => !t.completed);
-    if (filter === 'overdue') return tasks.filter((t) => isOverdue(t.dueDate) && !t.completed);
-    if (filter === 'done') return tasks.filter((t) => t.completed);
-    return tasks;
-  }, [tasks, filter]);
+  // TE-23: kein Filter mehr – immer nur offene Google Tasks.
+  const filtered = useMemo(() => tasks.filter((t) => !t.completed), [tasks]);
 
   return (
     <View style={styles.container}>
@@ -68,50 +60,22 @@ export function TaskListScreen() {
           <View style={styles.groupHeader}>
             <Ionicons name="logo-google" size={16} color={colors.text} />
             <Text style={styles.groupTitle}>Google Tasks</Text>
+            {/* TE-22: sichtbarer Hinweis, dass hier nichts bearbeitet wird. */}
+            <View style={styles.readOnlyBadge}>
+              <Ionicons name="lock-closed" size={11} color={colors.textSecondary} />
+              <Text style={styles.readOnlyText}>Nur lesen</Text>
+            </View>
           </View>
 
           <View style={styles.groupBody}>
-            <View style={styles.filterRow}>
-              {(['all', 'open', 'overdue', 'done'] as FilterMode[]).map((f) => {
-                const isActive = filter === f;
-                const isDanger = f === 'overdue' && isActive;
-                return (
-                  <TouchableOpacity
-                    key={f}
-                    style={[
-                      styles.chip,
-                      isActive && (isDanger ? styles.chipDanger : styles.chipActive),
-                    ]}
-                    onPress={() => setFilter(f)}
-                  >
-                    <Text
-                      style={[
-                        styles.chipText,
-                        isActive && styles.chipTextActive,
-                        !isActive && f === 'overdue' && { color: colors.danger },
-                      ]}
-                    >
-                      {f === 'all'
-                        ? 'Alle'
-                        : f === 'open'
-                        ? 'Offen'
-                        : f === 'overdue'
-                        ? 'Abgelaufen'
-                        : 'Erledigt'}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-
             {filtered.length === 0 ? (
               <View style={styles.emptyInline}>
                 <Ionicons name="checkmark-done-circle-outline" size={44} color={colors.textMuted} />
-                <Text style={styles.emptyTitle}>Keine Google Tasks</Text>
+                <Text style={styles.emptyTitle}>Keine offenen Google Tasks</Text>
                 <Text style={styles.emptySubtitle}>Angelegt wird in Google Tasks – hier erscheinen sie nach dem Sync.</Text>
               </View>
             ) : (
-              <View style={styles.mergedList}>
+              <View style={[styles.mergedList, styles.readOnlyList]}>
                 {filtered.map((item, i) => (
                   <TaskCard key={item.id} task={item} isLast={i === filtered.length - 1} />
                 ))}
@@ -162,44 +126,6 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
     // TE-117: flexGrow, damit die Tasks-Karte unten den Rest der Bildschirmhöhe
     // füllen kann, statt nackten Leerraum unter den Karten zu lassen.
     scrollContent: { paddingTop: 4, paddingBottom: 32, flexGrow: 1 },
-    // TE-106: kompakter Status-Filter (kleinere Chips, kein H-Padding – sitzt in der Box).
-    filterRow: {
-      flexDirection: 'row',
-      gap: 6,
-      flexWrap: 'wrap',
-      alignItems: 'center',
-    },
-    chip: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingHorizontal: 9,
-      paddingVertical: 3,
-      borderRadius: 11,
-      backgroundColor: c.surface,
-      borderWidth: 1,
-      borderColor: c.border,
-      gap: 4,
-    },
-    chipActive: {
-      backgroundColor: isDark ? c.accentNeon + '18' : c.accent,
-      borderColor: isDark ? c.accentNeon : c.accent,
-      borderWidth: isDark ? 1.5 : 1,
-      ...(isDark ? neonGlow(c.accentNeon, 'medium') : {}),
-    },
-    chipDanger: {
-      backgroundColor: isDark ? c.danger + '18' : c.danger,
-      borderColor: c.danger,
-      borderWidth: isDark ? 1.5 : 1,
-      ...(isDark ? neonGlow(c.danger, 'medium') : {}),
-    },
-    chipText: {
-      fontSize: 12,
-      color: c.textSecondary,
-    },
-    chipTextActive: {
-      color: isDark ? c.accentNeon : '#fff',
-      fontWeight: '600',
-    },
     // TE-105/TE-106: gemeinsamer Box-Look für die zwei klar getrennten Bereiche.
     groupCard: {
       marginHorizontal: 12,
@@ -232,6 +158,20 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
       overflow: 'hidden',
       backgroundColor: c.surface,
     },
+    // TE-22: Read-only-Kennzeichnung der Google-Tasks-Box.
+    readOnlyBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.surface,
+    },
+    readOnlyText: { fontSize: 11, fontWeight: '600', color: c.textSecondary },
+    readOnlyList: { borderStyle: 'dashed' },
     // Großer, einheitlicher +-Button (ersetzt FAB + kleinen Notizblock-+).
     // Look identisch zum vorherigen FAB: Neon-Rahmen+Glow im Dark, gefüllt im Light.
     bigAddBtn: {

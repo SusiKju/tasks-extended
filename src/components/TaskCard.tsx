@@ -15,6 +15,7 @@ interface Props {
 
 // TE-3: Google Tasks sind nur noch Anzeige – angelegt, abgehakt und gelöscht
 // wird ausschließlich in Google, die App holt sie per Sync nur ab.
+// TE-22: daher auch keine Checkbox und gedämpfte Schrift (Read-only-Look).
 export function TaskCard({ task, isLast }: Props) {
   const { groups, settings } = useStore();
   const { colors, isDark } = useTheme();
@@ -45,12 +46,7 @@ export function TaskCard({ task, isLast }: Props) {
         { borderLeftColor: leftBorderColor, borderLeftWidth: isHighlighted ? 3 : 0 },
       ]}
     >
-      <Ionicons
-        name={task.completed ? 'checkmark-circle' : 'ellipse-outline'}
-        size={24}
-        color={task.completed ? colors.success : colors.textMuted}
-      />
-
+      {/* TE-22: keine Checkbox – abgehakt wird nur in Google. */}
       <View style={styles.content}>
         <Text style={[styles.title, task.completed && styles.completedText]} numberOfLines={2}>
           {task.title}
@@ -114,7 +110,7 @@ function makeStyles(c: ThemeColors, _isDark: boolean) {
     title: {
       fontSize: 15,
       fontWeight: '500',
-      color: c.text,
+      color: c.textSecondary,
     },
     completedText: {
       textDecorationLine: 'line-through',
