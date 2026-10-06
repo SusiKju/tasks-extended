@@ -2,12 +2,13 @@
  * GeistesKacheln.tsx
  *
  * Persönliche Gedanken-Kacheln auf dem Dashboard.
- * Design: kompakte Kachel mit Emoji, Kurz-Label und Reifegrad-Punkten
+ * Design: kompakte Kachel mit Icon, Kurz-Label und Reifegrad-Punkten
  * (Funke → Gedanke → Plan → Aufgabe). Antippen öffnet das Sheet: dort wird
  * der nächste konkrete Schritt als Personal Task angelegt.
- * Symbol: Emoji, automatisch aus Label/Text vorgeschlagen (utils/emojiSuggest);
- * Altbestand mit Ionicons-Namen bekommt automatisch ein Emoji. Farbe ergibt
- * sich aus der Emoji-Kategorie (emojiColor) – keine manuelle Farbwahl.
+ * Symbol: MaterialCommunityIcons, immer automatisch aus Label/Text gewählt
+ * (utils/iconSuggest) – keine manuelle Symbol- oder Farbwahl. Farbe ergibt
+ * sich aus der Kategorie des Icons (iconColor). Weiter gereifte Geistesblitze
+ * stehen vorn und sind ab „Plan“ größer.
  * URLs im Text werden als kompakte Link-Chips (Favicon + Domain) geführt.
  */
 
@@ -27,7 +28,7 @@ import {
   Image,
   Linking,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { ThemeColors, SOFT_BORDER } from '../utils/theme';
 import { useFirebaseAuth } from '../hooks/useFirebaseAuth';
 import { useFamily } from '../hooks/useFamily';
@@ -49,7 +50,7 @@ import {
   parseScratchHistory,
   serializeScratchpad,
 } from './Scratchpad';
-import { suggestEmojis, isIoniconName, emojiColor } from '../utils/emojiSuggest';
+import { autoIcon, iconColor } from '../utils/iconSuggest';
 
 // ─── Typen ────────────────────────────────────────────────────────────────────
 
@@ -58,26 +59,19 @@ type LinkedTask = { text: string; done: boolean } | null;
 
 // ─── Symbol ───────────────────────────────────────────────────────────────────
 
-const DEFAULT_EMOJI = '💡';
+type McIconName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
 
-/** Auswahl, wenn Label/Text (noch) nichts treffen. */
-const QUICK_EMOJIS = ['💡', '⭐', '❤️', '🎯', '🛒', '✈️', '🎁', '🏠', '📚', '💰', '🏃', '🎵', '📷', '🍽️', '🌱', '🚗'];
-
-function autoEmoji(label: string, text: string): string {
-  return suggestEmojis(label, text, 1)[0] ?? DEFAULT_EMOJI;
-}
-
-/** Gespeichertes Emoji, sonst (leer oder Ionicons-Altbestand) automatisch aus Label/Text. */
+/** Symbol immer aus Label/Text – ein gespeichertes `emoji` (Altbestand) wird ignoriert. */
 function symbolFor(k: GeistesKachel): string {
-  return k.emoji && !isIoniconName(k.emoji) ? k.emoji : autoEmoji(k.label ?? '', k.text);
+  return autoIcon(k.label ?? '', k.text);
 }
 
-function colorFor(symbol: string, label: string, text: string): string {
-  return emojiColor(symbol, label.trim() || text);
+function colorFor(icon: string, label: string, text: string): string {
+  return iconColor(icon, label.trim() || text);
 }
 
-function KachelSymbol({ value, size }: { value: string; size: number }) {
-  return <Text style={{ fontSize: Math.round(size * 0.9), lineHeight: Math.round(size * 1.15) }}>{value}</Text>;
+function KachelSymbol({ value, size, color }: { value: string; size: number; color: string }) {
+  return <MaterialCommunityIcons name={value as McIconName} size={size} color={color} />;
 }
 
 // ─── Links ────────────────────────────────────────────────────────────────────
@@ -167,6 +161,9 @@ function dueISO(key: DueKey): string | null {
 
 const LABEL_MAX_LENGTH = 16;
 
+const snapshot = (text: string, links: string[], label: string, stage: GeistesStage, icon: string | null) =>
+  JSON.stringify([text.trim(), [...links].sort(), label.trim(), stage, icon]);
+
 interface ModalProps {
   visible: boolean;
   editing: GeistesKachel | null;
@@ -180,18 +177,16 @@ interface ModalProps {
 
 function KachelModal({ visible, editing, linkedTask, onSave, onCreateTask, onDelete, onClose, colors }: ModalProps) {
   const [text, setText] = useState('');
-  const [icon, setIcon] = useState(DEFAULT_EMOJI);
   const [label, setLabel] = useState('');
   const [links, setLinks] = useState<string[]>([]);
   const [textHeight, setTextHeight] = useState(0);
   const [stage, setStage] = useState<GeistesStage>('funke');
   const [step, setStep] = useState('');
   const [due, setDue] = useState<DueKey>(null);
-  const [emojiQuery, setEmojiQuery] = useState('');
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [iconLocked, setIconLocked] = useState(false);
   const inputRef = useRef<TextInput>(null);
+  const initial = useRef('');
 
   useEffect(() => {
     if (visible) {
@@ -200,23 +195,17 @@ function KachelModal({ visible, editing, linkedTask, onSave, onCreateTask, onDel
       setText(parsed.text);
       setLinks([...new Set([...(editing?.links ?? []), ...parsed.links])]);
       setTextHeight(0);
-      const ownEmoji = editing?.emoji && !isIoniconName(editing.emoji) ? editing.emoji : null;
-      setIcon(ownEmoji ?? (editing ? symbolFor(editing) : DEFAULT_EMOJI));
       setLabel(editing?.label ?? '');
       setStage(editing?.stage ?? 'funke');
       setStep('');
       setDue(null);
-      setEmojiQuery('');
-      setIconLocked(!!ownEmoji);
+      initial.current = snapshot(parsed.text, [...new Set([...(editing?.links ?? []), ...parsed.links])], editing?.label ?? '', editing?.stage ?? 'funke', null);
       if (!editing) setTimeout(() => inputRef.current?.focus(), 120);
     }
   }, [visible, editing]);
 
-  // Auto-Emoji, solange der User keins selbst gewählt hat.
-  useEffect(() => {
-    if (!iconLocked && (text || label)) setIcon(autoEmoji(label, text));
-  }, [text, label, iconLocked]);
-
+  // Symbol folgt live dem Inhalt; keine manuelle Wahl.
+  const icon = useMemo(() => autoIcon(label, text), [label, text]);
   const color = colorFor(icon, label, text);
 
   // Eingefügte URLs sofort zu Chips machen. Beim Tippen erst beim Verlassen des
@@ -230,15 +219,6 @@ function KachelModal({ visible, editing, linkedTask, onSave, onCreateTask, onDel
     if (value.length - text.length > 8) takeLinks(value);
     else setText(value);
   };
-
-  const emojiChoices = useMemo(() => {
-    const found = emojiQuery.trim()
-      ? suggestEmojis(emojiQuery, '', 16)
-      : suggestEmojis(label, text, 12);
-    const list = found.length ? found : QUICK_EMOJIS;
-    // Aktuelle Wahl immer sichtbar halten (auch Altbestand-Icon).
-    return list.includes(icon) ? list : [icon, ...list];
-  }, [emojiQuery, label, text, icon]);
 
   /** Text + Links final, falls noch eine getippte URL im Text steht. */
   const finalParts = () => {
@@ -256,6 +236,17 @@ function KachelModal({ visible, editing, linkedTask, onSave, onCreateTask, onDel
       onClose();
     }
     finally { setSaving(false); }
+  };
+
+  // Tippen daneben / Zurück übernimmt Änderungen statt sie zu verwerfen (TE-13).
+  const dirty = () => {
+    const f = finalParts();
+    return snapshot(f.text, f.links, label, stage, null) !== initial.current;
+  };
+  const dismiss = () => {
+    if (saving || deleting) return;
+    if (hasContent && dirty()) handleSave();
+    else onClose();
   };
 
   const handleCreateTask = async () => {
@@ -278,9 +269,9 @@ function KachelModal({ visible, editing, linkedTask, onSave, onCreateTask, onDel
   const taskOpen = stage === 'aufgabe' && linkedTask && !linkedTask.done;
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={dismiss}>
       <KeyboardAvoidingView style={s.overlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <Pressable style={StyleSheet.absoluteFill} onPress={dismiss} />
         <ScrollView
           style={[s.sheet, { backgroundColor: colors.surface, borderTopColor: color }]}
           contentContainerStyle={s.sheetContent}
@@ -289,7 +280,7 @@ function KachelModal({ visible, editing, linkedTask, onSave, onCreateTask, onDel
 
           {/* Vorschau-Symbol */}
           <View style={[s.previewIcon, { borderColor: color, backgroundColor: color + '22' }]}>
-            <KachelSymbol value={icon} size={24} />
+            <KachelSymbol value={icon} size={24} color={color} />
           </View>
 
           {/* Texteingabe */}
@@ -405,29 +396,6 @@ function KachelModal({ visible, editing, linkedTask, onSave, onCreateTask, onDel
             </>
           )}
 
-          {/* Emoji-Auswahl: Vorschläge aus Label/Text, oder per Suche */}
-          <Text style={[s.pickerLabel, { color: colors.textMuted }]}>Symbol</Text>
-          <TextInput
-            style={[s.searchInput, { color: colors.text, borderColor: SOFT_BORDER }]}
-            value={emojiQuery}
-            onChangeText={setEmojiQuery}
-            placeholder="Emoji suchen, z. B. Zug, Garten, Geschenk"
-            placeholderTextColor={colors.textMuted}
-            accessibilityLabel="Emoji suchen"
-          />
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.iconRow} keyboardShouldPersistTaps="handled">
-            {emojiChoices.map((em) => (
-              <Pressable
-                key={em}
-                style={[s.iconBtn, icon === em && { borderColor: color, backgroundColor: color + '33' }]}
-                onPress={() => { setIcon(em); setIconLocked(true); }}
-                accessibilityLabel={`Symbol ${em}`}
-              >
-                <KachelSymbol value={em} size={22} />
-              </Pressable>
-            ))}
-          </ScrollView>
-
           {/* Aktionen */}
           <View style={s.actions}>
             {editing && (
@@ -482,7 +450,7 @@ function KachelCard({ kachel, onPress, size, colors, compact, attention }: {
       onPress={onPress}
       accessibilityLabel={`Geistesblitz ${label ?? kachel.text}`}
     >
-      <KachelSymbol value={symbol} size={Math.round(size * (compact && label ? 0.3 : 0.38))} />
+      <KachelSymbol value={symbol} size={Math.round(size * (compact && label ? 0.34 : 0.42))} color={compact ? color : '#fff'} />
       {compact && label ? (
         <Text style={[s.cardLabel, { color: colors.textSecondary }]} numberOfLines={1}>{label}</Text>
       ) : null}
@@ -562,6 +530,12 @@ export function GeistesKacheln({ colors, isDark, areaWidth, columns, compact = f
   const aw = areaWidth ?? Dimensions.get('window').width;
   const tileSize = Math.floor((aw - 32 - (cols - 1) * 6) / cols);
 
+  // Weiter gereift = weiter vorn; innerhalb gleicher Stufe neueste zuerst.
+  const sortedTiles = useMemo(
+    () => [...tiles].sort((a, b) => stageIndex(b.stage) - stageIndex(a.stage) || b.createdAt.localeCompare(a.createdAt)),
+    [tiles],
+  );
+
   return (
     <View style={s.section}>
       <View style={s.header}>
@@ -603,12 +577,13 @@ export function GeistesKacheln({ colors, isDark, areaWidth, columns, compact = f
         </Pressable>
       ) : (
         <View style={s.grid}>
-          {tiles.map((k) => (
+          {sortedTiles.map((k) => (
             <KachelCard
               key={k.id}
               kachel={k}
               onPress={() => openEdit(k)}
-              size={tileSize}
+              // Ab „Plan“ (3 Punkte) etwas größer – Reife soll man sehen.
+              size={stageIndex(k.stage) >= 2 ? Math.round(tileSize * 1.25) : tileSize}
               colors={colors}
               compact={compact}
               attention={needsStep(k, linkedFor(k))}
@@ -651,7 +626,7 @@ const s = StyleSheet.create({
   headerTitle: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8 },
   attention: { fontSize: 11, fontWeight: '600' },
 
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, alignItems: 'center' },
   // Redesign: Radius an die Countdown-/Artefakt-Mini-Kachel angeglichen
   // (14 statt 10) – wirkten nebeneinander sonst unterschiedlich rund.
   card: { borderRadius: 14, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4, gap: 2 },
@@ -701,10 +676,6 @@ const s = StyleSheet.create({
     borderWidth: 1.5, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10,
     fontSize: 14,
   },
-  searchInput: {
-    borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8,
-    fontSize: 13,
-  },
 
   pickerLabel: { fontSize: 11, fontWeight: '600', letterSpacing: 0.5, textTransform: 'uppercase' },
 
@@ -723,14 +694,6 @@ const s = StyleSheet.create({
   chip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 7 },
   chipText: { fontSize: 13, fontWeight: '600' },
   taskBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 12, paddingVertical: 13 },
-
-  iconRow: { gap: 8, paddingVertical: 2 },
-  iconBtn: {
-    width: 44, height: 44, borderRadius: 10,
-    alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1.5, borderColor: '#FFFFFF15',
-    backgroundColor: '#FFFFFF08',
-  },
 
   actions: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 10 },
   btn: { borderRadius: 10, paddingHorizontal: 16, paddingVertical: 10, alignItems: 'center', justifyContent: 'center' },
