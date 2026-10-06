@@ -8,7 +8,7 @@
  */
 
 import { db } from './firebase';
-import { doc, setDoc, onSnapshot } from 'firebase/firestore';
+import { doc, setDoc, getDoc, onSnapshot } from 'firebase/firestore';
 
 /**
  * Abonniert den Scratchpad-Inhalt des Users in Echtzeit.
@@ -33,6 +33,16 @@ export function subscribeToScratchpad(
     },
     () => {}, // Fehler stillschweigend ignorieren
   );
+}
+
+/**
+ * Liest den Scratchpad-Inhalt einmalig – für Schreibzugriffe von außerhalb des
+ * Notizblocks (z. B. Geistesblitz → Aufgabe), damit kein veralteter lokaler
+ * Stand serverseitige Einträge überschreibt.
+ */
+export async function loadScratchpad(familyId: string, uid: string): Promise<string> {
+  const snap = await getDoc(doc(db, 'families', familyId, 'scratchpadByUser', uid));
+  return snap.data()?.raw ?? '';
 }
 
 /**
