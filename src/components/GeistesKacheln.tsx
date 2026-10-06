@@ -43,6 +43,9 @@ import {
 import { loadScratchpad, saveScratchpad } from '../services/scratchpadService';
 import { ScratchEntry, makeNoteId, parseScratchpad, serializeScratchpad } from './Scratchpad';
 import { LinkChip } from './LinkChip';
+import { DatePickerModal } from './DatePickerModal';
+import { addCountdown } from '../services/countdownsService';
+import { DEFAULT_DASHBOARD_BLOCKS } from '../types';
 import { autoIcon, iconColor } from '../utils/iconSuggest';
 
 // ─── Typen ────────────────────────────────────────────────────────────────────
@@ -137,12 +140,13 @@ interface ModalProps {
   editing: GeistesKachel | null;
   onSave: (text: string, icon: string, color: string, label: string, stage: GeistesStage, links: string[]) => Promise<void>;
   onCreateTask: (step: string, dueDate: string | null, text: string, links: string[]) => Promise<void>;
+  onCreateCountdown: (date: Date, c: { title: string; text: string; links: string[]; icon: string; color: string }) => Promise<void>;
   onDelete: () => Promise<void>;
   onClose: () => void;
   colors: ThemeColors;
 }
 
-function KachelModal({ visible, editing, onSave, onCreateTask, onDelete, onClose, colors }: ModalProps) {
+function KachelModal({ visible, editing, onSave, onCreateTask, onCreateCountdown, onDelete, onClose, colors }: ModalProps) {
   const [text, setText] = useState('');
   const [label, setLabel] = useState('');
   const [links, setLinks] = useState<string[]>([]);
@@ -152,6 +156,7 @@ function KachelModal({ visible, editing, onSave, onCreateTask, onDelete, onClose
   const [due, setDue] = useState<DueKey>(null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [datePickerVisible, setDatePickerVisible] = useState(false);
   const inputRef = useRef<TextInput>(null);
   const initial = useRef('');
 
@@ -223,6 +228,20 @@ function KachelModal({ visible, editing, onSave, onCreateTask, onDelete, onClose
       // Alles wandert in die Aufgabe, der Geistesblitz wird danach gelöscht.
       const f = finalParts();
       await onCreateTask(step, dueISO(due), f.text, f.links);
+      onClose();
+    } finally { setSaving(false); }
+  };
+
+  // TE-20: Geistesblitz → Countdown. Text, Links, Icon und Farbe wandern mit,
+  // der Geistesblitz wird danach gelöscht.
+  const handleCreateCountdown = async (date: Date) => {
+    setDatePickerVisible(false);
+    if (!hasContent) return;
+    setSaving(true);
+    try {
+      const f = finalParts();
+      const title = label.trim() || f.text.split('\n')[0].slice(0, 30).trim() || 'Countdown';
+      await onCreateCountdown(date, { title, text: f.text, links: f.links, icon, color });
       onClose();
     } finally { setSaving(false); }
   };
@@ -347,6 +366,17 @@ function KachelModal({ visible, editing, onSave, onCreateTask, onDelete, onClose
                     <Ionicons name="arrow-forward" size={16} color="#111" />
                   </Pressable>
                   <Text style={[s.hint, { color: colors.textMuted }]}>Text und Links wandern mit in die Aufgabe, der Geistesblitz verschwindet dann hier.</Text>
+
+                  {/* TE-20: Steht ein Termin fest (Urlaub gebucht …), lebt der Geistesblitz als Countdown weiter. */}
+                  <Pressable
+                    style={[s.countdownBtn, { borderColor: color, opacity: hasContent ? 1 : 0.4 }]}
+                    onPress={() => setDatePickerVisible(true)}
+                    disabled={saving || !hasContent}
+                  >
+                    <MaterialCommunityIcons name="timer-sand" size={17} color={color} />
+                    <Text style={[s.countdownBtnText, { color: colors.text }]}>Als Countdown – Datum wählen</Text>
+                  </Pressable>
+                  <Text style={[s.hint, { color: colors.textMuted }]}>Für Gebuchtes und Feststehendes: Details und Links hängen am Countdown.</Text>
               </>
             </>
           )}
@@ -372,6 +402,13 @@ function KachelModal({ visible, editing, onSave, onCreateTask, onDelete, onClose
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+      <DatePickerModal
+        visible={datePickerVisible}
+        value={null}
+        onConfirm={handleCreateCountdown}
+        onCancel={() => setDatePickerVisible(false)}
+        colors={colors}
+      />
     </Modal>
   );
 }
@@ -476,6 +513,19 @@ export function GeistesKacheln({ colors, isDark, areaWidth, columns, compact = f
     await deleteGeistesKachel(fid, uid, editing.id);
   }, [fid, uid, editing]);
 
+  const handleCreateCountdown = useCallback(async (date: Date, c: { title: string; text: string; links: string[]; icon: string; color: string }) => {
+    if (!fid || !uid || !editing) return;
+    const iso = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    await addCountdown(fid, uid, c.title, iso, null, { icon: c.icon, color: c.color, note: c.text.trim() || null, links: c.links });
+    await deleteGeistesKachel(fid, uid, editing.id);
+    // Wer ausdrücklich „Als Countdown“ wählt, will ihn sehen – ausgeblendeten
+    // Countdown-Block auf dem Dashboard daher wieder einschalten.
+    const { settings, updateSettings } = useStore.getState();
+    if (settings.dashboardBlocks?.countdowns === false) {
+      updateSettings({ dashboardBlocks: { ...DEFAULT_DASHBOARD_BLOCKS, ...settings.dashboardBlocks, countdowns: true } });
+    }
+  }, [fid, uid, editing]);
+
   const handleDelete = useCallback(async () => {
     if (!fid || !uid || !editing) return;
     await deleteGeistesKachel(fid, uid, editing.id);
@@ -571,6 +621,7 @@ export function GeistesKacheln({ colors, isDark, areaWidth, columns, compact = f
         editing={editing}
         onSave={handleSave}
         onCreateTask={handleCreateTask}
+        onCreateCountdown={handleCreateCountdown}
         onDelete={handleDelete}
         onClose={() => setModalVisible(false)}
         colors={colors}
@@ -647,6 +698,8 @@ const s = StyleSheet.create({
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 7 },
   chipText: { fontSize: 13, fontWeight: '600' },
+  countdownBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 12, borderWidth: 1.5, paddingVertical: 12, marginTop: 4 },
+  countdownBtnText: { fontSize: 14, fontWeight: '700' },
   taskBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 12, paddingVertical: 13 },
 
   actions: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 10 },

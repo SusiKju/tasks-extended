@@ -28,7 +28,16 @@ export interface Countdown {
   /** Optionaler Sticker, z. B. ✈️ für Urlaub, 🎂 für Geburtstag. */
   emoji?: string | null;
   createdAt: string;
+  /** TE-20: aus einem Geistesblitz übernommen – Icon (MaterialCommunityIcons) + Farbe statt Emoji. */
+  icon?: string | null;
+  color?: string | null;
+  /** TE-20: Details aus dem Geistesblitz bzw. eigene Notiz (Buchungsnummer …). */
+  note?: string | null;
+  links?: string[];
 }
+
+/** Optionale Details eines Countdowns (TE-20). */
+export type CountdownExtras = Pick<Countdown, 'icon' | 'color' | 'note' | 'links'>;
 
 const itemsCollection = (familyId: string, uid: string) =>
   collection(db, 'families', familyId, 'countdownsByUser', uid, 'items');
@@ -66,7 +75,8 @@ export async function addCountdown(
   uid: string,
   title: string,
   targetDate: string,
-  emoji: string | null
+  emoji: string | null,
+  extras: CountdownExtras = {}
 ): Promise<string> {
   const ref = doc(itemsCollection(familyId, uid));
   const item: Omit<Countdown, 'id'> = {
@@ -74,6 +84,8 @@ export async function addCountdown(
     targetDate,
     emoji: emoji ?? null,
     createdAt: new Date().toISOString(),
+    // Firestore lehnt undefined ab – nur gesetzte Extras übernehmen.
+    ...Object.fromEntries(Object.entries(extras).filter(([, v]) => v !== undefined)),
   };
   await setDoc(ref, item);
   return ref.id;
@@ -83,7 +95,7 @@ export async function updateCountdown(
   familyId: string,
   uid: string,
   itemId: string,
-  updates: { title?: string; targetDate?: string; emoji?: string | null }
+  updates: { title?: string; targetDate?: string; emoji?: string | null; note?: string | null; links?: string[] }
 ): Promise<void> {
   await updateDoc(doc(db, 'families', familyId, 'countdownsByUser', uid, 'items', itemId), updates);
 }

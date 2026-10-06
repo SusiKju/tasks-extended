@@ -9,13 +9,18 @@
  * TE-171: Countdowns sind privat pro User (vorher TE-130: geteilt mit der
  * Partnerin über shared/countdowns). Jeder Family-Account sieht nur seine
  * eigenen Karten.
+ *
+ * TE-20: Ein Countdown kann aus einem Geistesblitz entstehen. Dann trägt er
+ * dessen Icon + Farbe sowie Text und Links (Büroklammer auf der Karte); im
+ * Bearbeiten-Fenster lassen sich Notiz und Links pflegen.
  */
 
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView, TextInput, Modal, ActivityIndicator } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { ThemeColors, SOFT_BORDER } from '../utils/theme';
 import { DatePickerModal } from './DatePickerModal';
+import { LinkChip } from './LinkChip';
 import { useFamilyId } from '../hooks/useFamily';
 import { useFirebaseAuth } from '../hooks/useFirebaseAuth';
 import {
@@ -52,6 +57,8 @@ function CountdownCard({ countdown, colors, onPress }: { countdown: Countdown; c
   const isPast = days < 0;
   const isToday = days === 0;
   const accent = colors.accentNeon;
+  const hasDetails = !!countdown.note || !!countdown.links?.length;
+  const tint = countdown.color;
 
   return (
     <Pressable
@@ -60,14 +67,21 @@ function CountdownCard({ countdown, colors, onPress }: { countdown: Countdown; c
         styles.card,
         {
           // Redesign: gedimmter Rand statt vollem colors.border, angeglichen
-          // an styles.card in DashboardScreen.
-          borderColor: isToday ? accent : SOFT_BORDER,
-          backgroundColor: colors.surface,
+          // an styles.card in DashboardScreen. TE-20: aus Geistesblitz → dessen Farbe.
+          borderColor: isToday ? accent : tint ? tint + 'AA' : SOFT_BORDER,
+          backgroundColor: tint ? tint + '26' : colors.surface,
           opacity: pressed ? 0.7 : isPast ? 0.55 : 1,
         },
       ]}
     >
-      <Text style={styles.cardEmoji}>{countdown.emoji ?? '💛'}</Text>
+      {countdown.icon ? (
+        <MaterialCommunityIcons name={countdown.icon as React.ComponentProps<typeof MaterialCommunityIcons>['name']} size={15} color={tint ?? colors.text} style={{ marginBottom: 1 }} />
+      ) : (
+        <Text style={styles.cardEmoji}>{countdown.emoji ?? '💛'}</Text>
+      )}
+      {hasDetails && (
+        <Ionicons name="attach" size={12} color={tint ?? colors.textMuted} style={styles.clip} accessibilityLabel="hat Details" />
+      )}
       {isToday ? (
         <Text style={[styles.cardBigLabel, { color: accent }]} numberOfLines={1}>Heute! 🎉</Text>
       ) : isPast ? (
@@ -114,6 +128,8 @@ export function CountdownStrip({ colors, compact = false }: { colors: ThemeColor
   const [dateDraft, setDateDraft] = useState<Date | null>(null);
   const [datePickerVisible, setDatePickerVisible] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [noteDraft, setNoteDraft] = useState('');
+  const [linksDraft, setLinksDraft] = useState<string[]>([]);
 
   useEffect(() => {
     if (!familyId || !uid) return;
@@ -136,6 +152,8 @@ export function CountdownStrip({ colors, compact = false }: { colors: ThemeColor
     setTitleDraft('');
     setDateDraft(null);
     setEmojiDraft(COUNTDOWN_EMOJIS[0]);
+    setNoteDraft('');
+    setLinksDraft([]);
     setFormVisible(true);
   }, []);
 
@@ -144,6 +162,8 @@ export function CountdownStrip({ colors, compact = false }: { colors: ThemeColor
     setTitleDraft(c.title);
     setDateDraft(new Date(c.targetDate + 'T00:00:00'));
     setEmojiDraft(c.emoji ?? null);
+    setNoteDraft(c.note ?? '');
+    setLinksDraft(c.links ?? []);
     setFormVisible(true);
   }, []);
 
@@ -156,19 +176,20 @@ export function CountdownStrip({ colors, compact = false }: { colors: ThemeColor
     const title = titleDraft.trim();
     if (!title || !dateDraft || !uid || !familyId) return;
     const isoDate = `${dateDraft.getFullYear()}-${String(dateDraft.getMonth() + 1).padStart(2, '0')}-${String(dateDraft.getDate()).padStart(2, '0')}`;
+    const note = noteDraft.trim() || null;
     setBusy(true);
     try {
       if (editing) {
-        await updateCountdown(familyId, uid, editing.id, { title, targetDate: isoDate, emoji: emojiDraft });
+        await updateCountdown(familyId, uid, editing.id, { title, targetDate: isoDate, emoji: emojiDraft, note, links: linksDraft });
       } else {
-        await addCountdown(familyId, uid, title, isoDate, emojiDraft);
+        await addCountdown(familyId, uid, title, isoDate, emojiDraft, { note, links: linksDraft });
       }
       setFormVisible(false);
     } catch {
     } finally {
       setBusy(false);
     }
-  }, [editing, titleDraft, dateDraft, emojiDraft, uid, familyId]);
+  }, [editing, titleDraft, dateDraft, emojiDraft, noteDraft, linksDraft, uid, familyId]);
 
   const dismissForm = () => {
     if (busy) return;
@@ -249,7 +270,8 @@ export function CountdownStrip({ colors, compact = false }: { colors: ThemeColor
               onChangeText={setTitleDraft}
             />
 
-            <View style={styles.emojiRow}>
+            {/* TE-20: Countdown aus Geistesblitz trägt dessen Icon – dann kein Emoji-Picker. */}
+            {!editing?.icon && <View style={styles.emojiRow}>
               {COUNTDOWN_EMOJIS.map((e) => {
                 const selected = emojiDraft === e;
                 return (
@@ -266,7 +288,7 @@ export function CountdownStrip({ colors, compact = false }: { colors: ThemeColor
                   </Pressable>
                 );
               })}
-            </View>
+            </View>}
 
             <Pressable
               onPress={() => setDatePickerVisible(true)}
@@ -277,6 +299,25 @@ export function CountdownStrip({ colors, compact = false }: { colors: ThemeColor
                 {dateDraft ? formatDateDe(`${dateDraft.getFullYear()}-${String(dateDraft.getMonth() + 1).padStart(2, '0')}-${String(dateDraft.getDate()).padStart(2, '0')}`) : 'Zieldatum wählen …'}
               </Text>
             </Pressable>
+
+            {/* TE-20: Details – aus dem Geistesblitz übernommen oder eigene Notiz. */}
+            <TextInput
+              style={[styles.input, styles.noteInput, { color: colors.text, backgroundColor: colors.inputBackground, borderColor: colors.border }]}
+              placeholder="Notiz, z. B. Buchungsnummer, Check-in 15 Uhr"
+              placeholderTextColor={colors.placeholder}
+              value={noteDraft}
+              onChangeText={setNoteDraft}
+              multiline
+              textAlignVertical="top"
+              accessibilityLabel="Notiz zum Countdown"
+            />
+            {linksDraft.length > 0 && (
+              <View style={styles.linkRow}>
+                {linksDraft.map((u) => (
+                  <LinkChip key={u} url={u} color={editing?.color ?? accent} colors={colors} onRemove={() => setLinksDraft((prev) => prev.filter((x) => x !== u))} />
+                ))}
+              </View>
+            )}
 
             <View style={styles.formActions}>
               {editing && (
@@ -349,6 +390,9 @@ const styles = StyleSheet.create({
   cardTitle: { fontSize: 8.5, fontWeight: '600', textAlign: 'center', marginTop: 1 },
 
   addCard: { borderStyle: 'dashed', gap: 3 },
+  clip: { position: 'absolute', top: 5, right: 5 },
+  noteInput: { minHeight: 70, maxHeight: 180, lineHeight: 19 },
+  linkRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 },
 
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center', padding: 24 },
   formCard: { width: '100%', maxWidth: 420, borderRadius: 16, borderWidth: 1, padding: 18 },
