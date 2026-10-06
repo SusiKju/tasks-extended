@@ -444,6 +444,8 @@ export default function KinderScreen() {
     }
   }, [fid, selectedChild, editingTask, familyChildren, tasksByChild]);
 
+  const dismissEdit = () => (editingTask?.title.trim() ? handleSaveEdit() : setEditingTask(null));
+
   // Belohnung einer abgehakten Aufgabe freigeben/zurückziehen (TE-61).
   const handleToggleRewardRelease = useCallback(async (childId: string, task: ChildTask) => {
     try {
@@ -1024,8 +1026,9 @@ export default function KinderScreen() {
       )}
 
       {/* Edit-Modal — Titel + Belohnung (TE-63) */}
-      <Modal visible={!!editingTask} transparent animationType="fade">
-        <Pressable style={s.modalOverlay} onPress={() => setEditingTask(null)}>
+      {/* TE-13: Tippen daneben / Zurück speichert statt zu verwerfen (leerer Titel → nur schließen). */}
+      <Modal visible={!!editingTask} transparent animationType="fade" onRequestClose={dismissEdit}>
+        <Pressable style={s.modalOverlay} onPress={dismissEdit}>
           <Pressable style={s.modalBox} onPress={() => {}}>
             <Text style={s.modalTitle}>
               {editingTask?.groupId ? 'Gruppenaufgabe bearbeiten' : 'Aufgabe bearbeiten'}

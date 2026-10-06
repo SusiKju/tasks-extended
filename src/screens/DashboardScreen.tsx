@@ -1224,12 +1224,13 @@ export function DashboardScreen() {
         visible={quickAddKind !== null}
         animationType="fade"
         transparent
-        onRequestClose={() => { setQuickAddKind(null); setQuickAddText(''); }}
+        onRequestClose={handleQuickAddSubmit}
       >
         <View style={[styles.feedModalOverlay, { backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center' }]}>
           <Pressable
             style={StyleSheet.absoluteFill}
-            onPress={() => { setQuickAddKind(null); setQuickAddText(''); }}
+            // TE-13: Tippen daneben legt Getipptes an statt es zu verwerfen.
+            onPress={handleQuickAddSubmit}
           />
           <View style={[styles.quickAddCard, { backgroundColor: colors.background }]}>
             <Text style={[styles.feedModalTitle, { color: colors.text }]}>
@@ -1453,8 +1454,8 @@ export function DashboardScreen() {
                             { color: colors.text },
                             task.done && styles.kidTaskDone,
                             task.rejected && { color: colors.danger },
-                          ]}
                             (due?.level ?? 0) >= 2 && styles.kidTaskOverdue,
+                          ]}
                           numberOfLines={1}
                         >
                           {task.title}
@@ -1567,8 +1568,8 @@ export function DashboardScreen() {
       )}
 
       {/* ── Taschengeld-Korrektur (TE-154): Betrag nur für diesen Monat anpassen ── */}
-      <Modal visible={allowanceEdit !== null} transparent animationType="fade">
-        <Pressable style={styles.allowanceEditOverlay} onPress={() => setAllowanceEdit(null)}>
+      <Modal visible={allowanceEdit !== null} transparent animationType="fade" onRequestClose={saveAllowanceEdit}>
+        <Pressable style={styles.allowanceEditOverlay} onPress={saveAllowanceEdit}>
           <Pressable style={[styles.allowanceEditBox, { backgroundColor: colors.surface }]} onPress={() => {}}>
             <Text style={[styles.allowanceEditTitle, { color: colors.text }]}>
               Taschengeld anpassen
@@ -1871,10 +1872,10 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
     // Redesign: schlichter fett-roter Text statt gefülltem Pillen-Badge
     // (Nutzer hat die Umstellung explizit bestätigt).
     dueBadgeOverdue: { color: C.important },
-    // Redesign: Kind-/Gruppen-Kopfzeile als normale Zeile innerhalb der
     // TE-14: ab 3 Tagen Verzug größer; Titel dann fett.
     dueBadgeSevere: { fontSize: 13, fontWeight: '800' },
     kidTaskOverdue: { fontWeight: '800' },
+    // Redesign: Kind-/Gruppen-Kopfzeile als normale Zeile innerhalb der
     // flachen Card (vorher: eigener, unbordered Label-Block über einer
     // separat umrandeten Mini-Karte pro Kind).
     kidHeaderRow: {

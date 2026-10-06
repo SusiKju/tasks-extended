@@ -380,6 +380,8 @@ export default function SchuleScreen() {
     setEditingTime(null);
   }, [editingTime, fid, selectedChild, timeValid]);
 
+  const dismissTimeEditor = () => (timeValid ? handleSaveTime() : closeTimeEditor());
+
   const handleResetTime = useCallback(async () => {
     if (!editingTime || !fid || !selectedChild) return;
     await setPeriodTime(fid, selectedChild, editingTime.nr, '', '');
@@ -424,6 +426,8 @@ export default function SchuleScreen() {
     await saveSchoolItems(fid, selectedChild, next);
     setEditingItem(null);
   }, [fid, selectedChild, schoolItemsByChild, editingItem, itemValid, itemTitle, itemDate, itemNotes, itemIsInfo]);
+
+  const dismissItemEditor = () => (itemValid ? handleSaveItem() : closeItemEditor());
 
   /** Weiches Löschen: Eintrag bleibt erhalten, verschwindet nur aus der
    *  offenen Liste und taucht im Verlauf-Dialog auf (wiederherstellbar). */
@@ -483,6 +487,8 @@ export default function SchuleScreen() {
     await saveInfoFacts(fid, selectedChild, next);
     setEditingFact(null);
   }, [fid, selectedChild, infoFactsByChild, editingFact, factValid, factLabel, factValue]);
+
+  const dismissFactEditor = () => (factValid ? handleSaveFact() : closeFactEditor());
 
   const handleDeleteFact = useCallback(async () => {
     if (!fid || !selectedChild || !editingFact || editingFact === 'new') return;
@@ -935,8 +941,9 @@ export default function SchuleScreen() {
     </ScrollView>
 
       {/* Editor-Modal */}
-      <Modal visible={!!editing} transparent animationType="fade">
-        <Pressable style={s.modalOverlay} onPress={closeEditor}>
+      {/* TE-13: Tippen daneben / Zurück speichert statt zu verwerfen. */}
+      <Modal visible={!!editing} transparent animationType="fade" onRequestClose={handleSave}>
+        <Pressable style={s.modalOverlay} onPress={handleSave}>
           <Pressable style={s.modalBox} onPress={() => {}}>
             <Text style={s.modalTitle}>
               {DAY_NAMES[selectedDay]} · {editing?.nr}. Stunde
@@ -991,8 +998,8 @@ export default function SchuleScreen() {
       </Modal>
 
       {/* Zeit-Editor-Modal – nur für manuell gepflegte Kinder */}
-      <Modal visible={!!editingTime} transparent animationType="fade">
-        <Pressable style={s.modalOverlay} onPress={closeTimeEditor}>
+      <Modal visible={!!editingTime} transparent animationType="fade" onRequestClose={dismissTimeEditor}>
+        <Pressable style={s.modalOverlay} onPress={dismissTimeEditor}>
           <Pressable style={s.modalBox} onPress={() => {}}>
             <Text style={s.modalTitle}>Uhrzeit ändern</Text>
             <TextInput
@@ -1039,8 +1046,8 @@ export default function SchuleScreen() {
 
       {/* Eintrags-Editor-Modal – ein Feld-Set für alles (Titel/Datum/Notiz),
           "Aufgabe" gibt dem Eintrag den Haken (Default: Termin ohne Haken). */}
-      <Modal visible={!!editingItem} transparent animationType="fade">
-        <Pressable style={s.modalOverlay} onPress={closeItemEditor}>
+      <Modal visible={!!editingItem} transparent animationType="fade" onRequestClose={dismissItemEditor}>
+        <Pressable style={s.modalOverlay} onPress={dismissItemEditor}>
           <Pressable style={s.modalBox} onPress={() => {}}>
             <Text style={s.modalTitle}>{editingItem === 'new' ? 'Neuer Eintrag' : 'Eintrag bearbeiten'}</Text>
 
@@ -1246,8 +1253,8 @@ export default function SchuleScreen() {
 
       {/* Kontakt-/Info-Editor-Modal – Label frei wählbar (z. B. "Klassenlehrer",
           "Hort-Tel."), kein festes Feld-Set. */}
-      <Modal visible={!!editingFact} transparent animationType="fade">
-        <Pressable style={s.modalOverlay} onPress={closeFactEditor}>
+      <Modal visible={!!editingFact} transparent animationType="fade" onRequestClose={dismissFactEditor}>
+        <Pressable style={s.modalOverlay} onPress={dismissFactEditor}>
           <Pressable style={s.modalBox} onPress={() => {}}>
             <Text style={s.modalTitle}>{editingFact === 'new' ? 'Neue Info' : 'Info bearbeiten'}</Text>
             <View style={{ gap: 4 }}>

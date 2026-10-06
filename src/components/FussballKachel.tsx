@@ -517,7 +517,8 @@ export function FussballKachel({ forceTheme, iconStyle, iconSize = 18 }: Fussbal
       </View>
 
       {/* Fast-fullscreen Notizdialog des gewählten Themas */}
-      <Modal visible={!!openTheme} animationType="slide" transparent onRequestClose={() => setOpenTheme(null)}>
+      {/* TE-13: Zurück speichert Änderungen statt sie zu verwerfen. */}
+      <Modal visible={!!openTheme} animationType="slide" transparent onRequestClose={() => (editedRef.current ? handleSave() : setOpenTheme(null))}>
         {cfg && openTheme && (
           <KeyboardAvoidingView
             style={s.backdrop}

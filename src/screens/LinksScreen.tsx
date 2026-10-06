@@ -122,6 +122,13 @@ function LinkModal({ visible, editing, onSave, onDelete, onClose, colors }: Moda
     }
   };
 
+  // TE-13: Tippen daneben / Zurück speichert statt zu verwerfen.
+  const dismiss = () => {
+    if (saving || deleting) return;
+    if (canSave) handleSave();
+    else onClose();
+  };
+
   const handleDelete = async () => {
     setDeleting(true);
     try { await onDelete(); onClose(); }
@@ -134,9 +141,9 @@ function LinkModal({ visible, editing, onSave, onDelete, onClose, colors }: Moda
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={dismiss}>
       <KeyboardAvoidingView style={s.overlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <Pressable style={StyleSheet.absoluteFill} onPress={dismiss} />
         <View style={[s.sheet, { backgroundColor: colors.surface, borderTopColor: color }]}>
 
           {/* Vorschau */}

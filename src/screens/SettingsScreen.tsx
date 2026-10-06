@@ -304,6 +304,12 @@ export function SettingsScreen() {
     }
   }, [childModal, familyId, settings.childEmails]);
 
+  const dismissChildModal = () => {
+    if (savingChild) return;
+    if (childModal?.name.trim()) handleSaveChild();
+    else setChildModal(null);
+  };
+
   const handleDeleteChild = useCallback((child: ChildConfig) => {
     crossAlert(
       `${child.name} löschen?`,
@@ -950,8 +956,9 @@ export function SettingsScreen() {
       )}
 
       {/* Kind-Modal (Hinzufügen / Bearbeiten) */}
-      <Modal visible={!!childModal} transparent animationType="fade">
-        <Pressable style={styles.modalOverlay} onPress={() => setChildModal(null)}>
+      {/* TE-13: Tippen daneben / Zurück speichert statt zu verwerfen (ohne Namen → nur schließen). */}
+      <Modal visible={!!childModal} transparent animationType="fade" onRequestClose={dismissChildModal}>
+        <Pressable style={styles.modalOverlay} onPress={dismissChildModal}>
           <Pressable style={styles.modalBox} onPress={() => {}}>
             <Text style={styles.modalTitle}>
               {childModal?.mode === 'add' ? 'Kind hinzufügen' : 'Kind bearbeiten'}

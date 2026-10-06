@@ -167,7 +167,13 @@ export function GroupsScreen() {
         <Ionicons name="add" size={28} color={isDark ? colors.accentNeon : '#fff'} />
       </TouchableOpacity>
 
-      <Modal visible={modalVisible} animationType="slide" presentationStyle="pageSheet">
+      {/* TE-13: Wegwischen / Zurück speichert statt zu verwerfen (ohne Namen → nur schließen). */}
+      <Modal
+        visible={modalVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => (form.name.trim() ? handleSave() : setModalVisible(false))}
+      >
         <View style={styles.modal}>
           <View style={styles.modalHeader}>
             <TouchableOpacity onPress={() => setModalVisible(false)}>

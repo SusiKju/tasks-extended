@@ -155,12 +155,23 @@ export function BambiniScreen() {
       .catch((e) => console.warn('Bambini-Notizen laden fehlgeschlagen', e));
   }, [fid]);
 
-  const closeNotizen = useCallback(() => setNotizenOpen(false), []);
-
   const persistNotizItems = useCallback((items: NotizItem[]) => {
     setNotizItems(items);
     if (fid) saveBambiniNotizItems(fid, items).catch((e) => console.warn('Bambini-Notizen speichern fehlgeschlagen', e));
   }, [fid]);
+
+  // TE-13: Schließen (daneben tippen / Zurück / X) übernimmt Getipptes statt es zu verwerfen.
+  const closeNotizen = useCallback(() => {
+    let items = notizItems;
+    const edited = notizEditText.trim();
+    if (notizEditId && edited) items = items.map((n) => (n.id === notizEditId ? { ...n, text: edited } : n));
+    const text = notizInput.trim();
+    if (text) items = [{ id: makeId(), text, marked: false, createdAt: new Date().toISOString(), deletedAt: null }, ...items];
+    if (items !== notizItems) persistNotizItems(items);
+    setNotizEditId(null);
+    setNotizInput('');
+    setNotizenOpen(false);
+  }, [notizItems, notizEditId, notizEditText, notizInput, persistNotizItems]);
 
   const addNotizItem = useCallback(() => {
     const text = notizInput.trim();
@@ -235,12 +246,23 @@ export function BambiniScreen() {
       .catch((e) => console.warn('Trainingsideen laden fehlgeschlagen', e));
   }, [fid]);
 
-  const closeTrainingsideen = useCallback(() => setTrainingsideenOpen(false), []);
-
   const persistTrainingsideenItems = useCallback((items: NotizItem[]) => {
     setTrainingsideenItems(items);
     if (fid) saveBambiniTrainingsideenItems(fid, items).catch((e) => console.warn('Trainingsideen speichern fehlgeschlagen', e));
   }, [fid]);
+
+  // TE-13: Schließen (daneben tippen / Zurück / X) übernimmt Getipptes statt es zu verwerfen.
+  const closeTrainingsideen = useCallback(() => {
+    let items = trainingsideenItems;
+    const edited = trainingsideeEditText.trim();
+    if (trainingsideeEditId && edited) items = items.map((n) => (n.id === trainingsideeEditId ? { ...n, text: edited } : n));
+    const text = trainingsideeInput.trim();
+    if (text) items = [{ id: makeId(), text, marked: false, createdAt: new Date().toISOString(), deletedAt: null }, ...items];
+    if (items !== trainingsideenItems) persistTrainingsideenItems(items);
+    setTrainingsideeEditId(null);
+    setTrainingsideeInput('');
+    setTrainingsideenOpen(false);
+  }, [trainingsideenItems, trainingsideeEditId, trainingsideeEditText, trainingsideeInput, persistTrainingsideenItems]);
 
   const addTrainingsideeItem = useCallback(() => {
     const text = trainingsideeInput.trim();
@@ -684,7 +706,7 @@ export function BambiniScreen() {
         <Ionicons name="add" size={28} color={colors.accentFg} />
       </Pressable>
 
-      <Modal visible={editing !== null} transparent animationType="fade" onRequestClose={closeModal}>
+      <Modal visible={editing !== null} transparent animationType="fade" onRequestClose={saveEntry}>
         <KeyboardAvoidingView style={s.overlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={s.card}>
             <Text style={s.cardTitle}>{editing?.id ? 'Kind bearbeiten' : 'Neues Kind'}</Text>

@@ -136,6 +136,13 @@ function NoteModal({ visible, note, onSave, onClose, onDelete, colors, styles }:
     }
   }, [title, content, selectedColor, selectedGroupId, pinned, important, dueDate, isChecklist, checklistItems, onSave]);
 
+  // TE-13: Wegwischen / Zurück speichert statt zu verwerfen (leer → nur schließen).
+  const dismiss = () => {
+    const hasContent = isChecklist ? checklistItems.some((i) => i.text.trim()) : !!content.trim();
+    if (hasContent) handleSave();
+    else onClose();
+  };
+
   const addChecklistItem = useCallback(() => {
     setChecklistItems((prev) => [...prev, { text: '', checked: false }]);
   }, []);
@@ -153,7 +160,7 @@ function NoteModal({ visible, note, onSave, onClose, onDelete, colors, styles }:
   }, []);
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={dismiss}>
       <KeyboardAvoidingView
         style={[styles.modalContainer, { backgroundColor: colors.background }]}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}

@@ -170,6 +170,12 @@ export function CountdownStrip({ colors, compact = false }: { colors: ThemeColor
     }
   }, [editing, titleDraft, dateDraft, emojiDraft, uid, familyId]);
 
+  const dismissForm = () => {
+    if (busy) return;
+    if (titleDraft.trim() && dateDraft) handleSave();
+    else setFormVisible(false);
+  };
+
   const handleDelete = useCallback(async () => {
     if (!editing || !uid || !familyId) return;
     setBusy(true);
@@ -218,8 +224,9 @@ export function CountdownStrip({ colors, compact = false }: { colors: ThemeColor
         </ScrollView>
       )}
 
-      <Modal visible={formVisible} animationType="fade" transparent onRequestClose={() => setFormVisible(false)}>
-        <Pressable style={styles.backdrop} onPress={() => setFormVisible(false)}>
+      {/* TE-13: Tippen daneben / Zurück speichert; das X bleibt "Abbrechen". */}
+      <Modal visible={formVisible} animationType="fade" transparent onRequestClose={dismissForm}>
+        <Pressable style={styles.backdrop} onPress={dismissForm}>
           <Pressable style={[styles.formCard, { backgroundColor: colors.surface, borderColor: colors.border }]} onPress={() => {}}>
             <View style={styles.formHeader}>
               <Text style={[styles.formTitle, { color: colors.text }]}>
