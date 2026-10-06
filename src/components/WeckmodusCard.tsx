@@ -2,12 +2,13 @@
  * WeckmodusCard.tsx (TE-82)
  *
  * Zeigt morgens zwischen 5:00 und 10:00 Uhr an Schultagen (Mo-Fr) pro Kind, ob
- * die 1. Stunde stattfindet (aufstehen) oder frei ist (ausschlafen). Kinder
+ * die 1. Stunde stattfindet (aufstehen) oder frei ist (ausschlafen; mehrere
+ * freie Stunden am Stück werden zusammengezählt, TE-9). Kinder
  * ohne jemals eingetragenen Stundenplan werden ausgeblendet – für sie gibt es
  * keine Datenbasis für eine Aussage.
  *
- * Kein Ferienkalender vorhanden: "Schultag" ist hier nur Mo-Fr (todayDayIndex),
- * echte Schulferien werden nicht erkannt.
+ * In sächsischen Schulferien und an Feiertagen bleibt die Karte aus (TE-8,
+ * isSchulfrei).
  */
 
 import React, { useEffect, useState } from 'react';
@@ -18,9 +19,26 @@ import { useFamily } from '../hooks/useFamily';
 import {
   TimetableMap, key, todayDayIndex, isBiweeklyActiveWeek, needsWakeUp, subscribeToTimetable,
 } from '../services/timetable';
+import { isSchulfrei } from '../utils/schulferien';
+
+const LAST_LESSON_NR = 10;
+
+/** Anzahl freier Stunden am Stück ab der 1. Stunde (0 = 1. Stunde findet statt). */
+function leadingFreePeriods(map: TimetableMap | undefined, dayIdx: number, biweeklyActive: boolean): number {
+  let n = 0;
+  while (n < LAST_LESSON_NR && !needsWakeUp(map?.[key(dayIdx, n + 1)], biweeklyActive)) n++;
+  return n;
+}
+
+function statusText(free: number): string {
+  if (free === 0) return '1. Stunde – aufstehen';
+  if (free === 1) return '1. Stunde frei – ausschlafen';
+  if (free >= LAST_LESSON_NR) return 'kein Unterricht – ausschlafen';
+  return `1.–${free}. Stunde frei – ausschlafen`;
+}
 
 function inWakeWindow(d: Date): boolean {
-  return todayDayIndex() !== -1 && d.getHours() >= 5 && d.getHours() < 10;
+  return todayDayIndex() !== -1 && !isSchulfrei(d) && d.getHours() >= 5 && d.getHours() < 10;
 }
 
 export function WeckmodusCard({ colors }: { colors: ThemeColors }) {
@@ -50,7 +68,7 @@ export function WeckmodusCard({ colors }: { colors: ThemeColors }) {
     .filter((c) => Object.keys(timetables[c.id] ?? {}).length > 0)
     .map((c) => ({
       child: c,
-      wakeUp: needsWakeUp(timetables[c.id]?.[key(todayIdx, 1)], biweeklyActive),
+      free: leadingFreePeriods(timetables[c.id], todayIdx, biweeklyActive),
     }));
 
   if (rows.length === 0) return null;
@@ -58,7 +76,9 @@ export function WeckmodusCard({ colors }: { colors: ThemeColors }) {
   return (
     <View style={[styles.wrap, { borderColor: SOFT_BORDER, backgroundColor: colors.surface }]}>
       <Text style={[styles.windowLabel, { color: colors.textMuted }]}>wird angezeigt von 5–10 Uhr</Text>
-      {rows.map(({ child, wakeUp }) => (
+      {rows.map(({ child, free }) => {
+        const wakeUp = free === 0;
+        return (
         <View key={child.id} style={styles.row}>
           <View style={[styles.dot, { backgroundColor: child.color }]} />
           <Text style={[styles.name, { color: colors.text }]} numberOfLines={1}>
@@ -70,10 +90,11 @@ export function WeckmodusCard({ colors }: { colors: ThemeColors }) {
             color={wakeUp ? colors.accentNeon : colors.textMuted}
           />
           <Text style={[styles.status, { color: wakeUp ? colors.text : colors.textMuted }]} numberOfLines={1}>
-            {wakeUp ? '1. Stunde – aufstehen' : '1. Stunde frei – ausschlafen'}
+            {statusText(free)}
           </Text>
         </View>
-      ))}
+        );
+      })}
     </View>
   );
 }
