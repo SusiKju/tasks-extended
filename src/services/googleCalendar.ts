@@ -407,19 +407,10 @@ export async function listCalendars(accessToken: string): Promise<Array<{ id: st
 // Calendar-API wird hier nur noch lesend genutzt (listCalendars,
 // listUpcomingEvents) zur Anzeige bestehender Termine im Dashboard.
 
-async function tasksFetch(
-  path: string,
-  accessToken: string,
-  method: string = 'GET',
-  body?: object
-): Promise<Response> {
+// Google Tasks wird nur gelesen (TE-27) – keine POST/PATCH/DELETE-Aufrufe.
+async function tasksFetch(path: string, accessToken: string): Promise<Response> {
   return fetch(`${TASKS_API}${path}`, {
-    method,
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: body ? JSON.stringify(body) : undefined,
+    headers: { Authorization: `Bearer ${accessToken}` },
   });
 }
 
@@ -448,51 +439,4 @@ export async function listGoogleTasksById(accessToken: string, taskListId: strin
   if (!res.ok) return [];
   const data = await res.json();
   return data.items ?? [];
-}
-
-export async function createGoogleTask(
-  accessToken: string,
-  taskListId: string,
-  title: string,
-  notes?: string,
-  due?: string
-): Promise<string | null> {
-  const body: any = { title };
-  if (notes) body.notes = notes;
-  if (due) body.due = due;
-
-  const res = await tasksFetch(`/lists/${encodeURIComponent(taskListId)}/tasks`, accessToken, 'POST', body);
-  if (!res.ok) return null;
-  const data = await res.json();
-  return data.id ?? null;
-}
-
-export async function updateGoogleTask(
-  accessToken: string,
-  taskListId: string,
-  taskId: string,
-  updates: { title?: string; notes?: string; due?: string; status?: 'needsAction' | 'completed' }
-): Promise<boolean> {
-  const res = await tasksFetch(
-    `/lists/${encodeURIComponent(taskListId)}/tasks/${encodeURIComponent(taskId)}`,
-    accessToken,
-    'PATCH',
-    updates
-  );
-  return res.ok;
-}
-
-export async function deleteGoogleTask(
-  accessToken: string,
-  taskListId: string,
-  taskId: string
-): Promise<boolean> {
-  const res = await tasksFetch(
-    `/lists/${encodeURIComponent(taskListId)}/tasks/${encodeURIComponent(taskId)}`,
-    accessToken,
-    'DELETE'
-  );
-  // 200/204 = gelöscht, 404 = nicht gefunden, 400 = ungültige ID, 410 = bereits gelöscht
-  // Alle davon bedeuten: lokal aus der Warteschlange entfernen
-  return res.ok || res.status === 404 || res.status === 400 || res.status === 410;
 }

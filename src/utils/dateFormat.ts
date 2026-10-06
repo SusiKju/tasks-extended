@@ -50,17 +50,6 @@ export function localDateStr(iso: string): string {
 }
 
 /**
- * Konvertiert ein lokales ISO-Datum zu Mitternacht UTC des lokalen Datums.
- * Wird beim Senden zu Google Tasks/Calendar verwendet.
- * Beispiel: "2026-06-01T22:00:00Z" (= 2. Juni Mitternacht UTC+2)
- *        → "2026-06-02T00:00:00.000Z" (Google versteht: 2. Juni)
- */
-export function toGoogleDateISO(iso: string): string {
-  const d = new Date(iso);
-  return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())).toISOString();
-}
-
-/**
  * Importiert ein Google-Datum ("YYYY-MM-DDT00:00:00.000Z") als lokalen Mittag.
  * Mittag (12:00) statt Mitternacht verhindert, dass Sommerzeit-Übergänge
  * oder UTC+ Offsets das Datum um einen Tag verschieben.

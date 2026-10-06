@@ -407,12 +407,11 @@ export function SettingsScreen() {
     try {
       const result = await syncTasks();
       if (result === null) return;
-      const { imported, updated, pushed } = result;
+      const { imported, updated } = result;
       const parts = [
         imported > 0 ? `${imported} importiert` : null,
         updated > 0 ? `${updated} aktualisiert` : null,
-        pushed > 0 ? `${pushed} hochgeladen` : null,
-        imported === 0 && updated === 0 && pushed === 0 ? 'Keine Änderungen' : null,
+        imported === 0 && updated === 0 ? 'Keine Änderungen' : null,
       ].filter(Boolean);
       setTasksSyncResult(parts.join(', '));
     } catch (e) {

@@ -4,61 +4,29 @@ import {
   getValidAccessToken,
   listTaskLists,
   listGoogleTasksById,
-  createGoogleTask,
-  updateGoogleTask,
-  deleteGoogleTask,
 } from '../services/googleCalendar';
-import { localDateStr, toGoogleDateISO, fromGoogleDate } from '../utils/dateFormat';
+import { localDateStr, fromGoogleDate } from '../utils/dateFormat';
 
 export interface SyncResult {
   imported: number;
   updated: number;
-  pushed: number;
 }
 
 /**
- * Tries an async action with the current token. If it returns null/false (indicating
- * auth failure), refreshes the token once and retries. Returns the result of the
- * successful attempt, or null if both attempts fail.
+ * Google Tasks → App, nur lesend (TE-27). Die App schreibt nie zu Google
+ * Tasks: früher hat Schritt „Local → Google“ bei jedem Refresh den lokalen
+ * (alten) Stand per PATCH zurückgeschrieben und damit Änderungen, die in
+ * Google gemacht wurden, überschrieben. Jetzt gewinnt immer Google.
  */
-async function withTokenRefresh(
-  token: string,
-  onRefreshed: (newToken: string) => void,
-  action: (t: string) => Promise<string | boolean | null>
-): Promise<{ result: string | boolean | null; token: string }> {
-  const result = await action(token).catch(() => null);
-  if (result !== null && result !== false) return { result, token };
-
-  // First attempt failed — force a token refresh once and retry.
-  // Works on web (GIS silent) and native (refresh token).
-  const newToken = await getValidAccessToken(true);
-  if (!newToken || newToken === token) return { result: null, token };
-
-  onRefreshed(newToken);
-  const retried = await action(newToken).catch(() => null);
-  return { result: retried, token: newToken };
-}
-
 export function useGoogleTasksSync() {
   const syncTasks = useCallback(async (): Promise<SyncResult | null> => {
     // Always read from store directly — avoids stale closure values.
-    const {
-      settings,
-      tasks,
-      updateSettings,
-      addTask,
-      updateTask,
-      removeDeletedGoogleEventIds,
-    } = useStore.getState();
+    const { settings, updateSettings, addTask, updateTask } = useStore.getState();
 
     if (!settings.googleCalendarEnabled || !settings.googleAccessToken) return null;
 
     // Proaktiv ein gültiges Token holen (Web: GIS still, nativ: Refresh-Token).
     let token = (await getValidAccessToken()) ?? settings.googleAccessToken;
-    const onTokenRefreshed = (t: string) => {
-      token = t;
-      updateSettings({ googleAccessToken: t });
-    };
 
     // ── 1. Get the first Google Tasks list ─────────────────────────────────────
     let taskLists = await listTaskLists(token).catch(() => [] as Array<{ id: string; title: string }>);
@@ -66,174 +34,65 @@ export function useGoogleTasksSync() {
       // Could be an expired token — force refresh and retry once
       const newToken = await getValidAccessToken(true);
       if (newToken && newToken !== token) {
-        onTokenRefreshed(newToken);
+        token = newToken;
+        updateSettings({ googleAccessToken: newToken });
         taskLists = await listTaskLists(newToken).catch(() => []);
       }
     }
     if (taskLists.length === 0) return null;
 
-    const taskListId = taskLists[0].id;
+    // ── 2. Fetch all Google Tasks ───────────────────────────────────────────────
+    const googleTasks = await listGoogleTasksById(token, taskLists[0].id).catch(() => [] as any[]);
 
-    // ── 2. Process pending deletions ───────────────────────────────────────────
-    const deletedIds = useStore.getState().deletedGoogleEventIds;
-    const successfullyDeleted: string[] = [];
-    for (const googleId of deletedIds) {
-      const { result } = await withTokenRefresh(
-        token,
-        onTokenRefreshed,
-        (t) => deleteGoogleTask(t, taskListId, googleId)
-      );
-      if (result) successfullyDeleted.push(googleId);
-    }
-    if (successfullyDeleted.length > 0) {
-      removeDeletedGoogleEventIds(successfullyDeleted);
-    }
+    const result: SyncResult = { imported: 0, updated: 0 };
 
-    // ── 3. Fetch all Google Tasks ───────────────────────────────────────────────
-    const googleTasks = await listGoogleTasksById(token, taskListId).catch(() => [] as any[]);
-
-    const result: SyncResult = { imported: 0, updated: 0, pushed: 0 };
-
-    // Build a map for fast lookup: googleTaskId → googleTask
-    const googleTaskMap = new Map<string, any>();
-    for (const gt of googleTasks) {
-      if (gt.id) googleTaskMap.set(gt.id, gt);
-    }
-
-    // ── 4. Google → Local ──────────────────────────────────────────────────────
-    // Use fresh tasks snapshot for lookups
-    const localTasksSnapshot = useStore.getState().tasks;
+    // ── 3. Google → Local (Google ist Quelle der Wahrheit) ─────────────────────
+    // Lokal gelöschte Google-Tasks bleiben ausgeblendet (nur lokal, Google bleibt unberührt).
+    const { tasks: localTasks, deletedGoogleEventIds } = useStore.getState();
 
     for (const gt of googleTasks) {
       if (!gt.title) continue;
-      if (deletedIds.includes(gt.id)) continue;
+      if (deletedGoogleEventIds.includes(gt.id)) continue;
 
-      const local = localTasksSnapshot.find((t) => t.googleEventId === gt.id);
+      const remote = {
+        title: gt.title as string,
+        description: (gt.notes ?? '') as string,
+        dueDate: gt.due ? fromGoogleDate(gt.due) : null,
+        completed: gt.status === 'completed',
+      };
+      const local = localTasks.find((t) => t.googleEventId === gt.id);
 
       if (!local) {
-        // New task from Google — import it
         addTask({
           id: `gtask-${gt.id}`,
-          title: gt.title,
-          description: gt.notes ?? '',
+          ...remote,
           groupId: null,
-          dueDate: gt.due ? fromGoogleDate(gt.due) : null,
-          completed: gt.status === 'completed',
           attachments: [],
           googleEventId: gt.id,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         });
         result.imported++;
-      } else {
-        // Existing task — let Google be source of truth for completion status only.
-        // Local wins for title/description/date (user edits locally → pushed in step 5).
-        const googleCompleted = gt.status === 'completed';
-        if (local.completed !== googleCompleted) {
-          updateTask(local.id, { completed: googleCompleted });
-          result.updated++;
-        }
+        continue;
+      }
+
+      const changes: Partial<typeof remote> = {};
+      if (local.title !== remote.title) changes.title = remote.title;
+      if ((local.description ?? '') !== remote.description) changes.description = remote.description;
+      // Nach Kalendertag vergleichen, nicht als ISO-String (Uhrzeit/Timezone weichen ab).
+      const localDue = local.dueDate ? localDateStr(local.dueDate) : null;
+      const remoteDue = remote.dueDate ? localDateStr(remote.dueDate) : null;
+      if (localDue !== remoteDue) changes.dueDate = remote.dueDate;
+      if (local.completed !== remote.completed) changes.completed = remote.completed;
+      if (Object.keys(changes).length > 0) {
+        updateTask(local.id, changes);
+        result.updated++;
       }
     }
 
-    // ── 5. Local → Google ──────────────────────────────────────────────────────
-    // Re-read tasks so we see freshly imported ones (they already have googleEventId set).
-    const freshTasks = useStore.getState().tasks;
-
-    // Bereits verknüpfte googleEventIds vormerken, damit ein Match-by-title
-    // weiter unten keinen Google-Task "stiehlt", der schon einem anderen
-    // lokalen Task zugeordnet ist.
-    const claimedGoogleIds = new Set(
-      freshTasks.filter((t) => t.googleEventId).map((t) => t.googleEventId as string)
-    );
-
-    for (const local of freshTasks) {
-      // Skip completed tasks — don't push them as new, they're done
-      if (local.completed) continue;
-
-      if (!local.googleEventId) {
-        // Bevor ein neuer Google Task angelegt wird: prüfen, ob bereits ein
-        // (noch unverknüpfter) Google Task mit demselben Titel + Datum
-        // existiert. Das passiert z. B., wenn derselbe Task fast gleichzeitig
-        // auf zwei Geräten lokal angelegt wurde, bevor beide synchronisiert
-        // hatten — ohne diesen Check würde sonst auf JEDEM Gerät ein eigener
-        // Google Task erzeugt ("Duplikat"), und die beiden Kopien bekommen
-        // nie dieselbe googleEventId → manuelle Reihenfolge kann nie
-        // geräteübergreifend matchen (sieht aus wie "Sync funktioniert nicht").
-        const localDueStr = local.dueDate ? localDateStr(local.dueDate) : null;
-        const existingMatch = googleTasks.find((gt) => {
-          if (!gt.id || claimedGoogleIds.has(gt.id)) return false;
-          if ((gt.title ?? '').trim().toLowerCase() !== local.title.trim().toLowerCase()) return false;
-          const gtDueStr = gt.due ? gt.due.split('T')[0] : null;
-          return gtDueStr === localDueStr;
-        });
-
-        if (existingMatch) {
-          claimedGoogleIds.add(existingMatch.id);
-          updateTask(local.id, { googleEventId: existingMatch.id });
-          result.updated++;
-          continue;
-        }
-
-        // New local task — push to Google Tasks
-        const { result: newId } = await withTokenRefresh(
-          token,
-          onTokenRefreshed,
-          (t) => createGoogleTask(
-            t,
-            taskListId,
-            local.title,
-            local.description || undefined,
-            local.dueDate ? toGoogleDateISO(local.dueDate) : undefined
-          )
-        );
-        if (typeof newId === 'string' && newId) {
-          claimedGoogleIds.add(newId);
-          updateTask(local.id, { googleEventId: newId });
-          result.pushed++;
-        } else {
-          console.warn('[TaskSync] createGoogleTask failed for:', local.title);
-        }
-      } else {
-        // Existing Google Task — push local changes if title, description or date diverge
-        const gt = googleTaskMap.get(local.googleEventId);
-        if (!gt) continue; // Task not in Google list (deleted remotely, or wrong ID)
-
-        const updates: Parameters<typeof updateGoogleTask>[3] = {};
-
-        if (gt.title !== local.title) {
-          updates.title = local.title;
-        }
-        if ((gt.notes ?? '') !== (local.description ?? '')) {
-          updates.notes = local.description || '';
-        }
-
-        // Datum-Vergleich im lokalen Kontext — nicht als UTC-String (Timezone-Bug!)
-        const gtDue   = gt.due        ? gt.due.split('T')[0]            : null;
-        const localDue = local.dueDate ? localDateStr(local.dueDate)     : null;
-        if (gtDue !== localDue) {
-          updates.due = local.dueDate
-            ? toGoogleDateISO(local.dueDate)   // Mitternacht UTC des lokalen Datums
-            : undefined;
-        }
-
-        if (Object.keys(updates).length > 0) {
-          await withTokenRefresh(
-            token,
-            onTokenRefreshed,
-            (t) => updateGoogleTask(t, taskListId, local.googleEventId!, updates)
-          ).catch(() => {});
-        }
-      }
-    }
-
-    // ── 6. Diagnose: bereits bestehende Duplikate sichtbar machen ───────────────
+    // ── 4. Diagnose: bereits bestehende Duplikate sichtbar machen ───────────────
     // Nicht-destruktiv (kein Auto-Löschen) – nur Hinweis, falls zwei offene
-    // Tasks mit gleichem Titel unterschiedliche googleEventId haben. Das ist
-    // die Ursache, wenn die manuelle Feed-Reihenfolge für einen bestimmten
-    // Google-Tasks-Task partout nicht geräteübergreifend syncen will: es sind
-    // in Wahrheit zwei verschiedene Tasks (zwei verschiedene googleEventId),
-    // die nur zufällig gleich heißen.
+    // Tasks mit gleichem Titel unterschiedliche googleEventId haben.
     const finalTasks = useStore.getState().tasks.filter((t) => !t.completed && t.googleEventId);
     const byTitle = new Map<string, typeof finalTasks>();
     for (const t of finalTasks) {
