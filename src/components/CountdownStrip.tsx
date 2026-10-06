@@ -16,7 +16,7 @@
  */
 
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, TextInput, Modal, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ScrollView, TextInput, Modal, ActivityIndicator, Platform } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { ThemeColors, SOFT_BORDER } from '../utils/theme';
 import { DatePickerModal } from './DatePickerModal';
@@ -130,6 +130,7 @@ export function CountdownStrip({ colors, compact = false }: { colors: ThemeColor
   const [busy, setBusy] = useState(false);
   const [noteDraft, setNoteDraft] = useState('');
   const [linksDraft, setLinksDraft] = useState<string[]>([]);
+  const [noteHeight, setNoteHeight] = useState(0);
 
   useEffect(() => {
     if (!familyId || !uid) return;
@@ -247,8 +248,14 @@ export function CountdownStrip({ colors, compact = false }: { colors: ThemeColor
 
       {/* TE-13: Tippen daneben / Zurück speichert; das X bleibt "Abbrechen". */}
       <Modal visible={formVisible} animationType="fade" transparent onRequestClose={dismissForm}>
-        <Pressable style={styles.backdrop} onPress={dismissForm}>
-          <Pressable style={[styles.formCard, { backgroundColor: colors.surface, borderColor: colors.border }]} onPress={() => {}}>
+        {/* TE-21: Wie beim Geistesblitz scrollt das ganze Modal, nicht die Notiz. */}
+        <View style={styles.backdrop}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={dismissForm} />
+          <ScrollView
+            style={[styles.formCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            contentContainerStyle={styles.formCardContent}
+            keyboardShouldPersistTaps="handled"
+          >
             <View style={styles.formHeader}>
               <Text style={[styles.formTitle, { color: colors.text }]}>
                 {editing ? 'Countdown bearbeiten' : 'Neuer Countdown'}
@@ -302,11 +309,14 @@ export function CountdownStrip({ colors, compact = false }: { colors: ThemeColor
 
             {/* TE-20: Details – aus dem Geistesblitz übernommen oder eigene Notiz. */}
             <TextInput
-              style={[styles.input, styles.noteInput, { color: colors.text, backgroundColor: colors.inputBackground, borderColor: colors.border }]}
+              style={[styles.input, styles.noteInput, { color: colors.text, backgroundColor: colors.inputBackground, borderColor: colors.border, height: Math.max(70, noteHeight) }]}
               placeholder="Notiz, z. B. Buchungsnummer, Check-in 15 Uhr"
               placeholderTextColor={colors.placeholder}
               value={noteDraft}
               onChangeText={setNoteDraft}
+              // Feld wächst mit dem Inhalt statt intern zu scrollen.
+              onContentSizeChange={(e) => setNoteHeight(e.nativeEvent.contentSize.height + (Platform.OS === 'web' ? 0 : 24))}
+              scrollEnabled={false}
               multiline
               textAlignVertical="top"
               accessibilityLabel="Notiz zum Countdown"
@@ -335,8 +345,8 @@ export function CountdownStrip({ colors, compact = false }: { colors: ThemeColor
                 <Text style={[styles.saveBtnText, { color: colors.accentFg }]}>Speichern</Text>
               </Pressable>
             </View>
-          </Pressable>
-        </Pressable>
+          </ScrollView>
+        </View>
       </Modal>
 
       <DatePickerModal
@@ -391,11 +401,12 @@ const styles = StyleSheet.create({
 
   addCard: { borderStyle: 'dashed', gap: 3 },
   clip: { position: 'absolute', top: 5, right: 5 },
-  noteInput: { minHeight: 70, maxHeight: 180, lineHeight: 19 },
+  noteInput: { lineHeight: 19 },
   linkRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 },
 
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center', padding: 24 },
-  formCard: { width: '100%', maxWidth: 420, borderRadius: 16, borderWidth: 1, padding: 18 },
+  formCard: { width: '100%', maxWidth: 420, maxHeight: '90%', flexGrow: 0, borderRadius: 16, borderWidth: 1 },
+  formCardContent: { padding: 18 },
   formHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   formTitle: { fontSize: 16, fontWeight: '800' },
 
