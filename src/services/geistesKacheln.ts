@@ -40,6 +40,8 @@ export interface GeistesKachel {
   stage?: GeistesStage;
   /** Id des daraus angelegten Personal Tasks (ScratchEntry.id). */
   taskId?: string | null;
+  /** Aus dem Text gezogene URLs – als kompakte Chips statt Langtext angezeigt. */
+  links?: string[];
 }
 
 const tilesCol = (familyId: string, uid: string) =>
@@ -76,12 +78,14 @@ export async function addGeistesKachel(
   emoji: string | null,
   color: string,
   label?: string | null,
+  links: string[] = [],
 ): Promise<string> {
   const ref = await addDoc(tilesCol(familyId, uid), {
     text: text.trim(),
     emoji: emoji ?? null,
     color,
     label: label ?? null,
+    links,
     createdAt: new Date().toISOString(),
   });
   return ref.id;
@@ -91,7 +95,7 @@ export async function updateGeistesKachel(
   familyId: string,
   uid: string,
   id: string,
-  patch: Partial<Pick<GeistesKachel, 'text' | 'emoji' | 'color' | 'label' | 'stage' | 'taskId'>>,
+  patch: Partial<Pick<GeistesKachel, 'text' | 'emoji' | 'color' | 'label' | 'stage' | 'taskId' | 'links'>>,
 ): Promise<void> {
   await updateDoc(
     doc(db, 'families', familyId, 'geistesKachelByUser', uid, 'tiles', id),

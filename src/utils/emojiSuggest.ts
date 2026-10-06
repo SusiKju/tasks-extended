@@ -10,14 +10,14 @@
 
 import { EMOJI_DE } from '../data/emojiDe';
 
-type Entry = { e: string; words: string[] };
+type Entry = { e: string; group: number; words: string[] };
 
 let index: Entry[] | null = null;
 function getIndex(): Entry[] {
   if (!index) {
     index = EMOJI_DE.split('\n').map((line) => {
-      const [e, w] = line.split('\t');
-      return { e, words: w.split('|') };
+      const [e, g, w] = line.split('\t');
+      return { e, group: Number(g), words: w.split('|') };
     });
   }
   return index;
@@ -75,6 +75,47 @@ export function suggestEmojis(primary: string, secondary = '', limit = 8): strin
   // Gleichstand: frühere Position = gebräuchlicheres Emoji.
   scored.sort((a, b) => b.score - a.score || a.pos - b.pos);
   return scored.slice(0, limit).map((s) => s.e);
+}
+
+// Farben nach Emoji-Kategorie (emojibase-Gruppen), je zwei kräftige Töne, damit
+// benachbarte Kacheln derselben Kategorie trotzdem unterscheidbar bleiben.
+const GROUP_COLORS: Record<number, [string, string]> = {
+  0: ['#FFC83D', '#FF8A3D'], // Smileys
+  1: ['#FF6B9D', '#E879F9'], // Menschen
+  3: ['#4ADE80', '#2DD4BF'], // Tiere & Natur
+  4: ['#FB923C', '#F87171'], // Essen & Trinken
+  5: ['#60A5FA', '#2DD4BF'], // Reisen & Orte
+  6: ['#A78BFA', '#F472B6'], // Aktivitäten
+  7: ['#FACC15', '#22D3EE'], // Objekte
+  8: ['#C084FC', '#34D399'], // Symbole
+  9: ['#F87171', '#60A5FA'], // Flaggen
+};
+const ALL_COLORS = Object.values(GROUP_COLORS).flat();
+
+function hash(str: string): number {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) | 0;
+  return Math.abs(h);
+}
+
+let groupByEmoji: Map<string, number> | null = null;
+/** Emoji-Kategorie; Varianten-Selektor (U+FE0F) wird ignoriert. */
+function emojiGroup(emoji: string): number | undefined {
+  if (!groupByEmoji) {
+    groupByEmoji = new Map();
+    for (const { e, group } of getIndex()) groupByEmoji.set(e.replace(/\uFE0F/g, ''), group);
+  }
+  return groupByEmoji.get(emoji.replace(/\uFE0F/g, ''));
+}
+
+/**
+ * Farbe aus dem Kontext: Kategorie des Emojis bestimmt die Farbfamilie
+ * (Reise = blau, Natur = grün …), `seed` (Label/Text) wählt den Ton darin.
+ * Unbekanntes Emoji → irgendeine kräftige Farbe, stabil pro seed.
+ */
+export function emojiColor(emoji: string, seed: string): string {
+  const pair = GROUP_COLORS[emojiGroup(emoji) ?? -1];
+  return pair ? pair[hash(seed) % 2] : ALL_COLORS[hash(seed + emoji) % ALL_COLORS.length];
 }
 
 /** true, wenn der gespeicherte Symbol-Wert ein Ionicons-Name (Altbestand) statt eines Emojis ist. */

@@ -6,7 +6,9 @@
  * (Funke → Gedanke → Plan → Aufgabe). Antippen öffnet das Sheet: dort wird
  * der nächste konkrete Schritt als Personal Task angelegt.
  * Symbol: Emoji, automatisch aus Label/Text vorgeschlagen (utils/emojiSuggest);
- * Altbestand mit Ionicons-Namen wird weiter als Icon gezeigt.
+ * Altbestand mit Ionicons-Namen bekommt automatisch ein Emoji. Farbe ergibt
+ * sich aus der Emoji-Kategorie (emojiColor) – keine manuelle Farbwahl.
+ * URLs im Text werden als kompakte Link-Chips (Favicon + Domain) geführt.
  */
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
@@ -22,6 +24,8 @@ import {
   Platform,
   ActivityIndicator,
   Dimensions,
+  Image,
+  Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ThemeColors, SOFT_BORDER } from '../utils/theme';
@@ -45,11 +49,9 @@ import {
   parseScratchHistory,
   serializeScratchpad,
 } from './Scratchpad';
-import { suggestEmojis, isIoniconName } from '../utils/emojiSuggest';
+import { suggestEmojis, isIoniconName, emojiColor } from '../utils/emojiSuggest';
 
 // ─── Typen ────────────────────────────────────────────────────────────────────
-
-type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 
 /** Status des aus dem Geistesblitz angelegten Personal Tasks. */
 type LinkedTask = { text: string; done: boolean } | null;
@@ -65,21 +67,51 @@ function autoEmoji(label: string, text: string): string {
   return suggestEmojis(label, text, 1)[0] ?? DEFAULT_EMOJI;
 }
 
-function KachelSymbol({ value, size, color }: { value: string; size: number; color: string }) {
-  if (isIoniconName(value)) return <Ionicons name={value as IoniconName} size={size} color={color} />;
+/** Gespeichertes Emoji, sonst (leer oder Ionicons-Altbestand) automatisch aus Label/Text. */
+function symbolFor(k: GeistesKachel): string {
+  return k.emoji && !isIoniconName(k.emoji) ? k.emoji : autoEmoji(k.label ?? '', k.text);
+}
+
+function colorFor(symbol: string, label: string, text: string): string {
+  return emojiColor(symbol, label.trim() || text);
+}
+
+function KachelSymbol({ value, size }: { value: string; size: number }) {
   return <Text style={{ fontSize: Math.round(size * 0.9), lineHeight: Math.round(size * 1.15) }}>{value}</Text>;
 }
 
-// ─── Farb-Palette ─────────────────────────────────────────────────────────────
+// ─── Links ────────────────────────────────────────────────────────────────────
 
-const COLORS = [
-  '#6C63FF', '#FF6B9D', '#4ECDC4', '#45B7D1',
-  '#FF7675', '#A29BFE', '#00B894', '#FD79A8',
-  '#55EFC4', '#FDCB6E', '#E17055', '#0984E3',
-];
+const URL_RE = /https?:\/\/[^\s<>"']+/g;
 
-function randomColor(): string {
-  return COLORS[Math.floor(Math.random() * COLORS.length)];
+/** URLs aus dem Text ziehen; übrig bleibt der Text ohne URLs (Leerzeilen zusammengefasst). */
+function extractLinks(text: string): { text: string; links: string[] } {
+  const links = (text.match(URL_RE) ?? []).map((u) => u.replace(/[.,;:!?)\]]+$/, ''));
+  if (links.length === 0) return { text, links };
+  const rest = text.replace(URL_RE, '').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+  return { text: rest, links };
+}
+
+function hostOf(url: string): string {
+  try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return url; }
+}
+
+function LinkChip({ url, color, colors, onRemove }: { url: string; color: string; colors: ThemeColors; onRemove: () => void }) {
+  const [iconFailed, setIconFailed] = useState(false);
+  const host = hostOf(url);
+  return (
+    <View style={[s.linkChip, { borderColor: color + '66', backgroundColor: color + '14' }]}>
+      <Pressable style={s.linkOpen} onPress={() => Linking.openURL(url)} accessibilityRole="link" accessibilityLabel={`Link öffnen: ${host}`}>
+        {iconFailed
+          ? <Ionicons name="link-outline" size={15} color={color} />
+          : <Image source={{ uri: `https://${host}/favicon.ico` }} style={s.favicon} onError={() => setIconFailed(true)} />}
+        <Text style={[s.linkText, { color: colors.text }]} numberOfLines={1}>{host}</Text>
+      </Pressable>
+      <Pressable style={s.linkRemove} onPress={onRemove} accessibilityLabel={`Link ${host} entfernen`}>
+        <Ionicons name="close" size={14} color={colors.textMuted} />
+      </Pressable>
+    </View>
+  );
 }
 
 // ─── Reifegrad ────────────────────────────────────────────────────────────────
@@ -139,7 +171,7 @@ interface ModalProps {
   visible: boolean;
   editing: GeistesKachel | null;
   linkedTask: LinkedTask;
-  onSave: (text: string, icon: string, color: string, label: string, stage: GeistesStage) => Promise<void>;
+  onSave: (text: string, icon: string, color: string, label: string, stage: GeistesStage, links: string[]) => Promise<void>;
   onCreateTask: (step: string, dueDate: string | null) => Promise<void>;
   onDelete: () => Promise<void>;
   onClose: () => void;
@@ -149,8 +181,9 @@ interface ModalProps {
 function KachelModal({ visible, editing, linkedTask, onSave, onCreateTask, onDelete, onClose, colors }: ModalProps) {
   const [text, setText] = useState('');
   const [icon, setIcon] = useState(DEFAULT_EMOJI);
-  const [color, setColor] = useState(COLORS[0]);
   const [label, setLabel] = useState('');
+  const [links, setLinks] = useState<string[]>([]);
+  const [textHeight, setTextHeight] = useState(0);
   const [stage, setStage] = useState<GeistesStage>('funke');
   const [step, setStep] = useState('');
   const [due, setDue] = useState<DueKey>(null);
@@ -162,15 +195,19 @@ function KachelModal({ visible, editing, linkedTask, onSave, onCreateTask, onDel
 
   useEffect(() => {
     if (visible) {
-      setText(editing?.text ?? '');
-      setIcon(editing?.emoji ?? DEFAULT_EMOJI);
-      setColor(editing?.color ?? randomColor());
+      // Altbestand: URLs, die noch im Text stehen, gleich in Chips überführen.
+      const parsed = extractLinks(editing?.text ?? '');
+      setText(parsed.text);
+      setLinks([...new Set([...(editing?.links ?? []), ...parsed.links])]);
+      setTextHeight(0);
+      const ownEmoji = editing?.emoji && !isIoniconName(editing.emoji) ? editing.emoji : null;
+      setIcon(ownEmoji ?? (editing ? symbolFor(editing) : DEFAULT_EMOJI));
       setLabel(editing?.label ?? '');
       setStage(editing?.stage ?? 'funke');
       setStep('');
       setDue(null);
       setEmojiQuery('');
-      setIconLocked(!!editing?.emoji);
+      setIconLocked(!!ownEmoji);
       if (!editing) setTimeout(() => inputRef.current?.focus(), 120);
     }
   }, [visible, editing]);
@@ -179,6 +216,20 @@ function KachelModal({ visible, editing, linkedTask, onSave, onCreateTask, onDel
   useEffect(() => {
     if (!iconLocked && (text || label)) setIcon(autoEmoji(label, text));
   }, [text, label, iconLocked]);
+
+  const color = colorFor(icon, label, text);
+
+  // Eingefügte URLs sofort zu Chips machen. Beim Tippen erst beim Verlassen des
+  // Feldes, sonst würde eine halb getippte Adresse abgeschnitten.
+  const takeLinks = (value: string) => {
+    const parsed = extractLinks(value);
+    if (parsed.links.length) setLinks((prev) => [...new Set([...prev, ...parsed.links])]);
+    setText(parsed.text);
+  };
+  const handleTextChange = (value: string) => {
+    if (value.length - text.length > 8) takeLinks(value);
+    else setText(value);
+  };
 
   const emojiChoices = useMemo(() => {
     const found = emojiQuery.trim()
@@ -189,18 +240,30 @@ function KachelModal({ visible, editing, linkedTask, onSave, onCreateTask, onDel
     return list.includes(icon) ? list : [icon, ...list];
   }, [emojiQuery, label, text, icon]);
 
+  /** Text + Links final, falls noch eine getippte URL im Text steht. */
+  const finalParts = () => {
+    const parsed = extractLinks(text);
+    return { text: parsed.text, links: [...new Set([...links, ...parsed.links])] };
+  };
+  const hasContent = !!text.trim() || links.length > 0;
+
   const handleSave = async () => {
-    if (!text.trim()) return;
+    if (!hasContent) return;
     setSaving(true);
-    try { await onSave(text, icon, color, label, stage); onClose(); }
+    try {
+      const f = finalParts();
+      await onSave(f.text, icon, color, label, stage, f.links);
+      onClose();
+    }
     finally { setSaving(false); }
   };
 
   const handleCreateTask = async () => {
-    if (!text.trim() || !step.trim()) return;
+    if (!hasContent || !step.trim()) return;
     setSaving(true);
     try {
-      await onSave(text, icon, color, label, stage);
+      const f = finalParts();
+      await onSave(f.text, icon, color, label, stage, f.links);
       await onCreateTask(step, dueISO(due));
       onClose();
     } finally { setSaving(false); }
@@ -225,22 +288,34 @@ function KachelModal({ visible, editing, linkedTask, onSave, onCreateTask, onDel
         >
 
           {/* Vorschau-Symbol */}
-          <View style={[s.previewIcon, { borderColor: color }]}>
-            <KachelSymbol value={icon} size={34} color={color} />
+          <View style={[s.previewIcon, { borderColor: color, backgroundColor: color + '22' }]}>
+            <KachelSymbol value={icon} size={24} />
           </View>
 
           {/* Texteingabe */}
           <TextInput
             ref={inputRef}
-            style={[s.textInput, { color: colors.text, borderColor: color + '50' }]}
+            style={[s.textInput, { color: colors.text, borderColor: color + '50', height: Math.max(90, textHeight) }]}
             value={text}
-            onChangeText={setText}
-            placeholder="Dein Gedanke, deine Idee…"
+            onChangeText={handleTextChange}
+            onBlur={() => takeLinks(text)}
+            // Feld wächst mit dem Inhalt statt intern zu scrollen.
+            onContentSizeChange={(e) => setTextHeight(e.nativeEvent.contentSize.height + (Platform.OS === 'web' ? 0 : 24))}
+            scrollEnabled={false}
+            placeholder="Dein Gedanke, deine Idee… (Links einfach einfügen)"
             placeholderTextColor={colors.textMuted}
             multiline
             textAlignVertical="top"
             accessibilityLabel="Gedanke"
           />
+
+          {links.length > 0 && (
+            <View style={s.linkRow}>
+              {links.map((u) => (
+                <LinkChip key={u} url={u} color={color} colors={colors} onRemove={() => setLinks((prev) => prev.filter((x) => x !== u))} />
+              ))}
+            </View>
+          )}
 
           {/* Kurz-Label für die Kachel – bewusst getrennt vom freien Gedanken-Text
               oben, den der User explizit vergibt, damit er kurz bleibt. */}
@@ -318,12 +393,12 @@ function KachelModal({ visible, editing, linkedTask, onSave, onCreateTask, onDel
                     })}
                   </View>
                   <Pressable
-                    style={[s.taskBtn, { backgroundColor: color, opacity: step.trim() && text.trim() ? 1 : 0.4 }]}
+                    style={[s.taskBtn, { backgroundColor: color, opacity: step.trim() && hasContent ? 1 : 0.4 }]}
                     onPress={handleCreateTask}
-                    disabled={saving || !step.trim() || !text.trim()}
+                    disabled={saving || !step.trim() || !hasContent}
                   >
-                    <Text style={s.saveBtnText}>Als Aufgabe anlegen</Text>
-                    <Ionicons name="arrow-forward" size={16} color="#fff" />
+                    <Text style={[s.saveBtnText, { color: '#111' }]}>Als Aufgabe anlegen</Text>
+                    <Ionicons name="arrow-forward" size={16} color="#111" />
                   </Pressable>
                 </>
               )}
@@ -348,23 +423,10 @@ function KachelModal({ visible, editing, linkedTask, onSave, onCreateTask, onDel
                 onPress={() => { setIcon(em); setIconLocked(true); }}
                 accessibilityLabel={`Symbol ${em}`}
               >
-                <KachelSymbol value={em} size={22} color={colors.textSecondary} />
+                <KachelSymbol value={em} size={22} />
               </Pressable>
             ))}
           </ScrollView>
-
-          {/* Farb-Auswahl */}
-          <Text style={[s.pickerLabel, { color: colors.textMuted }]}>Farbe</Text>
-          <View style={s.colorRow}>
-            {COLORS.map((c) => (
-              <Pressable
-                key={c}
-                style={[s.colorDot, { backgroundColor: c }, color === c && s.colorDotActive]}
-                onPress={() => setColor(c)}
-                accessibilityLabel={`Farbe ${c}`}
-              />
-            ))}
-          </View>
 
           {/* Aktionen */}
           <View style={s.actions}>
@@ -376,9 +438,9 @@ function KachelModal({ visible, editing, linkedTask, onSave, onCreateTask, onDel
               </Pressable>
             )}
             <Pressable
-              style={[s.btn, s.saveBtn, { borderWidth: 1, borderColor: color, opacity: text.trim() ? 1 : 0.4 }]}
+              style={[s.btn, s.saveBtn, { borderWidth: 1, borderColor: color, opacity: hasContent ? 1 : 0.4 }]}
               onPress={handleSave}
-              disabled={saving || !text.trim()}
+              disabled={saving || !hasContent}
             >
               {saving
                 ? <ActivityIndicator size="small" color={color} />
@@ -396,8 +458,8 @@ function KachelModal({ visible, editing, linkedTask, onSave, onCreateTask, onDel
 // Redesign: Im kompakten Dashboard-Layout (einziger Einsatzort dieser
 // Komponente) trägt nicht mehr die Kachel-Fläche die vom User gewählte
 // Volltonfarbe, sondern nur noch Symbol + Reifegrad-Punkte – neutrale dunkle
-// Fläche + dezenter Rahmen, exakt wie Countdown-Kacheln daneben. Braucht der
-// Geistesblitz einen Schritt, wird der Rahmen gelb.
+// Fläche wird mit der Kontextfarbe getönt (farbig, damit Kacheln unterscheidbar
+// sind). Braucht der Geistesblitz einen Schritt, sitzt oben rechts ein Punkt.
 function KachelCard({ kachel, onPress, size, colors, compact, attention }: {
   kachel: GeistesKachel;
   onPress: () => void;
@@ -406,24 +468,27 @@ function KachelCard({ kachel, onPress, size, colors, compact, attention }: {
   compact?: boolean;
   attention: boolean;
 }) {
-  const symbol = kachel.emoji ?? autoEmoji(kachel.label ?? '', kachel.text);
+  const symbol = symbolFor(kachel);
   const label = kachel.label?.trim();
+  const color = colorFor(symbol, label ?? '', kachel.text);
   return (
     <Pressable
       style={({ pressed }) => [
         s.card,
         compact
-          ? { width: size, height: size, backgroundColor: colors.surface, borderWidth: 1, borderColor: attention ? colors.warning : SOFT_BORDER, opacity: pressed ? 0.8 : 1 }
-          : { width: size, height: size, backgroundColor: kachel.color, opacity: pressed ? 0.8 : 1 },
+          ? { width: size, height: size, backgroundColor: color + '33', borderWidth: 1.5, borderColor: color + 'AA', opacity: pressed ? 0.8 : 1 }
+          : { width: size, height: size, backgroundColor: color, opacity: pressed ? 0.8 : 1 },
       ]}
       onPress={onPress}
       accessibilityLabel={`Geistesblitz ${label ?? kachel.text}`}
     >
-      <KachelSymbol value={symbol} size={Math.round(size * (compact && label ? 0.3 : 0.38))} color={compact ? kachel.color : '#fff'} />
+      <KachelSymbol value={symbol} size={Math.round(size * (compact && label ? 0.3 : 0.38))} />
       {compact && label ? (
         <Text style={[s.cardLabel, { color: colors.textSecondary }]} numberOfLines={1}>{label}</Text>
       ) : null}
-      <StageDots stage={kachel.stage} color={compact ? kachel.color : '#fff'} size={Math.max(3, Math.round(size / 16))} />
+      <StageDots stage={kachel.stage} color={compact ? color : '#fff'} size={Math.max(3, Math.round(size / 16))} />
+      {/* Braucht einen Schritt: Punkt statt Rahmen, damit die Kachelfarbe sichtbar bleibt. */}
+      {attention && <View style={[s.attentionDot, { backgroundColor: colors.warning, borderColor: colors.background }]} />}
     </Pressable>
   );
 }
@@ -462,11 +527,11 @@ export function GeistesKacheln({ colors, isDark, areaWidth, columns, compact = f
   const openNew    = useCallback(() => { setEditing(null); setModalVisible(true); }, []);
   const openEdit   = useCallback((k: GeistesKachel) => { setEditing(k); setModalVisible(true); }, []);
 
-  const handleSave = useCallback(async (text: string, icon: string, color: string, label: string, stage: GeistesStage) => {
+  const handleSave = useCallback(async (text: string, icon: string, color: string, label: string, stage: GeistesStage, links: string[]) => {
     if (!fid || !uid) return;
     const trimmedLabel = label.trim() || null;
-    if (editing) await updateGeistesKachel(fid, uid, editing.id, { text, emoji: icon, color, label: trimmedLabel, stage });
-    else         await addGeistesKachel(fid, uid, text, icon, color, trimmedLabel);
+    if (editing) await updateGeistesKachel(fid, uid, editing.id, { text, emoji: icon, color, label: trimmedLabel, stage, links });
+    else         await addGeistesKachel(fid, uid, text, icon, color, trimmedLabel, links);
   }, [fid, uid, editing]);
 
   // Nächsten Schritt als Personal Task (Notizblock-Eintrag) ganz oben anlegen.
@@ -475,7 +540,7 @@ export function GeistesKacheln({ colors, isDark, areaWidth, columns, compact = f
     if (!fid || !uid || !editing) return;
     const id = makeNoteId();
     const prefix = editing.label?.trim();
-    const entry: ScratchEntry = { id, text: prefix ? `${prefix}: ${step.trim()}` : step.trim(), color: editing.color, dueDate };
+    const entry: ScratchEntry = { id, text: prefix ? `${prefix}: ${step.trim()}` : step.trim(), color: colorFor(symbolFor(editing), prefix ?? '', editing.text), dueDate };
     const current = parseScratchpad(await loadScratchpad(fid, uid));
     // parseScratchpad liefert bei leerem Notizblock einen id-losen Platzhalter.
     const isPlaceholder = current.length === 1 && !current[0].id && !current[0].text.trim();
@@ -592,6 +657,7 @@ const s = StyleSheet.create({
   card: { borderRadius: 14, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4, gap: 2 },
   cardLabel: { fontSize: 8.5, fontWeight: '600', textAlign: 'center' },
   dots: { flexDirection: 'row', gap: 2, marginTop: 1 },
+  attentionDot: { position: 'absolute', top: 5, right: 5, width: 9, height: 9, borderRadius: 5, borderWidth: 1.5 },
   addCard: { borderRadius: 14, borderWidth: 1.5, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center', gap: 3 },
 
   empty: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1.5, borderStyle: 'dashed', borderRadius: 12, padding: 16 },
@@ -614,16 +680,22 @@ const s = StyleSheet.create({
 
   previewIcon: {
     alignSelf: 'center',
-    width: 64, height: 64,
-    borderRadius: 16, borderWidth: 1.5,
+    width: 44, height: 44,
+    borderRadius: 12, borderWidth: 1.5,
     alignItems: 'center', justifyContent: 'center',
-    marginBottom: 4,
   },
 
   textInput: {
     borderWidth: 1.5, borderRadius: 10, padding: 12,
-    fontSize: 14, minHeight: 90, maxHeight: 200, lineHeight: 20,
+    fontSize: 14, lineHeight: 20,
   },
+
+  linkRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  linkChip: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 999, maxWidth: '100%' },
+  linkOpen: { flexDirection: 'row', alignItems: 'center', gap: 7, paddingLeft: 10, paddingVertical: 8, flexShrink: 1 },
+  linkRemove: { paddingHorizontal: 10, paddingVertical: 8 },
+  favicon: { width: 16, height: 16, borderRadius: 3 },
+  linkText: { fontSize: 13, fontWeight: '600', flexShrink: 1 },
 
   labelInput: {
     borderWidth: 1.5, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10,
@@ -659,10 +731,6 @@ const s = StyleSheet.create({
     borderWidth: 1.5, borderColor: '#FFFFFF15',
     backgroundColor: '#FFFFFF08',
   },
-
-  colorRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  colorDot: { width: 24, height: 24, borderRadius: 12 },
-  colorDotActive: { borderWidth: 3, borderColor: '#FFFFFF', transform: [{ scale: 1.2 }] },
 
   actions: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 10 },
   btn: { borderRadius: 10, paddingHorizontal: 16, paddingVertical: 10, alignItems: 'center', justifyContent: 'center' },
