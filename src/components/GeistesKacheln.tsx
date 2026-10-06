@@ -461,6 +461,10 @@ function KachelCard({ kachel, onPress, size, colors, compact, attention }: {
   );
 }
 
+const BIG_FACTOR = 1.25; // Kachel ab „Plan“
+const ADD_FACTOR = 0.5;  // Plus-Feld neben Kacheln: halb so breit
+const MIN_TILE = 44;
+
 // ─── Hauptkomponente ──────────────────────────────────────────────────────────
 
 export function GeistesKacheln({ colors, isDark, areaWidth, columns, compact = false }: { colors: ThemeColors; isDark: boolean; areaWidth?: number; columns?: number; compact?: boolean }) {
@@ -528,13 +532,19 @@ export function GeistesKacheln({ colors, isDark, areaWidth, columns, compact = f
   // bisherige Vollbild-Fall (8 Spalten über die Fensterbreite).
   const cols = columns ?? 8;
   const aw = areaWidth ?? Dimensions.get('window').width;
-  const tileSize = Math.floor((aw - 32 - (cols - 1) * 6) / cols);
+  const colSize = Math.floor((aw - 32 - (cols - 1) * 6) / cols);
 
   // Weiter gereift = weiter vorn; innerhalb gleicher Stufe neueste zuerst.
   const sortedTiles = useMemo(
     () => [...tiles].sort((a, b) => stageIndex(b.stage) - stageIndex(a.stage) || b.createdAt.localeCompare(a.createdAt)),
     [tiles],
   );
+
+  // Kacheln (Plan+ zählt 1,25) und schmales Plus-Feld (0,5) sollen in eine Reihe
+  // passen; dafür notfalls etwas kleiner, aber nie unter MIN_TILE – dann bricht um.
+  const units = sortedTiles.reduce((n, k) => n + (stageIndex(k.stage) >= 2 ? BIG_FACTOR : 1), 0) + ADD_FACTOR;
+  const fitSize = Math.floor((aw - 32 - sortedTiles.length * 6) / units);
+  const tileSize = Math.min(colSize, Math.max(MIN_TILE, fitSize));
 
   return (
     <View style={s.section}>
@@ -559,7 +569,7 @@ export function GeistesKacheln({ colors, isDark, areaWidth, columns, compact = f
           <Pressable
             style={({ pressed }) => [
               s.addCard,
-              { width: tileSize, height: tileSize, borderColor: SOFT_BORDER, opacity: pressed ? 0.6 : 1 },
+              { width: colSize, height: colSize, borderColor: SOFT_BORDER, opacity: pressed ? 0.6 : 1 },
             ]}
             onPress={openNew}
             accessibilityLabel="Geistesblitz anlegen"
@@ -583,7 +593,7 @@ export function GeistesKacheln({ colors, isDark, areaWidth, columns, compact = f
               kachel={k}
               onPress={() => openEdit(k)}
               // Ab „Plan“ (3 Punkte) etwas größer – Reife soll man sehen.
-              size={stageIndex(k.stage) >= 2 ? Math.round(tileSize * 1.25) : tileSize}
+              size={stageIndex(k.stage) >= 2 ? Math.floor(tileSize * BIG_FACTOR) : tileSize}
               colors={colors}
               compact={compact}
               attention={needsStep(k, linkedFor(k))}
@@ -592,12 +602,12 @@ export function GeistesKacheln({ colors, isDark, areaWidth, columns, compact = f
           <Pressable
             style={({ pressed }) => [
               s.addCard,
-              { width: tileSize, height: tileSize, borderColor: SOFT_BORDER, opacity: pressed ? 0.6 : 1 },
+              { width: Math.floor(tileSize * ADD_FACTOR), height: tileSize, borderColor: SOFT_BORDER, opacity: pressed ? 0.6 : 1 },
             ]}
             onPress={openNew}
             accessibilityLabel="Geistesblitz anlegen"
           >
-            <Ionicons name="add" size={22} color={colors.textMuted} />
+            <Ionicons name="add" size={18} color={colors.textMuted} />
           </Pressable>
         </View>
       )}
