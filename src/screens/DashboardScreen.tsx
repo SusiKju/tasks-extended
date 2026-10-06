@@ -238,7 +238,7 @@ export function DashboardScreen() {
   const { user } = useFirebaseAuth();
   const { syncTasks } = useGoogleTasksSync();
   const { syncBirthdays } = useGoogleContactsBirthdaysSync();
-  const { myName: fuerUnsMyName, sentToday: fuerUnsSentToday } = useFuerUns();
+  const fuerUns = useFuerUns();
 
   // Sync-Button
   const [syncing, setSyncing] = useState(false);
@@ -857,10 +857,11 @@ export function DashboardScreen() {
         </Animated.View>
       )}
 
-      {/* ── "Für uns"-Reminder (TE-55): gleiche Position/Prominenz wie die
-          Geburtstags-Card, aber bewusst ohne Pulsieren. Individuell pro
-          Person – bleibt sichtbar bis ICH selbst heute etwas geschickt habe. */}
-      {!!fuerUnsMyName && !fuerUnsSentToday && <FuerUnsReminderBanner colors={colors} />}
+      {/* ── "Für uns"-Karte (TE-55, seit TE-5 mit Antworten + Lust-Barometer):
+          gleiche Position wie die Geburtstags-Card, bewusst ohne Pulsieren.
+          Nur wenn der Verlauf lesbar ist – wer nicht in fuerUnsUids steht,
+          bekommt einen Permission-Fehler und soll die Karte gar nicht sehen. */}
+      {!!fuerUns.myName && fuerUns.loaded && !fuerUns.loadError && <FuerUnsReminderBanner colors={colors} fuerUns={fuerUns} />}
 
       {/* TE-25: „Heutige Termine" und „Kurzübersicht" sind ein gemeinsamer Block
           „Heute" an der früheren Termine-Position (vor Geistesblitzen/Countdowns):
@@ -985,7 +986,20 @@ export function DashboardScreen() {
           );
         };
 
-        const gtList = showBlock('googleTasks') ? dashboardTasks.slice(0, 6) : [];
+        // TE-28: Ein Google Task, zu dem es am selben Tag einen gleichnamigen
+        // Kalendertermin gibt (z. B. in Google als Task angelegt, dann als Termin
+        // geändert), nur einmal zeigen – der Termin trägt die Uhrzeit, gewinnt also.
+        const evKeys = new Set(
+          (showCal ? [...todayEvents, ...tomorrowEvents] : []).map(
+            (e) => `${localDateStr(e.start)}|${e.summary.trim().toLowerCase()}`,
+          ),
+        );
+        const todayKey = localDateStr(new Date().toISOString());
+        const gtList = showBlock('googleTasks')
+          ? dashboardTasks
+              .filter((t) => !evKeys.has(`${t.dueDate ? localDateStr(t.dueDate) : todayKey}|${t.title.trim().toLowerCase()}`))
+              .slice(0, 6)
+          : [];
         const ptList = showBlock('scratchpad') ? personalNotes : [];
         const stList = showBlock('schoolTasks') ? upcomingSchoolTermine.slice(0, 6) : [];
         const evTomorrow = showCal ? tomorrowEvents : [];
