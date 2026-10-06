@@ -82,12 +82,12 @@ export function FuerUnsReminderBanner({
   const moodLine = (partnerMood || myMood) && (
     <View style={styles.moodLine}>
       <Text style={[styles.moodText, { color: colors.textMuted }]}>
-        {partnerMood ? `${partner}: ${FUER_UNS_MOOD_LEVELS[partnerMood.level]}` : ''}
+        {partnerMood ? `${partner}: ${FUER_UNS_MOOD_LEVELS[partnerMood.level].emoji} ${FUER_UNS_MOOD_LEVELS[partnerMood.level].label}` : ''}
         {partnerMood && myMood ? '  ·  ' : ''}
       </Text>
       {myMood && (
         <Pressable onPress={() => setMoodOpen((v) => !v)} hitSlop={6}>
-          <Text style={[styles.moodText, { color: colors.textMuted }]}>Du: {FUER_UNS_MOOD_LEVELS[myMood.level]}</Text>
+          <Text style={[styles.moodText, { color: colors.textMuted }]}>Du: {FUER_UNS_MOOD_LEVELS[myMood.level].emoji} {FUER_UNS_MOOD_LEVELS[myMood.level].label}</Text>
         </Pressable>
       )}
     </View>
@@ -169,18 +169,15 @@ export function FuerUnsReminderBanner({
               const on = myMood?.level === i;
               return (
                 <Pressable
-                  key={m}
+                  key={m.label}
                   onPress={() => pickMood(i)}
                   style={[styles.scaleBtn, { borderColor: on ? ACCENT : colors.border, backgroundColor: on ? ACCENT + '22' : colors.surface }]}
                 >
-                  <Text style={styles.scaleEmoji}>{m}</Text>
+                  <Text style={styles.scaleEmoji}>{m.emoji}</Text>
+                  <Text style={[styles.scaleLabel, { color: on ? colors.text : colors.textMuted }]}>{m.label}</Text>
                 </Pressable>
               );
             })}
-          </View>
-          <View style={styles.scaleEnds}>
-            <Text style={[styles.scaleEnd, { color: colors.textMuted }]}>kaum</Text>
-            <Text style={[styles.scaleEnd, { color: colors.textMuted }]}>sehr</Text>
           </View>
         </View>
       )}
@@ -216,8 +213,7 @@ const styles = StyleSheet.create({
   suggestText: { fontSize: 13, fontWeight: '700' },
   shuffleBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 7 },
   shuffleText: { fontSize: 12.5, fontWeight: '700' },
-  scaleEnds: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 4 },
-  scaleEnd: { fontSize: 10.5 },
+  scaleLabel: { fontSize: 10.5, fontWeight: '600', marginTop: 1 },
   btn: { backgroundColor: ACCENT, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8 },
   btnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
   scale: { flexDirection: 'row', gap: 6 },

@@ -224,7 +224,14 @@ export function sentTodayByMe(items: FuerUnsItem[], myUid: string): boolean {
 // gesetzt wurde – ein „🔥 von vor drei Tagen“ soll nicht stehen bleiben.
 //   families/{familyId}/shared/fuerUns/mood/{uid} → FuerUnsMood
 
-export const FUER_UNS_MOOD_LEVELS = ['🕯️', '🌙', '✨', '😏', '🔥'];
+/** Stufen von „keine Lust“ bis „heiß“ – Icon plus Wort, damit niemand raten muss. Gespeichert wird nur der Index. */
+export const FUER_UNS_MOOD_LEVELS = [
+  { emoji: '😴', label: 'Müde' },
+  { emoji: '🤗', label: 'Kuscheln' },
+  { emoji: '😊', label: 'Offen' },
+  { emoji: '😏', label: 'Lust' },
+  { emoji: '🔥', label: 'Heiß' },
+];
 
 export interface FuerUnsMood {
   uid: string;
