@@ -146,8 +146,13 @@ export function FuerUnsReminderBanner({
               {suggestion} {fuerUnsComboLabel(suggestion)}
             </Text>
           </View>
-          <Pressable onPress={() => setSuggestion((s) => suggestCombo(s))} hitSlop={8} style={styles.iconBtn}>
-            <Ionicons name="shuffle" size={18} color={colors.textMuted} />
+          <Pressable
+            onPress={() => setSuggestion((s) => suggestCombo(s))}
+            hitSlop={6}
+            style={({ pressed }) => [styles.shuffleBtn, { borderColor: ACCENT, backgroundColor: colors.surface, opacity: pressed ? 0.6 : 1 }]}
+          >
+            <Ionicons name="shuffle" size={16} color={ACCENT} />
+            <Text style={[styles.shuffleText, { color: ACCENT }]}>Andere</Text>
           </Pressable>
           <Pressable onPress={() => send(suggestion)} style={({ pressed }) => [styles.btn, { opacity: pressed ? 0.7 : 1 }]}>
             <Text style={styles.btnText}>Senden</Text>
@@ -158,7 +163,7 @@ export function FuerUnsReminderBanner({
       {/* Lust-Barometer: ein Tipp, gilt nur für heute */}
       {showMood && (
         <View style={{ gap: 4 }}>
-          <Text style={[styles.sub, { color: colors.textMuted }]}>Und dir heute?</Text>
+          <Text style={[styles.sub, { color: colors.textMuted }]}>Wie viel Lust hast du heute?</Text>
           <View style={styles.scale}>
             {FUER_UNS_MOOD_LEVELS.map((m, i) => {
               const on = myMood?.level === i;
@@ -172,6 +177,10 @@ export function FuerUnsReminderBanner({
                 </Pressable>
               );
             })}
+          </View>
+          <View style={styles.scaleEnds}>
+            <Text style={[styles.scaleEnd, { color: colors.textMuted }]}>kaum</Text>
+            <Text style={[styles.scaleEnd, { color: colors.textMuted }]}>sehr</Text>
           </View>
         </View>
       )}
@@ -205,7 +214,10 @@ const styles = StyleSheet.create({
   chipEmoji: { fontSize: 15 },
   suggestRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   suggestText: { fontSize: 13, fontWeight: '700' },
-  iconBtn: { padding: 4 },
+  shuffleBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 7 },
+  shuffleText: { fontSize: 12.5, fontWeight: '700' },
+  scaleEnds: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 4 },
+  scaleEnd: { fontSize: 10.5 },
   btn: { backgroundColor: ACCENT, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8 },
   btnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
   scale: { flexDirection: 'row', gap: 6 },
