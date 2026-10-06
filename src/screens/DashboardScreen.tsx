@@ -986,23 +986,21 @@ export function DashboardScreen() {
           );
         };
 
-        // TE-28: Ein Google Task, zu dem es am selben Tag einen gleichnamigen
-        // Kalendertermin gibt (z. B. in Google als Task angelegt, dann als Termin
-        // geändert), nur einmal zeigen – der Termin trägt die Uhrzeit, gewinnt also.
-        const evKeys = new Set(
-          (showCal ? [...todayEvents, ...tomorrowEvents] : []).map(
-            (e) => `${localDateStr(e.start)}|${e.summary.trim().toLowerCase()}`,
-          ),
-        );
+        // TE-28/TE-29: Ein Google Task, zu dem es am selben Tag einen gleichnamigen
+        // Kalendertermin gibt (z. B. Altlast aus der Zeit vor TE-45, als pro Task ein
+        // Termin angelegt wurde), nur einmal zeigen – der Task gewinnt, der Termin
+        // wird ausgeblendet.
+        const gtList = showBlock('googleTasks') ? dashboardTasks.slice(0, 6) : [];
         const todayKey = localDateStr(new Date().toISOString());
-        const gtList = showBlock('googleTasks')
-          ? dashboardTasks
-              .filter((t) => !evKeys.has(`${t.dueDate ? localDateStr(t.dueDate) : todayKey}|${t.title.trim().toLowerCase()}`))
-              .slice(0, 6)
-          : [];
+        const gtKeys = new Set(
+          gtList.map((t) => `${t.dueDate ? localDateStr(t.dueDate) : todayKey}|${t.title.trim().toLowerCase()}`),
+        );
+        const notDupOfTask = (e: CalendarEvent) =>
+          !gtKeys.has(`${localDateStr(e.start)}|${e.summary.trim().toLowerCase()}`);
+        const evToday = showCal ? todayEvents.filter(notDupOfTask) : [];
         const ptList = showBlock('scratchpad') ? personalNotes : [];
         const stList = showBlock('schoolTasks') ? upcomingSchoolTermine.slice(0, 6) : [];
-        const evTomorrow = showCal ? tomorrowEvents : [];
+        const evTomorrow = showCal ? tomorrowEvents.filter(notDupOfTask) : [];
         const gtTomorrow = gtList.filter((t) => isTomorrow(t.dueDate));
         const ptTomorrow = ptList.filter((e) => isTomorrow(e.dueDate));
         const stTomorrow = stList.filter((x) => isTomorrow(x.item.date));
@@ -1041,7 +1039,7 @@ export function DashboardScreen() {
                   <ActivityIndicator color={mono(C.calendar)} size="small" />
                 </View>
               )}
-              {showCal && !calLoading && todayEvents.map((e) => renderEvent(e, true))}
+              {showCal && !calLoading && evToday.map((e) => renderEvent(e, true))}
               {gtList.filter((t) => !isTomorrow(t.dueDate)).map(renderGT)}
               {ptList.filter((e) => !isTomorrow(e.dueDate)).map(renderPT)}
               {stList.filter((x) => !isTomorrow(x.item.date)).map(renderST)}
