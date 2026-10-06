@@ -311,6 +311,7 @@ export interface CalendarEvent {
   location?: string;
   calendarName?: string;
   color?: string;  // resolved hex color for this event
+  isPrivate?: boolean; // Google-Sichtbarkeit "private" (TE-6)
 }
 
 async function fetchEventsFromCalendar(
@@ -352,6 +353,7 @@ async function fetchEventsFromCalendar(
       location: e.location,
       calendarName,
       color,
+      isPrivate: e.visibility === 'private',
     };
   });
 }
