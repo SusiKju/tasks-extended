@@ -201,6 +201,15 @@ service cloud.firestore {
             && request.auth.uid in get(/databases/$(database)/documents/families/$(familyId)).data.fuerUnsUids;
       }
 
+      // Lust-Barometer (TE-5): gleiche Allowlist wie die Nachrichten, aber
+      // schreiben darf jede Person nur ihr eigenes Dokument.
+      match /shared/fuerUns/mood/{uid} {
+        allow read: if isFamilyMember(familyId)
+            && request.auth.uid in get(/databases/$(database)/documents/families/$(familyId)).data.fuerUnsUids;
+        allow write: if isFamilyMember(familyId) && request.auth.uid == uid
+            && request.auth.uid in get(/databases/$(database)/documents/families/$(familyId)).data.fuerUnsUids;
+      }
+
       // Countdown-Karten pro User (TE-171: vorher geteilt unter shared/countdowns)
       match /countdownsByUser/{uid}/items/{itemId} {
         allow read, write: if isFamilyMember(familyId) && request.auth.uid == uid;

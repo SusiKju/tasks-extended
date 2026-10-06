@@ -176,7 +176,7 @@ function itemDoc(familyId: string, itemId: string) {
 export async function setFuerUnsReaction(
   familyId: string,
   itemId: string,
-  reaction: { emoji: string; by: string } | null
+  reaction: { emoji: string; by: string; byUid?: string } | null
 ): Promise<void> {
   await updateDoc(itemDoc(familyId, itemId), { reaction });
 }
@@ -217,4 +217,49 @@ export function unreadFromPartner(items: FuerUnsItem[], myUid: string): FuerUnsI
 export function sentTodayByMe(items: FuerUnsItem[], myUid: string): boolean {
   const today = localDateStr(new Date().toISOString());
   return items.some((i) => i.addedByUid === myUid && localDateStr(i.createdAt) === today);
+}
+
+// ── Lust-Barometer ──────────────────────────────────────────────────────────
+// Ein Tipp am Tag, pro Person ein Dokument. Gilt nur für den Tag, an dem es
+// gesetzt wurde – ein „🔥 von vor drei Tagen“ soll nicht stehen bleiben.
+//   families/{familyId}/shared/fuerUns/mood/{uid} → FuerUnsMood
+
+export const FUER_UNS_MOOD_LEVELS = ['🕯️', '🌙', '✨', '😏', '🔥'];
+
+export interface FuerUnsMood {
+  uid: string;
+  /** Index in FUER_UNS_MOOD_LEVELS. */
+  level: number;
+  /** Lokales Datum (yyyy-MM-dd), an dem der Wert gesetzt wurde. */
+  date: string;
+  updatedAt: string;
+}
+
+/** Echtzeit-Listener auf die heutigen Barometer-Werte beider Partner (ältere Tage fallen raus). */
+export function subscribeToFuerUnsMoods(
+  familyId: string,
+  onChange: (moods: FuerUnsMood[]) => void,
+  onError?: (error: unknown) => void
+): Unsubscribe {
+  return onSnapshot(
+    collection(db, 'families', familyId, 'shared', 'fuerUns', 'mood'),
+    (snap) => {
+      const today = localDateStr(new Date().toISOString());
+      onChange(
+        snap.docs
+          .map((d) => ({ uid: d.id, ...d.data() } as FuerUnsMood))
+          .filter((m) => m.date === today)
+      );
+    },
+    (error) => onError?.(error)
+  );
+}
+
+export async function setFuerUnsMood(familyId: string, uid: string, level: number): Promise<void> {
+  const now = new Date().toISOString();
+  await setDoc(doc(db, 'families', familyId, 'shared', 'fuerUns', 'mood', uid), {
+    level,
+    date: localDateStr(now),
+    updatedAt: now,
+  });
 }

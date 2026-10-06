@@ -19,6 +19,8 @@ import {
   subscribeToFuerUns,
   unreadFromPartner,
   sentTodayByMe,
+  FuerUnsMood,
+  subscribeToFuerUnsMoods,
 } from '../services/fuerUns';
 
 export function useFuerUns() {
@@ -30,6 +32,7 @@ export function useFuerUns() {
   const [deletedItems, setDeletedItems] = useState<FuerUnsItem[]>([]);
   const [loadError, setLoadError] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [moods, setMoods] = useState<FuerUnsMood[]>([]);
 
   useEffect(() => {
     if (!familyId) {
@@ -53,6 +56,15 @@ export function useFuerUns() {
     );
   }, [familyId]);
 
+  // Lust-Barometer: Fehler (z. B. Rule noch nicht deployt) lässt es nur leer.
+  useEffect(() => {
+    if (!familyId) {
+      setMoods([]);
+      return;
+    }
+    return subscribeToFuerUnsMoods(familyId, setMoods, () => setMoods([]));
+  }, [familyId]);
+
   const myName = members.find((m) => m.uid === myUid)?.displayName ?? null;
   const unread = myUid ? unreadFromPartner(items, myUid) : [];
 
@@ -65,6 +77,13 @@ export function useFuerUns() {
     loadError,
     loaded,
     unreadCount: unread.length,
+    myMood: moods.find((m) => m.uid === myUid) ?? null,
+    partnerMood: moods.find((m) => m.uid !== myUid) ?? null,
+    partnerName: (() => {
+      const partnerUid = items.find((i) => i.addedByUid && i.addedByUid !== myUid)?.addedByUid
+        ?? moods.find((m) => m.uid !== myUid)?.uid;
+      return members.find((m) => m.uid === partnerUid)?.displayName ?? null;
+    })(),
     sentToday: myUid ? sentTodayByMe(items, myUid) : true,
   };
 }

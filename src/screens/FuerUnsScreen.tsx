@@ -367,8 +367,8 @@ const s = StyleSheet.create({
 
   // Kombo-Chip-Leiste + Antwort-Kombos
   comboBar: { gap: 6, paddingVertical: 2 },
-  comboChip: { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 16, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 6, maxWidth: 260 },
-  comboChipEmoji: { fontSize: 16 },
+  comboChip: { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 16, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 5, maxWidth: 230 },
+  comboChipEmoji: { fontSize: 15, flexShrink: 0 },
   comboChipLabel: { fontSize: 12.5, fontWeight: '600', flexShrink: 1 },
   replyBox: { borderWidth: 1, borderRadius: 12, padding: 10, gap: 6 },
   replyTitle: { fontSize: 11.5, fontWeight: '600' },
