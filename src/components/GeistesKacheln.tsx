@@ -453,7 +453,9 @@ function KachelCard({ kachel, onPress, size, colors, compact, attention }: {
   );
 }
 
-const BIG_FACTOR = 1.25; // Kachel ab „Plan“
+const STEP_GROWTH = 0.125; // je Reifegrad-Step 12,5 % größer: Funke 1, Gedanke 1,125, Plan 1,25
+/** Größenfaktor einer Kachel – wächst mit jedem Step (Punkt) ihres Reifegrads. */
+const sizeFactor = (k: GeistesKachel) => 1 + stageIndex(k.stage) * STEP_GROWTH;
 const ADD_FACTOR = 0.5;  // Plus-Feld neben Kacheln: halb so breit
 const MIN_TILE = 44;
 
@@ -544,9 +546,9 @@ export function GeistesKacheln({ colors, isDark, areaWidth, columns, compact = f
     [tiles],
   );
 
-  // Kacheln (Plan+ zählt 1,25) und schmales Plus-Feld (0,5) sollen in eine Reihe
+  // Kacheln (wachsen mit dem Reifegrad bis 1,25) und schmales Plus-Feld (0,5) sollen in eine Reihe
   // passen; dafür notfalls etwas kleiner, aber nie unter MIN_TILE – dann bricht um.
-  const units = sortedTiles.reduce((n, k) => n + (stageIndex(k.stage) >= 2 ? BIG_FACTOR : 1), 0) + ADD_FACTOR;
+  const units = sortedTiles.reduce((n, k) => n + sizeFactor(k), 0) + ADD_FACTOR;
   const fitSize = Math.floor((aw - 32 - sortedTiles.length * 6) / units);
   const tileSize = Math.min(colSize, Math.max(MIN_TILE, fitSize));
 
@@ -596,8 +598,8 @@ export function GeistesKacheln({ colors, isDark, areaWidth, columns, compact = f
               key={k.id}
               kachel={k}
               onPress={() => openEdit(k)}
-              // Ab „Plan“ (3 Punkte) etwas größer – Reife soll man sehen.
-              size={stageIndex(k.stage) >= 2 ? Math.floor(tileSize * BIG_FACTOR) : tileSize}
+              // Mit jedem weiteren Step (Punkt) größer – Reife soll man sehen.
+              size={Math.floor(tileSize * sizeFactor(k))}
               colors={colors}
               compact={compact}
               attention={needsStep(k)}
