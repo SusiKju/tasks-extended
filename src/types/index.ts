@@ -139,7 +139,7 @@ export type DashboardBlockKey =
   | 'allowance';
 
 export const DASHBOARD_BLOCKS: { key: DashboardBlockKey; label: string; description: string }[] = [
-  { key: 'weckmodus',     label: 'Weckmodus',           description: 'Morgens 5–10 Uhr an Schultagen: muss ein Kind zur 1. Stunde aufstehen oder ist sie frei?' },
+  { key: 'weckmodus',     label: 'Weckmodus',           description: 'Morgens 5–7 Uhr an Schultagen: muss ein Kind zur 1. Stunde aufstehen oder ist sie frei?' },
   { key: 'birthdays',     label: 'Geburtstage',         description: 'Heutige Geburtstage ganz oben.' },
   { key: 'weather',       label: 'Wetter',              description: 'Wettervorhersage neben dem Sync-Button.' },
   { key: 'feed',          label: 'Mein Tag',            description: 'Alle anstehenden Dinge als eine Liste, mit dezentem Icon je Kategorie.' },

@@ -818,7 +818,7 @@ export function DashboardScreen() {
         </View>
       </View>
 
-      {/* ── Weckmodus (TE-82): nur morgens 5-8 Uhr an Schultagen relevant, ── */}
+      {/* ── Weckmodus (TE-82): nur morgens 5-7 Uhr an Schultagen relevant, ── */}
       {/* die Karte selbst entscheidet, ob sie überhaupt etwas rendert. ── */}
       {showBlock('weckmodus') && <WeckmodusCard colors={colors} />}
 
