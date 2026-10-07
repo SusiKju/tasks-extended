@@ -62,19 +62,21 @@ export const FUER_UNS_REACTIONS_EXTRA = ['🔑', '🕯️', '🎲', '🌙', '�
  * eigene Datenstruktur nötig.
  */
 export const FUER_UNS_COMBOS: { emoji: string; label: string }[] = [
-  // Harmlose/liebevolle Kombos zuerst – damit das Set nicht nur um Erotik geht.
-  { emoji: '❤️💭', label: 'Ich denke an dich' },
-  { emoji: '🤗☕', label: 'Lass uns kurz zusammen durchatmen' },
-  { emoji: '🌻😊', label: 'Danke, dass es dich gibt' },
-  { emoji: '🎶💫', label: 'Du gehst mir nicht aus dem Kopf' },
-  { emoji: '🥰🍫', label: 'Kleine Aufmerksamkeit für dich' },
-  { emoji: '🥺🫂', label: 'Nimm mich in die Arme, bitte.' },
-  // Erotische Kombos
-  { emoji: '🎲😈', label: 'Ich hab was Verruchtes im Kopf' },
-  { emoji: '⏱️🔥', label: 'Hast du 5 heiße Minuten – nur für mich, nur jetzt?' },
-  { emoji: '🍑💦', label: 'Richtig Lust auf dich' },
-  { emoji: '🌙✨', label: 'Lass uns heute Nacht was Neues ausprobieren' },
+  // Liebevolle/alltägliche Kombos zuerst – damit das Set nicht nur um Erotik geht.
+  { emoji: '🫶😌', label: 'Bin froh, dass ich dich hab' },
+  { emoji: '🛋️🍷', label: 'Heute Abend Sofa, du und ich?' },
+  { emoji: '👀😍', label: 'Hab grad an dich gedacht und gegrinst' },
+  { emoji: '💪😘', label: 'Du rockst das heute' },
+  { emoji: '🙈💛', label: 'Ich habe vorhin etwas überreagiert. Tut mir leid.' },
+  // Erotische Kombos (ab FUER_UNS_FIRST_HOT – Chip-Leiste hebt sie farbig ab)
+  { emoji: '😏🔥', label: 'Ich hab grad richtig Bock auf dich' },
+  { emoji: '🛏️⏰', label: 'Kinder im Bett = du gehörst mir' },
+  { emoji: '🌶️📸', label: 'Schick mir mal was Heißes' },
+  { emoji: '😏✍️', label: 'Solltest du heute Lust haben, schreib mir doch mal, was ich mit dir machen kann.' },
 ];
+
+/** Index der ersten erotischen Kombo in FUER_UNS_COMBOS. */
+export const FUER_UNS_FIRST_HOT = 5;
 
 /**
  * Antwort-Kombos: auf eine Kombo des Partners antwortet man mit einem Tipp
@@ -84,30 +86,52 @@ export const FUER_UNS_COMBOS: { emoji: string; label: string }[] = [
  */
 const REPLY_LATER = { emoji: '🌙⏳', label: 'Heute Abend' };
 const REPLY_SOFT_NO = { emoji: '💭🤍', label: 'Nicht heute – aber halt den Gedanken fest' };
-const REPLY_LOVE = [
-  { emoji: '🥰💭', label: 'Ich an dich auch' },
-  { emoji: '🫂❤️', label: 'Fühl dich gedrückt' },
-];
+const REPLY_HUG = { emoji: '🫂❤️', label: 'Fühl dich gedrückt' };
 
 export const FUER_UNS_REPLIES: Record<string, { emoji: string; label: string }[]> = {
-  '❤️💭': REPLY_LOVE,
-  '🤗☕': [{ emoji: '☕🙋', label: 'Gern, gleich?' }, ...REPLY_LOVE],
-  '🌻😊': REPLY_LOVE,
-  '🎶💫': REPLY_LOVE,
-  '🥰🍫': [{ emoji: '😋❤️', label: 'Danke, du Schatz' }, ...REPLY_LOVE],
-  '🥺🫂': [{ emoji: '🫂🏃', label: 'Komm her, bin gleich da' }, REPLY_LOVE[1]],
-  '🎲😈': [{ emoji: '👀😈', label: 'Erzähl mehr …' }, REPLY_LATER, REPLY_SOFT_NO],
-  '⏱️🔥': [{ emoji: '🔥👍', label: 'Ja, jetzt' }, REPLY_LATER, REPLY_SOFT_NO],
-  '🍑💦': [{ emoji: '😏🔥', label: 'Geht mir genauso' }, REPLY_LATER, REPLY_SOFT_NO],
-  '🌙✨': [{ emoji: '✨🙋', label: 'Bin dabei' }, { emoji: '🤔💬', label: 'Was hast du im Kopf?' }, REPLY_SOFT_NO],
+  '🫶😌': [{ emoji: '🥰🫶', label: 'Ich bin auch froh über dich' }, REPLY_HUG],
+  '🛋️🍷': [{ emoji: '🍷🙋', label: 'Bin dabei' }, { emoji: '🛋️😴', label: 'Heute lieber früh schlafen' }],
+  '👀😍': [{ emoji: '😊💭', label: 'Und ich an dich' }, REPLY_HUG],
+  '💪😘': [{ emoji: '🥹💛', label: 'Danke, das tut gut' }, REPLY_HUG],
+  '🙈💛': [{ emoji: '🫂💛', label: 'Schon gut, hab dich lieb' }, { emoji: '💬🕐', label: 'Lass uns später reden' }],
+  '😏🔥': [{ emoji: '🔥🙋', label: 'Ich auch auf dich' }, REPLY_LATER, REPLY_SOFT_NO],
+  '🛏️⏰': [{ emoji: '😈👍', label: 'Abgemacht' }, REPLY_SOFT_NO],
+  '🌶️📸': [{ emoji: '📸😏', label: 'Kommt gleich …' }, REPLY_SOFT_NO],
+  '😏✍️': [{ emoji: '✍️😈', label: 'Schreib ich dir gleich …' }, REPLY_LATER, REPLY_SOFT_NO],
 };
+
+/**
+ * Frühere Kombos und Antworten (TE-62 bis TE-4) – nicht mehr auswählbar, aber
+ * alte Nachrichten mit diesen Emojis sollen ihr Label behalten.
+ */
+const FUER_UNS_LEGACY_LABELS: { emoji: string; label: string }[] = [
+  { emoji: '❤️💭', label: 'Ich denke an dich' },
+  { emoji: '🤗☕', label: 'Lass uns kurz zusammen durchatmen' },
+  { emoji: '🌻😊', label: 'Danke, dass es dich gibt' },
+  { emoji: '🎶💫', label: 'Du gehst mir nicht aus dem Kopf' },
+  { emoji: '🥰🍫', label: 'Kleine Aufmerksamkeit für dich' },
+  { emoji: '🥺🫂', label: 'Nimm mich in die Arme, bitte.' },
+  { emoji: '🎲😈', label: 'Ich hab was Verruchtes im Kopf' },
+  { emoji: '⏱️🔥', label: 'Hast du 5 heiße Minuten – nur für mich, nur jetzt?' },
+  { emoji: '🍑💦', label: 'Richtig Lust auf dich' },
+  { emoji: '🌙✨', label: 'Lass uns heute Nacht was Neues ausprobieren' },
+  { emoji: '🥰💭', label: 'Ich an dich auch' },
+  { emoji: '☕🙋', label: 'Gern, gleich?' },
+  { emoji: '😋❤️', label: 'Danke, du Schatz' },
+  { emoji: '🫂🏃', label: 'Komm her, bin gleich da' },
+  { emoji: '👀😈', label: 'Erzähl mehr …' },
+  { emoji: '🔥👍', label: 'Ja, jetzt' },
+  { emoji: '✨🙋', label: 'Bin dabei' },
+  { emoji: '🤔💬', label: 'Was hast du im Kopf?' },
+];
 
 /** Klartext zu einer gespeicherten Kombo – egal ob Verfassen-Kombo oder Antwort-Kombo. */
 export function fuerUnsComboLabel(emoji: string | null | undefined): string | undefined {
   if (!emoji) return undefined;
   return (
     FUER_UNS_COMBOS.find((c) => c.emoji === emoji) ??
-    Object.values(FUER_UNS_REPLIES).flat().find((c) => c.emoji === emoji)
+    Object.values(FUER_UNS_REPLIES).flat().find((c) => c.emoji === emoji) ??
+    FUER_UNS_LEGACY_LABELS.find((c) => c.emoji === emoji)
   )?.label;
 }
 

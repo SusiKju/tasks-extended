@@ -30,6 +30,7 @@ import {
   FUER_UNS_REACTIONS,
   FUER_UNS_REACTIONS_EXTRA,
   FUER_UNS_COMBOS,
+  FUER_UNS_FIRST_HOT,
   fuerUnsComboLabel,
   pendingReplyFor,
 } from '../services/fuerUns';
@@ -38,9 +39,6 @@ import { useFuerUns } from '../hooks/useFuerUns';
 function formatDateTime(iso: string): string {
   return format(parseISO(iso), 'dd.MM.yyyy, HH:mm');
 }
-
-/** Ab diesem Index in FUER_UNS_COMBOS beginnen die erotischen Kombos (Chip-Leiste hebt sie farbig ab). */
-const FIRST_HOT_COMBO = FUER_UNS_COMBOS.findIndex((c) => c.emoji === '🎲😈');
 
 const PLACEHOLDER =
   'Was möchtest du deinem Partner heute sagen? Etwas Liebes, etwas Erotisches, ' +
@@ -61,6 +59,7 @@ export function FuerUnsScreen() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [reactionPickerFor, setReactionPickerFor] = useState<string | null>(null);
   const [extraOpen, setExtraOpen] = useState(false);
+  const [comboGroup, setComboGroup] = useState<'love' | 'hot'>('love');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState('');
 
@@ -165,24 +164,41 @@ export function FuerUnsScreen() {
               </View>
             )}
 
-            {/* Kombos als sichtbare Chip-Leiste: ein Tipp sendet sofort (mit dem
-                getippten Text, falls vorhanden). Ersetzt das Bottom-Sheet aus TE-63,
-                hinter dem die Vorauswahl kaum gefunden wurde. */}
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.comboBar}>
-              {FUER_UNS_COMBOS.map((c, i) => (
+            {/* Kombos ohne Scrollen und ohne Dropdown: zwei Reiter (Lieb / Heiß),
+                darunter alle Kombos der Gruppe als 2-Spalten-Raster. Ein Tipp
+                sendet sofort (mit dem getippten Text, falls vorhanden). */}
+            <View style={s.comboTabs}>
+              {(['love', 'hot'] as const).map((g) => {
+                const on = comboGroup === g;
+                return (
+                  <Pressable
+                    key={g}
+                    onPress={() => setComboGroup(g)}
+                    style={[s.comboTab, { borderColor: on ? accent : colors.border, backgroundColor: on ? accent + '22' : 'transparent' }]}
+                  >
+                    <Text style={[s.comboTabText, { color: on ? colors.text : colors.textMuted }]}>
+                      {g === 'love' ? '❤️ Lieb' : '🔥 Heiß'}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            <View style={s.comboGrid}>
+              {(comboGroup === 'love' ? FUER_UNS_COMBOS.slice(0, FUER_UNS_FIRST_HOT) : FUER_UNS_COMBOS.slice(FUER_UNS_FIRST_HOT)).map((c) => (
                 <Pressable
                   key={c.emoji}
                   onPress={() => sendCombo(c.emoji)}
                   style={({ pressed }) => [
                     s.comboChip,
-                    { borderColor: i >= FIRST_HOT_COMBO ? accent : colors.border, backgroundColor: i >= FIRST_HOT_COMBO ? accent + '14' : colors.surface, opacity: pressed ? 0.6 : 1 },
+                    s.comboCell,
+                    { borderColor: comboGroup === 'hot' ? accent : colors.border, backgroundColor: comboGroup === 'hot' ? accent + '14' : colors.surface, opacity: pressed ? 0.6 : 1 },
                   ]}
                 >
                   <Text style={s.comboChipEmoji}>{c.emoji}</Text>
-                  <Text style={[s.comboChipLabel, { color: colors.text }]} numberOfLines={1}>{c.label}</Text>
+                  <Text style={[s.comboChipLabel, { color: colors.text }]} numberOfLines={3}>{c.label}</Text>
                 </Pressable>
               ))}
-            </ScrollView>
+            </View>
 
             <TextInput
               style={[s.addInput, { color: colors.text, backgroundColor: colors.inputBackground, borderColor: colors.border }]}
@@ -366,7 +382,11 @@ const s = StyleSheet.create({
   inspiration: { fontSize: 12.5, lineHeight: 18, fontStyle: 'italic' },
 
   // Kombo-Chip-Leiste + Antwort-Kombos
-  comboBar: { gap: 6, paddingVertical: 2 },
+  comboTabs: { flexDirection: 'row', gap: 6 },
+  comboTab: { flex: 1, alignItems: 'center', borderWidth: 1, borderRadius: 10, paddingVertical: 6 },
+  comboTabText: { fontSize: 13, fontWeight: '700' },
+  comboGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  comboCell: { flexBasis: '48%', flexGrow: 1, maxWidth: '100%', borderRadius: 12 },
   comboChip: { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 16, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 5, maxWidth: 230 },
   comboChipEmoji: { fontSize: 15, flexShrink: 0 },
   comboChipLabel: { fontSize: 12.5, fontWeight: '600', flexShrink: 1 },
