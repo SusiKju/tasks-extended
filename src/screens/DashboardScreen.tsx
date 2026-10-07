@@ -980,7 +980,8 @@ export function DashboardScreen() {
             >
               <View style={[styles.dezentBullet, { backgroundColor: childColor(childId) }]} />
               <Ionicons name="book-outline" size={13} color={colors.textMuted} />
-              <Text style={styles.dezentText} numberOfLines={1}>{item.title}</Text>
+              {/* Kindname voranstellen, damit Termine verschiedener Kinder unterscheidbar sind. */}
+              <Text style={styles.dezentText} numberOfLines={1}>{childName(childId)}: {item.title}</Text>
               {due && <Text style={[styles.dueBadge, due.overdue && styles.dueBadgeOverdue]}>{due.label}</Text>}
             </Pressable>
           );
