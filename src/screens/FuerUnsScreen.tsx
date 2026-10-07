@@ -17,6 +17,7 @@ import React, { useState, useCallback } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet, ActivityIndicator, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { format, parseISO } from 'date-fns';
+import { de } from 'date-fns/locale';
 import { useTheme } from '../utils/theme';
 import {
   FuerUnsItem,
@@ -28,6 +29,10 @@ import {
   permanentlyDeleteFuerUnsMessage,
   setFuerUnsReadState,
   setFuerUnsArchived,
+  setFuerUnsMood,
+  setFuerUnsPause,
+  FUER_UNS_MOOD_LEVELS,
+  FUER_UNS_CARE_COMBOS,
   FUER_UNS_REACTIONS,
   FUER_UNS_REACTIONS_EXTRA,
   FUER_UNS_COMBOS,
@@ -37,17 +42,17 @@ import {
 } from '../services/fuerUns';
 import { useFuerUns } from '../hooks/useFuerUns';
 
+const PAUSE = '#D98AA8';
+
 function formatDateTime(iso: string): string {
   return format(parseISO(iso), 'dd.MM.yyyy, HH:mm');
 }
 
-const PLACEHOLDER =
-  'Was möchtest du deinem Partner heute sagen? Etwas Liebes, etwas Erotisches, ' +
-  'ein Gedanke – oder auch mal ganz sanft etwas, das ihr zusammen noch besser machen könntet.';
 
 export function FuerUnsScreen() {
   const { colors, isDark } = useTheme();
-  const { familyId, myUid, myName, items, deletedItems, archivedItems, loadError } = useFuerUns();
+  const { familyId, myUid, myName, items, deletedItems, archivedItems, loadError, myMood, partnerMood, myPause, partnerPause, partnerName } = useFuerUns();
+  const partner = partnerName ?? 'Partner';
   const pendingReply = myUid ? pendingReplyFor(items, myUid) : null;
 
   const handleToggleRead = useCallback((item: FuerUnsItem) => {
@@ -146,7 +151,92 @@ export function FuerUnsScreen() {
   return (
     <View style={[s.container, { backgroundColor: colors.background }]}>
       <ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
-        <Text style={[s.inspiration, { color: colors.textMuted }]}>{PLACEHOLDER}</Text>
+        {/* Paar-Kopf (TE-17): ihr zwei mit heutigem Stand, dazwischen das Flammen-Herz */}
+        <View style={s.couple}>
+          {[
+            { name: myName, mood: myMood, pause: myPause, me: true },
+            { name: partner, mood: partnerMood, pause: partnerPause, me: false },
+          ].map((p, i) => (
+            <React.Fragment key={i}>
+              {i === 1 && (
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={s.coupleHeart}>❤️‍🔥</Text>
+                  <Text style={[s.coupleSub, { color: colors.textMuted }]}>Liebe & Lust</Text>
+                </View>
+              )}
+              <View style={s.person}>
+                <View style={[s.avatar, { borderColor: accent }]}>
+                  <Text style={[s.avatarText, { color: colors.text }]}>{(p.name ?? '?').charAt(0).toUpperCase()}</Text>
+                </View>
+                <Text style={[s.personMood, { color: colors.textMuted }]} numberOfLines={1}>
+                  {p.pause ? '🌸 Pause'
+                    : p.mood ? `${FUER_UNS_MOOD_LEVELS[p.mood.level!].emoji} ${FUER_UNS_MOOD_LEVELS[p.mood.level!].label}`
+                    : '–'}
+                </Text>
+              </View>
+            </React.Fragment>
+          ))}
+        </View>
+
+        {/* Stimmungsbarometer: gilt für heute */}
+        <Text style={[s.sectionLabel, { color: colors.textMuted }]}>Stimmungsbarometer</Text>
+        <View style={s.scale}>
+          {FUER_UNS_MOOD_LEVELS.map((m, i) => {
+            const on = myMood?.level === i;
+            return (
+              <Pressable
+                key={m.label}
+                onPress={() => familyId && myUid && setFuerUnsMood(familyId, myUid, i).catch(() => {})}
+                style={[s.scaleBtn, { borderColor: on ? accent : colors.border, backgroundColor: on ? accent + '22' : colors.surface, opacity: myPause && i >= 3 ? 0.45 : 1 }]}
+              >
+                <Text style={s.scaleEmoji}>{m.emoji}</Text>
+                <Text style={[s.scaleLabel, { color: on ? colors.text : colors.textMuted }]}>{m.label}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        {/* Pause 🌸: Dauer per Tipp, endet von selbst */}
+        <View style={[s.pauseBox, { borderColor: PAUSE + '66' }]}>
+          {myPause ? (
+            <View style={s.pauseRow}>
+              <Text style={[s.pauseText, { color: colors.text }]}>🌸 Pause bis {format(parseISO(myPause), 'EEEE', { locale: de })}</Text>
+              <Pressable onPress={() => familyId && myUid && setFuerUnsPause(familyId, myUid, null).catch(() => {})} hitSlop={6}>
+                <Text style={[s.pauseEnd, { color: PAUSE }]}>Beenden</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <Text style={[s.pauseText, { color: colors.textMuted }]}>🌸 Pause</Text>
+          )}
+          <View style={s.pauseDurations}>
+            {[3, 5, 7].map((d) => (
+              <Pressable
+                key={d}
+                onPress={() => familyId && myUid && setFuerUnsPause(familyId, myUid, d).catch(() => {})}
+                style={[s.pauseDur, { borderColor: colors.border }]}
+              >
+                <Text style={[s.pauseDurText, { color: colors.text }]}>{d} Tage</Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+
+        {/* Partner hat Pause → fürsorgliche Kombos statt Druck */}
+        {partnerPause && (
+          <View style={[s.pauseBox, { borderColor: PAUSE + '66' }]}>
+            <Text style={[s.pauseText, { color: colors.text }]}>🌸 {partner} macht gerade Pause. Was ihr guttun könnte:</Text>
+            <View style={s.replyChips}>
+              {FUER_UNS_CARE_COMBOS.map((c) => (
+                <Pressable key={c.emoji} onPress={() => sendCombo(c.emoji)} style={({ pressed }) => [s.comboChip, { borderColor: PAUSE, backgroundColor: colors.surface, opacity: pressed ? 0.6 : 1 }]}>
+                  <Text style={s.comboChipEmoji}>{c.emoji}</Text>
+                  <Text style={[s.comboChipLabel, { color: colors.text }]}>{c.label}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        )}
+
+        <Text style={[s.inspiration, { color: colors.textMuted }]}>Was willst du {partner} heute sagen, lieb oder heiß?</Text>
 
             {/* Antwort-Kombos: liegt der Ball bei mir, antworte ich mit einem Tipp. */}
             {pendingReply && (
@@ -191,7 +281,12 @@ export function FuerUnsScreen() {
                 );
               })}
             </View>
-            <View style={s.comboGrid}>
+            {comboGroup === 'hot' && partnerPause && (
+              <Text style={[s.pauseHint, { color: colors.textMuted, borderColor: PAUSE + '88' }]}>
+                🌸 {partner} macht gerade Pause – die Lieb-Kombos passen heute besser.
+              </Text>
+            )}
+            <View style={[s.comboGrid, comboGroup === 'hot' && partnerPause ? { opacity: 0.45 } : null]}>
               {(comboGroup === 'love' ? FUER_UNS_COMBOS.slice(0, FUER_UNS_FIRST_HOT) : FUER_UNS_COMBOS.slice(FUER_UNS_FIRST_HOT)).map((c) => (
                 <Pressable
                   key={c.emoji}
@@ -422,6 +517,26 @@ const s = StyleSheet.create({
   content: { padding: 16, paddingBottom: 40, gap: 10 },
 
   inspiration: { fontSize: 12.5, lineHeight: 18, fontStyle: 'italic' },
+  couple: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 18, paddingVertical: 4 },
+  coupleHeart: { fontSize: 24 },
+  coupleSub: { fontSize: 10.5, fontWeight: '600', marginTop: 1 },
+  person: { alignItems: 'center', gap: 4, width: 90 },
+  avatar: { width: 40, height: 40, borderRadius: 20, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  avatarText: { fontSize: 16, fontWeight: '800' },
+  personMood: { fontSize: 12 },
+  sectionLabel: { fontSize: 11.5, fontWeight: '600' },
+  scale: { flexDirection: 'row', gap: 6 },
+  scaleBtn: { flex: 1, alignItems: 'center', borderWidth: 1, borderRadius: 10, paddingVertical: 5 },
+  scaleEmoji: { fontSize: 18 },
+  scaleLabel: { fontSize: 10.5, fontWeight: '600', marginTop: 1 },
+  pauseBox: { borderWidth: 1, borderRadius: 10, padding: 9, gap: 7 },
+  pauseRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  pauseText: { fontSize: 12.5, fontWeight: '600' },
+  pauseEnd: { fontSize: 12.5, fontWeight: '700' },
+  pauseDurations: { flexDirection: 'row', gap: 6 },
+  pauseDur: { flex: 1, alignItems: 'center', borderWidth: 1, borderRadius: 8, paddingVertical: 5 },
+  pauseDurText: { fontSize: 12, fontWeight: '700' },
+  pauseHint: { fontSize: 12, borderWidth: 1, borderStyle: 'dashed', borderRadius: 8, padding: 7 },
 
   // Kombo-Chip-Leiste + Antwort-Kombos
   comboTabs: { flexDirection: 'row', gap: 6 },

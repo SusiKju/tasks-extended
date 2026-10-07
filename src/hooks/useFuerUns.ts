@@ -22,6 +22,8 @@ import {
   FuerUnsMood,
   subscribeToFuerUnsMoods,
   fuerUnsDisplayName,
+  moodToday,
+  activePause,
 } from '../services/fuerUns';
 
 export function useFuerUns() {
@@ -81,8 +83,11 @@ export function useFuerUns() {
     loadError,
     loaded,
     unreadCount: unread.length,
-    myMood: moods.find((m) => m.uid === myUid) ?? null,
-    partnerMood: moods.find((m) => m.uid !== myUid) ?? null,
+    myMood: moodToday(moods.find((m) => m.uid === myUid)),
+    partnerMood: moodToday(moods.find((m) => m.uid !== myUid)),
+    myPause: activePause(moods.find((m) => m.uid === myUid)),
+    partnerPause: activePause(moods.find((m) => m.uid !== myUid)),
+    partnerLastSeenAt: moods.find((m) => m.uid !== myUid)?.lastSeenAt ?? null,
     partnerName: (() => {
       const partnerUid = items.find((i) => i.addedByUid && i.addedByUid !== myUid)?.addedByUid
         ?? moods.find((m) => m.uid !== myUid)?.uid;

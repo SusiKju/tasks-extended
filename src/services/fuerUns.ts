@@ -133,6 +133,7 @@ export function fuerUnsComboLabel(emoji: string | null | undefined): string | un
   return (
     FUER_UNS_COMBOS.find((c) => c.emoji === emoji) ??
     Object.values(FUER_UNS_REPLIES).flat().find((c) => c.emoji === emoji) ??
+    FUER_UNS_CARE_COMBOS.find((c) => c.emoji === emoji) ??
     FUER_UNS_LEGACY_LABELS.find((c) => c.emoji === emoji)
   )?.label;
 }
@@ -287,14 +288,28 @@ export const FUER_UNS_MOOD_LEVELS = [
 
 export interface FuerUnsMood {
   uid: string;
-  /** Index in FUER_UNS_MOOD_LEVELS. */
-  level: number;
-  /** Lokales Datum (yyyy-MM-dd), an dem der Wert gesetzt wurde. */
-  date: string;
-  updatedAt: string;
+  /** Index in FUER_UNS_MOOD_LEVELS – zählt nur, wenn `date` heute ist. */
+  level?: number;
+  /** Lokales Datum (yyyy-MM-dd), an dem der Barometer-Wert gesetzt wurde. */
+  date?: string;
+  updatedAt?: string;
+  /** Pause 🌸 (ihre Tage): gilt bis einschließlich dieses lokalen Datums. */
+  pauseUntil?: string | null;
+  /** Zuletzt in der App online (TE-31) – App-Start bzw. zurück in den Vordergrund. Bewusst nicht updatedAt, sonst „NEU“. */
+  lastSeenAt?: string;
 }
 
-/** Echtzeit-Listener auf die heutigen Barometer-Werte beider Partner (ältere Tage fallen raus). */
+/** Barometer-Stand von heute, sonst null. */
+export function moodToday(m: FuerUnsMood | null | undefined): FuerUnsMood | null {
+  return m && m.level != null && m.date === localDateStr(new Date().toISOString()) ? m : null;
+}
+
+/** Läuft gerade eine Pause? Liefert das Enddatum oder null. */
+export function activePause(m: FuerUnsMood | null | undefined): string | null {
+  return m?.pauseUntil && m.pauseUntil >= localDateStr(new Date().toISOString()) ? m.pauseUntil : null;
+}
+
+/** Echtzeit-Listener auf die Barometer-Dokumente beider Partner (Gültigkeit prüfen moodToday/activePause). */
 export function subscribeToFuerUnsMoods(
   familyId: string,
   onChange: (moods: FuerUnsMood[]) => void,
@@ -302,23 +317,47 @@ export function subscribeToFuerUnsMoods(
 ): Unsubscribe {
   return onSnapshot(
     collection(db, 'families', familyId, 'shared', 'fuerUns', 'mood'),
-    (snap) => {
-      const today = localDateStr(new Date().toISOString());
-      onChange(
-        snap.docs
-          .map((d) => ({ uid: d.id, ...d.data() } as FuerUnsMood))
-          .filter((m) => m.date === today)
-      );
-    },
+    (snap) => onChange(snap.docs.map((d) => ({ uid: d.id, ...d.data() } as FuerUnsMood))),
     (error) => onError?.(error)
   );
 }
 
+function moodDoc(familyId: string, uid: string) {
+  return doc(db, 'families', familyId, 'shared', 'fuerUns', 'mood', uid);
+}
+
 export async function setFuerUnsMood(familyId: string, uid: string, level: number): Promise<void> {
   const now = new Date().toISOString();
-  await setDoc(doc(db, 'families', familyId, 'shared', 'fuerUns', 'mood', uid), {
-    level,
-    date: localDateStr(now),
-    updatedAt: now,
-  });
+  // merge: eine laufende Pause bleibt stehen
+  await setDoc(moodDoc(familyId, uid), { level, date: localDateStr(now), updatedAt: now }, { merge: true });
 }
+
+/** TE-31: „zuletzt online“ – liegt im eigenen Barometer-Dokument, damit keine neue Rule nötig ist. */
+export async function markFuerUnsSeen(familyId: string, uid: string): Promise<void> {
+  await setDoc(moodDoc(familyId, uid), { lastSeenAt: new Date().toISOString() }, { merge: true });
+}
+
+/**
+ * Nur diese Person sieht auf dem Dashboard, wann der Partner zuletzt online war (TE-31).
+ * ponytail: fest im Code wie FUER_UNS_NICKNAMES – bei Bedarf eine Einstellung daraus machen.
+ */
+export const FUER_UNS_LAST_SEEN_VIEWER = 'rRX2Nyg07chTCMigmpy6OXliI1h1';
+
+/** Pause für `days` Tage ab heute (heute zählt mit), oder `null` zum Beenden. */
+export async function setFuerUnsPause(familyId: string, uid: string, days: number | null): Promise<void> {
+  let pauseUntil: string | null = null;
+  if (days) {
+    const end = new Date();
+    end.setDate(end.getDate() + days - 1);
+    pauseUntil = localDateStr(end.toISOString());
+  }
+  await setDoc(moodDoc(familyId, uid), { pauseUntil }, { merge: true });
+}
+
+/** Fürsorge-Kombos, die der Partner während einer Pause angeboten bekommt. */
+export const FUER_UNS_CARE_COMBOS = [
+  { emoji: '🫖💛', label: 'Tee?' },
+  { emoji: '🍫🚚', label: 'Schoki kommt' },
+  { emoji: '🫂🛋️', label: 'Einfach kuscheln' },
+  { emoji: '♨️🤍', label: 'Wärmflasche?' },
+];
