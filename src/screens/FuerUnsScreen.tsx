@@ -337,7 +337,9 @@ export function FuerUnsScreen() {
             ) : items.length === 0 ? (
               <View style={s.emptyRow}>
                 <Ionicons name="heart-outline" size={16} color={colors.textMuted} />
-                <Text style={[s.emptyText, { color: colors.textMuted }]}>Noch nichts geschickt – fang an.</Text>
+                <Text style={[s.emptyText, { color: colors.textMuted }]}>
+                  {archivedItems.length > 0 ? 'Alles erledigt 💛 Neues landet hier.' : 'Noch nichts geschickt – fang an.'}
+                </Text>
               </View>
             ) : (
               <View style={{ gap: 2 }}>
