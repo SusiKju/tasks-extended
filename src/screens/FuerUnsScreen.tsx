@@ -18,6 +18,7 @@ import { View, Text, TextInput, Pressable, StyleSheet, ActivityIndicator, Scroll
 import { Ionicons } from '@expo/vector-icons';
 import { format, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
+import { useFocusEffect } from 'expo-router';
 import { useTheme } from '../utils/theme';
 import {
   FuerUnsItem,
@@ -52,9 +53,14 @@ function formatDateTime(iso: string): string {
 
 export function FuerUnsScreen() {
   const { colors, isDark } = useTheme();
-  const { familyId, myUid, myName, items, deletedItems, archivedItems, loadError, myMood, partnerMood, myPause, partnerPause, partnerName, myDisplayName } = useFuerUns();
+  const { familyId, myUid, myName, items, deletedItems, archivedItems, loadError, myMood, partnerMood, myPause, partnerPause, partnerName, myDisplayName, partnerChanged, markPartnerSeen } = useFuerUns();
   const partner = partnerName ?? 'Partner';
   const pendingReply = myUid ? pendingReplyFor(items, myUid) : null;
+
+  // Tab sichtbar → Änderung des Partners gilt als gesehen (Tab-Badge und „NEU“ verschwinden).
+  useFocusEffect(useCallback(() => {
+    if (partnerChanged) markPartnerSeen();
+  }, [partnerChanged, markPartnerSeen]));
 
   const handleToggleRead = useCallback((item: FuerUnsItem) => {
     if (!familyId || item.addedByUid === myUid) return;

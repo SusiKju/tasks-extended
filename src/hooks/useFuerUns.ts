@@ -10,7 +10,8 @@
  * Partner unabhängig setzen konnten und dadurch kollidieren durfte.
  */
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFamilyId } from './useFamily';
 import { useFirebaseAuth } from './useFirebaseAuth';
 import { FamilyMember, subscribeToMembers } from '../services/family';
@@ -26,6 +27,20 @@ import {
   activePause,
 } from '../services/fuerUns';
 
+/**
+ * „Gesehen“-Stand für Änderungen des Partners (Barometer/Pause), geteilt über
+ * alle Hook-Instanzen (Tab-Badge, Dashboard-Zeile, Tab), damit ein Antippen an
+ * einer Stelle überall wirkt. Persistiert pro Gerät in AsyncStorage.
+ */
+let seenPartnerKey: string | null | undefined;
+let seenLoadedFor: string | null = null;
+const seenListeners = new Set<(v: string | null) => void>();
+function publishSeen(v: string | null) {
+  seenPartnerKey = v;
+  seenListeners.forEach((l) => l(v));
+}
+const seenStorageKey = (uid: string) => `fuerUnsPartnerSeen:${uid}`;
+
 export function useFuerUns() {
   const familyId = useFamilyId();
   const { user } = useFirebaseAuth();
@@ -37,6 +52,16 @@ export function useFuerUns() {
   const [loadError, setLoadError] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [moods, setMoods] = useState<FuerUnsMood[]>([]);
+  const [seen, setSeen] = useState<string | null | undefined>(seenPartnerKey);
+
+  useEffect(() => {
+    seenListeners.add(setSeen);
+    if (myUid && seenLoadedFor !== myUid) {
+      seenLoadedFor = myUid;
+      AsyncStorage.getItem(seenStorageKey(myUid)).then(publishSeen).catch(() => publishSeen(null));
+    }
+    return () => { seenListeners.delete(setSeen); };
+  }, [myUid]);
 
   useEffect(() => {
     if (!familyId) {
@@ -73,6 +98,17 @@ export function useFuerUns() {
   const myName = members.find((m) => m.uid === myUid)?.displayName ?? null;
   const unread = myUid ? unreadFromPartner(items, myUid) : [];
 
+  // Änderung des Partners = neuer Barometer-Stand oder Pause gestartet/beendet.
+  const partnerDoc = moods.find((m) => m.uid !== myUid);
+  const partnerKey = partnerDoc ? `${partnerDoc.updatedAt ?? ''}|${partnerDoc.pauseUntil ?? ''}` : null;
+  const partnerChanged = !!partnerKey && seen !== undefined && seen !== partnerKey
+    && (!!moodToday(partnerDoc) || !!activePause(partnerDoc));
+  const markPartnerSeen = useCallback(() => {
+    if (!myUid || !partnerKey) return;
+    publishSeen(partnerKey);
+    AsyncStorage.setItem(seenStorageKey(myUid), partnerKey).catch(() => {});
+  }, [myUid, partnerKey]);
+
   return {
     familyId,
     myUid,
@@ -83,6 +119,11 @@ export function useFuerUns() {
     loadError,
     loaded,
     unreadCount: unread.length,
+    /** Partner hat Barometer/Pause geändert und ich habe es noch nicht angesehen. */
+    partnerChanged,
+    markPartnerSeen,
+    /** Zahl für den Tab-Badge: ungelesene Nachrichten + 1 für eine ungesehene Partner-Änderung. */
+    badgeCount: unread.length + (partnerChanged ? 1 : 0),
     /** Eigener Anzeigename (Kosename, sonst Vorname) für den Paar-Kopf. */
     myDisplayName: fuerUnsDisplayName(myUid, myName),
     myMood: moodToday(moods.find((m) => m.uid === myUid)),

@@ -9,9 +9,8 @@
  * auf die Zeile öffnet ihn. Bewusst so flach wie eine Termin-Zeile.
  */
 
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { ThemeColors } from '../utils/theme';
 import { useFuerUns } from '../hooks/useFuerUns';
@@ -38,20 +37,12 @@ export function FuerUnsReminderBanner({
   fuerUns: ReturnType<typeof useFuerUns>;
 }) {
   const router = useRouter();
-  const { familyId, myName, items, myUid, myMood, partnerMood, myPause, partnerPause, partnerName, unreadCount, partnerLastSeenAt } = fuerUns;
+  const { familyId, myName, items, myUid, partnerChanged, markPartnerSeen, myMood, partnerMood, myPause, partnerPause, partnerName, unreadCount, partnerLastSeenAt } = fuerUns;
 
-  // Welchen Barometer-Stand des Partners habe ich schon gesehen? Neuer Stand → „NEU“, bis ich die Zeile antippe.
-  const seenKey = `fuerUnsPartnerMoodSeen:${myUid}`;
-  const [seenAt, setSeenAt] = useState<string | null | undefined>(undefined);
-  useEffect(() => {
-    if (!myUid) return;
-    AsyncStorage.getItem(seenKey).then(setSeenAt).catch(() => setSeenAt(null));
-  }, [seenKey, myUid]);
 
   if (!myUid) return null;
 
   const partner = partnerName ?? 'Partner';
-  const partnerIsNew = !!partnerMood?.updatedAt && seenAt !== undefined && seenAt !== partnerMood.updatedAt;
   const einig = !myPause && !partnerPause
     && (myMood?.level ?? -1) >= LUST_LEVEL && (partnerMood?.level ?? -1) >= LUST_LEVEL;
 
@@ -66,10 +57,7 @@ export function FuerUnsReminderBanner({
   const sayNo = () => { if (familyId && myName) addFuerUnsMessage(familyId, '', myName, myUid, SOFT_NO).catch(() => {}); };
 
   const open = () => {
-    if (partnerMood?.updatedAt) {
-      setSeenAt(partnerMood.updatedAt);
-      AsyncStorage.setItem(seenKey, partnerMood.updatedAt).catch(() => {});
-    }
+    markPartnerSeen();
     router.push('/(tabs)/fuer-uns' as any);
   };
 
@@ -118,7 +106,7 @@ export function FuerUnsReminderBanner({
           {partnerEmoji && (
             <Text style={styles.value} numberOfLines={1}>{partner} {partnerEmoji}</Text>
           )}
-          {partnerIsNew && !partnerPause && (
+          {partnerChanged && !partnerPause && (
             <View style={styles.badge}><Text style={styles.badgeText}>NEU</Text></View>
           )}
           <Text style={styles.muted}>{partnerEmoji ? ' · ' : ''}Du {myEmoji}</Text>
