@@ -267,6 +267,9 @@ const FUER_UNS_NICKNAMES: Record<string, string> = {
   rRX2Nyg07chTCMigmpy6OXliI1h1: 'Reddi',
 };
 
+/** Wer die Pause 🌸 (ihre Tage) setzen kann – nur Diana. ponytail: fest im Code wie die Kosenamen. */
+export const FUER_UNS_PAUSE_UIDS = ['8FlA32K3KUVTYhCBsHWUO046eVq2'];
+
 export function fuerUnsDisplayName(uid: string | null | undefined, displayName: string | null | undefined): string | null {
   if (uid && FUER_UNS_NICKNAMES[uid]) return FUER_UNS_NICKNAMES[uid];
   return displayName?.split(' ')[0] ?? null;

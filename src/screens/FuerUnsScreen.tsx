@@ -33,6 +33,7 @@ import {
   setFuerUnsPause,
   FUER_UNS_MOOD_LEVELS,
   FUER_UNS_CARE_COMBOS,
+  FUER_UNS_PAUSE_UIDS,
   FUER_UNS_REACTIONS,
   FUER_UNS_REACTIONS_EXTRA,
   FUER_UNS_COMBOS,
@@ -196,7 +197,8 @@ export function FuerUnsScreen() {
           })}
         </View>
 
-        {/* Pause 🌸: Dauer per Tipp, endet von selbst */}
+        {/* Pause 🌸: Dauer per Tipp, endet von selbst – nur bei Diana */}
+        {!!myUid && FUER_UNS_PAUSE_UIDS.includes(myUid) && (
         <View style={[s.pauseBox, { borderColor: PAUSE + '66' }]}>
           {myPause ? (
             <View style={s.pauseRow}>
@@ -220,6 +222,7 @@ export function FuerUnsScreen() {
             ))}
           </View>
         </View>
+        )}
 
         {/* Partner hat Pause → fürsorgliche Kombos statt Druck */}
         {partnerPause && (
