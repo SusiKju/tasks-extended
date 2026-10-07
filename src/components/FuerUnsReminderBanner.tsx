@@ -65,7 +65,8 @@ export function FuerUnsReminderBanner({
   const myEmoji = myPause ? '🌸' : myMood ? FUER_UNS_MOOD_LEVELS[myMood.level!].emoji : '?';
 
   // TE-31: nur in meinem Account – wann der Partner zuletzt in der App war.
-  const lastSeen = myUid === FUER_UNS_LAST_SEEN_VIEWER && partnerLastSeenAt ? parseISO(partnerLastSeenAt) : null;
+  const showLastSeen = myUid === FUER_UNS_LAST_SEEN_VIEWER;
+  const lastSeen = showLastSeen && partnerLastSeenAt ? parseISO(partnerLastSeenAt) : null;
 
   return (
     <>
@@ -100,9 +101,11 @@ export function FuerUnsReminderBanner({
       )}
       <Text style={styles.chevron}>›</Text>
     </Pressable>
-    {lastSeen && (
+    {showLastSeen && (
       <Text style={styles.lastSeen}>
-        {partner} zuletzt online {formatDistanceToNow(lastSeen, { addSuffix: true, locale: de })} · {format(lastSeen, isToday(lastSeen) ? 'HH:mm' : 'dd.MM. HH:mm')}
+        {lastSeen
+          ? `${partner} zuletzt online ${formatDistanceToNow(lastSeen, { addSuffix: true, locale: de })} · ${format(lastSeen, isToday(lastSeen) ? 'HH:mm' : 'dd.MM. HH:mm')}`
+          : `${partner}: noch nicht online seit dem Update`}
       </Text>
     )}
     </>
