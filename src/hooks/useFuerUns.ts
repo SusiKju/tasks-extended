@@ -30,6 +30,7 @@ export function useFuerUns() {
   const [members, setMembers] = useState<FamilyMember[]>([]);
   const [items, setItems] = useState<FuerUnsItem[]>([]);
   const [deletedItems, setDeletedItems] = useState<FuerUnsItem[]>([]);
+  const [archivedItems, setArchivedItems] = useState<FuerUnsItem[]>([]);
   const [loadError, setLoadError] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [moods, setMoods] = useState<FuerUnsMood[]>([]);
@@ -46,13 +47,14 @@ export function useFuerUns() {
     if (!familyId) {
       setItems([]);
       setDeletedItems([]);
+      setArchivedItems([]);
       setLoaded(false);
       return;
     }
     return subscribeToFuerUns(
       familyId,
-      (active, deleted) => { setLoadError(false); setItems(active); setDeletedItems(deleted); setLoaded(true); },
-      () => { setLoadError(true); setItems([]); setDeletedItems([]); setLoaded(true); }
+      (active, deleted, archived) => { setLoadError(false); setItems(active); setDeletedItems(deleted); setArchivedItems(archived); setLoaded(true); },
+      () => { setLoadError(true); setItems([]); setDeletedItems([]); setArchivedItems([]); setLoaded(true); }
     );
   }, [familyId]);
 
@@ -74,6 +76,7 @@ export function useFuerUns() {
     myName,
     items,
     deletedItems,
+    archivedItems,
     loadError,
     loaded,
     unreadCount: unread.length,
@@ -84,6 +87,7 @@ export function useFuerUns() {
         ?? moods.find((m) => m.uid !== myUid)?.uid;
       return members.find((m) => m.uid === partnerUid)?.displayName ?? null;
     })(),
-    sentToday: myUid ? sentTodayByMe(items, myUid) : true,
+    // Abgehakte Nachrichten zählen mit – sonst taucht der Schreiben-Hinweis nach dem Abhaken wieder auf.
+    sentToday: myUid ? sentTodayByMe([...items, ...archivedItems], myUid) : true,
   };
 }

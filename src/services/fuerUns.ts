@@ -41,6 +41,8 @@ export interface FuerUnsItem {
   readAt?: string | null;
   /** Soft-Delete: gesetzt wenn gelöscht, damit wiederherstellbar bleibt. */
   deletedAt?: string | null;
+  /** Abgehakt: verschwindet aus dem Chat in den Verlauf (TE-11), wiederherstellbar. */
+  archivedAt?: string | null;
 }
 
 export const FUER_UNS_REACTIONS = ['❤️', '😘', '🤗', '👍'];
@@ -152,7 +154,7 @@ const itemsCollection = (familyId: string) =>
 /** Echtzeit-Listener – neueste zuerst (Chat-Verlauf statt Einkaufsliste). */
 export function subscribeToFuerUns(
   familyId: string,
-  onChange: (active: FuerUnsItem[], deleted: FuerUnsItem[]) => void,
+  onChange: (active: FuerUnsItem[], deleted: FuerUnsItem[], archived: FuerUnsItem[]) => void,
   onError?: (error: unknown) => void
 ): Unsubscribe {
   return onSnapshot(
@@ -160,12 +162,15 @@ export function subscribeToFuerUns(
     (snap) => {
       const all = snap.docs.map((d) => ({ id: d.id, ...d.data() } as FuerUnsItem));
       const active = all
-        .filter((i) => !i.deletedAt)
+        .filter((i) => !i.deletedAt && !i.archivedAt)
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
       const deleted = all
         .filter((i) => !!i.deletedAt)
         .sort((a, b) => (b.deletedAt ?? '').localeCompare(a.deletedAt ?? ''));
-      onChange(active, deleted);
+      const archived = all
+        .filter((i) => !i.deletedAt && !!i.archivedAt)
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      onChange(active, deleted, archived);
     },
     (error) => onError?.(error)
   );
@@ -188,6 +193,7 @@ export async function addFuerUnsMessage(
     reaction: null,
     readAt: null,
     deletedAt: null,
+    archivedAt: null,
   };
   await setDoc(ref, item);
   return ref.id;
@@ -211,6 +217,14 @@ export async function updateFuerUnsMessage(familyId: string, itemId: string, tex
 
 export async function deleteFuerUnsMessage(familyId: string, itemId: string): Promise<void> {
   await updateDoc(itemDoc(familyId, itemId), { deletedAt: new Date().toISOString() });
+}
+
+/** Abhaken → Verlauf. Eine abgehakte Partner-Nachricht gilt damit auch als gelesen. */
+export async function setFuerUnsArchived(familyId: string, item: FuerUnsItem, archived: boolean): Promise<void> {
+  const now = new Date().toISOString();
+  await updateDoc(itemDoc(familyId, item.id), archived
+    ? { archivedAt: now, readAt: item.readAt ?? now }
+    : { archivedAt: null });
 }
 
 export async function restoreFuerUnsMessage(familyId: string, itemId: string): Promise<void> {

@@ -27,6 +27,7 @@ import {
   restoreFuerUnsMessage,
   permanentlyDeleteFuerUnsMessage,
   setFuerUnsReadState,
+  setFuerUnsArchived,
   FUER_UNS_REACTIONS,
   FUER_UNS_REACTIONS_EXTRA,
   FUER_UNS_COMBOS,
@@ -46,7 +47,7 @@ const PLACEHOLDER =
 
 export function FuerUnsScreen() {
   const { colors, isDark } = useTheme();
-  const { familyId, myUid, myName, items, deletedItems, loadError } = useFuerUns();
+  const { familyId, myUid, myName, items, deletedItems, archivedItems, loadError } = useFuerUns();
   const pendingReply = myUid ? pendingReplyFor(items, myUid) : null;
 
   const handleToggleRead = useCallback((item: FuerUnsItem) => {
@@ -55,6 +56,7 @@ export function FuerUnsScreen() {
   }, [familyId, myUid]);
 
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [archiveOpen, setArchiveOpen] = useState(false);
   const [draft, setDraft] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
   const [reactionPickerFor, setReactionPickerFor] = useState<string | null>(null);
@@ -93,6 +95,12 @@ export function FuerUnsScreen() {
       await setFuerUnsReaction(familyId, item.id, next);
     } catch {}
   }, [myName, myUid, familyId]);
+
+  const handleArchive = useCallback((item: FuerUnsItem, archived: boolean) => {
+    if (!familyId) return;
+    setReactionPickerFor(null);
+    setFuerUnsArchived(familyId, item, archived).catch(() => {});
+  }, [familyId]);
 
   const handleDelete = useCallback(async (item: FuerUnsItem) => {
     if (!familyId) return;
@@ -244,6 +252,10 @@ export function FuerUnsScreen() {
                         onPress={() => handleToggleRead(item)}
                         style={[s.row, { borderColor: isUnread ? accent + '55' : colors.border, backgroundColor: isUnread ? accent + '10' : 'transparent' }]}
                       >
+                        {/* Abhaken → Nachricht wandert in den Verlauf (TE-11) */}
+                        <Pressable onPress={() => handleArchive(item, true)} hitSlop={8} style={s.checkBtn}>
+                          <Ionicons name="square-outline" size={20} color={colors.textMuted} />
+                        </Pressable>
                         <View style={{ flex: 1 }}>
                           {editingId === item.id ? (
                             <TextInput
@@ -335,6 +347,36 @@ export function FuerUnsScreen() {
               </View>
             )}
 
+            {/* Verlauf: abgehakte Nachrichten, aufklappbar, mit Zurückholen */}
+            {archivedItems.length > 0 && (
+              <Pressable onPress={() => setArchiveOpen((v) => !v)} style={s.historyToggle} hitSlop={8}>
+                <Ionicons name="time-outline" size={14} color={archiveOpen ? accent : colors.textMuted} />
+                <Text style={[s.historyToggleText, { color: archiveOpen ? accent : colors.textMuted }]}>
+                  Verlauf ({archivedItems.length})
+                </Text>
+              </Pressable>
+            )}
+
+            {archiveOpen && archivedItems.length > 0 && (
+              <View style={[s.trashSection, { borderColor: colors.border }]}>
+                {archivedItems.map((item) => (
+                  <View key={item.id} style={[s.trashRow, { borderBottomColor: colors.border }]}>
+                    <Pressable onPress={() => handleArchive(item, false)} hitSlop={8} style={s.checkBtn}>
+                      <Ionicons name="checkbox" size={18} color={colors.success} />
+                    </Pressable>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[s.archivedText, { color: colors.textMuted }]} numberOfLines={2}>
+                        {[item.emoji, item.text || fuerUnsComboLabel(item.emoji)].filter(Boolean).join(' ')}
+                      </Text>
+                      <Text style={[s.itemMeta, { color: colors.textMuted }]}>
+                        von {item.addedBy} · {formatDateTime(item.createdAt)}
+                      </Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            )}
+
             {deletedItems.length > 0 && (
               <Pressable onPress={() => setHistoryOpen((v) => !v)} style={s.historyToggle} hitSlop={8}>
                 <Ionicons name="trash-outline" size={14} color={colors.textMuted} />
@@ -403,6 +445,8 @@ const s = StyleSheet.create({
 
   row: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, paddingVertical: 9, paddingHorizontal: 8, borderRadius: 10, borderWidth: 1 },
   iconBtn: { padding: 4 },
+  checkBtn: { paddingTop: 1 },
+  archivedText: { fontSize: 13 },
   editInput: { fontSize: 14, fontWeight: '600', borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
   itemText: { fontSize: 14, lineHeight: 19 },
   comboLabel: { fontSize: 11.5, fontStyle: 'italic', marginTop: 2 },
