@@ -83,14 +83,18 @@ export function useFuerUns() {
     loadError,
     loaded,
     unreadCount: unread.length,
+    /** Eigener Anzeigename (Kosename, sonst Vorname) für den Paar-Kopf. */
+    myDisplayName: fuerUnsDisplayName(myUid, myName),
     myMood: moodToday(moods.find((m) => m.uid === myUid)),
     partnerMood: moodToday(moods.find((m) => m.uid !== myUid)),
     myPause: activePause(moods.find((m) => m.uid === myUid)),
     partnerPause: activePause(moods.find((m) => m.uid !== myUid)),
     partnerLastSeenAt: moods.find((m) => m.uid !== myUid)?.lastSeenAt ?? null,
     partnerName: (() => {
-      const partnerUid = items.find((i) => i.addedByUid && i.addedByUid !== myUid)?.addedByUid
-        ?? moods.find((m) => m.uid !== myUid)?.uid;
+      // Abgehakte Nachrichten zählen mit; ohne Nachrichten/Barometer bleibt das andere Elternteil.
+      const partnerUid = [...items, ...archivedItems].find((i) => i.addedByUid && i.addedByUid !== myUid)?.addedByUid
+        ?? moods.find((m) => m.uid !== myUid)?.uid
+        ?? members.find((m) => m.uid !== myUid && m.role === 'parent')?.uid;
       return fuerUnsDisplayName(partnerUid, members.find((m) => m.uid === partnerUid)?.displayName);
     })(),
     // Abgehakte Nachrichten zählen mit – sonst taucht der Schreiben-Hinweis nach dem Abhaken wieder auf.

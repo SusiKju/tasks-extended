@@ -52,7 +52,7 @@ function formatDateTime(iso: string): string {
 
 export function FuerUnsScreen() {
   const { colors, isDark } = useTheme();
-  const { familyId, myUid, myName, items, deletedItems, archivedItems, loadError, myMood, partnerMood, myPause, partnerPause, partnerName } = useFuerUns();
+  const { familyId, myUid, myName, items, deletedItems, archivedItems, loadError, myMood, partnerMood, myPause, partnerPause, partnerName, myDisplayName } = useFuerUns();
   const partner = partnerName ?? 'Partner';
   const pendingReply = myUid ? pendingReplyFor(items, myUid) : null;
 
@@ -155,7 +155,7 @@ export function FuerUnsScreen() {
         {/* Paar-Kopf (TE-17): ihr zwei mit heutigem Stand, dazwischen das Flammen-Herz */}
         <View style={s.couple}>
           {[
-            { name: myName, mood: myMood, pause: myPause, me: true },
+            { name: myDisplayName, mood: myMood, pause: myPause, me: true },
             { name: partner, mood: partnerMood, pause: partnerPause, me: false },
           ].map((p, i) => (
             <React.Fragment key={i}>
@@ -169,6 +169,7 @@ export function FuerUnsScreen() {
                 <View style={[s.avatar, { borderColor: accent }]}>
                   <Text style={[s.avatarText, { color: colors.text }]}>{(p.name ?? '?').charAt(0).toUpperCase()}</Text>
                 </View>
+                <Text style={[s.personName, { color: colors.text }]} numberOfLines={1}>{p.name ?? ''}</Text>
                 <Text style={[s.personMood, { color: colors.textMuted }]} numberOfLines={1}>
                   {p.pause ? '🌸 Pause'
                     : p.mood ? `${FUER_UNS_MOOD_LEVELS[p.mood.level!].emoji} ${FUER_UNS_MOOD_LEVELS[p.mood.level!].label}`
@@ -526,6 +527,7 @@ const s = StyleSheet.create({
   person: { alignItems: 'center', gap: 4, width: 90 },
   avatar: { width: 40, height: 40, borderRadius: 20, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
   avatarText: { fontSize: 16, fontWeight: '800' },
+  personName: { fontSize: 13, fontWeight: '700' },
   personMood: { fontSize: 12 },
   sectionLabel: { fontSize: 11.5, fontWeight: '600' },
   scale: { flexDirection: 'row', gap: 6 },
