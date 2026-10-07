@@ -357,7 +357,7 @@ export async function setFuerUnsPause(familyId: string, uid: string, days: numbe
   await setDoc(moodDoc(familyId, uid), { pauseUntil }, { merge: true });
 }
 
-/** Fürsorge-Kombos, die der Partner während einer Pause angeboten bekommt. */
+/** Frühere Fürsorge-Kombos bei Pause (TE-17, Auswahl seit TE-29 entfernt) – nur noch für Labels bereits gesendeter Nachrichten. */
 export const FUER_UNS_CARE_COMBOS = [
   { emoji: '🫖💛', label: 'Tee?' },
   { emoji: '🍫🚚', label: 'Schoki kommt' },

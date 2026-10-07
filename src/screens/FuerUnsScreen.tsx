@@ -33,7 +33,6 @@ import {
   setFuerUnsMood,
   setFuerUnsPause,
   FUER_UNS_MOOD_LEVELS,
-  FUER_UNS_CARE_COMBOS,
   FUER_UNS_PAUSE_UIDS,
   FUER_UNS_REACTIONS,
   FUER_UNS_REACTIONS_EXTRA,
@@ -246,20 +245,6 @@ export function FuerUnsScreen() {
         </View>
         )}
 
-        {/* Partner hat Pause → fürsorgliche Kombos statt Druck */}
-        {partnerPause && (
-          <View style={[s.pauseBox, { borderColor: PAUSE + '66' }]}>
-            <Text style={[s.pauseText, { color: colors.text }]}>🌸 {partner} macht Pause bis einschließlich {pauseEnd(partnerPause)} – was ihr guttun könnte:</Text>
-            <View style={s.replyChips}>
-              {FUER_UNS_CARE_COMBOS.map((c) => (
-                <Pressable key={c.emoji} onPress={() => sendCombo(c.emoji)} style={({ pressed }) => [s.comboChip, { borderColor: PAUSE, backgroundColor: colors.surface, opacity: pressed ? 0.6 : 1 }]}>
-                  <Text style={s.comboChipEmoji}>{c.emoji}</Text>
-                  <Text style={[s.comboChipLabel, { color: colors.text }]}>{c.label}</Text>
-                </Pressable>
-              ))}
-            </View>
-          </View>
-        )}
 
         <Text style={[s.inspiration, { color: colors.textMuted }]}>Was willst du {partner} heute sagen, lieb oder heiß?</Text>
 
