@@ -246,6 +246,13 @@ export function FuerUnsScreen() {
         )}
 
 
+        {/* Partner hat Pause → nur der Hinweis, bis wann (Vorschläge entfernt, TE-29) */}
+        {partnerPause && (
+          <View style={[s.pauseBox, { borderColor: PAUSE + '66' }]}>
+            <Text style={[s.pauseText, { color: colors.text }]}>🌸 {partner} macht Pause bis einschließlich {pauseEnd(partnerPause)}</Text>
+          </View>
+        )}
+
         <Text style={[s.inspiration, { color: colors.textMuted }]}>Was willst du {partner} heute sagen, lieb oder heiß?</Text>
 
             {/* Antwort-Kombos: liegt der Ball bei mir, antworte ich mit einem Tipp. */}
