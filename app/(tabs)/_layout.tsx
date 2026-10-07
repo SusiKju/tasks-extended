@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Tabs, Redirect } from 'expo-router';
-import { Text } from 'react-native';
+import { Text, AppState } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme, neonGlow } from '../../src/utils/theme';
 import { useStore } from '../../src/store';
 import { DEFAULT_VISIBLE_TABS, TabKey } from '../../src/types';
 import { useFuerUns } from '../../src/hooks/useFuerUns';
+import { markFuerUnsSeen } from '../../src/services/fuerUns';
 import { useSchuleNotifications } from '../../src/hooks/useSchuleNotifications';
 import { useSchuleSyncStatus } from '../../src/hooks/useSchuleSyncStatus';
 
@@ -40,7 +41,16 @@ export default function TabsLayout() {
 function TabsLayoutInner() {
   const { colors, isDark } = useTheme();
   const visibleTabs = useStore((s) => s.settings.visibleTabs ?? DEFAULT_VISIBLE_TABS);
-  const { unreadCount } = useFuerUns();
+  const { unreadCount, familyId, myUid } = useFuerUns();
+  // TE-31: „zuletzt online“ beim Start und bei jeder Rückkehr in den Vordergrund.
+  // Fehler (kein Für-uns-Zugriff → Rule lehnt ab) bleiben still.
+  useEffect(() => {
+    if (!familyId || !myUid) return;
+    const mark = () => { markFuerUnsSeen(familyId, myUid).catch(() => {}); };
+    mark();
+    const sub = AppState.addEventListener('change', (s) => { if (s === 'active') mark(); });
+    return () => sub.remove();
+  }, [familyId, myUid]);
   const { unreadCount: schuleUnreadCount } = useSchuleNotifications();
   const schuleSyncError = useSchuleSyncStatus((s) => s.hasError);
   // TE-49: Elternteil kann Tabs zwischen Dashboard und Settings einzeln ausblenden.
