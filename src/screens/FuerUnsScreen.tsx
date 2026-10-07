@@ -46,6 +46,11 @@ import { useFuerUns } from '../hooks/useFuerUns';
 
 const PAUSE = '#D98AA8';
 
+/** Ende einer Pause, z. B. „Fr. 10.10.“ (Pause gilt bis einschließlich diesem Tag). */
+function pauseEnd(date: string): string {
+  return format(parseISO(date), 'EEEEEE. d.M.', { locale: de });
+}
+
 function formatDateTime(iso: string): string {
   return format(parseISO(iso), 'dd.MM.yyyy, HH:mm');
 }
@@ -186,7 +191,7 @@ export function FuerUnsScreen() {
                 </View>
                 <Text style={[s.personName, { color: colors.text }]} numberOfLines={1}>{p.name ?? ''}</Text>
                 <Text style={[s.personMood, { color: colors.textMuted }]} numberOfLines={1}>
-                  {p.pause ? '🌸 Pause'
+                  {p.pause ? `🌸 bis ${pauseEnd(p.pause)}`
                     : p.mood ? `${FUER_UNS_MOOD_LEVELS[p.mood.level!].emoji} ${FUER_UNS_MOOD_LEVELS[p.mood.level!].label}`
                     : '–'}
                 </Text>
@@ -218,7 +223,7 @@ export function FuerUnsScreen() {
         <View style={[s.pauseBox, { borderColor: PAUSE + '66' }]}>
           {myPause ? (
             <View style={s.pauseRow}>
-              <Text style={[s.pauseText, { color: colors.text }]}>🌸 Pause bis {format(parseISO(myPause), 'EEEE', { locale: de })}</Text>
+              <Text style={[s.pauseText, { color: colors.text }]}>🌸 Pause bis {pauseEnd(myPause)}</Text>
               <Pressable onPress={() => familyId && myUid && setFuerUnsPause(familyId, myUid, null).catch(() => {})} hitSlop={6}>
                 <Text style={[s.pauseEnd, { color: PAUSE }]}>Beenden</Text>
               </Pressable>
@@ -243,7 +248,7 @@ export function FuerUnsScreen() {
         {/* Partner hat Pause → fürsorgliche Kombos statt Druck */}
         {partnerPause && (
           <View style={[s.pauseBox, { borderColor: PAUSE + '66' }]}>
-            <Text style={[s.pauseText, { color: colors.text }]}>🌸 {partner} macht gerade Pause. Was ihr guttun könnte:</Text>
+            <Text style={[s.pauseText, { color: colors.text }]}>🌸 {partner} macht Pause bis einschließlich {pauseEnd(partnerPause)}. Was ihr guttun könnte:</Text>
             <View style={s.replyChips}>
               {FUER_UNS_CARE_COMBOS.map((c) => (
                 <Pressable key={c.emoji} onPress={() => sendCombo(c.emoji)} style={({ pressed }) => [s.comboChip, { borderColor: PAUSE, backgroundColor: colors.surface, opacity: pressed ? 0.6 : 1 }]}>
@@ -302,7 +307,7 @@ export function FuerUnsScreen() {
             </View>
             {comboGroup === 'hot' && partnerPause && (
               <Text style={[s.pauseHint, { color: colors.textMuted, borderColor: PAUSE + '88' }]}>
-                🌸 {partner} macht gerade Pause – die Lieb-Kombos passen heute besser.
+                🌸 {partner} macht Pause bis {pauseEnd(partnerPause!)} – die Lieb-Kombos passen heute besser.
               </Text>
             )}
             <View style={[s.comboGrid, comboGroup === 'hot' && partnerPause ? { opacity: 0.45 } : null]}>
