@@ -70,8 +70,10 @@ export function FuerUnsReminderBanner({
   const sad = !!partnerPause;
   const pauseUntil = partnerPause ? format(parseISO(partnerPause), 'EEEEEE.', { locale: de }) : null;
 
-  const partnerEmoji = partnerPause ? '🌸' : partnerMood ? FUER_UNS_MOOD_LEVELS[partnerMood.level!].emoji : null;
-  const myEmoji = myPause ? '🌸' : myMood ? FUER_UNS_MOOD_LEVELS[myMood.level!].emoji : '?';
+  // Pause und Barometer zusammen zeigen (TE-28): z. B. „🌸 😊“.
+  const moodEmoji = (m: typeof myMood) => (m ? FUER_UNS_MOOD_LEVELS[m.level!].emoji : null);
+  const partnerEmoji = [partnerPause ? '🌸' : null, moodEmoji(partnerMood)].filter(Boolean).join(' ') || null;
+  const myEmoji = [myPause ? '🌸' : null, moodEmoji(myMood)].filter(Boolean).join(' ') || '?';
 
   // TE-31: nur in meinem Account – wann der Partner zuletzt in der App war.
   const showLastSeen = myUid === FUER_UNS_LAST_SEEN_VIEWER;
@@ -116,7 +118,7 @@ export function FuerUnsReminderBanner({
             <Text style={[styles.value, sad && { color: SAD_TEXT }]} numberOfLines={1}>{partner} {partnerEmoji}</Text>
           )}
           {pauseUntil && <Text style={styles.until} numberOfLines={1}>bis {pauseUntil}</Text>}
-          {partnerChanged && !partnerPause && (
+          {partnerChanged && (
             <View style={styles.badge}><Text style={styles.badgeText}>NEU</Text></View>
           )}
           <Text style={styles.muted}>{partnerEmoji ? ' · ' : ''}Du {myEmoji}</Text>

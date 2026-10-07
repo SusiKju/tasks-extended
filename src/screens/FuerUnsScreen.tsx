@@ -191,10 +191,11 @@ export function FuerUnsScreen() {
                 </View>
                 <Text style={[s.personName, { color: colors.text }]} numberOfLines={1}>{p.name ?? ''}</Text>
                 <Text style={[s.personMood, { color: colors.textMuted }]} numberOfLines={1}>
-                  {p.pause ? `🌸 bis ${pauseEnd(p.pause)}`
-                    : p.mood ? `${FUER_UNS_MOOD_LEVELS[p.mood.level!].emoji} ${FUER_UNS_MOOD_LEVELS[p.mood.level!].label}`
-                    : '–'}
+                  {p.mood ? `${FUER_UNS_MOOD_LEVELS[p.mood.level!].emoji} ${FUER_UNS_MOOD_LEVELS[p.mood.level!].label}` : p.pause ? '' : '–'}
                 </Text>
+                {p.pause && (
+                  <Text style={[s.personMood, { color: colors.textMuted }]} numberOfLines={1}>🌸 bis {pauseEnd(p.pause)}</Text>
+                )}
               </View>
             </React.Fragment>
           ))}
@@ -248,7 +249,7 @@ export function FuerUnsScreen() {
         {/* Partner hat Pause → fürsorgliche Kombos statt Druck */}
         {partnerPause && (
           <View style={[s.pauseBox, { borderColor: PAUSE + '66' }]}>
-            <Text style={[s.pauseText, { color: colors.text }]}>🌸 {partner} macht Pause bis einschließlich {pauseEnd(partnerPause)}. Was ihr guttun könnte:</Text>
+            <Text style={[s.pauseText, { color: colors.text }]}>🌸 {partner} macht Pause bis einschließlich {pauseEnd(partnerPause)} – was ihr guttun könnte:</Text>
             <View style={s.replyChips}>
               {FUER_UNS_CARE_COMBOS.map((c) => (
                 <Pressable key={c.emoji} onPress={() => sendCombo(c.emoji)} style={({ pressed }) => [s.comboChip, { borderColor: PAUSE, backgroundColor: colors.surface, opacity: pressed ? 0.6 : 1 }]}>
