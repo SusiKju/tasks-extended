@@ -25,6 +25,10 @@ const WINE_BORDER = '#9b2f55';
 const WINE_GLOW = '#6b1a36';
 const TEXT = '#f4ecee';
 const MUTED = '#c9a9b3';
+// Traurige Variante, solange der Partner Pause hat (TE-27)
+const SAD = '#23262e';
+const SAD_BORDER = '#4a4f5c';
+const SAD_TEXT = '#b8bcc8';
 /** Ab dieser Stufe (😏 Lust) zählt es als Lust. */
 const LUST_LEVEL = 3;
 /** Liebes Nein aus FUER_UNS_REPLIES. */
@@ -61,6 +65,11 @@ export function FuerUnsReminderBanner({
     router.push('/(tabs)/fuer-uns' as any);
   };
 
+  // TE-27: Partner hat Pause → Zeile wird grau-traurig („Sendepause“ mit welker Rose) und
+  // zeigt dezent, bis wann. Nach dem letzten Tag liefert activePause() null → automatisch normal.
+  const sad = !!partnerPause;
+  const pauseUntil = partnerPause ? format(parseISO(partnerPause), 'EEEEEE.', { locale: de }) : null;
+
   const partnerEmoji = partnerPause ? '🌸' : partnerMood ? FUER_UNS_MOOD_LEVELS[partnerMood.level!].emoji : null;
   const myEmoji = myPause ? '🌸' : myMood ? FUER_UNS_MOOD_LEVELS[myMood.level!].emoji : '?';
 
@@ -87,12 +96,12 @@ export function FuerUnsReminderBanner({
       onPress={open}
       style={({ pressed }) => [
         styles.strip,
-        { backgroundColor: einig ? WINE_GLOW : WINE, borderColor: einig ? '#ff8fab' : WINE_BORDER, opacity: pressed ? 0.8 : 1 },
+        { backgroundColor: einig ? WINE_GLOW : sad ? SAD : WINE, borderColor: einig ? '#ff8fab' : sad ? SAD_BORDER : WINE_BORDER, opacity: pressed ? 0.8 : 1 },
         einig && styles.glow,
       ]}
     >
-      <Text style={styles.icon}>❤️‍🔥</Text>
-      <Text style={styles.title} numberOfLines={1}>{einig ? 'Ihr seid euch heute einig' : 'Für uns'}</Text>
+      <Text style={styles.icon}>{sad ? '🥀' : '❤️‍🔥'}</Text>
+      <Text style={[styles.title, sad && { color: SAD_TEXT }]} numberOfLines={1}>{einig ? 'Ihr seid euch heute einig' : sad ? 'Sendepause' : 'Für uns'}</Text>
       {unreadCount > 0 && (
         <View style={styles.badge}><Text style={styles.badgeText}>{unreadCount}</Text></View>
       )}
@@ -104,8 +113,9 @@ export function FuerUnsReminderBanner({
       ) : (
         <>
           {partnerEmoji && (
-            <Text style={styles.value} numberOfLines={1}>{partner} {partnerEmoji}</Text>
+            <Text style={[styles.value, sad && { color: SAD_TEXT }]} numberOfLines={1}>{partner} {partnerEmoji}</Text>
           )}
+          {pauseUntil && <Text style={styles.until} numberOfLines={1}>bis {pauseUntil}</Text>}
           {partnerChanged && !partnerPause && (
             <View style={styles.badge}><Text style={styles.badgeText}>NEU</Text></View>
           )}
@@ -144,6 +154,7 @@ const styles = StyleSheet.create({
   title: { color: TEXT, fontSize: 13, fontWeight: '700', flexShrink: 1 },
   value: { color: TEXT, fontSize: 13, fontWeight: '600' },
   muted: { color: MUTED, fontSize: 13 },
+  until: { color: '#8e93a1', fontSize: 11 },
   chevron: { color: MUTED, fontSize: 16, marginLeft: 2 },
   lastSeen: { color: '#9b7a85', fontSize: 11, marginHorizontal: 28, marginBottom: 4 },
   hot: { backgroundColor: '#5a1630', borderColor: '#ff8fab' },
