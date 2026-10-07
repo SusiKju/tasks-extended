@@ -21,6 +21,7 @@ import {
   sentTodayByMe,
   FuerUnsMood,
   subscribeToFuerUnsMoods,
+  fuerUnsDisplayName,
 } from '../services/fuerUns';
 
 export function useFuerUns() {
@@ -85,7 +86,7 @@ export function useFuerUns() {
     partnerName: (() => {
       const partnerUid = items.find((i) => i.addedByUid && i.addedByUid !== myUid)?.addedByUid
         ?? moods.find((m) => m.uid !== myUid)?.uid;
-      return members.find((m) => m.uid === partnerUid)?.displayName ?? null;
+      return fuerUnsDisplayName(partnerUid, members.find((m) => m.uid === partnerUid)?.displayName);
     })(),
     // Abgehakte Nachrichten zählen mit – sonst taucht der Schreiben-Hinweis nach dem Abhaken wieder auf.
     sentToday: myUid ? sentTodayByMe([...items, ...archivedItems], myUid) : true,

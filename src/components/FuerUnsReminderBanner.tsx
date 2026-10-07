@@ -12,10 +12,12 @@
  * Bewusst ruhig gehalten (kein Pulsieren wie die Geburtstags-Card).
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { format, parseISO } from 'date-fns';
 import { ThemeColors } from '../utils/theme';
 import { useFuerUns } from '../hooks/useFuerUns';
 import {
@@ -43,13 +45,20 @@ export function FuerUnsReminderBanner({
   const router = useRouter();
   const { familyId, myUid, myName, items, sentToday, myMood, partnerMood, partnerName } = fuerUns;
   const [moodOpen, setMoodOpen] = useState(false);
+  // Welchen Barometer-Stand des Partners habe ich schon gesehen? Neuer Stand → „NEU“, bis ich draufgetippt habe.
+  const seenKey = `fuerUnsPartnerMoodSeen:${myUid}`;
+  const [seenAt, setSeenAt] = useState<string | null | undefined>(undefined);
+  useEffect(() => {
+    if (!myUid) return;
+    AsyncStorage.getItem(seenKey).then(setSeenAt).catch(() => setSeenAt(null));
+  }, [seenKey, myUid]);
 
   if (!familyId || !myUid || !myName) return null;
 
   const unread = unreadFromPartner(items, myUid)[0] as FuerUnsItem | undefined;
   const replies = unread?.emoji ? FUER_UNS_REPLIES[unread.emoji] : undefined;
   const showMood = !myMood || moodOpen;
-  const partner = partnerName?.split(' ')[0] ?? 'Partner';
+  const partner = partnerName ?? 'Partner';
   const openTab = () => router.push('/(tabs)/fuer-uns' as any);
 
   const send = async (emoji: string) => {
@@ -70,28 +79,54 @@ export function FuerUnsReminderBanner({
     setFuerUnsMood(familyId, myUid, level).catch(() => {});
   };
 
-  const moodLine = (partnerMood || myMood) && (
-    <View style={styles.moodLine}>
-      <Text style={[styles.moodText, { color: colors.textMuted }]}>
-        {partnerMood ? `${partner}: ${FUER_UNS_MOOD_LEVELS[partnerMood.level].emoji} ${FUER_UNS_MOOD_LEVELS[partnerMood.level].label}` : ''}
-        {partnerMood && myMood ? '  ·  ' : ''}
-      </Text>
-      {myMood && (
-        <Pressable onPress={() => setMoodOpen((v) => !v)} hitSlop={6}>
-          <Text style={[styles.moodText, { color: colors.textMuted }]}>Du: {FUER_UNS_MOOD_LEVELS[myMood.level].emoji} {FUER_UNS_MOOD_LEVELS[myMood.level].label}</Text>
-        </Pressable>
+  const partnerIsNew = !!partnerMood && seenAt !== undefined && seenAt !== partnerMood.updatedAt;
+  const markPartnerSeen = () => {
+    if (!partnerMood) return;
+    setSeenAt(partnerMood.updatedAt);
+    AsyncStorage.setItem(seenKey, partnerMood.updatedAt).catch(() => {});
+  };
+
+  // Stand des Partners: eigene, gut sichtbare Zeile; ungesehene Änderung gefüllt + „NEU“.
+  const partnerPill = partnerMood && (
+    <Pressable
+      onPress={markPartnerSeen}
+      style={[styles.partnerPill, {
+        borderColor: partnerIsNew ? ACCENT : ACCENT + '55',
+        backgroundColor: partnerIsNew ? ACCENT + '33' : colors.surface,
+      }]}
+    >
+      <Text style={styles.partnerEmoji}>{FUER_UNS_MOOD_LEVELS[partnerMood.level].emoji}</Text>
+      <View style={{ flex: 1 }}>
+        <Text style={[styles.partnerWho, { color: colors.textMuted }]}>{partner} ist heute</Text>
+        <Text style={[styles.partnerLevel, { color: colors.text }]}>{FUER_UNS_MOOD_LEVELS[partnerMood.level].label}</Text>
+      </View>
+      {partnerIsNew ? (
+        <View style={styles.newBadge}><Text style={styles.newBadgeText}>NEU</Text></View>
+      ) : (
+        <Text style={[styles.partnerTime, { color: colors.textMuted }]}>seit {format(parseISO(partnerMood.updatedAt), 'HH:mm')}</Text>
       )}
-    </View>
+    </Pressable>
+  );
+
+  const myMoodLink = myMood && (
+    <Pressable onPress={() => setMoodOpen((v) => !v)} hitSlop={6}>
+      <Text style={[styles.moodText, { color: colors.textMuted }]}>Du: {FUER_UNS_MOOD_LEVELS[myMood.level].emoji} {FUER_UNS_MOOD_LEVELS[myMood.level].label}</Text>
+    </Pressable>
   );
 
   // C: nichts offen, Barometer gesetzt → eine Zeile
   if (!unread && !showMood) {
     return (
-      <Pressable onPress={openTab} style={[styles.card, styles.compact, { backgroundColor: ACCENT + '12', borderColor: ACCENT + '40' }]}>
-        <Ionicons name="heart" size={16} color={ACCENT} />
-        <View style={{ flex: 1 }}>{moodLine}</View>
-        <Text style={[styles.link, { color: colors.textMuted }]}>{sentToday ? 'Für uns ›' : `${partner} schreiben ›`}</Text>
-      </Pressable>
+      <View style={[styles.card, { backgroundColor: ACCENT + '12', borderColor: ACCENT + '40' }]}>
+        {partnerPill}
+        <View style={styles.compact}>
+          <Ionicons name="heart" size={14} color={ACCENT} />
+          <View style={{ flex: 1 }}>{myMoodLink}</View>
+          <Pressable onPress={openTab} hitSlop={6}>
+            <Text style={[styles.link, { color: colors.textMuted }]}>{sentToday ? 'Für uns ›' : `${partner} schreiben ›`}</Text>
+          </Pressable>
+        </View>
+      </View>
     );
   }
 
@@ -101,8 +136,10 @@ export function FuerUnsReminderBanner({
         <Ionicons name="heart-outline" size={16} color={ACCENT} />
         <Text style={[styles.title, { color: colors.text }]}>Für uns</Text>
         <View style={{ flex: 1 }} />
-        {moodLine}
+        {myMoodLink}
       </Pressable>
+
+      {partnerPill}
 
       {/* A: ungelesene Nachricht vom Partner */}
       {unread && (
@@ -171,12 +208,18 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     gap: 9,
   },
-  compact: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9 },
+  compact: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  partnerPill: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1.5, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8 },
+  partnerEmoji: { fontSize: 24 },
+  partnerWho: { fontSize: 11.5 },
+  partnerLevel: { fontSize: 15, fontWeight: '800' },
+  partnerTime: { fontSize: 11 },
+  newBadge: { backgroundColor: ACCENT, borderRadius: 8, paddingHorizontal: 7, paddingVertical: 2 },
+  newBadgeText: { color: '#fff', fontSize: 10.5, fontWeight: '800', letterSpacing: 0.5 },
   header: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   title: { fontSize: 13, fontWeight: '700' },
   link: { fontSize: 12, fontWeight: '700' },
   sub: { fontSize: 11.5 },
-  moodLine: { flexDirection: 'row', alignItems: 'center' },
   moodText: { fontSize: 12 },
   bubble: { borderWidth: 1, borderRadius: 12, borderBottomLeftRadius: 3, paddingHorizontal: 11, paddingVertical: 8 },
   bubbleText: { fontSize: 13.5, lineHeight: 19 },

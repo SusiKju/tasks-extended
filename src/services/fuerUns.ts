@@ -257,6 +257,20 @@ export function sentTodayByMe(items: FuerUnsItem[], myUid: string): boolean {
   return items.some((i) => i.addedByUid === myUid && localDateStr(i.createdAt) === today);
 }
 
+/**
+ * Kosenamen für die Anzeige beim Partner (Dashboard-Karte). Sonst Vorname.
+ * ponytail: fest im Code, weil es genau ein Paar gibt – bei mehr Paaren ein
+ * Feld am Familienmitglied daraus machen.
+ */
+const FUER_UNS_NICKNAMES: Record<string, string> = {
+  rRX2Nyg07chTCMigmpy6OXliI1h1: 'Reddi',
+};
+
+export function fuerUnsDisplayName(uid: string | null | undefined, displayName: string | null | undefined): string | null {
+  if (uid && FUER_UNS_NICKNAMES[uid]) return FUER_UNS_NICKNAMES[uid];
+  return displayName?.split(' ')[0] ?? null;
+}
+
 // ── Lust-Barometer ──────────────────────────────────────────────────────────
 // Ein Tipp am Tag, pro Person ein Dokument. Gilt nur für den Tag, an dem es
 // gesetzt wurde – ein „🔥 von vor drei Tagen“ soll nicht stehen bleiben.
