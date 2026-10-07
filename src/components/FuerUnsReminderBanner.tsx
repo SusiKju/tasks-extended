@@ -17,7 +17,7 @@ import { ThemeColors } from '../utils/theme';
 import { useFuerUns } from '../hooks/useFuerUns';
 import { format, formatDistanceToNow, isToday, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
-import { FUER_UNS_MOOD_LEVELS, FUER_UNS_LAST_SEEN_VIEWER } from '../services/fuerUns';
+import { addFuerUnsMessage, setFuerUnsMood, FUER_UNS_MOOD_LEVELS, FUER_UNS_LAST_SEEN_VIEWER } from '../services/fuerUns';
 
 const ACCENT = '#E8607A';
 // Eigene Bordeaux-Farbwelt, fest (nicht über mono()), damit die Zeile in jedem Theme als „Für uns“ erkennbar bleibt.
@@ -28,6 +28,8 @@ const TEXT = '#f4ecee';
 const MUTED = '#c9a9b3';
 /** Ab dieser Stufe (😏 Lust) zählt es als Lust. */
 const LUST_LEVEL = 3;
+/** Liebes Nein aus FUER_UNS_REPLIES. */
+const SOFT_NO = '💭🤍';
 
 export function FuerUnsReminderBanner({
   fuerUns,
@@ -36,7 +38,7 @@ export function FuerUnsReminderBanner({
   fuerUns: ReturnType<typeof useFuerUns>;
 }) {
   const router = useRouter();
-  const { myUid, myMood, partnerMood, myPause, partnerPause, partnerName, unreadCount, partnerLastSeenAt } = fuerUns;
+  const { familyId, myName, items, myUid, myMood, partnerMood, myPause, partnerPause, partnerName, unreadCount, partnerLastSeenAt } = fuerUns;
 
   // Welchen Barometer-Stand des Partners habe ich schon gesehen? Neuer Stand → „NEU“, bis ich die Zeile antippe.
   const seenKey = `fuerUnsPartnerMoodSeen:${myUid}`;
@@ -52,6 +54,16 @@ export function FuerUnsReminderBanner({
   const partnerIsNew = !!partnerMood?.updatedAt && seenAt !== undefined && seenAt !== partnerMood.updatedAt;
   const einig = !myPause && !partnerPause
     && (myMood?.level ?? -1) >= LUST_LEVEL && (partnerMood?.level ?? -1) >= LUST_LEVEL;
+
+  // Variante D (TE-20): Partner hat Lust, ich noch nicht → direkt in der Zeile antworten.
+  // „Heute nicht“ gilt als beantwortet, sobald ich nach seinem Stand ein 💭🤍 geschickt habe.
+  const declined = !!partnerMood?.updatedAt && items.some(
+    (i) => i.addedByUid === myUid && i.emoji === SOFT_NO && i.createdAt > partnerMood.updatedAt!
+  );
+  const askBack = !einig && !partnerPause && !myPause && !declined
+    && (partnerMood?.level ?? -1) >= LUST_LEVEL && (myMood?.level ?? -1) < LUST_LEVEL;
+  const sayYes = () => { if (familyId) setFuerUnsMood(familyId, myUid, LUST_LEVEL).catch(() => {}); };
+  const sayNo = () => { if (familyId && myName) addFuerUnsMessage(familyId, '', myName, myUid, SOFT_NO).catch(() => {}); };
 
   const open = () => {
     if (partnerMood?.updatedAt) {
@@ -70,6 +82,19 @@ export function FuerUnsReminderBanner({
 
   return (
     <>
+    {askBack ? (
+      <Pressable onPress={open} style={({ pressed }) => [styles.strip, styles.hot, { opacity: pressed ? 0.85 : 1 }]}>
+        <Text style={styles.bigEmoji}>{FUER_UNS_MOOD_LEVELS[partnerMood!.level!].emoji}</Text>
+        <Text style={[styles.title, styles.hotTitle]} numberOfLines={1}>{partner} hat Lust</Text>
+        <View style={{ flex: 1 }} />
+        <Pressable onPress={sayYes} hitSlop={4} style={({ pressed }) => [styles.btn, styles.btnYes, { opacity: pressed ? 0.7 : 1 }]}>
+          <Text style={styles.btnText} numberOfLines={1}>Ich auch</Text>
+        </Pressable>
+        <Pressable onPress={sayNo} hitSlop={4} style={({ pressed }) => [styles.btn, styles.btnNo, { opacity: pressed ? 0.7 : 1 }]}>
+          <Text style={[styles.btnText, { color: MUTED }]} numberOfLines={1}>Heute nicht</Text>
+        </Pressable>
+      </Pressable>
+    ) : (
     <Pressable
       onPress={open}
       style={({ pressed }) => [
@@ -101,6 +126,7 @@ export function FuerUnsReminderBanner({
       )}
       <Text style={styles.chevron}>›</Text>
     </Pressable>
+    )}
     {showLastSeen && (
       <Text style={styles.lastSeen}>
         {lastSeen
@@ -132,6 +158,13 @@ const styles = StyleSheet.create({
   muted: { color: MUTED, fontSize: 13 },
   chevron: { color: MUTED, fontSize: 16, marginLeft: 2 },
   lastSeen: { color: '#9b7a85', fontSize: 11, marginHorizontal: 28, marginBottom: 4 },
+  hot: { backgroundColor: '#5a1630', borderColor: '#ff8fab' },
+  bigEmoji: { fontSize: 17 },
+  hotTitle: { fontWeight: '800', color: '#fff' },
+  btn: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, flexShrink: 0 },
+  btnYes: { borderColor: '#ffb3c4', backgroundColor: ACCENT },
+  btnNo: { borderColor: MUTED + '66' },
+  btnText: { color: '#fff', fontSize: 12, fontWeight: '700' },
   badge: { backgroundColor: ACCENT, borderRadius: 6, paddingHorizontal: 5, paddingVertical: 1 },
   badgeText: { color: '#fff', fontSize: 9.5, fontWeight: '800', letterSpacing: 0.4 },
 });
