@@ -99,7 +99,7 @@ export function FuerUnsReminderBanner({
     <View style={[styles.card, { backgroundColor: ACCENT + '18', borderColor: ACCENT + '55' }]}>
       <Pressable onPress={openTab} style={styles.header} hitSlop={4}>
         <Ionicons name="heart-outline" size={16} color={ACCENT} />
-        <Text style={[styles.title, { color: colors.text }]}>Stimmungsbarometer</Text>
+        <Text style={[styles.title, { color: colors.text }]}>Für uns</Text>
         <View style={{ flex: 1 }} />
         {moodLine}
       </Pressable>
@@ -131,7 +131,7 @@ export function FuerUnsReminderBanner({
       {/* Lust-Barometer: ein Tipp, gilt nur für heute */}
       {showMood && (
         <View style={{ gap: 4 }}>
-          <Text style={[styles.sub, { color: colors.textMuted }]}>Wie viel Lust hast du heute?</Text>
+          <Text style={[styles.sub, { color: colors.textMuted }]}>Stimmungsbarometer</Text>
           <View style={styles.scale}>
             {FUER_UNS_MOOD_LEVELS.map((m, i) => {
               const on = myMood?.level === i;
