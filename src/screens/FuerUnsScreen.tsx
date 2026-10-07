@@ -147,6 +147,15 @@ export function FuerUnsScreen() {
 
   const accent = '#E8607A';
 
+  // TE-25: ohne Freigabe (Rule lehnt ab, z. B. Kinder-Account per Direktlink) nichts vom Inhalt zeigen.
+  if (loadError) {
+    return (
+      <View style={[s.container, { backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }]}>
+        <Ionicons name="lock-closed-outline" size={22} color={colors.textMuted} />
+      </View>
+    );
+  }
+
   if (!familyId) {
     return (
       <View style={[s.container, { backgroundColor: colors.background }]}>

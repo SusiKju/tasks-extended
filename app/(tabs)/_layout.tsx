@@ -41,7 +41,7 @@ export default function TabsLayout() {
 function TabsLayoutInner() {
   const { colors, isDark } = useTheme();
   const visibleTabs = useStore((s) => s.settings.visibleTabs ?? DEFAULT_VISIBLE_TABS);
-  const { badgeCount: fuerUnsBadge, familyId, myUid } = useFuerUns();
+  const { badgeCount: fuerUnsBadge, familyId, myUid, loaded: fuerUnsLoaded, loadError: fuerUnsDenied } = useFuerUns();
   // TE-31: „zuletzt online“ beim Start und bei jeder Rückkehr in den Vordergrund.
   // Fehler (kein Für-uns-Zugriff → Rule lehnt ab) bleiben still.
   useEffect(() => {
@@ -164,7 +164,10 @@ function TabsLayoutInner() {
         name="fuer-uns"
         options={{
           title: 'Für uns',
-          href: hrefFor('fuerUns'),
+          // TE-25: nur für die beiden Freigegebenen (fuerUnsUids) – alle anderen
+          // (z. B. Kinder mit eigenem Login) bekommen von der Rule einen Fehler
+          // und sehen den Tab gar nicht.
+          href: fuerUnsLoaded && !fuerUnsDenied ? hrefFor('fuerUns') : null,
           tabBarBadge: fuerUnsBadge > 0 ? fuerUnsBadge : undefined,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="heart-outline" size={size} color={color} />
