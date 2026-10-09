@@ -125,7 +125,6 @@ export type DashboardBlockKey =
   | 'weckmodus'
   | 'birthdays'
   | 'weather'
-  | 'feed'
   | 'googleTasks'
   | 'scratchpad'
   | 'driveFavorites'
@@ -142,7 +141,6 @@ export const DASHBOARD_BLOCKS: { key: DashboardBlockKey; label: string; descript
   { key: 'weckmodus',     label: 'Weckmodus',           description: 'Morgens 5–7 Uhr an Schultagen: muss ein Kind zur 1. Stunde aufstehen oder ist sie frei?' },
   { key: 'birthdays',     label: 'Geburtstage',         description: 'Heutige Geburtstage ganz oben.' },
   { key: 'weather',       label: 'Wetter',              description: 'Wettervorhersage neben dem Sync-Button.' },
-  { key: 'feed',          label: 'Mein Tag',            description: 'Alle anstehenden Dinge als eine Liste, mit dezentem Icon je Kategorie.' },
   { key: 'googleTasks',   label: 'Google Tasks',        description: 'Offene Google Tasks, zeilenweise über den Links.' },
   { key: 'scratchpad',    label: 'Aufgaben',            description: 'Eigene Aufgaben: ohne Datum, fällig heute/morgen oder überfällig.' },
   { key: 'driveFavorites',label: 'Drive-Favoriten',     description: 'Als Favorit markierte Google-Drive-Dateien.' },
@@ -156,10 +154,10 @@ export const DASHBOARD_BLOCKS: { key: DashboardBlockKey; label: string; descript
   { key: 'allowance',     label: 'Taschengeld',         description: 'Kinder, deren Taschengeld für den laufenden Monat noch offen ist.' },
 ];
 
-/** TE-77: Default-Sichtbarkeit – alle Dashboard-Blöcke aktiv, außer 'feed' (neu, Opt-in). */
+/** TE-77: Default-Sichtbarkeit – alle Dashboard-Blöcke aktiv. */
 export const DEFAULT_DASHBOARD_BLOCKS: Record<DashboardBlockKey, boolean> =
   DASHBOARD_BLOCKS.reduce(
-    (acc, b) => { acc[b.key] = b.key !== 'feed'; return acc; },
+    (acc, b) => { acc[b.key] = true; return acc; },
     {} as Record<DashboardBlockKey, boolean>
   );
 

@@ -42,12 +42,7 @@ import { FuerUnsReminderBanner } from '../components/FuerUnsReminderBanner';
 import { useFuerUns } from '../hooks/useFuerUns';
 import { CountdownStrip } from '../components/CountdownStrip';
 import { WeckmodusCard } from '../components/WeckmodusCard';
-import { FeedBlock, FeedItem } from '../components/FeedBlock';
-import { subscribeToFeedOrder, saveFeedOrder, FeedOrder } from '../services/feedOrderService';
-import { subscribeToFeedHighlight, saveFeedHighlight } from '../services/feedHighlightService';
-import { SharedNoteItem, subscribeToSharedNotes } from '../services/sharedNotes';
 import { addQuickNote } from '../services/quickNotesService';
-import { GeistesKachel, subscribeToGeistesKacheln } from '../services/geistesKacheln';
 import { DashboardBlockKey, Task } from '../types';
 
 // Fallback-Farbe falls Kind keine Farbe gesetzt hat
@@ -85,20 +80,6 @@ function taskDue(dateStr?: string | null): { label: string; overdue: boolean } |
   const overdue = isOverdue(dateStr);
   const [, m, d] = localDateStr(dateStr).split('-');
   return { label: `${d}.${m}.`, overdue };
-}
-
-/**
- * Feed-Block ("Mein Tag", TE-?): ordnet ein "YYYY-MM-DD"-Datum einer der vier
- * Zeitgruppen zu (Überfällig/Heute/Morgen/Ohne Termin) – dieselbe Semantik wie
- * der bisherige Tasks-Block, nur über alle Item-Kategorien hinweg angewandt.
- * Kein Datum (null/undefined) landet immer in "Ohne Termin".
- */
-function feedDateGroup(dateStr: string | null | undefined): 'overdue' | 'today' | 'tomorrow' | 'later' {
-  if (!dateStr) return 'later';
-  if (dateStr < TODAY) return 'overdue';
-  if (dateStr === TODAY) return 'today';
-  const tomorrow = format(new Date(Date.now() + 86400000), 'yyyy-MM-dd');
-  return dateStr === tomorrow ? 'tomorrow' : 'later';
 }
 
 /** TE-5: Kurzübersicht zeigt nur Einträge ohne Datum oder mit Datum heute/morgen. */
@@ -253,9 +234,6 @@ export function DashboardScreen() {
   // Schatten-Eigenheiten wie beim alten Flammen-Glow vor TE-4).
   const birthdayPulse = useRef(new Animated.Value(0)).current;
 
-  // "Mein Tag" (Feed): erscheint nicht mehr inline auf dem Dashboard,
-  // sondern wird über das Icon links neben dem Sync-Button als Dialog geöffnet.
-  const [feedDialogOpen, setFeedDialogOpen] = useState(false);
   const spinLoop = useRef<Animated.CompositeAnimation | null>(null);
 
   // TE-152: Schnell-Anlegen für Personal Tasks & Notizen direkt aus der
@@ -412,21 +390,6 @@ export function DashboardScreen() {
     setAllowanceEdit(null);
   }, [allowanceEdit, fid, dueMonthByChild, familyChildren]);
 
-  // ── Feed-Block ("Mein Tag"): zusätzliche Datenquellen, die bisher nur in den ──
-  // jeweiligen Einzel-Komponenten geladen wurden (Geteilte Liste, Countdowns,
-  // Geistesblitze). Werden hier zusätzlich abonniert, damit der Feed sie als
-  // Items zeigen kann – die Einzel-Blöcke laden ihre Daten weiterhin selbst.
-  const [feedSharedNotes, setFeedSharedNotes] = useState<SharedNoteItem[]>([]);
-  useEffect(() => {
-    if (!fid) return;
-    const unsub = subscribeToSharedNotes(
-      fid,
-      (active) => setFeedSharedNotes(active),
-      () => setFeedSharedNotes([]),
-    );
-    return unsub;
-  }, [fid]);
-
   // TE-150: Google Tasks fürs Dashboard – offene Tasks, wichtig zuerst, dann nach
   // Fälligkeit. Zeilenweise & dezent über den Links dargestellt (Klick → Tasks-Tab).
   const dashboardTasks = useMemo<Task[]>(
@@ -469,59 +432,6 @@ export function DashboardScreen() {
     setQuickAddText('');
     setQuickAddKind(null);
   }, [quickAddKind, quickAddText, scratchpad, saveScratchpadText, fid, user?.uid]);
-
-  const [feedGeistesKacheln, setFeedGeistesKacheln] = useState<GeistesKachel[]>([]);
-  useEffect(() => {
-    if (!fid || !user?.uid) return;
-    const unsub = subscribeToGeistesKacheln(
-      fid,
-      user.uid,
-      (tiles) => setFeedGeistesKacheln(tiles),
-      () => setFeedGeistesKacheln([]),
-    );
-    return unsub;
-  }, [fid, user?.uid]);
-
-  // "Mein Tag": manuelle Sortierung der flachen Liste, pro User in Firestore
-  // persistiert und live synchronisiert (siehe feedOrderService.ts).
-  const [feedOrder, setFeedOrder] = useState<FeedOrder>([]);
-  const feedOrderSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    if (!fid || !user?.uid) return;
-    const unsub = subscribeToFeedOrder(fid, user.uid, (order) => setFeedOrder(order));
-    return unsub;
-  }, [fid, user?.uid]);
-
-  const handleFeedReorder = useCallback(
-    (orderedKeys: string[]) => {
-      setFeedOrder(orderedKeys);
-      if (fid && user?.uid) {
-        if (feedOrderSaveTimer.current) clearTimeout(feedOrderSaveTimer.current);
-        feedOrderSaveTimer.current = setTimeout(() => {
-          saveFeedOrder(fid, user.uid, orderedKeys);
-        }, 500);
-      }
-    },
-    [fid, user?.uid],
-  );
-
-  // "Mein Tag": per Long-Press hervorgehobene Items (TE-95, Mehrfach-Auswahl
-  // möglich), pro User in Firestore persistiert und live synchronisiert
-  // (siehe feedHighlightService.ts).
-  const [feedHighlightKeys, setFeedHighlightKeys] = useState<string[]>([]);
-  useEffect(() => {
-    if (!fid || !user?.uid) return;
-    const unsub = subscribeToFeedHighlight(fid, user.uid, (keys) => setFeedHighlightKeys(keys));
-    return unsub;
-  }, [fid, user?.uid]);
-
-  const handleFeedHighlight = useCallback(
-    (keys: string[]) => {
-      setFeedHighlightKeys(keys);
-      if (fid && user?.uid) saveFeedHighlight(fid, user.uid, keys);
-    },
-    [fid, user?.uid],
-  );
 
   // Offene, echte Aufgaben aus dem manuellen Klassenbuch je Kind – Info-
   // Einträge, abgehakte und gelöschte bleiben außen vor. Neueste zuerst,
@@ -589,117 +499,6 @@ export function DashboardScreen() {
     };
   }, [calEvents]);
 
-  // Alle Quellen zu einer einheitlichen Item-Liste verschmelzen (TE-?: "Mein Tag").
-  // Nur berechnet/gerendert, wenn der Block aktiv ist – additiv, ersetzt keine
-  // bestehenden Blöcke (siehe .drills/2026-06-16/unified-feed-block.md).
-  const feedItems = useMemo<FeedItem[]>(() => {
-    const items: FeedItem[] = [];
-
-    // TE-138: Eigene Tasks erscheinen nicht mehr im „Mein Tag"-Feed – das
-    // Dashboard ist tasks-frei, der Tasks-Tab bleibt die einzige Quelle dafür.
-
-    // Kinder-Aufgaben (alle offenen je Kind, inkl. Gruppenaufgaben einzeln je Kind).
-    for (const child of familyChildren) {
-      for (const t of (childTasks[child.id] ?? [])) {
-        if (t.done) continue;
-        items.push({
-          key: `kidTask:${child.id}:${t.id}`,
-          category: 'kidsTask',
-          group: feedDateGroup(t.date),
-          title: `${t.title} · ${childName(child.id)}`,
-          overdue: t.date < TODAY,
-          onPress: () => router.push('/(tabs)/kids' as any),
-        });
-      }
-    }
-
-    // Kalender-Termine (nur heute – Termine für morgen werden im Feed nicht angezeigt).
-    for (const e of todayEvents) {
-      items.push({
-        key: `calendar:${e.id}`,
-        category: 'calendar',
-        group: 'today',
-        title: e.summary || '(Ohne Titel)',
-        subtitle: e.location ?? undefined,
-      });
-    }
-
-    // Geburtstage (heute).
-    for (const b of todayBirthdays) {
-      items.push({
-        key: `birthday:${b.id}`,
-        category: 'birthday',
-        group: 'today',
-        title: b.name,
-        important: true,
-      });
-    }
-
-    // Geteilte Liste – offene (nicht abgehakte) Einträge, kein Termin.
-    for (const n of feedSharedNotes) {
-      if (n.done) continue;
-      items.push({
-        key: `sharedList:${n.id}`,
-        category: 'sharedList',
-        group: 'later',
-        title: n.text,
-        subtitle: `von ${n.addedBy}`,
-        onPress: () => router.push('/(tabs)' as any),
-      });
-    }
-
-    // Geistesblitze – persönliche Notiz-Kacheln, kein Termin.
-    for (const k of feedGeistesKacheln) {
-      items.push({
-        key: `geistesblitz:${k.id}`,
-        category: 'geistesblitz',
-        group: 'later',
-        title: k.text,
-      });
-    }
-
-    // Notizblock – persönliche Notizen aus dem Scratchpad (TE-81), kein Termin.
-    // Quelle ist derselbe `scratchpad`-Store-Wert wie der Notizblock selbst, daher
-    // fließen Änderungen aus dem Notizblock automatisch in den Feed ein. Leere
-    // Einträge (frische, noch ungetippte Notiz) werden ausgelassen. Die Bullet-
-    // Farbe ist die vom Nutzer gewählte Notiz-Farbe (TE-85), damit Feed und
-    // Notizblock identisch aussehen – auch im Mono-Theme.
-    parseScratchpad(scratchpad).forEach((entry, idx) => {
-      const text = entry.text.trim();
-      if (!text) return;
-      items.push({
-        // Stabile entry.id statt Array-Index (TE-95): sonst "erbt" eine neu
-        // oben eingefügte Notiz Highlight/manuelle Sortierung der alten
-        // Notiz an Position 0, weil sich nur der Index, nicht die Notiz
-        // selbst, verschoben hat.
-        key: `note:${entry.id ?? idx}`,
-        category: 'note',
-        group: 'later',
-        title: text,
-        color: entry.color,
-      });
-    });
-
-    // Taschengeld – Kinder, deren Betrag für den nächsten fälligen Monat noch offen ist (TE-78).
-    for (const c of openAllowanceChildren) {
-      items.push({
-        key: `allowance:${c.id}`,
-        category: 'allowance',
-        group: 'later',
-        title: `Taschengeld ${childName(c.id)}`,
-        subtitle: `${formatEuro(c.allowance ?? 0)} · ${formatMonthLabel(dueMonthByChild[c.id])}`,
-        onPress: () => router.push('/(tabs)/kids' as any),
-      });
-    }
-
-    return items;
-  }, [
-    familyChildren, childTasks,
-    todayEvents, todayBirthdays, feedSharedNotes,
-    feedGeistesKacheln, openAllowanceChildren, dueMonthByChild, router,
-    scratchpad, isMono, isDark, colors,
-  ]);
-
   // TE-168: Drive-Favoriten beim Laden automatisch ziehen – analog zum
   // Kalender. Nur wenn der Block überhaupt sichtbar ist (kein unnötiger Call).
   useEffect(() => {
@@ -752,20 +551,11 @@ export function DashboardScreen() {
       onLayout={(e) => setDashW(e.nativeEvent.layout.width)}
     >
 
-      {/* ── Wettervorhersage (TE-126, links) + "Mein Tag"-Icon + Sync-Button (rechts) ──
+      {/* ── Wettervorhersage (TE-126, links) + Sync-Button (rechts) ──
           Redesign: steht jetzt ganz oben, vor dem Geburtstag (vorher umgekehrt). ── */}
       <View style={styles.syncRow}>
         {showBlock('weather') ? <WeatherWidget colors={colors} /> : <View />}
         <View style={styles.syncRowRight}>
-          {showBlock('feed') && (
-            <Pressable
-              onPress={() => setFeedDialogOpen(true)}
-              style={({ pressed }) => [styles.syncBtn, { opacity: pressed ? 0.6 : 1 }]}
-              hitSlop={12}
-            >
-              <Ionicons name="today-outline" size={18} color={colors.textSecondary} />
-            </Pressable>
-          )}
           <Pressable
             onPress={handleSync}
             disabled={syncing}
@@ -1088,38 +878,6 @@ export function DashboardScreen() {
         </View>
       )}
 
-      {/* ── "Mein Tag" (Feed): nicht mehr inline auf dem Dashboard, sondern als Dialog ── */}
-      {/* über das Icon links neben dem Sync-Button (siehe oben), additiv, standardmäßig AUS. */}
-      {showBlock('feed') && (
-        <Modal
-          visible={feedDialogOpen}
-          animationType="slide"
-          transparent
-          onRequestClose={() => setFeedDialogOpen(false)}
-        >
-          <View style={[styles.feedModalOverlay, { backgroundColor: 'rgba(0,0,0,0.5)' }]}>
-            <Pressable style={StyleSheet.absoluteFill} onPress={() => setFeedDialogOpen(false)} />
-            <View style={[styles.feedModalCard, { backgroundColor: colors.background }]}>
-              <View style={styles.feedModalHeader}>
-                <Text style={[styles.feedModalTitle, { color: colors.text }]}>Mein Tag</Text>
-                <Pressable onPress={() => setFeedDialogOpen(false)} hitSlop={12}>
-                  <Ionicons name="close" size={22} color={colors.textSecondary} />
-                </Pressable>
-              </View>
-              <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
-                <FeedBlock
-                  items={feedItems}
-                  colors={colors}
-                  manualOrder={feedOrder}
-                  onReorder={handleFeedReorder}
-                  highlightedKeys={feedHighlightKeys}
-                  onHighlight={handleFeedHighlight}
-                />
-              </ScrollView>
-            </View>
-          </View>
-        </Modal>
-      )}
 
       {/* TE-152: Schnell-Anlegen-Modal für Aufgaben & Ideen – ein Textfeld,
           Absenden legt den Eintrag direkt an (kein voller Formular-Umweg). */}
@@ -1362,19 +1120,6 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
     feedModalOverlay: {
       flex: 1,
       justifyContent: 'flex-end',
-    },
-    feedModalCard: {
-      maxHeight: '80%',
-      borderTopLeftRadius: 20,
-      borderTopRightRadius: 20,
-      paddingTop: 16,
-    },
-    feedModalHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingHorizontal: 20,
-      paddingBottom: 12,
     },
     feedModalTitle: {
       fontSize: 17,
