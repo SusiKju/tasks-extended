@@ -578,7 +578,8 @@ export function DashboardScreen() {
       {showBlock('weckmodus') && <WeckmodusCard colors={colors} />}
 
       {/* ── Google-Connect-Banner (nur wenn noch nicht verbunden) ── */}
-      {!settings.googleCalendarEnabled && <GoogleConnectBanner colors={colors} />}
+      {/* TE-45: pro Gerät/Person – die Kalender-Flags sind familienweit, das Token nicht. */}
+      {!settings.googleAccessToken && <GoogleConnectBanner colors={colors} />}
 
       {/* ── Geburtstage: privat (eigene Google-Kontakte, nicht family-weit geteilt) ──
           Muss immer ins Auge stechen (User-Wunsch) – deshalb pulsiert der Rand

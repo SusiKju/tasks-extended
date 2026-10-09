@@ -129,6 +129,19 @@ function normaliseEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
+/**
+ * TE-45: Gmail ignoriert Punkte im lokalen Teil – „vor.name@gmail.com“ und
+ * „vorname@gmail.com“ sind dasselbe Konto, das Login-Token liefert aber nur
+ * eine der Schreibweisen. Deshalb legen wir die Zuordnung für beide an.
+ */
+function childEmailVariants(email: string): string[] {
+  const e = normaliseEmail(email);
+  const [local, domain] = e.split('@');
+  if (domain !== 'gmail.com' && domain !== 'googlemail.com') return [e];
+  const dotless = `${local.replace(/\./g, '')}@${domain}`;
+  return dotless === e ? [e] : [e, dotless];
+}
+
 function childEmailDoc(familyId: string, email: string) {
   return doc(db, 'families', familyId, 'childEmails', normaliseEmail(email));
 }
@@ -475,10 +488,10 @@ export async function syncChildLoginEmail(
 
   const batch = writeBatch(db);
   if (normalisedOld) {
-    batch.delete(childEmailDoc(familyId, normalisedOld));
+    for (const e of childEmailVariants(normalisedOld)) batch.delete(childEmailDoc(familyId, e));
   }
   if (normalisedNew) {
-    batch.set(childEmailDoc(familyId, normalisedNew), { childId, name: childName });
+    for (const e of childEmailVariants(normalisedNew)) batch.set(childEmailDoc(familyId, e), { childId, name: childName });
   }
   await batch.commit();
 }

@@ -385,17 +385,15 @@ export function SettingsScreen() {
 
   // TE-44: Es gibt nur noch „angemeldet“ oder „abgemeldet“. Abmelden trennt
   // Google gleich mit (inkl. serverseitigem Refresh-Token, TE-43).
+  // TE-45: NUR die geräte-lokalen Token-Felder leeren – googleCalendarEnabled,
+  // Kalender-ID usw. gelten familienweit (useSettingsSync) und würden sonst
+  // auch bei Diana den Kalender abschalten.
   const handleSignOut = useCallback(async () => {
     await forgetServerGoogleToken();
     updateSettings({
-      googleCalendarEnabled: false,
       googleAccessToken: null,
       googleRefreshToken: null,
       googleTokenExpiry: null,
-      googleCalendarId: null,
-      googleCalendarName: null,
-      googleNotesEnabled: false,
-      googleBirthdaysEnabled: false,
     });
     await signOutFirebase().catch(() => {});
   }, [updateSettings]);
@@ -415,13 +413,14 @@ export function SettingsScreen() {
               <Text style={styles.rowTitle}>Angemeldet</Text>
               <Text style={styles.rowSubtitle}>
                 {user.email ?? user.displayName ?? ''}
-                {settings.googleCalendarEnabled ? ' · synchronisiert automatisch' : ''}
+                {settings.googleCalendarEnabled && settings.googleAccessToken ? ' · synchronisiert automatisch' : ''}
               </Text>
             </View>
           </View>
         )}
 
-        {settings.googleCalendarEnabled ? (
+        {/* TE-45: „verbunden“ heißt: DIESES Gerät hat ein Token. Die Flags sind familienweit. */}
+        {settings.googleCalendarEnabled && settings.googleAccessToken ? (
           <>
             <View style={styles.row}>
               <Ionicons

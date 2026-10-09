@@ -16,7 +16,7 @@ import { useFirebaseAuth } from '../src/hooks/useFirebaseAuth';
 import { useFamily } from '../src/hooks/useFamily';
 import { useSettingsSync } from '../src/hooks/useSettingsSync';
 import { useImportantTasksSync } from '../src/hooks/useImportantTasksSync';
-import { handleRedirectResult } from '../src/services/firebaseAuth';
+import { handleRedirectResult, signOutFirebase } from '../src/services/firebaseAuth';
 import { getOwnMember, getChildIdForEmail } from '../src/services/family';
 import { useAutoReloadOnNewVersion } from '../src/hooks/useAutoReloadOnNewVersion';
 import { AppContextProvider } from '../src/contexts/AppContext';
@@ -131,9 +131,15 @@ export default function RootLayout() {
   useEffect(() => {
     if (!user || !familyId || isChildMode !== false) return;
     getOwnMember(familyId, user.uid).then(async (member) => {
-      if (member?.role !== 'child' || !user.email) return;
-      const childId = await getChildIdForEmail(familyId, user.email);
-      if (!childId) return;
+      if (member?.role !== 'child') return;
+      const childId = user.email ? await getChildIdForEmail(familyId, user.email) : null;
+      if (!childId) {
+        // TE-45: Kind-Konto ohne passende E-Mail-Zuordnung (z. B. Gmail-Punkt-
+        // Variante) darf NIE in der Eltern-Oberfläche landen → abmelden.
+        console.warn('[Kind-Modus] Kind-Konto ohne Zuordnung – Abmeldung');
+        signOutFirebase().catch(() => {});
+        return;
+      }
       await AsyncStorage.multiSet([
         ['kinder_child_id', childId],
         ['kinder_family_id', familyId],
