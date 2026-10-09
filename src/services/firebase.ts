@@ -27,6 +27,7 @@ if (Platform.OS === 'web') {
   _db = getFirestore(app);
 }
 export const db = _db;
+export const firebaseApp = app;
 
 // Firebase Auth – plattformspezifische Initialisierung.
 // Native braucht AsyncStorage-Persistenz, Web den Standard-Browser-Persistenz.

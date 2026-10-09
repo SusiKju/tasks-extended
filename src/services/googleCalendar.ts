@@ -3,6 +3,8 @@ import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
 import { useStore } from '../store';
 import { create } from 'zustand';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import { firebaseApp } from './firebase';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -95,6 +97,66 @@ if (Platform.OS === 'web' && typeof document !== 'undefined') {
   getWebTokenClient().catch(() => {});
 }
 
+// ── TE-43: Code-Flow + Refresh-Token auf dem Server (Cloud Functions) ────────
+// Beim Verbinden holt der GIS Code-Client einen Autorisierungscode; die Function
+// `googleExchangeCode` tauscht ihn und behält das Refresh-Token. Danach liefert
+// `googleAccessToken` still neue Access-Tokens – ganz ohne Pop-up.
+
+let webCodeClient: any = null;
+
+async function getWebCodeClient(): Promise<any> {
+  await loadGisScript();
+  const oauth2 = (window as any).google?.accounts?.oauth2;
+  if (!oauth2) throw new Error('GIS oauth2 nicht verfügbar');
+  if (!webCodeClient) {
+    webCodeClient = oauth2.initCodeClient({
+      client_id: GOOGLE_CLIENT_ID,
+      scope: SCOPES.join(' '),
+      ux_mode: 'popup',
+      callback: () => {}, // wird pro Anfrage gesetzt
+    });
+  }
+  return webCodeClient;
+}
+
+/** Öffnet den Zustimmungs-Pop-up und liefert den Autorisierungscode (muss im User-Gesture laufen). */
+function requestWebCode(): Promise<string | null> {
+  const client = webCodeClient;
+  if (!client) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    client.callback = (resp: any) => resolve(resp?.error || !resp?.code ? null : resp.code);
+    client.error_callback = () => resolve(null);
+    try {
+      client.requestCode();
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+if (Platform.OS === 'web' && typeof document !== 'undefined') {
+  getWebCodeClient().catch(() => {});
+}
+
+function callFn<T>(name: string, data?: unknown): Promise<T> {
+  const fn = httpsCallable(getFunctions(firebaseApp, 'europe-west1'), name);
+  return fn(data).then((r) => r.data as T);
+}
+
+/** Still über den Server erneuern; null, wenn dort (noch) kein Refresh-Token liegt. */
+async function refreshViaServer(): Promise<TokenRefreshResult | null> {
+  try {
+    return await callFn<TokenRefreshResult>('googleAccessToken');
+  } catch {
+    return null;
+  }
+}
+
+/** Beim Trennen: serverseitiges Refresh-Token löschen (Fehler egal, z. B. offline). */
+export function forgetServerGoogleToken(): Promise<void> {
+  return callFn<void>('googleForget').catch(() => {});
+}
+
 /**
  * Fordert via GIS ein Access-Token an.
  * - prompt: 'consent' → expliziter Login (Popup, alle Scopes neu bestätigen).
@@ -141,6 +203,20 @@ export async function signInWithGoogle(): Promise<CalendarAuthResult | null> {
 
   // ── Web: GIS Token-Client (still erneuerbar, kein Refresh-Token nötig) ──────
   if (Platform.OS === 'web') {
+    // TE-43: Code-Flow, damit der Server ein Refresh-Token bekommt. Klappt das
+    // nicht (Function nicht erreichbar o. Ä.), weiter wie bisher per Token-Client
+    // – dann eben mit stündlichem Pop-up.
+    const code = await requestWebCode();
+    if (code) {
+      try {
+        const r = await callFn<{ accessToken: string; expiresIn: number; hasRefreshToken: boolean }>('googleExchangeCode', { code });
+        if (!r.hasRefreshToken) console.warn('[GoogleLogin] kein Refresh-Token erhalten – stiller Refresh nur, falls schon eins gespeichert ist');
+        return { accessToken: r.accessToken, refreshToken: null, expiresIn: r.expiresIn };
+      } catch (e) {
+        console.warn('[GoogleLogin] Code-Tausch fehlgeschlagen:', e);
+        return null;
+      }
+    }
     const res = await requestWebToken('consent');
     if (!res) {
       console.warn('[GoogleLogin] kein Web-Token erhalten');
@@ -269,8 +345,14 @@ export async function getValidAccessToken(force = false): Promise<string | null>
     // Aufrufe teilen sich deshalb EINE Anfrage (sonst mehrere Pop-ups), und
     // währenddessen zeigt GoogleRefreshIndicator einen dezenten Hinweis.
     if (!webRefreshInFlight) {
-      useGoogleRefreshing.setState({ refreshing: true });
-      webRefreshInFlight = requestWebToken('')
+      webRefreshInFlight = (async () => {
+        // TE-43: erst still über den Server; nur ohne gespeichertes Refresh-Token
+        // (noch nicht neu verbunden) bleibt es beim GIS-Pop-up mit Hinweis.
+        const silent = await refreshViaServer();
+        if (silent) return silent;
+        useGoogleRefreshing.setState({ refreshing: true });
+        return requestWebToken('');
+      })()
         .catch(() => null)
         .finally(() => {
           webRefreshInFlight = null;

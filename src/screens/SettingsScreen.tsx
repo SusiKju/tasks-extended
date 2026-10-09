@@ -21,6 +21,7 @@ import { DASHBOARD_BLOCKS, DEFAULT_DASHBOARD_BLOCKS, TOGGLEABLE_TABS, DEFAULT_VI
 
 import {
   signInWithGoogle,
+  forgetServerGoogleToken,
   listCalendars,
 } from '../services/googleCalendar';
 import { useGoogleTasksSync } from '../hooks/useGoogleTasksSync';
@@ -388,6 +389,7 @@ export function SettingsScreen() {
   }, [updateSettings, syncBirthdays]);
 
   const handleGoogleDisconnect = useCallback(() => {
+    forgetServerGoogleToken(); // TE-43: Refresh-Token auch serverseitig löschen
     updateSettings({
       googleCalendarEnabled: false,
       googleAccessToken: null,
