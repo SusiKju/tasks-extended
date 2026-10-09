@@ -356,6 +356,8 @@ export function SettingsScreen() {
         googleCalendarEnabled: true,
         googleCalendarId: primary.id,
         googleCalendarName: primary.summary,
+        // TE-46: nur Kalender behalten, die dieses Konto auch sieht
+        selectedCalendarIds: (useStore.getState().settings.selectedCalendarIds ?? []).filter((id) => calendars.some((c) => c.id === id)),
         googleNotesEnabled: true,
         googleBirthdaysEnabled: true,
       });

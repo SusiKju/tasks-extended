@@ -29,6 +29,11 @@ export const LOCAL_ONLY_SETTING_KEYS: (keyof AppSettings)[] = [
   // TE-49: Tab-Sichtbarkeit ist bewusst pro Elternteil/Gerät gedacht (z.B.
   // braucht nicht jeder Elternteil den Bambini-Tab) – kein Familien-Sync.
   'visibleTabs',
+  // TE-46: Kalender-Auswahl gehört zum Google-Konto der Person, die auf dem
+  // Gerät angemeldet ist – Dianas Token kann Matthias' Kalender nicht lesen.
+  'googleCalendarId',
+  'googleCalendarName',
+  'selectedCalendarIds',
 ];
 
 /** Entfernt Local-only- und undefined-Felder. Firebase 11 hängt bei undefined-Werten. */
@@ -56,7 +61,11 @@ export function subscribeToSettings(
     ref,
     (snap) => {
       const data = snap.data();
-      if (data) callback(data as Partial<AppSettings>);
+      if (!data) return;
+      // Alt-Dokumente können noch Local-only-Felder enthalten (merge-Writes,
+      // ältere App-Versionen) – die dürfen den lokalen Stand nie überschreiben.
+      for (const k of LOCAL_ONLY_SETTING_KEYS) delete (data as Record<string, unknown>)[k];
+      callback(data as Partial<AppSettings>);
     },
     () => {}, // Fehler stillschweigend ignorieren – lokale Settings bleiben gültig
   );

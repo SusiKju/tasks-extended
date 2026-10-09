@@ -36,6 +36,8 @@ export function GoogleConnectBanner({ colors }: { colors: ThemeColors }) {
         googleCalendarEnabled: true,
         googleCalendarId: primary?.id ?? null,
         googleCalendarName: primary?.summary ?? null,
+        // TE-46: nur Kalender behalten, die dieses Konto auch sieht
+        selectedCalendarIds: (useStore.getState().settings.selectedCalendarIds ?? []).filter((id) => calendars.some((c) => c.id === id)),
         googleNotesEnabled: true,
         googleBirthdaysEnabled: true,
       });
