@@ -9,7 +9,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { ChildConfig } from '../services/family';
 import {
-  GradeEntry, GradesMap, ackGrades, gradeId, subscribeToGrades, subscribeToGradesAck, unreadGradeIds,
+  GradeEntry, GradesMap, ackGrades, gradeColor, gradeId, subscribeToGrades, subscribeToGradesAck, unreadGradeIds,
 } from '../services/grades';
 
 interface Props {
@@ -69,7 +69,7 @@ export function NewGradesNotice({ familyId, children, childColor }: Props) {
             >
               <View style={styles.badges}>
                 {list.slice(0, MAX_BADGES).map(({ g }, i) => (
-                  <View key={i} style={[styles.badge, { borderColor: color }, i > 0 && styles.badgeOverlap]}>
+                  <View key={i} style={[styles.badge, { borderColor: gradeColor(g.value) ?? color }, i > 0 && styles.badgeOverlap]}>
                     <Text style={styles.badgeText} numberOfLines={1}>{g.value}</Text>
                   </View>
                 ))}

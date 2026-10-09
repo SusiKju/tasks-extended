@@ -52,6 +52,23 @@ export async function replaceGrades(familyId: string, childId: string, map: Grad
   }
 }
 
+/**
+ * TE-53: Farbe passend zur Note (Schulnoten 1–6, Tendenz „+“/„-“):
+ * 1 grün → 2 hellgrün → 3 gelb → 4 orange → 5/6 rot. Nicht als Note
+ * lesbare Werte (z. B. „teilgenommen“) → null, Aufrufer nimmt eine Ersatzfarbe.
+ */
+export function gradeColor(value: string): string | null {
+  const m = /^\s*([1-6])\s*([+-]?)/.exec(String(value));
+  if (!m) return null;
+  const n = Number(m[1]) + (m[2] === '+' ? -0.3 : m[2] === '-' ? 0.3 : 0);
+  if (n <= 1.5) return '#22C55E';
+  if (n <= 2.5) return '#84CC16';
+  if (n <= 3.5) return '#EAB308';
+  if (n <= 4.5) return '#F97316';
+  if (n <= 5.5) return '#EF4444';
+  return '#B91C1C';
+}
+
 export function gradeId(entry: GradeEntry): string | null {
   const id = (entry.raw as { id?: string | number } | null)?.id;
   return id != null ? String(id) : null;
