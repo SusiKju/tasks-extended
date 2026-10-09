@@ -1259,7 +1259,9 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
       borderRadius: 18,
       overflow: 'hidden',
       borderWidth: 1,
-      borderColor: SOFT_BORDER,
+      // TE-55: im Dark-Mode fast weißer Rand – auf Smartphone-Displays hob
+      // sich die Karte sonst kaum vom schwarzen Grund ab.
+      borderColor: isDark ? 'rgba(255,255,255,0.85)' : SOFT_BORDER,
       ...(isDark ? neonGlow(c.accentNeon, 'soft') : {}),
     },
 
