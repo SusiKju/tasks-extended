@@ -29,8 +29,8 @@ import { useStore } from '../../src/store';
 import {
   ChildTask,
   ActivityEntry, ActivityAction,
-  ChildReward, RewardType, REWARD_TYPES,
-  subscribeToChildTasks, addTask, updateTask, deleteTask, deleteCompletedTasks, rejectTask,
+  ChildReward, RewardType, REWARD_TYPES, RepeatInterval, REPEAT_LABELS,
+  subscribeToChildTasks, addTask, updateTask, deleteTask, deleteCompletedTasks, rejectTask, toggleTask,
   releaseTaskReward, markChildTasksSeen,
   getActivityLog,
   getEmailReminderConfig, setEmailReminderConfig,
@@ -102,6 +102,7 @@ export default function KinderScreen() {
     groupId?: string | null;
     rewardType: RewardType | null;
     rewardDetail: string;
+    repeat: RepeatInterval | null;
   } | null>(null);
   const [historyChild, setHistoryChild] = useState<string | null>(null);
   const [history, setHistory] = useState<ActivityEntry[]>([]);
@@ -110,6 +111,8 @@ export default function KinderScreen() {
   // Default immer "keine" (null) — wird nach jedem Anlegen wieder zurückgesetzt.
   const [draftReward, setDraftReward] = useState<ChildReward | null>(null);
   const [draftRewardTitle, setDraftRewardTitle] = useState('');
+  // Wiederholung für die nächste neue Aufgabe (TE-57). null = einmalig.
+  const [draftRepeat, setDraftRepeat] = useState<RepeatInterval | null>(null);
 
   // Erstes Kind als Standard auswählen sobald Kinder geladen sind
   useEffect(() => {
@@ -176,6 +179,7 @@ export default function KinderScreen() {
   const resetDraftReward = useCallback(() => {
     setDraftReward(null);
     setDraftRewardTitle('');
+    setDraftRepeat(null);
   }, []);
 
   const handleAddTask = useCallback(async () => {
@@ -188,10 +192,11 @@ export default function KinderScreen() {
       date: TODAY,
       createdAt: new Date().toISOString(),
       ...(reward ? { reward } : {}),
+      ...(draftRepeat ? { repeat: draftRepeat } : {}),
     });
     setNewTaskTitle('');
     resetDraftReward();
-  }, [fid, selectedChild, newTaskTitle, buildDraftReward, resetDraftReward]);
+  }, [fid, selectedChild, newTaskTitle, draftRepeat, buildDraftReward, resetDraftReward]);
 
   const toggleGroupChild = useCallback((childId: string) => {
     setGroupSelection((prev) => ({ ...prev, [childId]: !prev[childId] }));
@@ -220,6 +225,7 @@ export default function KinderScreen() {
             groupId,
             groupChildren: targets,
             ...(reward ? { reward } : {}),
+            ...(draftRepeat ? { repeat: draftRepeat } : {}),
           })
         )
       );
@@ -228,7 +234,7 @@ export default function KinderScreen() {
     } catch (e: any) {
       crossInfo('Fehler', e?.message ?? 'Gruppenaufgabe konnte nicht angelegt werden.');
     }
-  }, [fid, familyChildren, newTaskTitle, groupSelection, buildDraftReward, resetDraftReward]);
+  }, [fid, familyChildren, newTaskTitle, groupSelection, draftRepeat, buildDraftReward, resetDraftReward]);
 
   // Verschickt Push & E-Mail für genau ein Kind (HTML-Aufbau + Versand lebt in
   // taskMail.ts, damit der automatische Versand ihn auch ohne gemountete
@@ -370,6 +376,16 @@ export default function KinderScreen() {
     }, true);
   }, [fid, selectedChild, familyChildren, tasksByChild, handleDeleteGroupTask]);
 
+  // Eltern haken eine offene Aufgabe selbst ab (TE-57) — statt sie löschen zu müssen.
+  // Bei wiederkehrenden Aufgaben entsteht dabei die nächste Instanz.
+  const handleCompleteTask = useCallback(async (task: ChildTask) => {
+    try {
+      await toggleTask(fid, selectedChild, task.id, true, { actor: 'parent', title: task.title });
+    } catch (e: any) {
+      crossInfo('Fehler', e?.message ?? String(e));
+    }
+  }, [fid, selectedChild]);
+
   const handleRejectTask = useCallback((taskId: string, title: string) => {
     crossAlert(
       'Aufgabe ablehnen?',
@@ -419,7 +435,7 @@ export default function KinderScreen() {
 
     // Eine Kopie aktualisieren. Hat sich die Belohnung geändert, Freigabe zurücksetzen.
     const applyTo = (childId: string, task: ChildTask) => {
-      const updates: Partial<ChildTask> = { title, reward: newReward };
+      const updates: Partial<ChildTask> = { title, reward: newReward, repeat: editingTask.repeat };
       if (!sameReward(task.reward, newReward)) updates.rewardReleased = false;
       return updateTask(fid, childId, task.id, updates, { actor: 'parent', title });
     };
@@ -526,19 +542,40 @@ export default function KinderScreen() {
       groupId: string;
       title: string;
       reward: ChildReward | null;
+      repeat: RepeatInterval | null;
       members: { childId: string; taskId: string; done: boolean; rewardReleased: boolean }[];
     }>();
     for (const child of familyChildren) {
       for (const t of tasksByChild[child.id] ?? []) {
         if (!t.groupId) continue;
         const entry = map.get(t.groupId)
-          ?? { groupId: t.groupId, title: t.title, reward: t.reward ?? null, members: [] };
+          ?? { groupId: t.groupId, title: t.title, reward: t.reward ?? null, repeat: t.repeat ?? null, members: [] };
         entry.members.push({ childId: child.id, taskId: t.id, done: t.done, rewardReleased: !!t.rewardReleased });
         map.set(t.groupId, entry);
       }
     }
     return [...map.values()];
   }, [familyChildren, tasksByChild]);
+
+  // Auswahl Einmalig/täglich/wöchentlich/monatlich (TE-57), gleiche Chips wie die Belohnung.
+  const renderRepeatPicker = (value: RepeatInterval | null, onChange: (r: RepeatInterval | null) => void) => (
+    <View style={s.rewardPickerRow}>
+      {([null, ...Object.keys(REPEAT_LABELS)] as (RepeatInterval | null)[]).map((r) => {
+        const sel = value === r;
+        return (
+          <TouchableOpacity
+            key={r ?? 'once'}
+            style={[s.rewardPickerChip, sel && s.rewardPickerChipActive]}
+            onPress={() => onChange(r)}
+          >
+            <Text style={[s.rewardPickerChipText, sel && s.rewardPickerChipTextActive]}>
+              {r ? REPEAT_LABELS[r] : 'Einmalig'}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
 
   return (
     <ScrollView
@@ -709,6 +746,10 @@ export default function KinderScreen() {
             returnKeyType="done"
           />
         )}
+
+        {/* Wiederholung (TE-57) — Default "Einmalig", nach Anlegen zurückgesetzt. */}
+        <Text style={s.rewardPickerLabel}>Wiederholung</Text>
+        {renderRepeatPicker(draftRepeat, setDraftRepeat)}
       </View>
 
       {/* Inhalt: Gruppenaufgaben-Liste (Gruppe) oder Aufgaben + Belohnung (Einzelne) (TE-56) */}
@@ -734,6 +775,7 @@ export default function KinderScreen() {
                       groupId: g.groupId,
                       rewardType: g.reward?.type ?? null,
                       rewardDetail: g.reward?.title ?? '',
+                      repeat: g.repeat,
                     })}>
                       <Ionicons name="pencil-outline" size={18} color={colors.accentNeon} />
                     </TouchableOpacity>
@@ -742,6 +784,7 @@ export default function KinderScreen() {
                     </TouchableOpacity>
                   </View>
                 </View>
+                {g.repeat && <Text style={s.repeatTag}>↻ {REPEAT_LABELS[g.repeat]}</Text>}
                 {g.reward && (
                   <Text style={s.taskRewardBadge}>
                     {REWARD_TYPES[g.reward.type].emoji} {REWARD_TYPES[g.reward.type].label}
@@ -819,10 +862,10 @@ export default function KinderScreen() {
         {tasks.map((task) => (
           <View key={task.id} style={s.taskItem}>
             <View style={s.taskRow}>
-              {/* Abgehakte Aufgaben sind antippbar → ablehnen (zurücksetzen). (TE-103) */}
+              {/* Abgehakte Aufgaben antippen → ablehnen (zurücksetzen, TE-103);
+                  offene antippen → als erledigt markieren (TE-57). */}
               <TouchableOpacity
-                onPress={() => task.done && handleRejectTask(task.id, task.title)}
-                disabled={!task.done}
+                onPress={() => task.done ? handleRejectTask(task.id, task.title) : handleCompleteTask(task)}
               >
                 <Ionicons
                   name={task.done ? 'checkmark-circle' : task.rejected ? 'close-circle' : 'ellipse-outline'}
@@ -839,6 +882,7 @@ export default function KinderScreen() {
                   <Text style={s.groupTagText}>{groupShorts(task).join('·')}</Text>
                 </View>
               )}
+              {task.repeat && <Text style={s.repeatTag}>↻ {REPEAT_LABELS[task.repeat]}</Text>}
               {task.rejected && <Text style={s.rejectedTag}>abgelehnt</Text>}
               {dueLabel(task) && <Text style={s.overdueTag}>{dueLabel(task)}</Text>}
               <TouchableOpacity onPress={() => setEditingTask({
@@ -847,6 +891,7 @@ export default function KinderScreen() {
                 groupId: task.groupId ?? null,
                 rewardType: task.reward?.type ?? null,
                 rewardDetail: task.reward?.title ?? '',
+                repeat: task.repeat ?? null,
               })}>
                 <Ionicons name="pencil-outline" size={18} color={colors.accentNeon} />
               </TouchableOpacity>
@@ -1078,6 +1123,9 @@ export default function KinderScreen() {
                 returnKeyType="done"
               />
             )}
+
+            <Text style={s.rewardPickerLabel}>Wiederholung</Text>
+            {renderRepeatPicker(editingTask?.repeat ?? null, (r) => setEditingTask((e) => e ? { ...e, repeat: r } : e))}
 
             <TouchableOpacity style={s.saveBtn} onPress={handleSaveEdit}>
               <Text style={s.saveBtnText}>Speichern</Text>
@@ -1399,6 +1447,7 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
       backgroundColor: '#f59e0b', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2,
       textTransform: 'uppercase', letterSpacing: 0.3, overflow: 'hidden',
     },
+    repeatTag: { fontSize: 11, fontWeight: '700', color: colors.accentNeon },
     empty: { fontSize: 13, color: colors.textMuted, fontStyle: 'italic' },
     // Taschengeld-Verlauf (TE-72)
     allowanceTotal: { fontSize: 12, fontWeight: '700', color: colors.success },

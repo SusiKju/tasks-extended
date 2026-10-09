@@ -26,6 +26,7 @@ import {
   limit,
   Unsubscribe,
 } from 'firebase/firestore';
+import { addDays, addMonths, addWeeks, format, parseISO } from 'date-fns';
 import { db } from './firebase';
 
 /** @deprecated Wird durch dynamische Kinder aus Firestore ersetzt (Task 5).
@@ -98,6 +99,70 @@ export interface ChildTask {
   seenByParent?: boolean;
   /** ISO-Zeitstempel der letzten Erinnerungs-Mail vom Dashboard (TE-54). */
   remindedAt?: string | null;
+  /** Wiederholung (TE-57). null/undefined = einmalig. Beim Erledigen entsteht die
+   *  nächste Instanz mit dem nächsten Termin; sie bleibt bis zu ihrem Datum unsichtbar. */
+  repeat?: RepeatInterval | null;
+  /** ID der beim Erledigen erzeugten Folge-Instanz (TE-57). Wird beim Zurücksetzen
+   *  wieder entfernt, damit kein Duplikat entsteht. */
+  nextId?: string | null;
+}
+
+// ─── Wiederkehrende Aufgaben (TE-57) ─────────────────────────────────────────
+
+export type RepeatInterval = 'daily' | 'weekly' | 'monthly';
+
+export const REPEAT_LABELS: Record<RepeatInterval, string> = {
+  daily: 'täglich', weekly: 'wöchentlich', monthly: 'monatlich',
+};
+
+const REPEAT_STEP: Record<RepeatInterval, (d: Date, n: number) => Date> = {
+  daily: addDays, weekly: addWeeks, monthly: addMonths,
+};
+
+/** Erster Termin nach `today` im Takt von `repeat`, gerechnet ab `from` (ISO-Daten).
+ *  Monate werden ab dem Ursprungsdatum gezählt (31.01. → 28.02. → 31.03.). */
+export function nextRepeatDate(from: string, repeat: RepeatInterval, today: string): string {
+  const base = parseISO(from);
+  for (let n = 1; ; n++) {
+    const next = format(REPEAT_STEP[repeat](base, n), 'yyyy-MM-dd');
+    if (next > today) return next;
+  }
+}
+
+/**
+ * Hält die Folge-Instanz einer wiederkehrenden Aufgabe passend zum neuen
+ * done-Status: Erledigen legt sie an, Zurücksetzen/Ablehnen löscht sie wieder
+ * (solange sie noch offen ist). Liefert die nextId-Änderung für das Update.
+ */
+async function syncRepeatInstance(
+  familyId: string,
+  childId: string,
+  taskId: string,
+  done: boolean
+): Promise<Partial<ChildTask>> {
+  const snap = await getDoc(taskDoc(familyId, childId, taskId));
+  const task = snap.data() as ChildTask | undefined;
+  if (!task) return {};
+  if (done && task.repeat && !task.nextId) {
+    const ref = doc(tasksCol(familyId, childId));
+    const next: Omit<ChildTask, 'id'> = {
+      title: task.title,
+      done: false,
+      date: nextRepeatDate(task.date, task.repeat, format(new Date(), 'yyyy-MM-dd')),
+      createdAt: new Date().toISOString(),
+      repeat: task.repeat,
+      ...(task.reward ? { reward: task.reward } : {}),
+      ...(task.groupId ? { groupId: task.groupId, groupChildren: task.groupChildren ?? [] } : {}),
+    };
+    await setDoc(ref, next);
+    return { nextId: ref.id };
+  }
+  if (!done && task.nextId) {
+    const nextSnap = await getDoc(taskDoc(familyId, childId, task.nextId));
+    if (nextSnap.exists() && !nextSnap.data().done) await deleteDoc(nextSnap.ref);
+    return { nextId: null };
+  }
+  return {};
 }
 
 // ─── Belohnungspakete (TE-101 → TE-61) ───────────────────────────────────────
@@ -161,7 +226,14 @@ export async function getInboxTasksForChild(familyId: string, childId: string, d
   const snap = await getDocs(tasksCol(familyId, childId));
   return snap.docs
     .map((d) => ({ id: d.id, ...d.data() } as ChildTask))
-    .filter((t) => !t.done || t.date === date);
+    .filter((t) => isInbox(t, date));
+}
+
+/** Offene Aufgaben bis einschließlich `date` plus die für `date` erledigten. Offene
+ *  Aufgaben mit späterem Datum (Folge-Instanzen wiederkehrender Aufgaben, TE-57)
+ *  bleiben bis zu ihrem Termin unsichtbar. */
+function isInbox(t: ChildTask, date: string): boolean {
+  return t.done ? t.date === date : t.date <= date;
 }
 
 /**
@@ -181,7 +253,7 @@ export function subscribeToChildTasks(
   return onSnapshot(tasksCol(familyId, childId), (snap) => {
     const tasks = snap.docs
       .map((d) => ({ id: d.id, ...d.data() } as ChildTask))
-      .filter((t) => !t.done || t.date === date)
+      .filter((t) => isInbox(t, date))
       .sort((a, b) => a.date.localeCompare(b.date));
     onChange(tasks);
   });
@@ -255,18 +327,22 @@ export async function toggleTask(
   done: boolean,
   opts?: { actor?: Actor; title?: string }
 ): Promise<void> {
+  const actor = opts?.actor ?? 'child';
+  const repeatUpdate = await syncRepeatInstance(familyId, childId, taskId, done);
   await updateDoc(taskDoc(familyId, childId, taskId), {
     done,
     completedAt: done ? new Date().toISOString() : null,
     rejected: false,
-    // Abhaken macht die Aufgabe für die Eltern "ungesehen" (Punkt im Kind-Chip).
-    seenByParent: !done,
+    // Abhaken durchs Kind macht die Aufgabe für die Eltern "ungesehen" (Punkt im
+    // Kind-Chip). Haken die Eltern selbst ab (TE-57), gibt es nichts zu sehen.
+    seenByParent: !done || actor === 'parent',
+    ...repeatUpdate,
   });
   await logActivity(familyId, childId, {
     action: done ? 'completed' : 'reopened',
     taskId,
     taskTitle: opts?.title ?? '',
-    actor: opts?.actor ?? 'child',
+    actor,
     at: new Date().toISOString(),
   });
 }
@@ -283,8 +359,9 @@ export async function rejectTask(
   taskId: string,
   opts?: { title?: string }
 ): Promise<void> {
+  const repeatUpdate = await syncRepeatInstance(familyId, childId, taskId, false);
   await updateDoc(taskDoc(familyId, childId, taskId), {
-    done: false, completedAt: null, rejected: true,
+    done: false, completedAt: null, rejected: true, ...repeatUpdate,
   });
   await logActivity(familyId, childId, {
     action: 'reopened', taskId,
