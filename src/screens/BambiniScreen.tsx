@@ -506,6 +506,7 @@ export function BambiniScreen() {
             {c.name}
             {c.parentName ? <Text style={s.rowParent}>{'  '}{c.parentName.toUpperCase()}</Text> : null}
           </Text>
+          {c.stopped ? <Text style={s.badgeStopped}>aufgehört</Text> : null}
         </View>
         <View style={s.iconSlot}>
           {c.whatsapp ? (
@@ -524,10 +525,8 @@ export function BambiniScreen() {
             <Ionicons name="information-circle" size={20} color={INFO_YELLOW} accessibilityLabel="Info vorhanden" />
           ) : null}
         </View>
-        <View style={s.badgeSlot}>
-          {c.stopped ? <Text style={s.badgeStopped}>aufgehört</Text> : null}
-        </View>
-        <Text style={s.rowYear}>{c.birthYear || '—'}</Text>
+        {/* TE-38: Alter statt Jahrgang (nur Jahrgang gespeichert → Jahrgangsalter). */}
+        <Text style={s.rowYear}>{c.birthYear ? `${new Date().getFullYear() - c.birthYear} J.` : '—'}</Text>
       </Pressable>
     );
   };
@@ -1220,13 +1219,12 @@ function makeStyles(c: ThemeColors) {
     // stattdessen einfach etwas transparenter.
     rowSchnupper: { opacity: 0.55 },
     rowIndex: { color: c.textSecondary, fontSize: 12, fontWeight: '600', width: 24, textAlign: 'right' },
-    rowMain: { flex: 1 },
-    rowName: { color: c.text, fontSize: 14, fontWeight: '600' },
+    rowMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 },
+    rowName: { color: c.text, fontSize: 14, fontWeight: '600', flexShrink: 1 },
     rowNameStopped: { textDecorationLine: 'line-through', color: c.textSecondary },
     // Feste Spaltenbreite pro Icon/Badge, sonst rutscht die Spalte je nach Zeile
     // (nicht jedes Kind hat WhatsApp/Info/Badge) hin und her ("Treppeneffekt").
     iconSlot: { width: 20, alignItems: 'center' },
-    badgeSlot: { width: 62, alignItems: 'flex-start' },
     rowParent: { color: c.textSecondary, fontSize: 11, fontWeight: '500', letterSpacing: 0.6, textDecorationLine: 'none' },
     badgeStopped: {
       color: c.warningFg,
@@ -1238,7 +1236,7 @@ function makeStyles(c: ThemeColors) {
       paddingHorizontal: 6,
       paddingVertical: 2,
     },
-    rowYear: { color: c.textSecondary, fontSize: 13, fontWeight: '600' },
+    rowYear: { color: c.textSecondary, fontSize: 13, fontWeight: '600', width: 34, textAlign: 'right' },
 
     fab: {
       position: 'absolute',
