@@ -24,7 +24,6 @@ import {
   forgetServerGoogleToken,
   listCalendars,
 } from '../services/googleCalendar';
-import { useGoogleTasksSync } from '../hooks/useGoogleTasksSync';
 import { useGoogleContactsBirthdaysSync } from '../hooks/useGoogleContactsBirthdaysSync';
 import { useFamily } from '../hooks/useFamily';
 import { useFirebaseAuth } from '../hooks/useFirebaseAuth';
@@ -70,18 +69,14 @@ function crossAlert(title: string, message: string, onConfirm: () => void) {
 
 export function SettingsScreen() {
   const { settings, updateSettings } = useStore();
-  const { syncTasks } = useGoogleTasksSync();
   const { syncBirthdays } = useGoogleContactsBirthdaysSync();
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [loadingCalendar, setLoadingCalendar] = useState(false);
   const [availableCalendars, setAvailableCalendars] = useState<Array<{ id: string; summary: string; primary?: boolean }>>([]);
   const [loadingCalendars, setLoadingCalendars] = useState(false);
-  const [loadingTasksSync, setLoadingTasksSync] = useState(false);
-  const [confirmDisconnect, setConfirmDisconnect] = useState(false);
   const [showUncheckedCalendars, setShowUncheckedCalendars] = useState(false);
   const [showActiveCalendars, setShowActiveCalendars] = useState(false);
-  const [tasksSyncResult, setTasksSyncResult] = useState<string | null>(null);
 
   // ── Familie ──────────────────────────────────────────────────────────────
   const { user } = useFirebaseAuth();
@@ -388,8 +383,10 @@ export function SettingsScreen() {
     }
   }, [updateSettings, syncBirthdays]);
 
-  const handleGoogleDisconnect = useCallback(() => {
-    forgetServerGoogleToken(); // TE-43: Refresh-Token auch serverseitig löschen
+  // TE-44: Es gibt nur noch „angemeldet“ oder „abgemeldet“. Abmelden trennt
+  // Google gleich mit (inkl. serverseitigem Refresh-Token, TE-43).
+  const handleSignOut = useCallback(async () => {
+    await forgetServerGoogleToken();
     updateSettings({
       googleCalendarEnabled: false,
       googleAccessToken: null,
@@ -400,29 +397,9 @@ export function SettingsScreen() {
       googleNotesEnabled: false,
       googleBirthdaysEnabled: false,
     });
-    setConfirmDisconnect(false);
+    await signOutFirebase().catch(() => {});
   }, [updateSettings]);
 
-  const handleTasksSync = useCallback(async () => {
-    setLoadingTasksSync(true);
-    setTasksSyncResult(null);
-    try {
-      const result = await syncTasks();
-      if (result === null) return;
-      const { imported, updated } = result;
-      const parts = [
-        imported > 0 ? `${imported} importiert` : null,
-        updated > 0 ? `${updated} aktualisiert` : null,
-        imported === 0 && updated === 0 ? 'Keine Änderungen' : null,
-      ].filter(Boolean);
-      setTasksSyncResult(parts.join(', '));
-    } catch (e) {
-      console.error('[TasksSync]', e);
-      setTasksSyncResult('Fehler beim Sync');
-    } finally {
-      setLoadingTasksSync(false);
-    }
-  }, [syncTasks]);
 
 
   return (
@@ -430,7 +407,19 @@ export function SettingsScreen() {
 
       {/* Google Calendar */}
       <View style={styles.section}>
-        <Text style={styles.sectionHeader}>Google Kalender</Text>
+        <Text style={styles.sectionHeader}>Google-Konto</Text>
+        {user && (
+          <View style={styles.row}>
+            <Ionicons name="person-circle-outline" size={20} color={colors.success} />
+            <View style={styles.rowContent}>
+              <Text style={styles.rowTitle}>Angemeldet</Text>
+              <Text style={styles.rowSubtitle}>
+                {user.email ?? user.displayName ?? ''}
+                {settings.googleCalendarEnabled ? ' · synchronisiert automatisch' : ''}
+              </Text>
+            </View>
+          </View>
+        )}
 
         {settings.googleCalendarEnabled ? (
           <>
@@ -442,7 +431,7 @@ export function SettingsScreen() {
               />
               <View style={styles.rowContent}>
                 <Text style={styles.rowTitle}>
-                  {settings.googleCalendarId ? 'Verbunden' : 'Verbindung unvollständig'}
+                  {settings.googleCalendarId ? 'Kalender & Aufgaben verbunden' : 'Verbindung unvollständig'}
                 </Text>
                 {settings.googleCalendarId ? (
                   <Text style={styles.rowSubtitle}>
@@ -470,31 +459,6 @@ export function SettingsScreen() {
                   </>
                 )}
               </Pressable>
-            ) : null}
-            {settings.googleCalendarId ? (
-              <Pressable
-                style={({ pressed }) => [styles.syncBtn, pressed && { opacity: 0.8 }, loadingTasksSync && { opacity: 0.6 }]}
-                onPress={handleTasksSync}
-                disabled={loadingTasksSync}
-              >
-                {loadingTasksSync ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <>
-                    <Ionicons name="sync-outline" size={16} color="#fff" />
-                    <Text style={styles.syncBtnText}>Aufgaben synchronisieren</Text>
-                  </>
-                )}
-              </Pressable>
-            ) : null}
-            {tasksSyncResult ? (
-              <View style={[styles.row, { backgroundColor: colors.surfaceHigh }]}>
-                <Ionicons name="checkmark-circle-outline" size={16} color={colors.success} />
-                <Text style={[styles.rowSubtitle, { flex: 1 }]}>{tasksSyncResult}</Text>
-                <Pressable onPress={() => setTasksSyncResult(null)} hitSlop={8}>
-                  <Ionicons name="close" size={16} color={colors.textSecondary} />
-                </Pressable>
-              </View>
             ) : null}
             {/* Kalender-Auswahl für Dashboard */}
             {availableCalendars.length > 0 && (
@@ -582,33 +546,6 @@ export function SettingsScreen() {
               </View>
             )}
 
-            {confirmDisconnect ? (
-              <View style={styles.confirmRow}>
-                <Text style={[styles.rowSubtitle, { flex: 1, color: colors.danger }]}>
-                  Kalender-Verbindung wirklich trennen?
-                </Text>
-                <Pressable
-                  style={({ pressed }) => [styles.confirmBtn, { backgroundColor: colors.danger }, pressed && { opacity: 0.7 }]}
-                  onPress={handleGoogleDisconnect}
-                >
-                  <Text style={styles.confirmBtnText}>Trennen</Text>
-                </Pressable>
-                <Pressable
-                  style={({ pressed }) => [styles.confirmBtn, { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }, pressed && { opacity: 0.7 }]}
-                  onPress={() => setConfirmDisconnect(false)}
-                >
-                  <Text style={[styles.confirmBtnText, { color: colors.text }]}>Abbrechen</Text>
-                </Pressable>
-              </View>
-            ) : (
-              <Pressable
-                style={({ pressed }) => [styles.dangerBtn, pressed && { opacity: 0.7 }]}
-                onPress={() => setConfirmDisconnect(true)}
-              >
-                <Ionicons name="log-out-outline" size={16} color={colors.danger} />
-                <Text style={[styles.dangerBtnText, { color: colors.danger }]}>Google Kalender trennen</Text>
-              </Pressable>
-            )}
           </>
         ) : (
           <>
@@ -632,11 +569,20 @@ export function SettingsScreen() {
               ) : (
                 <>
                   <Ionicons name="logo-google" size={18} color="#fff" />
-                  <Text style={styles.connectBtnText}>Mit Google anmelden</Text>
+                  <Text style={styles.connectBtnText}>Kalender & Aufgaben verbinden</Text>
                 </>
               )}
             </Pressable>
           </>
+        )}
+        {user && (
+          <Pressable
+            style={({ pressed }) => [styles.dangerBtn, pressed && { opacity: 0.7 }]}
+            onPress={() => crossAlert('Abmelden?', 'Google-Kalender und -Aufgaben werden dabei getrennt.', () => { handleSignOut(); })}
+          >
+            <Ionicons name="log-out-outline" size={16} color={colors.danger} />
+            <Text style={[styles.dangerBtnText, { color: colors.danger }]}>Abmelden</Text>
+          </Pressable>
         )}
       </View>
 
@@ -1179,15 +1125,6 @@ export function SettingsScreen() {
           <Text style={styles.rowTitle}>Version</Text>
           <Text style={styles.rowValue}>{Constants.expoConfig?.version ?? '2.0.0'}</Text>
         </View>
-        {user && (
-          <Pressable
-            style={({ pressed }) => [styles.dangerBtn, pressed && { opacity: 0.7 }]}
-            onPress={() => crossAlert('Abmelden?', '', () => signOutFirebase().catch(() => {}))}
-          >
-            <Ionicons name="log-out-outline" size={16} color={colors.danger} />
-            <Text style={[styles.dangerBtnText, { color: colors.danger }]}>Abmelden</Text>
-          </Pressable>
-        )}
       </View>
     </ScrollView>
   );
@@ -1295,16 +1232,6 @@ function makeStyles(c: ThemeColors) {
       borderRadius: 10,
     },
     confirmBtnText: { fontSize: 14, fontWeight: '600', color: c.dangerFg },
-    syncBtn: {
-      backgroundColor: c.accent,
-      borderRadius: 12,
-      padding: 12,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: 8,
-    },
-    syncBtnText: { color: c.accentFg, fontSize: 14, fontWeight: '600' },
     calendarPickerRow: {
       flexDirection: 'row',
       alignItems: 'center',
