@@ -80,7 +80,8 @@ export function FuerUnsReminderBanner({
   const lastSeen = showLastSeen && partnerLastSeenAt ? parseISO(partnerLastSeenAt) : null;
 
   return (
-    <>
+    // TE-36: ein Container, damit der gap des Dashboards nicht zwischen Zeile und „zuletzt online“ greift.
+    <View>
     {askBack ? (
       <Pressable onPress={open} style={({ pressed }) => [styles.strip, styles.hot, { opacity: pressed ? 0.85 : 1 }]}>
         <Text style={styles.bigEmoji}>{FUER_UNS_MOOD_LEVELS[partnerMood!.level!].emoji}</Text>
@@ -134,7 +135,7 @@ export function FuerUnsReminderBanner({
           : `${partner}: noch nicht online seit dem Update`}
       </Text>
     )}
-    </>
+    </View>
   );
 }
 
@@ -158,7 +159,7 @@ const styles = StyleSheet.create({
   muted: { color: MUTED, fontSize: 13 },
   until: { color: '#8e93a1', fontSize: 11 },
   chevron: { color: MUTED, fontSize: 16, marginLeft: 2 },
-  lastSeen: { color: '#9b7a85', fontSize: 11, marginHorizontal: 28, marginBottom: 4 },
+  lastSeen: { color: '#9b7a85', fontSize: 11, marginHorizontal: 22, marginTop: 1, textAlign: 'right' },
   hot: { backgroundColor: '#5a1630', borderColor: '#ff8fab' },
   bigEmoji: { fontSize: 17 },
   hotTitle: { fontWeight: '800', color: '#fff' },
