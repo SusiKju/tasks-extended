@@ -123,7 +123,7 @@ const C = {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function formatEventTime(e: CalendarEvent): { day: string; time: string } {
-  if (e.allDay) return { day: dayLabel(new Date(e.start)), time: 'Ganztägig' };
+  if (e.allDay) return { day: dayLabel(new Date(e.start)), time: 'ganzt.' };
   try {
     const d = new Date(e.start);
     return {
@@ -876,7 +876,7 @@ export function DashboardScreen() {
                 <Text style={[
                   prominent ? styles.calHourLg : styles.calHourSm,
                   { color: eventTextColor }
-                ]}>{time}</Text>
+                ]} numberOfLines={1}>{time}</Text>
               </View>
               {/* Titel + Ort in einer Zeile (TE-116) */}
               <View style={{ flex: 1 }}>
@@ -1473,8 +1473,8 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
     // Calendar
     calRowProminent: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 12, gap: 10 },
     calRowDimmed:    { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 9,  gap: 10 },
-    calTimeLg: { width: 46 },
-    calTimeSm: { width: 40 },
+    calTimeLg: { minWidth: 46 },
+    calTimeSm: { minWidth: 40 },
     calHourLg: { fontSize: 15, fontWeight: '700' },
     calHourSm: { fontSize: 12, fontWeight: '500' },
     calBar: { borderRadius: 2, alignSelf: 'stretch', minHeight: 24 },
