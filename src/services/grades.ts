@@ -52,7 +52,7 @@ export async function replaceGrades(familyId: string, childId: string, map: Grad
   }
 }
 
-function gradeId(entry: GradeEntry): string | null {
+export function gradeId(entry: GradeEntry): string | null {
   const id = (entry.raw as { id?: string | number } | null)?.id;
   return id != null ? String(id) : null;
 }

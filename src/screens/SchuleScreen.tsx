@@ -23,7 +23,7 @@ import {
   key, todayDayIndex, subscribeToTimetable, setTimetableEntry,
   applyPeriodTimes, subscribeToPeriodTimes, setPeriodTime, isBiweeklyActiveWeek, minutesBetween,
 } from '../services/timetable';
-import { GradesMap, subscribeToGrades, subscribeToGradesAck, unreadGradeIds, ackGrades } from '../services/grades';
+import { GradesMap, GradeEntry, subscribeToGrades, subscribeToGradesAck, unreadGradeIds, ackGrades, gradeId } from '../services/grades';
 import {
   JournalData, subscribeToJournal,
   subscribeToJournalAck, unreadJournalKeys, ackJournal,
@@ -80,6 +80,12 @@ function isWebUrl(value: string): boolean {
   const trimmed = value.trim();
   if (isEmail(trimmed)) return false;
   return /^(https?:\/\/)?(www\.)?[a-z0-9-]+(\.[a-z0-9-]+)+(\/\S*)?$/i.test(trimmed);
+}
+
+/** TE-49: Datum einer Note kurz als „07.10.“ (beste.schule liefert given_at als ISO). */
+function gradeDateLabel(g: GradeEntry): string | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(g.date ?? ''));
+  return m ? `${m[3]}.${m[2]}.` : null;
 }
 
 export default function SchuleScreen() {
@@ -225,6 +231,15 @@ export default function SchuleScreen() {
   const unreadGrades = React.useMemo(
     () => unreadGradeIds(grades, gradesAckByChild[selectedChild] ?? []),
     [grades, gradesAckByChild, selectedChild]
+  );
+  // TE-49: neue Noten sichtbar machen statt nur zu zählen.
+  const unreadSet = React.useMemo(() => new Set(unreadGrades), [unreadGrades]);
+  const newGrades = React.useMemo(
+    () => Object.entries(grades)
+      .flatMap(([fach, entries]) => entries.map((g) => ({ fach, g })))
+      .filter(({ g }) => { const id = gradeId(g); return !!id && unreadSet.has(id); })
+      .sort((a, b) => String(b.g.date ?? '').localeCompare(String(a.g.date ?? ''))),
+    [grades, unreadSet]
   );
   const totalGradeCount = React.useMemo(
     () => Object.values(grades).reduce((n, entries) => n + entries.length, 0),
@@ -851,6 +866,19 @@ export default function SchuleScreen() {
         </View>
       ) : view === 'noten' ? (
         <View style={s.section}>
+          {newGrades.length > 0 && (
+            <View style={s.newGradesCard}>
+              <Text style={s.newGradesTitle}>Neu</Text>
+              {newGrades.map(({ fach, g }, i) => (
+                <View key={i} style={s.newGradeRow}>
+                  <View style={[s.lessonDot, { backgroundColor: subjectColor(fach) }]} />
+                  <Text style={s.newGradeFach} numberOfLines={1}>{fach}</Text>
+                  <Text style={s.newGradeValue}>{g.value}</Text>
+                  <Text style={s.gradeChipMeta}>{[g.type, gradeDateLabel(g)].filter(Boolean).join(' · ')}</Text>
+                </View>
+              ))}
+            </View>
+          )}
           {unreadGrades.length > 0 && (
             <TouchableOpacity
               style={s.markReadBtn}
@@ -878,12 +906,18 @@ export default function SchuleScreen() {
                     <Text style={s.lessonEmpty}>Keine Noten erteilt.</Text>
                   ) : (
                     <View style={s.gradeChipsRow}>
-                      {entries.map((g, i) => (
-                        <View key={i} style={s.gradeChip}>
-                          <Text style={s.gradeChipText}>{g.value}</Text>
-                          {!!g.type && <Text style={s.gradeChipMeta}>{g.type}</Text>}
-                        </View>
-                      ))}
+                      {entries.map((g, i) => {
+                        const isNew = unreadSet.has(gradeId(g) ?? '');
+                        return (
+                          <View key={i} style={[s.gradeChip, isNew && s.gradeChipNew]}>
+                            {isNew && <Text style={s.gradeChipNewTag}>NEU</Text>}
+                            <Text style={s.gradeChipText}>{g.value}</Text>
+                            {!!(g.type || g.date) && (
+                              <Text style={s.gradeChipMeta}>{[g.type, gradeDateLabel(g)].filter(Boolean).join(' · ')}</Text>
+                            )}
+                          </View>
+                        );
+                      })}
                     </View>
                   )}
                 </View>
@@ -1368,6 +1402,17 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
     },
     gradeChipText: { fontSize: 14, fontWeight: '800', color: colors.text },
     gradeChipMeta: { fontSize: 11, color: colors.textMuted },
+    // TE-49: neue Noten
+    gradeChipNew: { borderColor: colors.accentNeon, borderWidth: 2, backgroundColor: colors.accentNeon + '1F' },
+    gradeChipNewTag: { fontSize: 9, fontWeight: '900', letterSpacing: 0.5, color: colors.accentNeon },
+    newGradesCard: {
+      gap: 6, padding: 12, borderRadius: 12, borderWidth: 2, borderColor: colors.accentNeon,
+      backgroundColor: colors.accentNeon + '14', marginBottom: 4,
+    },
+    newGradesTitle: { fontSize: 12, fontWeight: '800', letterSpacing: 1, color: colors.accentNeon, textTransform: 'uppercase' },
+    newGradeRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    newGradeFach: { flex: 1, fontSize: 14, fontWeight: '600', color: colors.text },
+    newGradeValue: { fontSize: 16, fontWeight: '900', color: colors.text },
     // Stundenliste
     section: { gap: 5 },
     lessonCard: {
