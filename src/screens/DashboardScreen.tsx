@@ -175,6 +175,8 @@ function SectionLabel({
   );
 }
 
+const WEEKDAYS_SHORT = ['So.', 'Mo.', 'Di.', 'Mi.', 'Do.', 'Fr.', 'Sa.'];
+
 const labelStyles = StyleSheet.create({
   row: {
     flexDirection: 'row',
@@ -830,10 +832,12 @@ export function DashboardScreen() {
           „Heute" an der früheren Termine-Position (vor Geistesblitzen/Countdowns):
           oben Termine + Einträge von heute (inkl. undatierter/überfälliger),
           unter einem Trennstrich „Morgen" alles, was morgen fällig ist. ── */}
-      {((showBlock('calendar') && settings.googleCalendarEnabled) || showBlock('googleTasks') || showBlock('scratchpad') || showBlock('schoolTasks')) && (() => {
+      {((showBlock('calendar') && settings.googleCalendarEnabled) || showBlock('googleTasks') || showBlock('scratchpad') || showBlock('schoolTasks') || showBlock('kidsTasks')) && (() => {
         const showCal = showBlock('calendar') && settings.googleCalendarEnabled;
         const tomorrowStr = format(new Date(Date.now() + 86400000), 'yyyy-MM-dd');
         const isTomorrow = (d?: string | null) => !!d && localDateStr(d) === tomorrowStr;
+        const now = new Date();
+        const tomorrow = new Date(now.getTime() + 86400000);
 
         const renderEvent = (event: CalendarEvent, prominent: boolean) => {
           const { time } = formatEventTime(event);
@@ -896,17 +900,19 @@ export function DashboardScreen() {
           );
         };
 
-        const renderGT = (t: Task) => {
-          const due = taskDue(t.dueDate);
+        // TE-35: compact = Zeile im Morgen-Block (Vorschau): kleiner, grau, ohne
+        // Datum (wäre ohnehin bei allen „morgen“).
+        const renderGT = (t: Task, compact = false) => {
+          const due = compact ? null : taskDue(t.dueDate);
           return (
             <Pressable
               key={`gt-${t.id}`}
               onPress={() => router.push('/(tabs)/tasks' as any)}
-              style={({ pressed }) => [styles.dezentRow, styles.rowDivider, { opacity: pressed ? 0.6 : 1 }]}
+              style={({ pressed }) => [styles.dezentRow, styles.rowDivider, compact && styles.rowCompact, { opacity: pressed ? 0.6 : 1 }]}
             >
-              <View style={[styles.dezentBullet, { backgroundColor: C.tasks }, t.important && { backgroundColor: C.important }]} />
-              <Text style={styles.dezentText} numberOfLines={1}>{t.title}</Text>
-              {due ? (
+              <View style={[styles.dezentBullet, { backgroundColor: C.tasks }, t.important && { backgroundColor: C.important }, compact && styles.bulletCompact]} />
+              <Text style={[styles.dezentText, compact && styles.textCompact]} numberOfLines={1}>{t.title}</Text>
+              {compact ? null : due ? (
                 <Text style={[styles.dueBadge, due.overdue && styles.dueBadgeOverdue]}>{due.label}</Text>
               ) : (
                 <Text style={[styles.dezentCategory, { color: colors.textMuted }]}>Google Task</Text>
@@ -914,18 +920,18 @@ export function DashboardScreen() {
             </Pressable>
           );
         };
-        const renderPT = (entry: (typeof personalNotes)[number], idx: number) => {
-          const due = entry.dueDate ? dueInfo({ date: localDateStr(entry.dueDate) }) : null;
+        const renderPT = (entry: (typeof personalNotes)[number], idx: number, compact = false) => {
+          const due = !compact && entry.dueDate ? dueInfo({ date: localDateStr(entry.dueDate) }) : null;
           const level = due?.level ?? 0;
           return (
             <Pressable
               key={`pt-${entry.id ?? idx}`}
               onPress={() => router.push('/(tabs)/tasks' as any)}
-              style={({ pressed }) => [styles.dezentRow, styles.rowDivider, { opacity: pressed ? 0.6 : 1, backgroundColor: OVERDUE_TINT[level] }]}
+              style={({ pressed }) => [styles.dezentRow, styles.rowDivider, compact && styles.rowCompact, { opacity: pressed ? 0.6 : 1, backgroundColor: OVERDUE_TINT[level] }]}
             >
-              <View style={[styles.dezentBullet, { backgroundColor: C.personal }]} />
-              <Text style={[styles.dezentText, level >= 2 && styles.kidTaskOverdue]} numberOfLines={1}>{entry.text}</Text>
-              {due ? (
+              <View style={[styles.dezentBullet, { backgroundColor: C.personal }, compact && styles.bulletCompact]} />
+              <Text style={[styles.dezentText, level >= 2 && styles.kidTaskOverdue, compact && styles.textCompact]} numberOfLines={1}>{entry.text}</Text>
+              {compact ? null : due ? (
                 <Text style={[styles.dueBadge, due.overdue && styles.dueBadgeOverdue, level >= 2 && styles.dueBadgeSevere]}>{due.label}</Text>
               ) : (
                 <Text style={[styles.dezentCategory, { color: colors.textMuted }]}>Aufgabe</Text>
@@ -933,18 +939,18 @@ export function DashboardScreen() {
             </Pressable>
           );
         };
-        const renderST = ({ item, childId }: (typeof upcomingSchoolTermine)[number]) => {
-          const due = taskDue(item.date);
+        const renderST = ({ item, childId }: (typeof upcomingSchoolTermine)[number], compact = false) => {
+          const due = compact ? null : taskDue(item.date);
           return (
             <Pressable
               key={`st-${item.id}`}
               onPress={() => router.push({ pathname: '/(tabs)/schule', params: { child: childId } } as any)}
-              style={({ pressed }) => [styles.dezentRow, styles.rowDivider, { opacity: pressed ? 0.6 : 1 }]}
+              style={({ pressed }) => [styles.dezentRow, styles.rowDivider, compact && styles.rowCompact, { opacity: pressed ? 0.6 : 1 }]}
             >
-              <View style={[styles.dezentBullet, { backgroundColor: childColor(childId) }]} />
+              <View style={[styles.dezentBullet, { backgroundColor: childColor(childId) }, compact && styles.bulletCompact]} />
               <Ionicons name="book-outline" size={13} color={colors.textMuted} />
               {/* Kindname voranstellen, damit Termine verschiedener Kinder unterscheidbar sind. */}
-              <Text style={styles.dezentText} numberOfLines={1}><Text style={{ color: childColor(childId) }}>{childName(childId)}:</Text> {item.title}</Text>
+              <Text style={[styles.dezentText, compact && styles.textCompact]} numberOfLines={1}><Text style={{ color: childColor(childId) }}>{childName(childId)}:</Text> {item.title}</Text>
               {due && <Text style={[styles.dueBadge, due.overdue && styles.dueBadgeOverdue]}>{due.label}</Text>}
             </Pressable>
           );
@@ -970,16 +976,16 @@ export function DashboardScreen() {
           ? familyChildren.flatMap((c) =>
               (childTasks[c.id] ?? []).filter((t) => !t.done).map((task) => ({ task, childId: c.id })))
           : [];
-        const renderCT = ({ task, childId }: (typeof ctList)[number]) => {
-          const due = taskDue(task.date);
+        const renderCT = ({ task, childId }: (typeof ctList)[number], compact = false) => {
+          const due = compact ? null : taskDue(task.date);
           return (
             <Pressable
               key={`ct-${childId}-${task.id}`}
               onPress={() => router.push('/(tabs)/kids' as any)}
-              style={({ pressed }) => [styles.dezentRow, styles.rowDivider, { opacity: pressed ? 0.6 : 1 }]}
+              style={({ pressed }) => [styles.dezentRow, styles.rowDivider, compact && styles.rowCompact, { opacity: pressed ? 0.6 : 1 }]}
             >
-              <View style={[styles.dezentBullet, { backgroundColor: childColor(childId) }]} />
-              <Text style={styles.dezentText} numberOfLines={1}>
+              <View style={[styles.dezentBullet, { backgroundColor: childColor(childId) }, compact && styles.bulletCompact]} />
+              <Text style={[styles.dezentText, compact && styles.textCompact]} numberOfLines={1}>
                 <Text style={{ color: childColor(childId) }}>{childName(childId)}:</Text> {task.title}
               </Text>
               {due && <Text style={[styles.dueBadge, due.overdue && styles.dueBadgeOverdue]}>{due.label}</Text>}
@@ -1003,10 +1009,8 @@ export function DashboardScreen() {
         return (
           <View>
             <View style={labelStyles.row}>
-              <View style={labelStyles.titleRow}>
-                <Ionicons name="today-outline" size={13} color={colors.textMuted} />
-                <Text style={[labelStyles.title, { color: colors.textSecondary }]}>Heute</Text>
-              </View>
+              {/* TE-35: „Heute“ steht jetzt in der Datumsspalte der Karte. */}
+              <View />
               <View style={labelStyles.actions}>
                 {showBlock('scratchpad') && (
                   <Pressable onPress={() => setQuickAddKind('personal')} hitSlop={8} accessibilityLabel="Aufgabe anlegen">
@@ -1020,29 +1024,46 @@ export function DashboardScreen() {
               </View>
             </View>
 
+            {/* TE-35 (Variante B): Agenda mit Datumsspalte links – Heute groß mit
+                Akzentbalken, Morgen klein und grau als Vorschau. */}
             <View style={[styles.card, styles.todayEventsGlowCard, { elevation: 0 }]}>
-              {showCal && calLoading && (
-                <View style={styles.loadingRow}>
-                  <ActivityIndicator color={mono(C.calendar)} size="small" />
+              <View style={styles.agendaToday}>
+                <View style={styles.agendaGutter}>
+                  <Text style={[styles.agendaLabel, { color: colors.accent }]}>HEUTE</Text>
+                  <Text style={[styles.agendaDayLg, { color: colors.text }]}>{now.getDate()}</Text>
+                  <Text style={[styles.agendaWd, { color: colors.textMuted }]}>{WEEKDAYS_SHORT[now.getDay()]}</Text>
                 </View>
-              )}
-              {showCal && !calLoading && evToday.map((e) => renderEvent(e, true))}
-              {gtList.filter((t) => !isTomorrow(t.dueDate)).map(renderGT)}
-              {ptList.filter((e) => !isTomorrow(e.dueDate)).map(renderPT)}
-              {stList.filter((x) => !isTomorrow(x.item.date)).map(renderST)}
-              {ctList.filter((x) => !isTomorrow(x.task.date)).map(renderCT)}
-              {emptySummary && (
-                <Text style={[styles.dezentEmptySummary, styles.rowDivider, { color: colors.textMuted }]}>{emptySummary}</Text>
-              )}
+                <View style={[styles.agendaBody, { borderLeftColor: colors.accent }]}>
+                  {showCal && calLoading && (
+                    <View style={styles.loadingRow}>
+                      <ActivityIndicator color={mono(C.calendar)} size="small" />
+                    </View>
+                  )}
+                  {showCal && !calLoading && evToday.map((e) => renderEvent(e, true))}
+                  {gtList.filter((t) => !isTomorrow(t.dueDate)).map((t) => renderGT(t))}
+                  {ptList.filter((e) => !isTomorrow(e.dueDate)).map((e, i) => renderPT(e, i))}
+                  {stList.filter((x) => !isTomorrow(x.item.date)).map((x) => renderST(x))}
+                  {ctList.filter((x) => !isTomorrow(x.task.date)).map((x) => renderCT(x))}
+                  {emptySummary && (
+                    <Text style={[styles.dezentEmptySummary, styles.rowDivider, { color: colors.textMuted }]}>{emptySummary}</Text>
+                  )}
+                </View>
+              </View>
               {hasTomorrow && (
-                <>
-                  <Text style={[styles.dezentCategory, { color: colors.textMuted, paddingHorizontal: 14, paddingTop: 10, paddingBottom: 4, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase' }]}>Morgen</Text>
-                  {!calLoading && evTomorrow.map((e) => renderEvent(e, false))}
-                  {gtTomorrow.map(renderGT)}
-                  {ptTomorrow.map(renderPT)}
-                  {stTomorrow.map(renderST)}
-                  {ctTomorrow.map(renderCT)}
-                </>
+                <View style={[styles.agendaTomorrow, { borderTopColor: colors.border }]}>
+                  <View style={[styles.agendaGutter, { paddingTop: 10 }]}>
+                    <Text style={[styles.agendaLabelSm, { color: colors.textMuted }]}>MORGEN</Text>
+                    <Text style={[styles.agendaDaySm, { color: colors.textMuted }]}>{tomorrow.getDate()}</Text>
+                    <Text style={[styles.agendaWd, { color: colors.textMuted }]}>{WEEKDAYS_SHORT[tomorrow.getDay()]}</Text>
+                  </View>
+                  <View style={[styles.agendaBody, { borderLeftColor: colors.border }]}>
+                    {!calLoading && evTomorrow.map((e) => renderEvent(e, false))}
+                    {gtTomorrow.map((t) => renderGT(t, true))}
+                    {ptTomorrow.map((e, i) => renderPT(e, i, true))}
+                    {stTomorrow.map((x) => renderST(x, true))}
+                    {ctTomorrow.map((x) => renderCT(x, true))}
+                  </View>
+                </View>
               )}
             </View>
           </View>
@@ -1471,6 +1492,19 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
     },
 
     // Calendar
+    // TE-35: Agenda-Layout der Heute-Karte (Datumsspalte links)
+    agendaToday: { flexDirection: 'row' },
+    agendaTomorrow: { flexDirection: 'row', borderTopWidth: 1 },
+    agendaGutter: { width: 56, alignItems: 'center', paddingTop: 14 },
+    agendaBody: { flex: 1, minWidth: 0, borderLeftWidth: 3 },
+    agendaLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 1 },
+    agendaLabelSm: { fontSize: 9, fontWeight: '800', letterSpacing: 0.8 },
+    agendaDayLg: { fontSize: 28, fontWeight: '800', lineHeight: 32 },
+    agendaDaySm: { fontSize: 18, fontWeight: '700', lineHeight: 22 },
+    agendaWd: { fontSize: 11, fontWeight: '600' },
+    rowCompact: { paddingVertical: 7 },
+    bulletCompact: { width: 6, height: 6, borderRadius: 3 },
+    textCompact: { fontWeight: '400', color: c.textSecondary },
     calRowProminent: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 12, gap: 10 },
     calRowDimmed:    { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 9,  gap: 10 },
     calTimeLg: { minWidth: 46 },
