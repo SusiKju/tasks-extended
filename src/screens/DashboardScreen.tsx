@@ -29,8 +29,9 @@ import { listUpcomingEvents, CalendarEvent, getValidAccessToken } from '../servi
 import { syncBesteSchuleChild } from '../services/besteSchule';
 import { listStarredDriveFiles, DriveFile } from '../services/googleDrive';
 import {
-  ChildTask, subscribeToChildTasks,
+  ChildTask, subscribeToChildTasks, markTasksReminded,
 } from '../services/kinderTasks';
+import { sendTaskMailToChild } from '../services/taskMail';
 import { SchoolItem, subscribeToSchoolItems } from '../services/schoolManual';
 import { AllowanceMonth, subscribeToAllowanceMonths, monthKey, formatEuro, formatMonthLabel, effectiveAllowance, setAllowanceOverride } from '../services/allowance';
 import { useFamily } from '../hooks/useFamily';
@@ -326,6 +327,30 @@ export function DashboardScreen() {
   // Heutige Aufgaben aller Kinder (TE-110) – ein Echtzeit-Listener pro Kind,
   // analog zum Kids-Tab. Abschnitt erscheint nur, wenn mindestens eine Aufgabe da ist.
   const [childTasks, setChildTasks] = useState<Record<string, ChildTask[]>>({});
+  // TE-54: „Erinnern“ in der Karte „Kinder erinnern“ – Mail an das Kind.
+  const [remindingChild, setRemindingChild] = useState<string | null>(null);
+  const [remindError, setRemindError] = useState<Record<string, string>>({});
+  const remindChild = useCallback(async (childId: string) => {
+    const email = settings.childEmails?.[childId];
+    if (!fid || !email) return;
+    setRemindingChild(childId);
+    setRemindError((prev) => ({ ...prev, [childId]: '' }));
+    try {
+      const token = (await getValidAccessToken().catch(() => null)) ?? settings.googleAccessToken;
+      const all = childTasks[childId] ?? [];
+      const open = all.filter((t) => !t.done);
+      const result = token
+        ? await sendTaskMailToChild(fid, childId, childName(childId), email, token, open, all.filter((t) => t.done))
+        : 'error';
+      if (result === 'sent') {
+        await markTasksReminded(fid, childId, open.map((t) => t.id), new Date().toISOString());
+      } else {
+        setRemindError((prev) => ({ ...prev, [childId]: 'Senden fehlgeschlagen – Google-Konto in den Einstellungen neu verbinden.' }));
+      }
+    } finally {
+      setRemindingChild(null);
+    }
+  }, [fid, settings.childEmails, settings.googleAccessToken, childTasks, familyChildren]);
   useEffect(() => {
     if (!fid || familyChildren.length === 0) return;
     const unsubs = familyChildren.map((child) =>
@@ -796,28 +821,55 @@ export function DashboardScreen() {
           ? familyChildren.flatMap((c) =>
               (childTasks[c.id] ?? []).filter((t) => !t.done).map((task) => ({ task, childId: c.id })))
           : [];
-        const renderCT = ({ task, childId }: (typeof ctList)[number], compact = false) => {
-          const due = compact ? null : taskDue(task.date);
+        // TE-54 (Variante D): Kinder-Aufgaben stehen nicht mehr in Heute/Morgen,
+        // sondern gesammelt pro Kind in einer ruhigen Karte „Kinder erinnern“.
+        const ctChildren = familyChildren.filter((c) => ctList.some((x) => x.childId === c.id));
+        const renderKidReminder = (childId: string) => {
+          const open = ctList.filter((x) => x.childId === childId).map((x) => x.task);
+          const oldest = open.reduce((min, t) => (t.date < min ? t.date : min), open[0].date);
+          const overdueDays = differenceInCalendarDays(now, parseISO(oldest));
+          const last = open.reduce<string | null>((m, t) => (t.remindedAt && (!m || t.remindedAt > m) ? t.remindedAt : m), null);
+          const lastDate = last ? new Date(last) : null;
+          const locked = !!lastDate && now.getTime() - lastDate.getTime() < 60 * 60 * 1000;
+          const hasEmail = !!settings.childEmails?.[childId];
+          const busy = remindingChild === childId;
+          const meta = [
+            overdueDays > 0 ? `${overdueDays} Tg.` : null,
+            lastDate ? `✉ erinnert ${localDateStr(last!) === todayKey ? format(lastDate, 'HH:mm') : format(lastDate, 'dd.MM.')}` : null,
+            !hasEmail ? 'keine E-Mail hinterlegt' : null,
+          ].filter(Boolean).join(' · ');
           return (
-            <Pressable
-              key={`ct-${childId}-${task.id}`}
-              onPress={() => router.push('/(tabs)/kids' as any)}
-              style={({ pressed }) => [styles.dezentRow, styles.rowDivider, compact && styles.rowCompact, { opacity: pressed ? 0.6 : 1 }]}
-            >
-              <View style={[styles.dezentBullet, { backgroundColor: childColor(childId) }, compact && styles.bulletCompact]} />
-              <Text style={[styles.dezentText, compact && styles.textCompact]} numberOfLines={1}>
-                <Text style={{ color: childColor(childId) }}>{childName(childId)}:</Text> {task.title}
-              </Text>
-              {due && <Text style={[styles.dueBadge, due.overdue && styles.dueBadgeOverdue]}>{due.label}</Text>}
-            </Pressable>
+            <View key={`kr-${childId}`} style={[styles.dezentRow, styles.rowDivider]}>
+              <View style={[styles.kidAvatar, { backgroundColor: childColor(childId) }]}>
+                <Text style={styles.kidAvatarText}>{childEmoji(childId) ?? childName(childId).charAt(0)}</Text>
+              </View>
+              <Pressable style={{ flex: 1 }} onPress={() => router.push('/(tabs)/kids' as any)}>
+                <Text style={[styles.dezentText, { color: colors.textSecondary, fontWeight: '500' }]} numberOfLines={2}>
+                  {open.map((t) => t.title).join(' · ')}
+                </Text>
+                {!!meta && <Text style={[styles.dezentCategory, { color: colors.textMuted }]}>{meta}</Text>}
+                {!!remindError[childId] && <Text style={[styles.dezentCategory, { color: C.important }]}>{remindError[childId]}</Text>}
+              </Pressable>
+              {hasEmail && (
+                <Pressable
+                  onPress={() => remindChild(childId)}
+                  disabled={busy || locked}
+                  accessibilityLabel={`${childName(childId)} per E-Mail erinnern`}
+                  style={({ pressed }) => [styles.remindBtn, { borderColor: colors.border, opacity: busy || locked ? 0.45 : pressed ? 0.6 : 1 }]}
+                >
+                  {busy
+                    ? <ActivityIndicator size="small" color={colors.textSecondary} />
+                    : <Text style={[styles.remindBtnText, { color: colors.text }]}>{locked ? 'Erinnert' : last ? 'Erneut' : 'Erinnern'}</Text>}
+                </Pressable>
+              )}
+            </View>
           );
         };
         const evTomorrow = showCal ? tomorrowEvents.filter(notDupOfTask) : [];
         const gtTomorrow = gtList.filter((t) => isTomorrow(t.dueDate));
         const ptTomorrow = ptList.filter((e) => isTomorrow(e.dueDate));
         const stTomorrow = stList.filter((x) => isTomorrow(x.item.date));
-        const ctTomorrow = ctList.filter((x) => isTomorrow(x.task.date));
-        const hasTomorrow = evTomorrow.length + gtTomorrow.length + ptTomorrow.length + stTomorrow.length + ctTomorrow.length > 0;
+        const hasTomorrow = evTomorrow.length + gtTomorrow.length + ptTomorrow.length + stTomorrow.length > 0;
 
         const emptyLabels: string[] = [];
         if (showBlock('googleTasks') && dashboardTasks.length === 0) emptyLabels.push('Google Tasks');
@@ -863,7 +915,6 @@ export function DashboardScreen() {
                   {gtList.filter((t) => !isTomorrow(t.dueDate)).map((t) => renderGT(t))}
                   {ptList.filter((e) => !isTomorrow(e.dueDate)).map((e, i) => renderPT(e, i))}
                   {stList.filter((x) => !isTomorrow(x.item.date)).map((x) => renderST(x))}
-                  {ctList.filter((x) => !isTomorrow(x.task.date)).map((x) => renderCT(x))}
                   {emptySummary && (
                     <Text style={[styles.dezentEmptySummary, styles.rowDivider, { color: colors.textMuted }]}>{emptySummary}</Text>
                   )}
@@ -881,11 +932,19 @@ export function DashboardScreen() {
                     {gtTomorrow.map((t) => renderGT(t, true))}
                     {ptTomorrow.map((e, i) => renderPT(e, i, true))}
                     {stTomorrow.map((x) => renderST(x, true))}
-                    {ctTomorrow.map((x) => renderCT(x, true))}
                   </View>
                 </View>
               )}
             </View>
+            {ctChildren.length > 0 && (
+              <View style={[styles.card, { marginTop: 10, elevation: 0 }]}>
+                <View style={styles.remindHeader}>
+                  <Text style={[styles.remindHeaderText, { color: colors.textMuted }]}>KINDER ERINNERN</Text>
+                  <Text style={[styles.remindHeaderText, { color: colors.textMuted }]}>{ctList.length} offen</Text>
+                </View>
+                {ctChildren.map((c) => renderKidReminder(c.id))}
+              </View>
+            )}
           </View>
         );
       })()}
@@ -1358,6 +1417,11 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
     // TE-14: ab 3 Tagen Verzug größer; Titel dann fett.
     dueBadgeSevere: { fontSize: 13, fontWeight: '800' },
     kidTaskOverdue: { fontWeight: '800' },
+    // TE-54: Karte „Kinder erinnern“.
+    remindHeader: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 14, paddingTop: 10, paddingBottom: 2 },
+    remindHeaderText: { fontSize: 10.5, fontWeight: '800', letterSpacing: 1.2 },
+    remindBtn: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 5, minWidth: 74, alignItems: 'center' },
+    remindBtnText: { fontSize: 12, fontWeight: '700' },
     // Redesign: Kind-/Gruppen-Kopfzeile als normale Zeile innerhalb der
     // flachen Card (vorher: eigener, unbordered Label-Block über einer
     // separat umrandeten Mini-Karte pro Kind).

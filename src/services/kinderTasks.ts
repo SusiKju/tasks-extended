@@ -96,6 +96,8 @@ export interface ChildTask {
   /** false = Aufgabe wurde abgehakt, aber noch nicht von den Eltern zur Kenntnis
    *  genommen (Punkt im Kind-Chip in der Kinder-Ansicht). true/undefined = gesehen. */
   seenByParent?: boolean;
+  /** ISO-Zeitstempel der letzten Erinnerungs-Mail vom Dashboard (TE-54). */
+  remindedAt?: string | null;
 }
 
 // ─── Belohnungspakete (TE-101 → TE-61) ───────────────────────────────────────
@@ -296,6 +298,13 @@ export async function rejectTask(
 export async function markChildTasksSeen(familyId: string, childId: string, taskIds: string[]): Promise<void> {
   await Promise.all(
     taskIds.map((id) => updateDoc(taskDoc(familyId, childId, id), { seenByParent: true }))
+  );
+}
+
+/** TE-54: merkt sich, wann das Kind per Dashboard-Mail erinnert wurde. */
+export async function markTasksReminded(familyId: string, childId: string, taskIds: string[], at: string): Promise<void> {
+  await Promise.all(
+    taskIds.map((id) => updateDoc(taskDoc(familyId, childId, id), { remindedAt: at }))
   );
 }
 
