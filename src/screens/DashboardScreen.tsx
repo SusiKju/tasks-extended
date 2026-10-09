@@ -40,6 +40,7 @@ import { LinkCardBar } from '../components/LinkCardBar';
 import { WeatherWidget } from '../components/WeatherWidget';
 import { GoogleConnectBanner } from '../components/GoogleConnectBanner';
 import { FuerUnsReminderBanner } from '../components/FuerUnsReminderBanner';
+import { NewGradesNotice } from '../components/NewGradesNotice';
 import { useFuerUns } from '../hooks/useFuerUns';
 import { CountdownStrip } from '../components/CountdownStrip';
 import { WeckmodusCard } from '../components/WeckmodusCard';
@@ -643,6 +644,9 @@ export function DashboardScreen() {
           Nur wenn der Verlauf lesbar ist – wer nicht in fuerUnsUids steht,
           bekommt einen Permission-Fehler und soll die Karte gar nicht sehen. */}
       {!!fuerUns.myName && fuerUns.loaded && !fuerUns.loadError && <FuerUnsReminderBanner colors={colors} fuerUns={fuerUns} />}
+
+      {/* TE-52: neue Noten der Kinder – dezent oberhalb der Heute-Karte, nicht in der Liste */}
+      {!!fid && <NewGradesNotice familyId={fid} children={familyChildren} childColor={childColor} />}
 
       {/* TE-25: „Heutige Termine" und „Kurzübersicht" sind ein gemeinsamer Block
           „Heute" an der früheren Termine-Position (vor Geistesblitzen/Countdowns):

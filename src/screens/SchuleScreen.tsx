@@ -135,16 +135,20 @@ export default function SchuleScreen() {
   // verlinkt wurde (z. B. "Schulaufgaben" im Dashboard) – bei jedem
   // Fokussieren erneut, falls der Tab schon gemountet war und sich nur der
   // Parameter geändert hat.
-  const { child: childParam } = useLocalSearchParams<{ child?: string }>();
+  // TE-52: ?view=noten (Noten-Hinweis auf dem Dashboard) öffnet direkt die Noten.
+  const { child: childParam, view: viewParam } = useLocalSearchParams<{ child?: string; view?: string }>();
+  const pendingView = useRef<ScreenView | null>(null);
   useFocusEffect(
     useCallback(() => {
+      if (viewParam === 'noten') { pendingView.current = 'noten'; setView('noten'); }
       if (childParam) setSelectedChild(childParam);
-    }, [childParam])
+    }, [childParam, viewParam])
   );
 
   // Ansicht-Umschalter unterscheidet sich je nach Kind (Noten/Klassenbuch vs.
-  // Hausaufgaben/Infos/Termine) – beim Kindwechsel immer auf Stundenplan zurück.
-  useEffect(() => { setView('plan'); }, [selectedChild]);
+  // Hausaufgaben/Infos/Termine) – beim Kindwechsel immer auf Stundenplan zurück,
+  // außer ein Deep-Link hat eine Ansicht vorgegeben.
+  useEffect(() => { setView(pendingView.current ?? 'plan'); pendingView.current = null; }, [selectedChild]);
 
   useEffect(() => {
     if (!fid || familyChildren.length === 0) return;
