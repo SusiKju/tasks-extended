@@ -26,6 +26,7 @@ import { useGoogleTasksSync } from '../hooks/useGoogleTasksSync';
 import { useGoogleContactsBirthdaysSync } from '../hooks/useGoogleContactsBirthdaysSync';
 import { isOverdue, isDueToday, localDateStr } from '../utils/dateFormat';
 import { listUpcomingEvents, CalendarEvent, getValidAccessToken } from '../services/googleCalendar';
+import { syncBesteSchuleChild } from '../services/besteSchule';
 import { listStarredDriveFiles, DriveFile } from '../services/googleDrive';
 import {
   ChildTask, subscribeToChildTasks,
@@ -269,8 +270,17 @@ export function DashboardScreen() {
       token && settings.googleCalendarEnabled
         ? listUpcomingEvents(token, settings.selectedCalendarIds ?? [], 2).then(setCalEvents).catch(() => {})
         : null,
+      // TE-48: Schuldaten (beste.schule) aller verknüpften Kinder – landen in
+      // Firestore, Dashboard/Schule-Tab aktualisieren sich per Listener.
+      ...(fid && settings.besteSchuleToken
+        ? Object.entries(settings.besteSchuleStudentIds ?? {})
+            .filter(([childId, studentId]) => !!studentId && familyChildren.some((c) => c.id === childId))
+            .map(([childId, studentId]) =>
+              syncBesteSchuleChild(fid, childId, settings.besteSchuleToken!, studentId!).catch((e) =>
+                console.warn('[Sync] beste.schule', childId, e)))
+        : []),
     ]);
-  }, [syncTasks, syncBirthdays, settings.googleAccessToken, settings.googleCalendarEnabled, settings.selectedCalendarIds, loadDriveFavorites]);
+  }, [syncTasks, syncBirthdays, settings.googleAccessToken, settings.googleCalendarEnabled, settings.selectedCalendarIds, settings.besteSchuleToken, settings.besteSchuleStudentIds, fid, familyChildren, loadDriveFavorites]);
 
   const handleSync = useCallback(async () => {
     if (syncing) return;

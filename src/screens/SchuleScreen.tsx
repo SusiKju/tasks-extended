@@ -20,15 +20,15 @@ import { useStore } from '../store';
 import {
   PERIODS, DAY_NAMES, DAY_SHORT, subjectColor,
   TimetableEntry, TimetableMap, PeriodTimesMap,
-  key, todayDayIndex, subscribeToTimetable, setTimetableEntry, replaceTimetable,
+  key, todayDayIndex, subscribeToTimetable, setTimetableEntry,
   applyPeriodTimes, subscribeToPeriodTimes, setPeriodTime, isBiweeklyActiveWeek, minutesBetween,
 } from '../services/timetable';
-import { GradesMap, subscribeToGrades, replaceGrades, subscribeToGradesAck, unreadGradeIds, ackGrades } from '../services/grades';
+import { GradesMap, subscribeToGrades, subscribeToGradesAck, unreadGradeIds, ackGrades } from '../services/grades';
 import {
-  JournalData, subscribeToJournal, replaceJournal,
+  JournalData, subscribeToJournal,
   subscribeToJournalAck, unreadJournalKeys, ackJournal,
 } from '../services/journal';
-import { fetchBesteSchuleTimetable, fetchBesteSchuleGrades, fetchBesteSchuleJournal } from '../services/besteSchule';
+import { syncBesteSchuleChild } from '../services/besteSchule';
 import {
   SchoolItem, makeId,
   subscribeToSchoolItems, saveSchoolItems,
@@ -316,14 +316,7 @@ export default function SchuleScreen() {
       return;
     }
     guardedUpdate({ status: 'syncing' });
-    return Promise.all([
-      fetchBesteSchuleTimetable(settings.besteSchuleToken, linkedStudentId!)
-        .then((map) => replaceTimetable(fid, selectedChild, map)),
-      fetchBesteSchuleGrades(settings.besteSchuleToken, linkedStudentId!)
-        .then((map) => replaceGrades(fid, selectedChild, map)),
-      fetchBesteSchuleJournal(settings.besteSchuleToken, linkedStudentId!)
-        .then((data) => replaceJournal(fid, selectedChild, data)),
-    ])
+    return syncBesteSchuleChild(fid, selectedChild, settings.besteSchuleToken, linkedStudentId!)
       .then(() => guardedUpdate({ status: 'done' }))
       .catch((e) => guardedUpdate({ status: 'error', message: e?.message ?? String(e) }));
   }, [isLinked, fid, selectedChild, settings.besteSchuleToken, linkedStudentId, updateSyncState]);

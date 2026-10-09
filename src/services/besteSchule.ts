@@ -34,9 +34,22 @@
  *     Sonderplan beachten.").
  */
 
-import { TimetableMap, key as slotKey } from './timetable';
-import { GradeEntry, GradesMap } from './grades';
-import { JournalNote, JournalData } from './journal';
+import { TimetableMap, key as slotKey, replaceTimetable } from './timetable';
+import { GradeEntry, GradesMap, replaceGrades } from './grades';
+import { JournalNote, JournalData, replaceJournal } from './journal';
+
+/**
+ * TE-48: Stundenplan, Noten und Klassenbuch eines Kindes von beste.schule
+ * holen und in Firestore ersetzen. Gemeinsam genutzt vom Schule-Tab (beim
+ * Öffnen) und vom Dashboard-Sync (Button + Rückkehr in die App).
+ */
+export async function syncBesteSchuleChild(familyId: string, childId: string, token: string, studentId: string): Promise<void> {
+  await Promise.all([
+    fetchBesteSchuleTimetable(token, studentId).then((map) => replaceTimetable(familyId, childId, map)),
+    fetchBesteSchuleGrades(token, studentId).then((map) => replaceGrades(familyId, childId, map)),
+    fetchBesteSchuleJournal(token, studentId).then((data) => replaceJournal(familyId, childId, data)),
+  ]);
+}
 
 const API_BASE = 'https://beste.schule/api';
 
