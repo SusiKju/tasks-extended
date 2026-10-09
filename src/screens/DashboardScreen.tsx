@@ -843,14 +843,16 @@ export function DashboardScreen() {
               <View style={[styles.kidAvatar, { backgroundColor: childColor(childId) }]}>
                 <Text style={styles.kidAvatarText}>{childEmoji(childId) ?? childName(childId).charAt(0)}</Text>
               </View>
-              <Pressable style={{ flex: 1 }} onPress={() => router.push('/(tabs)/kids' as any)}>
-                {/* TE-56: Kindesname über den Aufgaben – das Emoji allein verrät nicht, wer gemeint ist. */}
-                <Text style={[styles.kidHeaderText, { color: colors.text, fontSize: 14 }]} numberOfLines={1}>{childName(childId)}</Text>
-                <Text style={[styles.dezentText, { color: colors.textSecondary, fontWeight: '500' }]} numberOfLines={2}>
-                  {open.map((t) => t.title).join(' · ')}
-                </Text>
-                {!!meta && <Text style={[styles.dezentCategory, { color: colors.textMuted }]}>{meta}</Text>}
-                {!!remindError[childId] && <Text style={[styles.dezentCategory, { color: C.important }]}>{remindError[childId]}</Text>}
+              {/* TE-56: Name vor den Aufgaben (flach, kein Extra-Zeile) – das Emoji allein verrät nicht, wer gemeint ist. */}
+              <Pressable style={{ flex: 1, flexDirection: 'row', gap: 8 }} onPress={() => router.push('/(tabs)/kids' as any)}>
+                <Text style={{ fontSize: 13.5, fontWeight: '700', color: colors.text }} numberOfLines={1}>{childName(childId)}</Text>
+                <View style={{ flex: 1 }}>
+                  {open.map((t) => (
+                    <Text key={t.id} style={[styles.dezentText, { color: colors.textSecondary, fontWeight: '500' }]} numberOfLines={1}>{t.title}</Text>
+                  ))}
+                  {!!meta && <Text style={[styles.dezentCategory, { color: colors.textMuted }]}>{meta}</Text>}
+                  {!!remindError[childId] && <Text style={[styles.dezentCategory, { color: C.important }]}>{remindError[childId]}</Text>}
+                </View>
               </Pressable>
               {hasEmail && (
                 <Pressable
