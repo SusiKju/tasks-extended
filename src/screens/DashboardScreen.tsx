@@ -844,6 +844,8 @@ export function DashboardScreen() {
                 <Text style={styles.kidAvatarText}>{childEmoji(childId) ?? childName(childId).charAt(0)}</Text>
               </View>
               <Pressable style={{ flex: 1 }} onPress={() => router.push('/(tabs)/kids' as any)}>
+                {/* TE-56: Kindesname über den Aufgaben – das Emoji allein verrät nicht, wer gemeint ist. */}
+                <Text style={[styles.kidHeaderText, { color: colors.text, fontSize: 14 }]} numberOfLines={1}>{childName(childId)}</Text>
                 <Text style={[styles.dezentText, { color: colors.textSecondary, fontWeight: '500' }]} numberOfLines={2}>
                   {open.map((t) => t.title).join(' · ')}
                 </Text>
@@ -1107,7 +1109,8 @@ export function DashboardScreen() {
           />
           {/* TE-18: grüner Akzentbalken + Betrags-Pille, damit Geld nicht wie eine rote Aufgabenzeile aussieht. */}
           <View style={[styles.card, { borderLeftWidth: 4, borderLeftColor: colors.success }]}>
-            {openAllowanceChildren.map((child, i) => {
+           <View style={styles.cardClip}>
+            {openAllowanceChildren.map((child) => {
               const m = allowanceByChild[child.id]?.[dueMonthByChild[child.id]];
               const corrected = m?.overrideAmount != null;
               const amount = effectiveAllowance(child.allowance ?? 0, m);
@@ -1115,7 +1118,7 @@ export function DashboardScreen() {
                 <Pressable
                   key={child.id}
                   onPress={() => openAllowanceEdit(child.id)}
-                  style={[styles.kidRow, i < openAllowanceChildren.length - 1 && styles.rowDivider]}
+                  style={[styles.kidRow, styles.rowDivider]}
                 >
                   <View style={[styles.kidAvatar, { backgroundColor: childColor(child.id) }]}>
                     <Text style={styles.kidAvatarText}>
@@ -1139,6 +1142,7 @@ export function DashboardScreen() {
                 </Pressable>
               );
             })}
+           </View>
           </View>
         </View>
       )}
