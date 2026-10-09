@@ -1,6 +1,6 @@
 {
   "name": "tasks-extended",
-  "version": "2.59.3",
+  "version": "2.59.4",
   "main": "expo-router/entry",
   "scripts": {
     "start": "expo start",
