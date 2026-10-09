@@ -871,6 +871,23 @@ export function DashboardScreen() {
         const stTomorrow = stList.filter((x) => isTomorrow(x.item.date));
         const hasTomorrow = evTomorrow.length + gtTomorrow.length + ptTomorrow.length + stTomorrow.length > 0;
 
+        const splitTomorrow = ctChildren.length > 0;
+        const tomorrowSection = (
+          <View style={[styles.agendaTomorrow, splitTomorrow ? { borderTopWidth: 0 } : { borderTopColor: colors.border }]}>
+            <View style={[styles.agendaGutter, { paddingTop: 10 }]}>
+              <Text style={[styles.agendaLabelSm, { color: colors.textMuted }]}>MORGEN</Text>
+              <Text style={[styles.agendaDaySm, { color: colors.textMuted }]}>{tomorrow.getDate()}</Text>
+              <Text style={[styles.agendaWd, { color: colors.textMuted }]}>{WEEKDAYS_SHORT[tomorrow.getDay()]}</Text>
+            </View>
+            <View style={[styles.agendaBody, { borderLeftColor: colors.border }]}>
+              {!calLoading && evTomorrow.map((e) => renderEvent(e, false))}
+              {gtTomorrow.map((t) => renderGT(t, true))}
+              {ptTomorrow.map((e, i) => renderPT(e, i, true))}
+              {stTomorrow.map((x) => renderST(x, true))}
+            </View>
+          </View>
+        );
+
         const emptyLabels: string[] = [];
         if (showBlock('googleTasks') && dashboardTasks.length === 0) emptyLabels.push('Google Tasks');
         if (showBlock('scratchpad') && personalNotes.length === 0) emptyLabels.push('Aufgaben');
@@ -920,23 +937,11 @@ export function DashboardScreen() {
                   )}
                 </View>
               </View>
-              {hasTomorrow && (
-                <View style={[styles.agendaTomorrow, { borderTopColor: colors.border }]}>
-                  <View style={[styles.agendaGutter, { paddingTop: 10 }]}>
-                    <Text style={[styles.agendaLabelSm, { color: colors.textMuted }]}>MORGEN</Text>
-                    <Text style={[styles.agendaDaySm, { color: colors.textMuted }]}>{tomorrow.getDate()}</Text>
-                    <Text style={[styles.agendaWd, { color: colors.textMuted }]}>{WEEKDAYS_SHORT[tomorrow.getDay()]}</Text>
-                  </View>
-                  <View style={[styles.agendaBody, { borderLeftColor: colors.border }]}>
-                    {!calLoading && evTomorrow.map((e) => renderEvent(e, false))}
-                    {gtTomorrow.map((t) => renderGT(t, true))}
-                    {ptTomorrow.map((e, i) => renderPT(e, i, true))}
-                    {stTomorrow.map((x) => renderST(x, true))}
-                  </View>
-                </View>
-              )}
+              {hasTomorrow && !splitTomorrow && tomorrowSection}
             </View>
-            {ctChildren.length > 0 && (
+            {/* TE-54: Kinder-Karte sitzt zwischen Heute und Morgen; Morgen bekommt
+                dann eine eigene Karte. Ohne Kinder-Aufgaben bleibt alles in einer. */}
+            {splitTomorrow && (
               <View style={[styles.card, { marginTop: 10, elevation: 0 }]}>
                 <View style={styles.remindHeader}>
                   <Text style={[styles.remindHeaderText, { color: colors.textMuted }]}>KINDER ERINNERN</Text>
@@ -944,6 +949,9 @@ export function DashboardScreen() {
                 </View>
                 {ctChildren.map((c) => renderKidReminder(c.id))}
               </View>
+            )}
+            {hasTomorrow && splitTomorrow && (
+              <View style={[styles.card, { marginTop: 10, elevation: 0 }]}>{tomorrowSection}</View>
             )}
           </View>
         );
