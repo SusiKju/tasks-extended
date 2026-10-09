@@ -916,6 +916,7 @@ export function DashboardScreen() {
             {/* TE-35 (Variante B): Agenda mit Datumsspalte links – Heute groß mit
                 Akzentbalken, Morgen klein und grau als Vorschau. */}
             <View style={[styles.card, styles.todayEventsGlowCard, { elevation: 0 }]}>
+             <View style={styles.cardClip}>
               <View style={styles.agendaToday}>
                 <View style={styles.agendaGutter}>
                   <Text style={[styles.agendaLabel, { color: colors.accent }]}>HEUTE</Text>
@@ -938,6 +939,7 @@ export function DashboardScreen() {
                 </View>
               </View>
               {hasTomorrow && !splitTomorrow && tomorrowSection}
+             </View>
             </View>
             {/* TE-54: Kinder-Karte sitzt zwischen Heute und Morgen; Morgen bekommt
                 dann eine eigene Karte. Ohne Kinder-Aufgaben bleibt alles in einer. */}
@@ -947,11 +949,11 @@ export function DashboardScreen() {
                   <Text style={[styles.remindHeaderText, { color: colors.textMuted }]}>KINDER ERINNERN</Text>
                   <Text style={[styles.remindHeaderText, { color: colors.textMuted }]}>{ctList.length} offen</Text>
                 </View>
-                {ctChildren.map((c) => renderKidReminder(c.id))}
+                <View style={styles.cardClip}>{ctChildren.map((c) => renderKidReminder(c.id))}</View>
               </View>
             )}
             {hasTomorrow && splitTomorrow && (
-              <View style={[styles.card, { marginTop: 10, elevation: 0 }]}>{tomorrowSection}</View>
+              <View style={[styles.card, { marginTop: 10, elevation: 0 }]}><View style={styles.cardClip}>{tomorrowSection}</View></View>
             )}
           </View>
         );
@@ -1047,6 +1049,7 @@ export function DashboardScreen() {
             colors={colors}
           />
           <View style={styles.card}>
+           <View style={styles.cardClip}>
             {childrenWithSchoolTasks.map((childId) => {
               const list = schoolTasksByChild[childId];
               return (
@@ -1089,6 +1092,7 @@ export function DashboardScreen() {
                 </React.Fragment>
               );
             })}
+           </View>
           </View>
         </View>
       )}
@@ -1263,6 +1267,10 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
       ...(isDark ? CARD_EDGE : {}),
       ...(isDark ? neonGlow(c.accentNeon, 'soft') : {}),
     },
+
+    // TE-55: Trennlinie der letzten Zeile am Kartenboden wegschneiden – die
+    // Karte hat overflow:hidden, der Inhalt ragt 1px darunter.
+    cardClip: { marginBottom: -1 },
 
     rowDivider: {
       borderBottomWidth: StyleSheet.hairlineWidth,
