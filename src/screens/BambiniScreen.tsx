@@ -508,25 +508,28 @@ export function BambiniScreen() {
           </Text>
           {c.stopped ? <Text style={s.badgeStopped}>aufgehört</Text> : null}
         </View>
-        <View style={s.iconSlot}>
-          {c.whatsapp ? (
-            <Ionicons name="logo-whatsapp" size={20} color={WHATSAPP_GREEN} accessibilityLabel="In WhatsApp-Gruppe" />
-          ) : c.sms ? (
-            <Ionicons name="chatbox-ellipses" size={20} color={SMS_BLUE} accessibilityLabel="Kommunikation per SMS" />
-          ) : null}
+        {/* TE-39: Icons + Alter als enger Block, eigener kleiner gap statt Zeilen-gap 8. */}
+        <View style={s.rowTrail}>
+          <View style={s.iconSlot}>
+            {c.whatsapp ? (
+              <Ionicons name="logo-whatsapp" size={20} color={WHATSAPP_GREEN} accessibilityLabel="In WhatsApp-Gruppe" />
+            ) : c.sms ? (
+              <Ionicons name="chatbox-ellipses" size={20} color={SMS_BLUE} accessibilityLabel="Kommunikation per SMS" />
+            ) : null}
+          </View>
+          <View style={s.iconSlot}>
+            {!c.vereinAngemeldet ? (
+              <Ionicons name="document-text" size={20} color={NOT_ANGEMELDET_RED} accessibilityLabel="Nicht im Verein angemeldet" />
+            ) : null}
+          </View>
+          <View style={s.iconSlot}>
+            {c.info ? (
+              <Ionicons name="information-circle" size={20} color={INFO_YELLOW} accessibilityLabel="Info vorhanden" />
+            ) : null}
+          </View>
+          {/* TE-38: Alter statt Jahrgang (nur Jahrgang gespeichert → Jahrgangsalter). */}
+          <Text style={s.rowYear}>{c.birthYear ? `${new Date().getFullYear() - c.birthYear} J.` : '—'}</Text>
         </View>
-        <View style={s.iconSlot}>
-          {!c.vereinAngemeldet ? (
-            <Ionicons name="document-text" size={20} color={NOT_ANGEMELDET_RED} accessibilityLabel="Nicht im Verein angemeldet" />
-          ) : null}
-        </View>
-        <View style={s.iconSlot}>
-          {c.info ? (
-            <Ionicons name="information-circle" size={20} color={INFO_YELLOW} accessibilityLabel="Info vorhanden" />
-          ) : null}
-        </View>
-        {/* TE-38: Alter statt Jahrgang (nur Jahrgang gespeichert → Jahrgangsalter). */}
-        <Text style={s.rowYear}>{c.birthYear ? `${new Date().getFullYear() - c.birthYear} J.` : '—'}</Text>
       </Pressable>
     );
   };
@@ -1225,6 +1228,7 @@ function makeStyles(c: ThemeColors) {
     // Feste Spaltenbreite pro Icon/Badge, sonst rutscht die Spalte je nach Zeile
     // (nicht jedes Kind hat WhatsApp/Info/Badge) hin und her ("Treppeneffekt").
     iconSlot: { width: 20, alignItems: 'center' },
+    rowTrail: { flexDirection: 'row', alignItems: 'center', gap: 2 },
     rowParent: { color: c.textSecondary, fontSize: 11, fontWeight: '500', letterSpacing: 0.6, textDecorationLine: 'none' },
     badgeStopped: {
       color: c.warningFg,
@@ -1236,7 +1240,7 @@ function makeStyles(c: ThemeColors) {
       paddingHorizontal: 6,
       paddingVertical: 2,
     },
-    rowYear: { color: c.textSecondary, fontSize: 13, fontWeight: '600', width: 34, textAlign: 'right' },
+    rowYear: { color: c.textSecondary, fontSize: 13, fontWeight: '600', width: 30, textAlign: 'right' },
 
     fab: {
       position: 'absolute',
