@@ -45,9 +45,9 @@ const CALM_BORDER = '#2A578C'; // = #4A9EFF * ~0.55, kühles Blau, dezent
 // colors.border-Ersatz gedacht (das würde app-weit den kühlen Blauton
 // kippen), sondern gezielt dort importiert, wo das Redesign es vorsieht.
 export const SOFT_BORDER = '#242429';
-// TE-55: dünner hellgrauer Rand um Dashboard-Karten – hebt sie auf
-// Smartphone-Displays vom schwarzen Grund ab, ohne grell weiß zu wirken.
-export const CARD_EDGE = { borderColor: '#9A9AA0' } as const;
+// TE-55: Dashboard-Karten im Look des Sendepause-Banners (FuerUnsReminderBanner,
+// SAD/SAD_BORDER): Schiefergrau-Fläche, dünner grauer Rand, Radius 12.
+export const CARD_EDGE = { backgroundColor: '#23262e', borderColor: '#4a4f5c', borderRadius: 12 } as const;
 const COLORS: ThemeColors = {
   background:    '#000000',   // reines Schwarz
   surface:       '#0A0A0A',

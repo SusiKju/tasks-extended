@@ -102,7 +102,7 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
     paddingVertical: 8, paddingLeft: 10, paddingRight: 8, borderRadius: 14,
-    borderWidth: 1, ...CARD_EDGE, backgroundColor: '#111318',
+    borderWidth: 1, ...CARD_EDGE,
   },
   main: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 10 },
   badges: { flexDirection: 'row' },
