@@ -20,6 +20,7 @@ import { handleRedirectResult } from '../src/services/firebaseAuth';
 import { getOwnMember, getChildIdForEmail } from '../src/services/family';
 import { useAutoReloadOnNewVersion } from '../src/hooks/useAutoReloadOnNewVersion';
 import { AppContextProvider } from '../src/contexts/AppContext';
+import { GoogleRefreshIndicator } from '../src/components/GoogleRefreshIndicator';
 
 export default function RootLayout() {
   const { colors, isDark } = useTheme();
@@ -241,6 +242,7 @@ export default function RootLayout() {
         <Stack.Screen name="family-setup" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       </Stack>
+      <GoogleRefreshIndicator />
     </AppContextProvider>
   );
 }

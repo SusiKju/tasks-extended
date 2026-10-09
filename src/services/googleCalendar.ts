@@ -2,6 +2,7 @@ import { Platform } from 'react-native';
 import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
 import { useStore } from '../store';
+import { create } from 'zustand';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -42,7 +43,8 @@ interface TokenRefreshResult {
 // ── Google Identity Services (GIS) — Web token flow ──────────────────────────
 // Der Browser bekommt by design nie ein Refresh-Token. GIS löst das über den
 // Token-Client: er fordert kurzlebige (1 h) Access-Tokens an und kann sie mit
-// prompt:'' still im Hintergrund erneuern, solange die Google-Session lebt.
+// prompt:'' ohne erneute Zustimmung erneuern, solange die Google-Session lebt –
+// dabei öffnet GIS aber trotzdem kurz ein Pop-up (TE-42).
 
 let gisScriptPromise: Promise<void> | null = null;
 
@@ -96,7 +98,7 @@ if (Platform.OS === 'web' && typeof document !== 'undefined') {
 /**
  * Fordert via GIS ein Access-Token an.
  * - prompt: 'consent' → expliziter Login (Popup, alle Scopes neu bestätigen).
- * - prompt: ''        → stiller Refresh ohne UI, sofern Session & Consent leben.
+ * - prompt: ''        → Refresh ohne Zustimmungsdialog (GIS zeigt kurz ein Pop-up).
  */
 async function requestWebToken(prompt: '' | 'consent'): Promise<TokenRefreshResult | null> {
   // requestAccessToken öffnet ein Popup und DARF nur direkt aus einem
@@ -239,6 +241,11 @@ async function refreshNativeToken(refreshToken: string): Promise<TokenRefreshRes
   }
 }
 
+let webRefreshInFlight: Promise<TokenRefreshResult | null> | null = null;
+
+/** TE-42: true, solange im Web ein Token-Refresh (mit kurzem GIS-Pop-up) läuft. */
+export const useGoogleRefreshing = create<{ refreshing: boolean }>(() => ({ refreshing: false }));
+
 /**
  * Zentrale Token-Beschaffung. Gibt ein gültiges Access-Token zurück und erneuert
  * es bei Bedarf transparent — im Web still via GIS, nativ via Refresh-Token.
@@ -258,7 +265,19 @@ export async function getValidAccessToken(force = false): Promise<string | null>
 
   let refreshed: TokenRefreshResult | null = null;
   if (Platform.OS === 'web') {
-    refreshed = await requestWebToken('').catch(() => null);
+    // TE-42: GIS öffnet auch beim „stillen“ Refresh kurz ein Pop-up. Parallele
+    // Aufrufe teilen sich deshalb EINE Anfrage (sonst mehrere Pop-ups), und
+    // währenddessen zeigt GoogleRefreshIndicator einen dezenten Hinweis.
+    if (!webRefreshInFlight) {
+      useGoogleRefreshing.setState({ refreshing: true });
+      webRefreshInFlight = requestWebToken('')
+        .catch(() => null)
+        .finally(() => {
+          webRefreshInFlight = null;
+          useGoogleRefreshing.setState({ refreshing: false });
+        });
+    }
+    refreshed = await webRefreshInFlight;
   } else if (settings.googleRefreshToken) {
     refreshed = await refreshNativeToken(settings.googleRefreshToken).catch(() => null);
   }
