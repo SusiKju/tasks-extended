@@ -7,6 +7,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
+import { CARD_GLOW } from '../utils/theme';
 import { ChildConfig } from '../services/family';
 import {
   GradeEntry, GradesMap, ackGrades, gradeColor, gradeId, subscribeToGrades, subscribeToGradesAck, unreadGradeIds,
@@ -101,7 +102,7 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
     paddingVertical: 8, paddingLeft: 10, paddingRight: 8, borderRadius: 14,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.85)', backgroundColor: '#111318',
+    borderWidth: 1, ...CARD_GLOW, backgroundColor: '#111318',
   },
   main: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 10 },
   badges: { flexDirection: 'row' },

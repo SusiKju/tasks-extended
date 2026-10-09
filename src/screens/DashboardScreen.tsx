@@ -18,7 +18,7 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useStore } from '../store';
-import { useTheme, ThemeColors, readableTextOn, neonGlow, SOFT_BORDER } from '../utils/theme';
+import { useTheme, ThemeColors, readableTextOn, neonGlow, SOFT_BORDER, CARD_GLOW } from '../utils/theme';
 import { useScratchpad } from '../hooks/useScratchpad';
 import { parseScratchpad, prependScratch, sortScratch } from '../components/Scratchpad';
 import { useFirebaseAuth } from '../hooks/useFirebaseAuth';
@@ -1259,9 +1259,8 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
       borderRadius: 18,
       overflow: 'hidden',
       borderWidth: 1,
-      // TE-55: im Dark-Mode fast weißer Rand – auf Smartphone-Displays hob
-      // sich die Karte sonst kaum vom schwarzen Grund ab.
-      borderColor: isDark ? 'rgba(255,255,255,0.85)' : SOFT_BORDER,
+      borderColor: SOFT_BORDER,
+      ...(isDark ? CARD_GLOW : {}),
       ...(isDark ? neonGlow(c.accentNeon, 'soft') : {}),
     },
 
