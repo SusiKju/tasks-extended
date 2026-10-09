@@ -9,11 +9,11 @@ import {
   ActivityIndicator,
   TextInput,
   Animated,
-  Platform,
   Modal,
   Alert,
   Linking,
   useWindowDimensions,
+  AppState,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -256,6 +256,22 @@ export function DashboardScreen() {
     if (result !== null) setDriveFavorites(result);
   }, []);
 
+  // TE-47: Daten im Hintergrund neu laden („Hot Replacement“) – kein
+  // Seiten-Reload. Firestore-Daten kommen ohnehin live per onSnapshot; neu
+  // geholt werden nur die Google-Quellen. Alte Termine bleiben sichtbar, bis
+  // die neuen da sind (kein calLoading → kein Flackern).
+  const refreshData = useCallback(async () => {
+    const token = (await getValidAccessToken().catch(() => null)) ?? settings.googleAccessToken;
+    await Promise.all([
+      syncTasks().catch(() => {}),
+      syncBirthdays().catch(() => {}),
+      token ? loadDriveFavorites(token) : null,
+      token && settings.googleCalendarEnabled
+        ? listUpcomingEvents(token, settings.selectedCalendarIds ?? [], 2).then(setCalEvents).catch(() => {})
+        : null,
+    ]);
+  }, [syncTasks, syncBirthdays, settings.googleAccessToken, settings.googleCalendarEnabled, settings.selectedCalendarIds, loadDriveFavorites]);
+
   const handleSync = useCallback(async () => {
     if (syncing) return;
     setSyncing(true);
@@ -263,33 +279,32 @@ export function DashboardScreen() {
       Animated.timing(spinAnim, { toValue: 1, duration: 800, useNativeDriver: true })
     );
     spinLoop.current.start();
-
     try {
-      await Promise.all([
-        syncTasks().catch(() => {}),
-        syncBirthdays().catch(() => {}),
-      ]);
-      // Drive + Kalender neu laden
-      if (settings.googleAccessToken) {
-        loadDriveFavorites(settings.googleAccessToken);
-        if (settings.googleCalendarEnabled) {
-          setCalLoading(true);
-          listUpcomingEvents(settings.googleAccessToken, settings.selectedCalendarIds ?? [], 2)
-            .then((events) => setCalEvents(events))
-            .catch(() => {})
-            .finally(() => setCalLoading(false));
-        }
-      }
-      // Web: zurück zum SPA-Root (nicht reload() — das würde die aktuelle Route als Datei anfragen)
-      if (Platform.OS === 'web') {
-        window.location.replace(window.location.origin + '/tasks-extended/');
-      }
+      await refreshData();
     } finally {
       spinLoop.current?.stop();
       spinAnim.setValue(0);
       setSyncing(false);
     }
-  }, [syncing, syncTasks, syncBirthdays, settings, loadDriveFavorites]);
+  }, [syncing, refreshData]);
+
+  // TE-47: Nach längerer Abwesenheit (≥ 5 min im Hintergrund) beim Zurückkehren
+  // still neu laden – sichtbar nur am kurz drehenden Sync-Symbol.
+  const hiddenSince = useRef<number | null>(null);
+  const handleSyncRef = useRef(handleSync);
+  handleSyncRef.current = handleSync;
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state !== 'active') {
+        hiddenSince.current ??= Date.now();
+        return;
+      }
+      const away = hiddenSince.current ? Date.now() - hiddenSince.current : 0;
+      hiddenSince.current = null;
+      if (away >= 5 * 60_000) handleSyncRef.current();
+    });
+    return () => sub.remove();
+  }, []);
 
   const styles = useMemo(() => makeStyles(colors, isDark), [colors, isDark]);
 
