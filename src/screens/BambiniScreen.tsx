@@ -501,10 +501,11 @@ export function BambiniScreen() {
       >
         <Text style={s.rowIndex}>{index + 1}.</Text>
         <View style={s.rowMain}>
-          <Text style={[s.rowName, c.stopped && s.rowNameStopped]} numberOfLines={1}>{c.name}</Text>
-          {c.registeredSince ? (
-            <Text style={s.rowSub} numberOfLines={1}>seit {formatDE(c.registeredSince)}</Text>
-          ) : null}
+          {/* TE-37: Datum nur noch im Detail; Elternname inline als graue Kapitälchen. */}
+          <Text style={[s.rowName, c.stopped && s.rowNameStopped]} numberOfLines={1}>
+            {c.name}
+            {c.parentName ? <Text style={s.rowParent}>{'  '}{c.parentName.toUpperCase()}</Text> : null}
+          </Text>
         </View>
         <View style={s.iconSlot}>
           {c.whatsapp ? (
@@ -1207,7 +1208,7 @@ function makeStyles(c: ThemeColors) {
       borderWidth: 1,
       borderColor: c.border,
       borderRadius: 10,
-      paddingVertical: 6,
+      paddingVertical: 4,
       paddingHorizontal: 12,
       marginBottom: 4,
       position: 'relative',
@@ -1226,7 +1227,7 @@ function makeStyles(c: ThemeColors) {
     // (nicht jedes Kind hat WhatsApp/Info/Badge) hin und her ("Treppeneffekt").
     iconSlot: { width: 20, alignItems: 'center' },
     badgeSlot: { width: 62, alignItems: 'flex-start' },
-    rowSub: { color: c.textSecondary, fontSize: 11, marginTop: 0 },
+    rowParent: { color: c.textSecondary, fontSize: 11, fontWeight: '500', letterSpacing: 0.6, textDecorationLine: 'none' },
     badgeStopped: {
       color: c.warningFg,
       backgroundColor: c.warning,
