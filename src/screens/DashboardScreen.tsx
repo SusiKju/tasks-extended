@@ -981,7 +981,7 @@ export function DashboardScreen() {
               <View style={[styles.dezentBullet, { backgroundColor: childColor(childId) }]} />
               <Ionicons name="book-outline" size={13} color={colors.textMuted} />
               {/* Kindname voranstellen, damit Termine verschiedener Kinder unterscheidbar sind. */}
-              <Text style={styles.dezentText} numberOfLines={1}>{childName(childId)}: {item.title}</Text>
+              <Text style={styles.dezentText} numberOfLines={1}><Text style={{ color: childColor(childId) }}>{childName(childId)}:</Text> {item.title}</Text>
               {due && <Text style={[styles.dueBadge, due.overdue && styles.dueBadgeOverdue]}>{due.label}</Text>}
             </Pressable>
           );
@@ -1001,11 +1001,34 @@ export function DashboardScreen() {
         const evToday = showCal ? todayEvents.filter(notDupOfTask) : [];
         const ptList = showBlock('scratchpad') ? personalNotes : [];
         const stList = showBlock('schoolTasks') ? upcomingSchoolTermine.slice(0, 6) : [];
+        // TE-31: offene Aufgaben der Kinder (inkl. Gruppenaufgaben-Kopien je Kind)
+        // mit in der gemeinsamen Liste – Name davor und Kinderfarbe als Punkt.
+        const ctList = showBlock('kidsTasks')
+          ? familyChildren.flatMap((c) =>
+              (childTasks[c.id] ?? []).filter((t) => !t.done).map((task) => ({ task, childId: c.id })))
+          : [];
+        const renderCT = ({ task, childId }: (typeof ctList)[number]) => {
+          const due = taskDue(task.date);
+          return (
+            <Pressable
+              key={`ct-${childId}-${task.id}`}
+              onPress={() => router.push('/(tabs)/kids' as any)}
+              style={({ pressed }) => [styles.dezentRow, styles.rowDivider, { opacity: pressed ? 0.6 : 1 }]}
+            >
+              <View style={[styles.dezentBullet, { backgroundColor: childColor(childId) }]} />
+              <Text style={styles.dezentText} numberOfLines={1}>
+                <Text style={{ color: childColor(childId) }}>{childName(childId)}:</Text> {task.title}
+              </Text>
+              {due && <Text style={[styles.dueBadge, due.overdue && styles.dueBadgeOverdue]}>{due.label}</Text>}
+            </Pressable>
+          );
+        };
         const evTomorrow = showCal ? tomorrowEvents.filter(notDupOfTask) : [];
         const gtTomorrow = gtList.filter((t) => isTomorrow(t.dueDate));
         const ptTomorrow = ptList.filter((e) => isTomorrow(e.dueDate));
         const stTomorrow = stList.filter((x) => isTomorrow(x.item.date));
-        const hasTomorrow = evTomorrow.length + gtTomorrow.length + ptTomorrow.length + stTomorrow.length > 0;
+        const ctTomorrow = ctList.filter((x) => isTomorrow(x.task.date));
+        const hasTomorrow = evTomorrow.length + gtTomorrow.length + ptTomorrow.length + stTomorrow.length + ctTomorrow.length > 0;
 
         const emptyLabels: string[] = [];
         if (showBlock('googleTasks') && dashboardTasks.length === 0) emptyLabels.push('Google Tasks');
@@ -1044,6 +1067,7 @@ export function DashboardScreen() {
               {gtList.filter((t) => !isTomorrow(t.dueDate)).map(renderGT)}
               {ptList.filter((e) => !isTomorrow(e.dueDate)).map(renderPT)}
               {stList.filter((x) => !isTomorrow(x.item.date)).map(renderST)}
+              {ctList.filter((x) => !isTomorrow(x.task.date)).map(renderCT)}
               {emptySummary && (
                 <Text style={[styles.dezentEmptySummary, styles.rowDivider, { color: colors.textMuted }]}>{emptySummary}</Text>
               )}
@@ -1054,6 +1078,7 @@ export function DashboardScreen() {
                   {gtTomorrow.map(renderGT)}
                   {ptTomorrow.map(renderPT)}
                   {stTomorrow.map(renderST)}
+                  {ctTomorrow.map(renderCT)}
                 </>
               )}
             </View>
