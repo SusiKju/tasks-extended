@@ -12,14 +12,15 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { ThemeColors } from '../utils/theme';
+import { ThemeColors, ButtonGradient } from '../utils/theme';
+import { GradientButton } from './GradientButton';
 import { CalendarEvent } from '../services/googleCalendar';
 import { fetchWeatherForecast, DailyWeather } from '../services/weather';
 
 const SEGMENTS = 60;
 const RING_SIZE = 92;
 const RING_STOPS = ['#10c88a', '#7b2ff7', '#f72585'];
+const DEFAULT_TASK: ButtonGradient = { colors: ['#7b2ff7', '#f72585'], fg: '#FFFFFF' };
 
 function hexToRgb(hex: string): [number, number, number] {
   const n = parseInt(hex.slice(1), 16);
@@ -129,19 +130,26 @@ export function TodayHero({
         </View>
       </View>
       <View style={styles.actions}>
-        <Pressable onPress={onAddTask} accessibilityRole="button" style={({ pressed }) => [styles.btnFlex, { opacity: pressed ? 0.8 : 1 }]}>
-          <LinearGradient colors={['#7b2ff7', '#f72585']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.btn}>
-            <Text style={[styles.btnText, { color: '#FFFFFF' }]}>+ Aufgabe</Text>
-          </LinearGradient>
-        </Pressable>
-        <Pressable onPress={onAddIdea} accessibilityRole="button" style={({ pressed }) => [styles.btnFlex, styles.btn, styles.btnOutline, { borderColor: colors.border, opacity: pressed ? 0.7 : 1 }]}>
-          <Text style={[styles.btnText, { color: colors.text }]}>+ Idee</Text>
-        </Pressable>
-        {onAddBlitz && (
-          <Pressable onPress={onAddBlitz} accessibilityRole="button" style={({ pressed }) => [styles.btnFlex, styles.btn, styles.btnOutline, { borderColor: colors.border, opacity: pressed ? 0.7 : 1 }]}>
-            <Text style={[styles.btnText, { color: colors.text }]} numberOfLines={1}>+ Geistesblitz</Text>
-          </Pressable>
-        )}
+        {/* TE-62: Verlauf je nach Theme (Bento Dark: Aufgabe blau, Idee gelb,
+            Geistesblitz grell); sonst Aufgabe im Aurora-Verlauf, Rest Outline. */}
+        {([
+          ['task', '+ Aufgabe', onAddTask],
+          ['idea', '+ Idee', onAddIdea],
+          ...(onAddBlitz ? [['blitz', '+ Geistesblitz', onAddBlitz] as const] : []),
+        ] as const).map(([kind, label, onPress]) => {
+          const g = colors.gradients?.[kind] ?? (kind === 'task' ? DEFAULT_TASK : undefined);
+          return (
+            <GradientButton
+              key={kind}
+              gradient={g}
+              onPress={onPress}
+              style={[styles.btnFlex, styles.btn]}
+              fallbackStyle={[styles.btnOutline, { borderColor: colors.border }]}
+            >
+              <Text style={[styles.btnText, { color: g ? g.fg : colors.text }]} numberOfLines={1}>{label}</Text>
+            </GradientButton>
+          );
+        })}
       </View>
     </View>
   );
@@ -166,8 +174,9 @@ const styles = StyleSheet.create({
   nextTitle: { fontSize: 18, fontWeight: '700', marginTop: 2 },
   after: { fontSize: 13, marginTop: 2 },
   actions: { flexDirection: 'row', gap: 8 },
-  btnFlex: { flex: 1 },
-  btn: { minHeight: 44, borderRadius: 999, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8 },
+  // Breite nach Inhalt statt gleicher Drittel – sonst wird „+ Geistesblitz“ am Handy abgeschnitten.
+  btnFlex: { flexGrow: 1, flexShrink: 1, flexBasis: 'auto' },
+  btn: { minHeight: 44, borderRadius: 999, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
   btnOutline: { borderWidth: 1 },
   btnText: { fontSize: 13, fontWeight: '700' },
 });

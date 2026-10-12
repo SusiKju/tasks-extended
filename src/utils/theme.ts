@@ -1,6 +1,10 @@
 import { useStore } from '../store';
 import { ThemeName } from '../types';
 
+/** TE-62: Verlauf für einen wichtigen Button – Farbstopps + lesbare Schriftfarbe. */
+export interface ButtonGradient { colors: readonly [string, string, ...string[]]; fg: string }
+export type GradientKind = 'task' | 'idea' | 'blitz' | 'remind';
+
 export interface ThemeColors {
   background: string;
   surface: string;
@@ -30,6 +34,8 @@ export interface ThemeColors {
   card: string;
   cardBorder: string;
   softBorder: string;
+  /** TE-62: Verlaufs-Buttons; fehlt ein Eintrag, nutzt der Button den Standard-Look. */
+  gradients?: Partial<Record<GradientKind, ButtonGradient>>;
 }
 
 // „Ruhig": Schwarz-Weiß, ohne Glow & Animationen. Reines Schwarz, weißer Text
@@ -116,6 +122,14 @@ const BENTO_NIGHT: ThemeColors = {
   card: '#1C1C1E',
   cardBorder: '#2C2C2E',
   softBorder: '#2C2C2E',
+  // TE-62: Farbe folgt der Bedeutung – Aufgabe blau, Idee gelb, Geistesblitz
+  // grell (Orange→Pink→Violett), Erinnern im Violett→Pink vom Aurora-Entwurf.
+  gradients: {
+    task:   { colors: ['#0A6CFF', '#5E5CE6'], fg: '#FFFFFF' },
+    idea:   { colors: ['#FFE14D', '#FF9F0A'], fg: '#1C1C1E' },
+    blitz:  { colors: ['#FF6B00', '#FF0080', '#7928CA'], fg: '#FFFFFF' },
+    remind: { colors: ['#7B2FF7', '#F72585'], fg: '#FFFFFF' },
+  },
 };
 
 // TE-61 „Aurora": tiefes Nachtviolett, Akzente aus dem Nordlicht-Verlauf

@@ -46,6 +46,7 @@ import { useFuerUns } from '../hooks/useFuerUns';
 import { CountdownStrip } from '../components/CountdownStrip';
 import { WeckmodusCard } from '../components/WeckmodusCard';
 import { TodayHero } from '../components/TodayHero';
+import { GradientButton } from '../components/GradientButton';
 import { addQuickNote } from '../services/quickNotesService';
 import { DashboardBlockKey, Task } from '../types';
 
@@ -867,16 +868,18 @@ export function DashboardScreen() {
                 </View>
               </Pressable>
               {hasEmail && (
-                <Pressable
+                <GradientButton
+                  gradient={colors.gradients?.remind}
                   onPress={() => remindChild(childId)}
                   disabled={busy || locked}
                   accessibilityLabel={`${childName(childId)} per E-Mail erinnern`}
-                  style={({ pressed }) => [styles.remindBtn, { borderColor: colors.border, opacity: busy || locked ? 0.45 : pressed ? 0.6 : 1 }]}
+                  style={styles.remindBtn}
+                  fallbackStyle={{ borderColor: colors.border }}
                 >
                   {busy
-                    ? <ActivityIndicator size="small" color={colors.textSecondary} />
-                    : <Text style={[styles.remindBtnText, { color: colors.text }]}>{locked ? 'Erinnert' : last ? 'Erneut' : 'Erinnern'}</Text>}
-                </Pressable>
+                    ? <ActivityIndicator size="small" color={colors.gradients?.remind?.fg ?? colors.textSecondary} />
+                    : <Text style={[styles.remindBtnText, { color: colors.gradients?.remind?.fg ?? colors.text }]}>{locked ? 'Erinnert' : last ? 'Erneut' : 'Erinnern'}</Text>}
+                </GradientButton>
               )}
             </View>
           );
@@ -1007,12 +1010,20 @@ export function DashboardScreen() {
               onSubmitEditing={handleQuickAddSubmit}
               returnKeyType="done"
             />
-            <Pressable
-              onPress={handleQuickAddSubmit}
-              style={({ pressed }) => [styles.quickAddSaveBtn, { backgroundColor: colors.accent, opacity: pressed ? 0.8 : 1 }]}
-            >
-              <Text style={styles.quickAddSaveText}>Speichern</Text>
-            </Pressable>
+            {(() => {
+              // TE-62: Speichern im Verlauf des Typs (Aufgabe blau / Idee gelb), sonst Akzentfläche.
+              const g = colors.gradients?.[quickAddKind === 'notiz' ? 'idea' : 'task'];
+              return (
+                <GradientButton
+                  gradient={g}
+                  onPress={handleQuickAddSubmit}
+                  style={styles.quickAddSaveBtn}
+                  fallbackStyle={{ backgroundColor: colors.accent }}
+                >
+                  <Text style={[styles.quickAddSaveText, { color: g ? g.fg : colors.accentFg }]}>Speichern</Text>
+                </GradientButton>
+              );
+            })()}
           </View>
         </View>
       </Modal>
@@ -1440,7 +1451,7 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
     // TE-54: Karte „Kinder erinnern“.
     remindHeader: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 14, paddingTop: 10, paddingBottom: 2 },
     remindHeaderText: { fontSize: 10.5, fontWeight: '800', letterSpacing: 1.2 },
-    remindBtn: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 5, minWidth: 74, alignItems: 'center' },
+    remindBtn: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 14, minHeight: 32, minWidth: 82, alignItems: 'center', justifyContent: 'center' },
     remindBtnText: { fontSize: 12, fontWeight: '700' },
     // Redesign: Kind-/Gruppen-Kopfzeile als normale Zeile innerhalb der
     // flachen Card (vorher: eigener, unbordered Label-Block über einer
