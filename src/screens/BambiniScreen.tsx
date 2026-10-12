@@ -583,7 +583,8 @@ export function BambiniScreen() {
       <View style={s.bTiles}>
         <View style={s.bTileRow}>
           <Pressable style={[s.bTile, s.bTileHalf]} onPress={() => setStoppedFilter((v) => (v === false ? null : false))}>
-            <LinearGradient colors={[colors.success, '#0E7A3A']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+            {/* TE-77: Verläufe aus der Button-Palette (theme.ts gradients). */}
+            <LinearGradient colors={['#30D158', '#00B8D9']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
             <View style={s.bTileHead}>
               <Text style={[s.bTileLabel, s.bOnColor]}>Aktiv</Text>
               <Ionicons name="people" size={18} color="#FFFFFF" />
@@ -591,11 +592,12 @@ export function BambiniScreen() {
             <Text style={[s.bTileNumber, s.bOnColor]}>{children.length - stoppedCount}</Text>
           </Pressable>
           <Pressable style={[s.bTile, s.bTileHalf]} onPress={() => setStoppedFilter((v) => (v === true ? null : true))}>
+            <LinearGradient colors={['#FF375F', '#7928CA']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
             <View style={s.bTileHead}>
-              <Text style={s.bTileLabel}>Aufgehört</Text>
-              <Ionicons name="exit-outline" size={18} color={colors.danger} />
+              <Text style={[s.bTileLabel, s.bOnColor]}>Aufgehört</Text>
+              <Ionicons name="exit-outline" size={18} color="#FFFFFF" />
             </View>
-            <Text style={[s.bTileNumber, { color: colors.danger }]}>{stoppedCount}</Text>
+            <Text style={[s.bTileNumber, s.bOnColor]}>{stoppedCount}</Text>
           </Pressable>
         </View>
 
@@ -606,15 +608,16 @@ export function BambiniScreen() {
           </View>
           <View style={s.bBars}>
             {yearCounts.map(({ year, count }) => {
-              const on = yearFilter.includes(year);
+              // TE-77: aktive Jahrgänge (alle, wenn kein Filter) im Verlauf, übrige gedimmt.
+              const on = yearFilter.length === 0 || yearFilter.includes(year);
               return (
                 <Pressable key={year} style={s.bBarCol} onPress={() => toggleYear(year)} accessibilityLabel={`Jahrgang ${year || 'ohne'} filtern`}>
-                  <Text style={[s.bBarCount, on && { color: colors.text }]}>{count}</Text>
+                  <Text style={[s.bBarCount, !on && s.bBarOff]}>{count}</Text>
                   <View style={[s.bBar, { height: 8 + (count / maxCount) * 52 }]}>
                     {on ? (
-                      <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.text }]} />
+                      <LinearGradient colors={['#00B8D9', '#0A5CFF', '#7B61FF']} style={StyleSheet.absoluteFill} />
                     ) : (
-                      <LinearGradient colors={['#64D2FF', colors.accent]} style={StyleSheet.absoluteFill} />
+                      <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.surfaceHigh }]} />
                     )}
                   </View>
                   <Text style={[s.bBarYear, on && { color: colors.text }]}>{year ? String(year).slice(2) : '—'}</Text>
@@ -1424,7 +1427,8 @@ function makeStyles(c: ThemeColors) {
     bBars: { flexDirection: 'row', alignItems: 'flex-end', gap: 10, marginTop: 4 },
     bBarCol: { flex: 1, alignItems: 'center', gap: 4 },
     bBar: { alignSelf: 'stretch', borderTopLeftRadius: 8, borderTopRightRadius: 8, borderBottomLeftRadius: 3, borderBottomRightRadius: 3, overflow: 'hidden' },
-    bBarCount: { color: c.textSecondary, fontSize: 12, fontWeight: '700' },
+    bBarCount: { color: c.text, fontSize: 12, fontWeight: '700' },
+    bBarOff: { color: c.textMuted },
     bBarYear: { color: c.textMuted, fontSize: 12 },
     bDot: { width: 7, height: 7, borderRadius: 4 },
 
