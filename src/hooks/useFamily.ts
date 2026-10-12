@@ -49,7 +49,8 @@ export function useFamily(): FamilyState {
     const unsub = subscribeToUserFamily(user.uid, async (id) => {
       setFamilyId(id);
       if (id) {
-        const m = await getFamilyMeta(id);
+        // TE-75: offline ohne Cache-Treffer würde getDoc werfen → sonst ewiger Lade-Spinner.
+        const m = await getFamilyMeta(id).catch(() => null);
         setMeta(m);
       } else {
         setMeta(null);

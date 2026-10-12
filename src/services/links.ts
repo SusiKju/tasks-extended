@@ -13,13 +13,10 @@ import { db } from './firebase';
 import {
   collection,
   doc,
-  addDoc,
-  updateDoc,
-  deleteDoc,
   onSnapshot,
-  writeBatch,
   Unsubscribe,
 } from 'firebase/firestore';
+import { addDoc, updateDoc, deleteDoc, writeBatch } from './firestoreWrites';
 
 export interface LinkItem {
   id: string;

@@ -13,7 +13,8 @@
  */
 
 import { db } from './firebase';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
+import { setDoc } from './firestoreWrites';
 import { FunTileTheme } from '../types';
 
 /**

@@ -18,12 +18,23 @@ import { getOwnMember, getChildIdForEmail } from '../src/services/family';
 import { useAutoReloadOnNewVersion } from '../src/hooks/useAutoReloadOnNewVersion';
 import { AppContextProvider } from '../src/contexts/AppContext';
 import { GoogleRefreshIndicator } from '../src/components/GoogleRefreshIndicator';
+import { OfflineBanner } from '../src/components/OfflineBanner';
+import { isOffline } from '../src/services/firestoreWrites';
 
 export default function RootLayout() {
   const { colors, isDark } = useTheme();
 
   // TE-74: gecachtes GitHub-Pages-Bundle bei neuer Version still selbst neu laden.
   useAutoReloadOnNewVersion();
+
+  // TE-75: Service Worker für den Offline-Modus – nur im CI-Build (GitHub Pages),
+  // nicht im lokalen Dev-Server, wo er HMR mit gecachten Bundles stören würde.
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !process.env.EXPO_PUBLIC_GIT_SHA || !('serviceWorker' in navigator)) return;
+    navigator.serviceWorker.register('/tasks-extended/sw.js').catch((e) => {
+      console.warn('[Offline] Service Worker nicht registriert:', e);
+    });
+  }, []);
 
   // Auf GitHub Pages: Firebase Redirect-Ergebnis beim App-Start auswerten.
   // onAuthStateChanged feuert danach automatisch – hier nur Fehler abfangen.
@@ -59,6 +70,7 @@ export default function RootLayout() {
     if (!user || !familyId) return;
 
     const runSync = () => {
+      if (isOffline()) return; // TE-75: offline kein Google-Sync (würde nur Token-Pop-ups auslösen)
       syncRef.current().catch(() => {});
       syncBirthdaysRef.current().catch(() => {});
     };
@@ -202,6 +214,7 @@ export default function RootLayout() {
         </Head>
       )}
       <StatusBar style={isDark ? 'light' : 'dark'} />
+      <OfflineBanner />
       <Stack>
         <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="login" options={{ headerShown: false }} />

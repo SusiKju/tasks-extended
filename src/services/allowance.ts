@@ -14,11 +14,10 @@
 
 import {
   doc,
-  updateDoc,
-  setDoc,
   onSnapshot,
   Unsubscribe,
 } from 'firebase/firestore';
+import { updateDoc, setDoc } from './firestoreWrites';
 import { db } from './firebase';
 
 /** Ein Monatseintrag im Taschengeld-Verlauf. Map-Key ist "YYYY-MM". */

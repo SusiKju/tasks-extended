@@ -11,10 +11,11 @@
 
 import { db } from './firebase';
 import {
-  collection, doc,
-  addDoc, setDoc, deleteDoc,
+  collection,
+  doc,
   onSnapshot,
 } from 'firebase/firestore';
+import { addDoc, setDoc, deleteDoc } from './firestoreWrites';
 import { QuickNote } from '../types';
 
 /** Abonniert alle schnellen Notizen des Users in Echtzeit (neueste zuerst). */

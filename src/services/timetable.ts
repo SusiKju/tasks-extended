@@ -9,7 +9,8 @@
  * abgedeckt, kein Rules-Deploy nötig.
  */
 
-import { doc, setDoc, updateDoc, onSnapshot, Unsubscribe } from 'firebase/firestore';
+import { doc, onSnapshot, Unsubscribe } from 'firebase/firestore';
+import { setDoc, updateDoc } from './firestoreWrites';
 import { db } from './firebase';
 
 export interface TimetableEntry {

@@ -15,7 +15,8 @@
 
 import uuid from 'react-native-uuid';
 import { db } from './firebase';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
+import { setDoc } from './firestoreWrites';
 import {
   loadFussballKachel,
   saveFussballKachel,

@@ -14,7 +14,8 @@
  */
 
 import { db } from './firebase';
-import { doc, setDoc, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { setDoc } from './firestoreWrites';
 import { AppSettings } from '../types';
 
 /** Felder, die NICHT nach Firestore synchronisiert werden (geräte-/sitzungsgebunden). */

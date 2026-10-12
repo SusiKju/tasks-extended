@@ -11,12 +11,10 @@ import { db } from './firebase';
 import {
   collection,
   doc,
-  addDoc,
-  updateDoc,
-  deleteDoc,
   onSnapshot,
   Unsubscribe,
 } from 'firebase/firestore';
+import { addDoc, updateDoc, deleteDoc } from './firestoreWrites';
 
 /** Reifegrad eines Geistesblitzes. 'aufgabe' ist nur noch Ziel-Markierung: beim
  *  Umwandeln wird der Geistesblitz gelöscht (TE-16); Altbestand wird ausgeblendet. */

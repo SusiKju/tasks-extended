@@ -8,7 +8,8 @@
  */
 
 import { db } from './firebase';
-import { doc, setDoc, getDoc, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc, onSnapshot } from 'firebase/firestore';
+import { setDoc } from './firestoreWrites';
 
 /**
  * Abonniert den Scratchpad-Inhalt des Users in Echtzeit.

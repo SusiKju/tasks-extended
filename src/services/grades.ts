@@ -9,7 +9,8 @@
  * kein manuelles Noten-Eintragen in dieser Version.
  */
 
-import { doc, setDoc, updateDoc, arrayUnion, onSnapshot, Unsubscribe } from 'firebase/firestore';
+import { doc, arrayUnion, onSnapshot, Unsubscribe } from 'firebase/firestore';
+import { setDoc, updateDoc } from './firestoreWrites';
 import { db } from './firebase';
 
 export interface GradeEntry {

@@ -16,7 +16,8 @@
  */
 
 import { db } from './firebase';
-import { doc, setDoc, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { setDoc } from './firestoreWrites';
 
 /**
  * Abonniert die als wichtig markierten Task-IDs (googleEventId) des Users in

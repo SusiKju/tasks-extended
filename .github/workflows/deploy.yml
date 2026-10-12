@@ -34,6 +34,8 @@ jobs:
       # dieselbe SHA steckt auch im Bundle (EXPO_PUBLIC_GIT_SHA oben), die App
       # vergleicht beide und lädt sich bei Mismatch selbst neu.
       - run: echo '{"sha":"${{ github.sha }}"}' > dist/version.json
+      # TE-75: Service Worker für den Offline-Modus mit SHA + Precache-Liste befüllen.
+      - run: node scripts/build-sw.mjs ${{ github.sha }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

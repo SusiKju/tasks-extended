@@ -16,12 +16,10 @@
 import {
   collection,
   doc,
-  setDoc,
-  updateDoc,
-  deleteDoc,
   onSnapshot,
   Unsubscribe,
 } from 'firebase/firestore';
+import { setDoc, updateDoc, deleteDoc } from './firestoreWrites';
 import { db } from './firebase';
 import { localDateStr } from '../utils/dateFormat';
 

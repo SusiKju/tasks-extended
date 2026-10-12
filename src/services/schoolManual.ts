@@ -27,7 +27,8 @@
  */
 
 import uuid from 'react-native-uuid';
-import { doc, setDoc, updateDoc, onSnapshot, Unsubscribe } from 'firebase/firestore';
+import { doc, onSnapshot, Unsubscribe } from 'firebase/firestore';
+import { setDoc, updateDoc } from './firestoreWrites';
 import { db } from './firebase';
 
 export const makeId = (): string => String(uuid.v4());

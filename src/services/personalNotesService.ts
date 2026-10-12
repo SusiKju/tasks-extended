@@ -12,10 +12,11 @@
 
 import { db } from './firebase';
 import {
-  collection, doc,
-  deleteDoc,
+  collection,
+  doc,
   onSnapshot,
 } from 'firebase/firestore';
+import { deleteDoc } from './firestoreWrites';
 import { Note } from '../types';
 
 /** Abonniert alle Notizen des Users in Echtzeit. */

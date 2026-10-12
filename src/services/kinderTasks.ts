@@ -16,9 +16,6 @@ import {
   collection,
   doc,
   getDocs,
-  setDoc,
-  updateDoc,
-  deleteDoc,
   onSnapshot,
   getDoc,
   query,
@@ -26,6 +23,7 @@ import {
   limit,
   Unsubscribe,
 } from 'firebase/firestore';
+import { setDoc, updateDoc, deleteDoc } from './firestoreWrites';
 import { addDays, addMonths, addWeeks, format, parseISO } from 'date-fns';
 import { db } from './firebase';
 

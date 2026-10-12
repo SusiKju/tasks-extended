@@ -1,5 +1,10 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { initializeFirestore, getFirestore, memoryLocalCache } from 'firebase/firestore';
+import {
+  initializeFirestore,
+  getFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+} from 'firebase/firestore';
 import { Platform } from 'react-native';
 
 const firebaseConfig = {
@@ -13,12 +18,17 @@ const firebaseConfig = {
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
-// Web: memoryLocalCache vermeidet IndexedDB-Multi-Client-Problem bei HMR.
+// Web (TE-75): persistenter IndexedDB-Cache → zuletzt geladene Daten sind offline
+// lesbar, offline angelegte Writes überleben einen Reload und werden beim
+// Reconnect automatisch synchronisiert. Der Multi-Tab-Manager erlaubt mehrere
+// offene Tabs (und HMR) auf denselben Cache. Schreib-Promises: siehe firestoreWrites.ts.
 // Native: Standard-Verhalten (kein expliziter Cache nötig).
 let _db: ReturnType<typeof getFirestore>;
 if (Platform.OS === 'web') {
   try {
-    _db = initializeFirestore(app, { localCache: memoryLocalCache() });
+    _db = initializeFirestore(app, {
+      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+    });
   } catch {
     // Firestore bereits initialisiert (HMR-Reload) – bestehende Instanz verwenden.
     _db = getFirestore(app);

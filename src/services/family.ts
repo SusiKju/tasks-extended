@@ -14,14 +14,12 @@ import {
   collection,
   doc,
   getDoc,
-  setDoc,
-  deleteDoc,
   onSnapshot,
   query,
   Unsubscribe,
   serverTimestamp,
-  writeBatch,
 } from 'firebase/firestore';
+import { setDoc, deleteDoc, writeBatch } from './firestoreWrites';
 import { User } from 'firebase/auth';
 import { db } from './firebase';
 

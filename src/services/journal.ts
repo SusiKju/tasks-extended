@@ -10,7 +10,8 @@
  * Vergangenes fällt automatisch raus.
  */
 
-import { doc, setDoc, updateDoc, arrayUnion, onSnapshot, Unsubscribe } from 'firebase/firestore';
+import { doc, arrayUnion, onSnapshot, Unsubscribe } from 'firebase/firestore';
+import { setDoc, updateDoc } from './firestoreWrites';
 import { db } from './firebase';
 
 export interface JournalNote {
