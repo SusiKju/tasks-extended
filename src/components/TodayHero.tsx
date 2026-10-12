@@ -2,7 +2,7 @@
  * TodayHero.tsx (TE-60)
  *
  * Kopfkarte des Dashboards aus dem Aurora-Entwurf: links ein Tagesring
- * (Anteil des Tages, der schon vergangen ist) mit Uhrzeit + Temperatur,
+ * (12-h-Ziffernblatt mit Terminstrichen, TE-71) mit Uhrzeit + Temperatur,
  * rechts der nächste Termin von heute und der danach. Darunter drei
  * Schnell-Anlegen-Buttons: Aufgabe, Idee, Geistesblitz.
  *
@@ -38,16 +38,62 @@ function gradientAt(stops: string[], t: number): string {
   return `rgb(${c[0]},${c[1]},${c[2]})`;
 }
 
-function DayRing({ progress, track, children }: { progress: number; track: string; children: React.ReactNode }) {
-  const filled = Math.round(progress * SEGMENTS);
+const HALF_DAY = 12 * 60;
+const MARKER_OVERHANG = 7;
+
+/**
+ * TE-71: 12-Stunden-Ziffernblatt der aktuellen Tageshälfte (oben = 12/0 Uhr).
+ * Ein Segment = 12 min, jedes 5. ist eine Stundenmarke (länger, heller).
+ * Termine der Hälfte stehen als lange Striche nach außen; der nächste ist
+ * dicker, vergangene blass. Termine der anderen Hälfte werden bewusst nicht
+ * gezeigt – sie würden sonst über die schon gefüllte Zeit fallen.
+ */
+function DayRing({
+  nowMin,
+  eventMins,
+  track,
+  hourTrack,
+  marker,
+  children,
+}: {
+  nowMin: number;
+  eventMins: number[];
+  track: string;
+  hourTrack: string;
+  marker: string;
+  children: React.ReactNode;
+}) {
+  const start = nowMin >= HALF_DAY ? HALF_DAY : 0;
+  const filled = Math.round(((nowMin - start) / HALF_DAY) * SEGMENTS);
+  const inHalf = eventMins.filter((m) => m >= start && m < start + HALF_DAY);
+  const nextMin = Math.min(...inHalf.filter((m) => m >= nowMin));
   return (
-    <View style={styles.ring} accessibilityRole="image" accessibilityLabel={`${Math.round(progress * 100)} Prozent des Tages vergangen`}>
-      {Array.from({ length: SEGMENTS }, (_, i) => (
-        <View key={i} style={[StyleSheet.absoluteFill, { transform: [{ rotate: `${(i * 360) / SEGMENTS}deg` }] }]}>
+    <View
+      style={styles.ring}
+      accessibilityRole="image"
+      accessibilityLabel={`Uhr, ${inHalf.filter((m) => m >= nowMin).length} anstehende Termine bis ${start ? '24' : '12'} Uhr`}
+    >
+      {Array.from({ length: SEGMENTS }, (_, i) => {
+        const hour = i % 5 === 0;
+        return (
+          <View key={i} style={[StyleSheet.absoluteFill, { transform: [{ rotate: `${(i * 360) / SEGMENTS}deg` }] }]}>
+            <View
+              style={[
+                styles.segment,
+                hour && styles.hourSegment,
+                { backgroundColor: i < filled ? gradientAt(RING_STOPS, filled > 1 ? i / (filled - 1) : 0) : hour ? hourTrack : track },
+              ]}
+            />
+          </View>
+        );
+      })}
+      {inHalf.map((m, i) => (
+        <View key={`e${i}`} style={[StyleSheet.absoluteFill, { transform: [{ rotate: `${((m - start) / HALF_DAY) * 360}deg` }] }]}>
           <View
             style={[
-              styles.segment,
-              { backgroundColor: i < filled ? gradientAt(RING_STOPS, filled > 1 ? i / (filled - 1) : 0) : track },
+              styles.marker,
+              m === nextMin && styles.markerNext,
+              { backgroundColor: marker, opacity: m < nowMin ? 0.35 : 1 },
             ]}
           />
         </View>
@@ -88,7 +134,14 @@ export function TodayHero({
     return () => { cancelled = true; };
   }, []);
 
-  const progress = (now.getHours() * 60 + now.getMinutes()) / (24 * 60);
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const eventMins = useMemo(
+    () =>
+      todayEvents
+        .filter((e) => !e.allDay && new Date(e.start).toDateString() === now.toDateString())
+        .map((e) => { const d = new Date(e.start); return d.getHours() * 60 + d.getMinutes(); }),
+    [todayEvents, now],
+  );
 
   // Nur getimte Termine, die noch nicht begonnen haben – ganztägige haben
   // keinen „als Nächstes"-Zeitpunkt.
@@ -103,7 +156,7 @@ export function TodayHero({
   return (
     <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.softBorder }]}>
       <View style={styles.top}>
-        <DayRing progress={progress} track={colors.surfaceHigh}>
+        <DayRing nowMin={nowMin} eventMins={eventMins} track={colors.surfaceHigh} hourTrack={colors.textMuted} marker={colors.text}>
           <Text style={[styles.time, { color: colors.text }]}>{hhmm(now)}</Text>
           {weather && (
             <Text style={[styles.temp, { color: colors.textMuted }]}>
@@ -165,8 +218,11 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   top: { flexDirection: 'row', alignItems: 'center', gap: 16 },
-  ring: { width: RING_SIZE, height: RING_SIZE },
+  ring: { width: RING_SIZE, height: RING_SIZE, margin: MARKER_OVERHANG },
   segment: { position: 'absolute', top: 0, left: RING_SIZE / 2 - 1.5, width: 3, height: 9, borderRadius: 2 },
+  hourSegment: { height: 12 },
+  marker: { position: 'absolute', top: -MARKER_OVERHANG, left: RING_SIZE / 2 - 1.5, width: 3, height: 9 + MARKER_OVERHANG + 1, borderRadius: 2 },
+  markerNext: { left: RING_SIZE / 2 - 2, width: 4 },
   ringCenter: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
   time: { fontSize: 20, fontWeight: '800', fontVariant: ['tabular-nums'] },
   temp: { fontSize: 11 },
