@@ -8,17 +8,24 @@ const BASE = '/tasks-extended/';
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE)
-      // Einzeln statt addAll: eine fehlende Datei soll nicht den ganzen Worker kippen.
-      .then((cache) => Promise.all([BASE, ...PRECACHE].map((u) => cache.add(u).catch(() => {}))))
-      .then(() => self.skipWaiting()),
+    caches.open(CACHE).then(async (cache) => {
+      // Pflicht: index.html (am HTTP-Cache vorbei) + JS-Bundle. Fehlt eins, scheitert die
+      // Installation und der bisherige Worker mit seinem vollständigen Cache bleibt aktiv –
+      // sonst würde ein halb gefüllter Cache offline zur Browser-Fehlerseite führen.
+      await cache.add(new Request(BASE, { cache: 'reload' }));
+      await cache.addAll(PRECACHE.filter((u) => u.endsWith('.js')));
+      // Rest (Bilder, Fonts) einzeln: eine fehlende Datei soll nicht alles kippen.
+      await Promise.all(PRECACHE.map((u) => cache.add(u).catch(() => {})));
+    }).then(() => self.skipWaiting()),
   );
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+      // Nur eigene alte Caches löschen: andere Apps auf susikju.github.io teilen sich denselben
+      // Cache-Speicher (gleiche Origin), z. B. expense-splitter.
+      .then((keys) => Promise.all(keys.filter((k) => k.startsWith('te-') && k !== CACHE).map((k) => caches.delete(k))))
       .then(() => self.clients.claim()),
   );
 });
@@ -34,7 +41,19 @@ self.addEventListener('fetch', (event) => {
 
   if (req.mode === 'navigate') {
     // Netz zuerst, damit eine neue Version sofort ankommt; offline die gecachte index.html.
-    event.respondWith(fetch(req).catch(() => caches.match(BASE)));
+    event.respondWith(
+      fetch(req)
+        .then((res) => {
+          // Online geladene index.html als Offline-Stand merken (GitHub Pages liefert
+          // Unterseiten wie /dashboard als 404 mit index-Inhalt → nur res.ok übernehmen).
+          if (res.ok) {
+            const copy = res.clone();
+            caches.open(CACHE).then((cache) => cache.put(BASE, copy));
+          }
+          return res;
+        })
+        .catch(() => caches.match(BASE)),
+    );
     return;
   }
 
