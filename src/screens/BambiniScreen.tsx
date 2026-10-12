@@ -23,6 +23,7 @@ import {
   Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme, ThemeColors } from '../utils/theme';
 import { GradientButton, PLUS_BUTTON, PLUS_ICON_SIZE } from '../components/GradientButton';
 import { useFamily } from '../hooks/useFamily';
@@ -573,6 +574,79 @@ export function BambiniScreen() {
     );
   };
 
+  // TE-76: Bento-Kacheln – Zahlen, Jahrgangs-Balken (antippen = filtern), Beitrag, Vereinsseite.
+  const renderBentoTiles = () => {
+    const maxCount = Math.max(1, ...yearCounts.map((y) => y.count));
+    const toggleYear = (year: number) =>
+      setYearFilter((v) => (v.includes(year) ? v.filter((y) => y !== year) : [...v, year]));
+    return (
+      <View style={s.bTiles}>
+        <View style={s.bTileRow}>
+          <Pressable style={[s.bTile, s.bTileHalf]} onPress={() => setStoppedFilter((v) => (v === false ? null : false))}>
+            <LinearGradient colors={[colors.success, '#0E7A3A']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+            <View style={s.bTileHead}>
+              <Text style={[s.bTileLabel, s.bOnColor]}>Aktiv</Text>
+              <Ionicons name="people" size={18} color="#FFFFFF" />
+            </View>
+            <Text style={[s.bTileNumber, s.bOnColor]}>{children.length - stoppedCount}</Text>
+          </Pressable>
+          <Pressable style={[s.bTile, s.bTileHalf]} onPress={() => setStoppedFilter((v) => (v === true ? null : true))}>
+            <View style={s.bTileHead}>
+              <Text style={s.bTileLabel}>Aufgehört</Text>
+              <Ionicons name="exit-outline" size={18} color={colors.danger} />
+            </View>
+            <Text style={[s.bTileNumber, { color: colors.danger }]}>{stoppedCount}</Text>
+          </Pressable>
+        </View>
+
+        <View style={s.bTile}>
+          <View style={s.bTileHead}>
+            <Text style={s.bTileLabel}>Jahrgänge</Text>
+            <Ionicons name="bar-chart" size={18} color={colors.accent} />
+          </View>
+          <View style={s.bBars}>
+            {yearCounts.map(({ year, count }) => {
+              const on = yearFilter.includes(year);
+              return (
+                <Pressable key={year} style={s.bBarCol} onPress={() => toggleYear(year)} accessibilityLabel={`Jahrgang ${year || 'ohne'} filtern`}>
+                  <Text style={[s.bBarCount, on && { color: colors.text }]}>{count}</Text>
+                  <View style={[s.bBar, { height: 8 + (count / maxCount) * 52 }]}>
+                    {on ? (
+                      <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.text }]} />
+                    ) : (
+                      <LinearGradient colors={['#64D2FF', colors.accent]} style={StyleSheet.absoluteFill} />
+                    )}
+                  </View>
+                  <Text style={[s.bBarYear, on && { color: colors.text }]}>{year ? String(year).slice(2) : '—'}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+
+        <View style={s.bTileRow}>
+          <Pressable style={[s.bTile, s.bTileHalf]} onPress={() => Linking.openURL('https://serkowitzer-fsv.de/dokumente/')}>
+            <View style={[s.bIconBadge, { backgroundColor: colors.warning + '26' }]}>
+              <Ionicons name="wallet" size={16} color={colors.warning} />
+            </View>
+            <Text style={s.bTileTitle}>Beitrag</Text>
+            <Text style={s.bTileSub}>70 € / Jahr{'\n'}35 € / Halbjahr</Text>
+          </Pressable>
+          <Pressable style={[s.bTile, s.bTileHalf]} onPress={() => Linking.openURL('https://serkowitzer-fsv.de/g-junioren/#')}>
+            <View style={s.bTileHead}>
+              <View style={[s.bIconBadge, { backgroundColor: colors.accent + '26' }]}>
+                <Ionicons name="football" size={16} color={colors.accent} />
+              </View>
+              <Ionicons name="arrow-up-outline" size={16} color={colors.textMuted} style={{ transform: [{ rotate: '45deg' }] }} />
+            </View>
+            <Text style={s.bTileTitle}>Vereinsseite</Text>
+            <Text style={s.bTileSub}>G-Junioren auf serkowitzer-fsv.de</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  };
+
   // Gruppen nur bei Jahrgangs-Sortierung; bei „erstes Mal" eine einzige Gruppe ohne Kopf.
   const bentoGroups: { year: number | null; items: Child[] }[] = [];
   if (bento) {
@@ -592,7 +666,7 @@ export function BambiniScreen() {
         <>
           {children.length > 0 ? (
             <View style={s.filterToggleRow}>
-              <Text style={s.overview} numberOfLines={2}>{overviewText}</Text>
+              {bento ? <View style={s.bSpacer} /> : <Text style={s.overview} numberOfLines={2}>{overviewText}</Text>}
               <Pressable
                 style={[s.filterToggleBtn, filtersOpen && s.filterToggleBtnActive]}
                 onPress={() => setFiltersOpen((v) => !v)}
@@ -677,6 +751,9 @@ export function BambiniScreen() {
           ) : null}
 
           <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
+            {/* TE-76 (Bento Dark): Kachel-Kopf statt Übersichtszeile und Info-Karten unten. */}
+            {bento && children.length > 0 ? renderBentoTiles() : null}
+
             {/* TE-101/TE-103: markierte Notiz-Items (wichtig/nächste Aufgabe) als gelbe Alert-Box, gleiches Gelb wie der Notizen-FAB. */}
             {markedNotizItems.length > 0 ? (
               <View style={s.markedBox}>
@@ -727,6 +804,8 @@ export function BambiniScreen() {
               })
             )}
 
+            {!bento ? (
+            <>
             {/* TE-47: Beitragshöhe aus der Beitragsordnung 2026 (serkowitzer-fsv.de),
                 Link führt zur Dokumente-Seite (Mitgliedsantrag, Beitragsordnung). */}
             <Pressable
@@ -752,6 +831,8 @@ export function BambiniScreen() {
               </View>
               <Ionicons name="open-outline" size={16} color={colors.textSecondary} />
             </Pressable>
+            </>
+            ) : null}
           </ScrollView>
         </>
       )}
@@ -1326,6 +1407,25 @@ function makeStyles(c: ThemeColors) {
     bName: { color: c.text, fontSize: 15, fontWeight: '600', flexShrink: 1 },
     bParent: { color: c.textMuted, fontSize: 12, marginTop: 1 },
     bDots: { flexDirection: 'row', gap: 4 },
+
+    // TE-76: Bento-Kacheln oben.
+    bSpacer: { flex: 1 },
+    bTiles: { gap: 8, marginBottom: 18 },
+    bTileRow: { flexDirection: 'row', gap: 8 },
+    bTile: { backgroundColor: c.surface, borderRadius: 18, padding: 14, overflow: 'hidden', gap: 6 },
+    bTileHalf: { flex: 1 },
+    bTileHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    bTileLabel: { color: c.textMuted, fontSize: 12, fontWeight: '600', letterSpacing: 0.6, textTransform: 'uppercase' },
+    bTileNumber: { color: c.text, fontSize: 40, fontWeight: '800', lineHeight: 44 },
+    bOnColor: { color: '#FFFFFF' },
+    bTileTitle: { color: c.text, fontSize: 16, fontWeight: '700' },
+    bTileSub: { color: c.textMuted, fontSize: 13, lineHeight: 18 },
+    bIconBadge: { width: 30, height: 30, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+    bBars: { flexDirection: 'row', alignItems: 'flex-end', gap: 10, marginTop: 4 },
+    bBarCol: { flex: 1, alignItems: 'center', gap: 4 },
+    bBar: { alignSelf: 'stretch', borderTopLeftRadius: 8, borderTopRightRadius: 8, borderBottomLeftRadius: 3, borderBottomRightRadius: 3, overflow: 'hidden' },
+    bBarCount: { color: c.textSecondary, fontSize: 12, fontWeight: '700' },
+    bBarYear: { color: c.textMuted, fontSize: 12 },
     bDot: { width: 7, height: 7, borderRadius: 4 },
 
     fab: {
