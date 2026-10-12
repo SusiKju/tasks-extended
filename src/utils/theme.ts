@@ -1,3 +1,6 @@
+import { useStore } from '../store';
+import { ThemeName } from '../types';
+
 export interface ThemeColors {
   background: string;
   surface: string;
@@ -23,6 +26,10 @@ export interface ThemeColors {
   dangerFg: string;
   warningFg: string;
   successFg: string;
+  /** TE-61: Dashboard-Kartenfläche/-rand (vorher fest CARD_EDGE) und gedimmter Rand (vorher SOFT_BORDER). */
+  card: string;
+  cardBorder: string;
+  softBorder: string;
 }
 
 // „Ruhig": Schwarz-Weiß, ohne Glow & Animationen. Reines Schwarz, weißer Text
@@ -44,11 +51,12 @@ const CALM_BORDER = '#2A578C'; // = #4A9EFF * ~0.55, kühles Blau, dezent
 // --app-border aus dem Redesign-Artefakt. Bewusst nicht als globaler
 // colors.border-Ersatz gedacht (das würde app-weit den kühlen Blauton
 // kippen), sondern gezielt dort importiert, wo das Redesign es vorsieht.
-export const SOFT_BORDER = '#242429';
+const SOFT_BORDER = '#242429';
 // TE-55: Dashboard-Karten im Look des Sendepause-Banners (FuerUnsReminderBanner,
 // SAD/SAD_BORDER): Schiefergrau-Fläche, dünner grauer Rand, Radius 12.
-export const CARD_EDGE = { backgroundColor: '#23262e', borderColor: '#4a4f5c', borderRadius: 12 } as const;
-const COLORS: ThemeColors = {
+/** TE-61: Karten-Look als Style-Objekt, jetzt aus den Theme-Farben statt fest verdrahtet. */
+export const cardEdge = (c: ThemeColors) => ({ backgroundColor: c.card, borderColor: c.cardBorder, borderRadius: 12 });
+const RUHIG: ThemeColors = {
   background:    '#000000',   // reines Schwarz
   surface:       '#0A0A0A',
   surfaceHigh:   '#181818',
@@ -73,6 +81,80 @@ const COLORS: ThemeColors = {
   dangerFg: '#000000',
   warningFg: '#000000',
   successFg: '#000000',
+  card: '#23262e',
+  cardBorder: '#4a4f5c',
+  softBorder: SOFT_BORDER,
+};
+
+// TE-61 „Bento Dark": Apple-Dunkelmodus – reines Schwarz, Kacheln in
+// iOS-Systemgrau, Systemblau als Akzent. Text-Kontraste ≥ 4.5:1 auf surfaceHigh.
+const BENTO_NIGHT: ThemeColors = {
+  background:    '#000000',
+  surface:       '#1C1C1E',
+  surfaceHigh:   '#2C2C2E',
+  text:          '#F5F5F7',
+  textSecondary: '#C7C7CC',
+  textMuted:     '#A1A1A6',   // 5.4:1 auf #2C2C2E
+  accent:        '#0A84FF',
+  accentNeon:    '#0A84FF',
+  success:       '#30D158',
+  warning:       '#FFD60A',
+  danger:        '#FF453A',
+  border:        '#38383A',
+  tabBar:        '#1C1C1E',
+  tabBarBorder:  '#38383A',
+  header:        '#000000',
+  inputBackground: '#2C2C2E',
+  placeholder:   '#9A9AA0',   // 5.0:1 auf #2C2C2E
+  glowAccent:  'transparent',
+  glowDanger:  'transparent',
+  glowSuccess: 'transparent',
+  accentFg: '#FFFFFF',   // 3.7:1 – wie iOS; reicht nur für fette/große Button-Schrift
+  dangerFg: '#000000',
+  warningFg: '#000000',
+  successFg: '#000000',
+  card: '#1C1C1E',
+  cardBorder: '#2C2C2E',
+  softBorder: '#2C2C2E',
+};
+
+// TE-61 „Aurora": tiefes Nachtviolett, Akzente aus dem Nordlicht-Verlauf
+// (Mint, Violett, Pink). Flächen bleiben deckend – RN-Screens setzen ihren
+// Hintergrund selbst, ein App-weiter Verlauf würde überdeckt.
+const AURORA: ThemeColors = {
+  background:    '#120B26',
+  surface:       '#1C1436',
+  surfaceHigh:   '#2A2050',
+  text:          '#FFFFFF',
+  textSecondary: '#D4CCF0',
+  textMuted:     '#A99FCB',   // 6.0:1 auf #2A2050
+  accent:        '#B388FF',
+  accentNeon:    '#00F5A0',
+  success:       '#00E59A',
+  warning:       '#F5C26B',
+  danger:        '#FF6FA8',
+  border:        '#3A2E66',
+  tabBar:        '#140D2B',
+  tabBarBorder:  '#3A2E66',
+  header:        '#120B26',
+  inputBackground: '#241B45',
+  placeholder:   '#A39AC8',   // 6.1:1 auf #241B45
+  glowAccent:  'rgba(123, 47, 247, 0.35)',
+  glowDanger:  'rgba(247, 37, 133, 0.30)',
+  glowSuccess: 'rgba(0, 245, 160, 0.30)',
+  accentFg: '#120B26',
+  dangerFg: '#120B26',
+  warningFg: '#120B26',
+  successFg: '#120B26',
+  card: '#1E1640',
+  cardBorder: '#3A2E66',
+  softBorder: '#33295C',
+};
+
+export const THEMES: Record<ThemeName, { label: string; description: string; colors: ThemeColors }> = {
+  'ruhig':       { label: 'Ruhig', description: 'Schwarz-Weiß, Inhaltsfarben als Graustufen', colors: RUHIG },
+  'bento-night': { label: 'Bento Dark', description: 'Apple-Dunkelmodus mit Systemblau', colors: BENTO_NIGHT },
+  'aurora':      { label: 'Aurora', description: 'Nachtviolett mit Nordlicht-Akzenten', colors: AURORA },
 };
 
 /** Relative Luminanz (WCAG) einer Hex-Farbe (#RGB / #RRGGBB), 0..1. */
@@ -153,11 +235,15 @@ export function useTheme(): {
   /** Schwarz-Weiß-Theme wandelt Inhaltsfarben zu Graustufe. */
   mono: (hex: string) => string;
 } {
+  const name = useStore((s) => s.settings.theme);
+  const resolved: ThemeName = THEMES[name] ? name : 'ruhig';
+  // Nur „Ruhig" ist schwarz-weiß; die anderen Themes zeigen Inhaltsfarben echt.
+  const isMono = resolved === 'ruhig';
   return {
-    colors: COLORS,
+    colors: THEMES[resolved].colors,
     isDark: true,
-    isMono: true,
+    isMono,
     reduceMotion: true,
-    mono: toGray,
+    mono: isMono ? toGray : (hex: string) => hex,
   };
 }

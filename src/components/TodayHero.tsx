@@ -13,7 +13,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ThemeColors, SOFT_BORDER } from '../utils/theme';
+import { ThemeColors } from '../utils/theme';
 import { CalendarEvent } from '../services/googleCalendar';
 import { fetchWeatherForecast, DailyWeather } from '../services/weather';
 
@@ -100,7 +100,7 @@ export function TodayHero({
   );
 
   return (
-    <View style={[styles.card, { backgroundColor: colors.surface }]}>
+    <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.softBorder }]}>
       <View style={styles.top}>
         <DayRing progress={progress} track={colors.surfaceHigh}>
           <Text style={[styles.time, { color: colors.text }]}>{hhmm(now)}</Text>
@@ -153,7 +153,6 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: SOFT_BORDER,
     padding: 14,
     gap: 14,
   },

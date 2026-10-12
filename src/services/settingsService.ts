@@ -29,6 +29,8 @@ export const LOCAL_ONLY_SETTING_KEYS: (keyof AppSettings)[] = [
   // TE-49: Tab-Sichtbarkeit ist bewusst pro Elternteil/Gerät gedacht (z.B.
   // braucht nicht jeder Elternteil den Bambini-Tab) – kein Familien-Sync.
   'visibleTabs',
+  // TE-61: Farbschema ist persönlicher Geschmack pro Gerät, kein Familien-Sync.
+  'theme',
   // TE-46: Kalender-Auswahl gehört zum Google-Konto der Person, die auf dem
   // Gerät angemeldet ist – Dianas Token kann Matthias' Kalender nicht lesen.
   'googleCalendarId',

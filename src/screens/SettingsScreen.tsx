@@ -16,8 +16,8 @@ import { Clipboard } from 'react-native';
 import Constants from 'expo-constants';
 import { Ionicons } from '@expo/vector-icons';
 import { useStore } from '../store';
-import { useTheme, ThemeColors, neonGlow } from '../utils/theme';
-import { DASHBOARD_BLOCKS, DEFAULT_DASHBOARD_BLOCKS, TOGGLEABLE_TABS, DEFAULT_VISIBLE_TABS } from '../types';
+import { useTheme, ThemeColors, neonGlow, THEMES } from '../utils/theme';
+import { DASHBOARD_BLOCKS, DEFAULT_DASHBOARD_BLOCKS, TOGGLEABLE_TABS, DEFAULT_VISIBLE_TABS, ThemeName } from '../types';
 
 import {
   signInWithGoogle,
@@ -1054,6 +1054,40 @@ export function SettingsScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* Darstellung (TE-61): Theme-Auswahl, nur auf diesem Gerät */}
+      <View style={styles.section}>
+        <Text style={styles.sectionHeader}>Darstellung</Text>
+        <Text style={[styles.rowSubtitle, { paddingHorizontal: 4, marginBottom: 6 }]}>
+          Farbschema der App – gilt nur auf diesem Gerät.
+        </Text>
+        {(Object.keys(THEMES) as ThemeName[]).map((key) => {
+          const t = THEMES[key];
+          const active = (THEMES[settings.theme] ? settings.theme : 'ruhig') === key;
+          return (
+            <Pressable
+              key={key}
+              style={({ pressed }) => [styles.themeRow, active && styles.themeRowActive, pressed && { opacity: 0.85 }]}
+              onPress={() => updateSettings({ theme: key })}
+              accessibilityRole="radio"
+              accessibilityState={{ checked: active }}
+            >
+              <View style={{ flexDirection: 'row', marginRight: 12 }}>
+                {[t.colors.background, t.colors.surfaceHigh, t.colors.accent, t.colors.accentNeon].map((c, i) => (
+                  <View key={i} style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: c, borderWidth: 1, borderColor: t.colors.border, marginLeft: i ? -5 : 0 }} />
+                ))}
+              </View>
+              <View style={styles.rowContent}>
+                <Text style={styles.rowTitle}>{t.label}</Text>
+                <Text style={styles.rowSubtitle}>{t.description}</Text>
+              </View>
+              {active
+                ? <Ionicons name="checkmark-circle" size={22} color={colors.accentNeon} />
+                : <Ionicons name="ellipse-outline" size={22} color={colors.textMuted} />}
+            </Pressable>
+          );
+        })}
+      </View>
 
       {/* Dashboard-Blöcke (TE-77) */}
       <View style={styles.section}>

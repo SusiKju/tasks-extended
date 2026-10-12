@@ -7,7 +7,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
-import { CARD_EDGE } from '../utils/theme';
+import { useTheme, cardEdge } from '../utils/theme';
 import { ChildConfig } from '../services/family';
 import {
   GradeEntry, GradesMap, ackGrades, gradeColor, gradeId, subscribeToGrades, subscribeToGradesAck, unreadGradeIds,
@@ -27,6 +27,7 @@ function dateLabel(g: GradeEntry): string | null {
 }
 
 export function NewGradesNotice({ familyId, children, childColor }: Props) {
+  const { colors } = useTheme();
   const [grades, setGrades] = useState<Record<string, GradesMap>>({});
   const [acks, setAcks] = useState<Record<string, string[]>>({});
 
@@ -62,7 +63,7 @@ export function NewGradesNotice({ familyId, children, childColor }: Props) {
           ? [single.g.type, dateLabel(single.g)].filter(Boolean).join(' · ')
           : [...new Set(list.map((x) => x.fach))].join(' · ');
         return (
-          <View key={child.id} style={styles.card}>
+          <View key={child.id} style={[styles.card, cardEdge(colors)]}>
             <Pressable
               style={({ pressed }) => [styles.main, { opacity: pressed ? 0.6 : 1 }]}
               onPress={() => router.push({ pathname: '/(tabs)/schule', params: { child: child.id, view: 'noten' } } as any)}
@@ -102,7 +103,7 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
     paddingVertical: 8, paddingLeft: 10, paddingRight: 8,
-    borderWidth: 1, ...CARD_EDGE,
+    borderWidth: 1,
   },
   main: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 10 },
   badges: { flexDirection: 'row' },

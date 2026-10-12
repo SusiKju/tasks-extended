@@ -27,7 +27,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { ThemeColors, SOFT_BORDER } from '../utils/theme';
+import { ThemeColors } from '../utils/theme';
 import { useFirebaseAuth } from '../hooks/useFirebaseAuth';
 import { useFamily } from '../hooks/useFamily';
 import { useStore } from '../store';
@@ -347,7 +347,7 @@ function KachelModal({ visible, editing, onSave, onCreateTask, onCreateCountdown
                       return (
                         <Pressable
                           key={o.label}
-                          style={[s.chip, { borderColor: active ? color : SOFT_BORDER }]}
+                          style={[s.chip, { borderColor: active ? color : colors.softBorder }]}
                           onPress={() => setDue(o.key)}
                           accessibilityRole="button"
                           accessibilityState={{ selected: active }}
@@ -576,7 +576,7 @@ export function GeistesKacheln({ colors, isDark, areaWidth, columns, compact = f
           <Pressable
             style={({ pressed }) => [
               s.addCard,
-              { width: colSize, height: colSize, borderColor: SOFT_BORDER, opacity: pressed ? 0.6 : 1 },
+              { width: colSize, height: colSize, borderColor: colors.softBorder, opacity: pressed ? 0.6 : 1 },
             ]}
             onPress={openNew}
             accessibilityLabel="Geistesblitz anlegen"
@@ -586,7 +586,7 @@ export function GeistesKacheln({ colors, isDark, areaWidth, columns, compact = f
         </View>
       ) : tiles.length === 0 ? (
         <Pressable
-          style={({ pressed }) => [s.empty, { borderColor: SOFT_BORDER, opacity: pressed ? 0.7 : 1 }]}
+          style={({ pressed }) => [s.empty, { borderColor: colors.softBorder, opacity: pressed ? 0.7 : 1 }]}
           onPress={openNew}
         >
           <Ionicons name="bulb-outline" size={20} color={colors.textMuted} />
@@ -609,7 +609,7 @@ export function GeistesKacheln({ colors, isDark, areaWidth, columns, compact = f
           <Pressable
             style={({ pressed }) => [
               s.addCard,
-              { width: Math.floor(tileSize * ADD_FACTOR), height: tileSize, borderColor: SOFT_BORDER, opacity: pressed ? 0.6 : 1 },
+              { width: Math.floor(tileSize * ADD_FACTOR), height: tileSize, borderColor: colors.softBorder, opacity: pressed ? 0.6 : 1 },
             ]}
             onPress={openNew}
             accessibilityLabel="Geistesblitz anlegen"

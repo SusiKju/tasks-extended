@@ -18,7 +18,7 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useStore } from '../store';
-import { useTheme, ThemeColors, readableTextOn, neonGlow, SOFT_BORDER, CARD_EDGE } from '../utils/theme';
+import { useTheme, ThemeColors, readableTextOn, neonGlow, cardEdge } from '../utils/theme';
 import { useScratchpad } from '../hooks/useScratchpad';
 import { parseScratchpad, prependScratch, sortScratch } from '../components/Scratchpad';
 import { useFirebaseAuth } from '../hooks/useFirebaseAuth';
@@ -1266,8 +1266,8 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
       borderRadius: 18,
       overflow: 'hidden',
       borderWidth: 1,
-      borderColor: SOFT_BORDER,
-      ...(isDark ? CARD_EDGE : {}),
+      borderColor: c.softBorder,
+      ...(isDark ? cardEdge(c) : {}),
       ...(isDark ? neonGlow(c.accentNeon, 'soft') : {}),
     },
 

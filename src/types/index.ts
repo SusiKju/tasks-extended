@@ -58,7 +58,11 @@ export interface Countdown {
   createdAt: string;
 }
 
+/** TE-61: Farbschema der App – geräte-lokal (LOCAL_ONLY_SETTING_KEYS). */
+export type ThemeName = 'ruhig' | 'bento-night' | 'aurora';
+
 export interface AppSettings {
+  theme: ThemeName;
   dateFormat: DateFormat;
   googleCalendarEnabled: boolean;
   googleClientId: string | null;

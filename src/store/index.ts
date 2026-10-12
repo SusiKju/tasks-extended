@@ -86,6 +86,7 @@ const DEFAULT_GROUPS: Group[] = [
 ];
 
 const DEFAULT_SETTINGS: AppSettings = {
+  theme: 'ruhig',
   dateFormat: 'de',
   googleCalendarEnabled: false,
   googleClientId: null,
@@ -264,7 +265,7 @@ export const useStore = create<TaskState>()(
     }),
     {
       name: 'tasks-extended-store',
-      version: 27,
+      version: 28,
       migrate: (persistedState: any, version: number) => {
         if (version < 1 && persistedState?.tasks) {
           persistedState.tasks = persistedState.tasks.map((t: any) => ({
@@ -409,6 +410,13 @@ export const useStore = create<TaskState>()(
           // TE-49: Ein-/ausschaltbare Tabs pro Elternteil – Default: alle sichtbar.
           persistedState.settings.visibleTabs =
             persistedState.settings.visibleTabs ?? { ...DEFAULT_VISIBLE_TABS };
+        }
+        if (version < 28 && persistedState?.settings) {
+          // TE-61: Theme-Switcher – Default bleibt das ruhige Schwarz-Weiß-Theme.
+          // Altwerte aus früheren Switchern (z. B. 'dark-calm', kam per Familien-
+          // Sync zurück) auf 'ruhig' setzen.
+          const valid = ['ruhig', 'bento-night', 'aurora'];
+          if (!valid.includes(persistedState.settings.theme)) persistedState.settings.theme = 'ruhig';
         }
         return persistedState;
       },

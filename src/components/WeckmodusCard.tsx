@@ -14,7 +14,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { ThemeColors, SOFT_BORDER } from '../utils/theme';
+import { ThemeColors } from '../utils/theme';
 import { useFamily } from '../hooks/useFamily';
 import {
   TimetableMap, key, todayDayIndex, isBiweeklyActiveWeek, needsWakeUp, subscribeToTimetable,
@@ -74,7 +74,7 @@ export function WeckmodusCard({ colors }: { colors: ThemeColors }) {
   if (rows.length === 0) return null;
 
   return (
-    <View style={[styles.wrap, { borderColor: SOFT_BORDER, backgroundColor: colors.surface }]}>
+    <View style={[styles.wrap, { borderColor: colors.softBorder, backgroundColor: colors.surface }]}>
       <Text style={[styles.windowLabel, { color: colors.textMuted }]}>wird angezeigt von 5–7 Uhr</Text>
       {rows.map(({ child, free }) => {
         const wakeUp = free === 0;

@@ -18,7 +18,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView, Image, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { ThemeColors, SOFT_BORDER } from '../utils/theme';
+import { ThemeColors } from '../utils/theme';
 import { useFirebaseAuth } from '../hooks/useFirebaseAuth';
 import { useFamily } from '../hooks/useFamily';
 import { LinkItem, subscribeToLinks, openLink } from '../services/links';
@@ -61,7 +61,7 @@ export function LinkCardBar({
 
   const chipStyle = ({ pressed }: { pressed: boolean }) => [
     s.chip,
-    { borderColor: SOFT_BORDER, backgroundColor: colors.surface, opacity: pressed ? 0.7 : 1 },
+    { borderColor: colors.softBorder, backgroundColor: colors.surface, opacity: pressed ? 0.7 : 1 },
   ];
 
   return (
@@ -91,7 +91,7 @@ export function LinkCardBar({
           );
         })}
         {driveOverflow > 0 && (
-          <View style={[s.chip, { borderColor: SOFT_BORDER, backgroundColor: colors.surface }]}>
+          <View style={[s.chip, { borderColor: colors.softBorder, backgroundColor: colors.surface }]}>
             <Text style={[s.chipLabel, { color: colors.textMuted }]}>+{driveOverflow}</Text>
           </View>
         )}
