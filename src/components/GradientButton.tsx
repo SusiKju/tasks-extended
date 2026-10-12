@@ -40,7 +40,7 @@ export function GradientButton({
       ]}
     >
       {gradient && (
-        <LinearGradient colors={gradient.colors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+        <LinearGradient colors={gradient.colors} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={StyleSheet.absoluteFill} />
       )}
       {children}
     </Pressable>

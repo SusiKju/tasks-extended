@@ -125,8 +125,9 @@ const BENTO_NIGHT: ThemeColors = {
   // TE-62: Farbe folgt der Bedeutung – Aufgabe blau, Idee gelb, Geistesblitz
   // grell (Orange→Pink→Violett), Erinnern im Violett→Pink vom Aurora-Entwurf.
   gradients: {
-    task:   { colors: ['#0A6CFF', '#5E5CE6'], fg: '#FFFFFF' },
-    idea:   { colors: ['#FFE14D', '#FF9F0A'], fg: '#1C1C1E' },
+    // Farbabstand groß genug, dass der Verlauf auch auf schmalen Pills sichtbar ist.
+    task:   { colors: ['#0A5CFF', '#00B8D9'], fg: '#FFFFFF' },   // Blau → Türkis
+    idea:   { colors: ['#FFE600', '#FF7A00'], fg: '#1C1C1E' },   // Gelb → Orange
     blitz:  { colors: ['#FF6B00', '#FF0080', '#7928CA'], fg: '#FFFFFF' },
     remind: { colors: ['#7B2FF7', '#F72585'], fg: '#FFFFFF' },
   },
