@@ -42,6 +42,7 @@ import {
 } from '../services/allowance';
 import { parseTeamIdFromUrl } from '../services/fussballDe';
 import ChildAvatar from '../components/ChildAvatar';
+import { useOfflineReadiness } from '../components/OfflineBanner';
 
 /** Eingabe-Toleranz: "5,50" → 5.5, leer → null, ungültig/negativ → null. */
 function parseAllowance(text: string): number | null {
@@ -70,6 +71,7 @@ function crossAlert(title: string, message: string, onConfirm: () => void) {
 
 
 export function SettingsScreen() {
+  const offlineReadiness = useOfflineReadiness();
   const { settings, updateSettings } = useStore();
   const { syncBirthdays } = useGoogleContactsBirthdaysSync();
   const { colors } = useTheme();
@@ -1160,6 +1162,10 @@ export function SettingsScreen() {
         <View style={styles.row}>
           <Text style={styles.rowTitle}>Version</Text>
           <Text style={styles.rowValue}>{Constants.expoConfig?.version ?? '2.0.0'}</Text>
+        </View>
+        <View style={styles.row}>
+          <Text style={styles.rowTitle}>Offline</Text>
+          <Text style={[styles.rowValue, { flexShrink: 1, textAlign: 'right' }]}>{offlineReadiness}</Text>
         </View>
       </View>
     </ScrollView>
