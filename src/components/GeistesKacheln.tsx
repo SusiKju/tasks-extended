@@ -44,6 +44,7 @@ import { loadScratchpad, saveScratchpad } from '../services/scratchpadService';
 import { ScratchEntry, makeNoteId, parseScratchpad, serializeScratchpad } from './Scratchpad';
 import { LinkChip } from './LinkChip';
 import { DatePickerModal } from './DatePickerModal';
+import { GradientButton } from './GradientButton';
 import { addCountdown } from '../services/countdownsService';
 import { DEFAULT_DASHBOARD_BLOCKS } from '../types';
 import { autoIcon, iconColor } from '../utils/iconSuggest';
@@ -573,16 +574,15 @@ export function GeistesKacheln({ colors, isDark, areaWidth, columns, compact = f
         // gestrichelten Box mit Fließtext (vorher inkonsistent zur
         // Countdown-Leiste direkt darunter).
         <View style={s.grid}>
-          <Pressable
-            style={({ pressed }) => [
-              s.addCard,
-              { width: colSize, height: colSize, borderColor: colors.softBorder, opacity: pressed ? 0.6 : 1 },
-            ]}
+          <GradientButton
+            gradient={colors.gradients?.blitz}
+            style={[s.addCard, { width: colSize, height: colSize }]}
+            fallbackStyle={{ borderColor: colors.softBorder }}
             onPress={openNew}
             accessibilityLabel="Geistesblitz anlegen"
           >
-            <Ionicons name="add" size={22} color={colors.textMuted} />
-          </Pressable>
+            <Ionicons name="add" size={22} color={colors.gradients?.blitz?.fg ?? colors.textMuted} />
+          </GradientButton>
         </View>
       ) : tiles.length === 0 ? (
         <Pressable
@@ -606,16 +606,15 @@ export function GeistesKacheln({ colors, isDark, areaWidth, columns, compact = f
               attention={needsStep(k)}
             />
           ))}
-          <Pressable
-            style={({ pressed }) => [
-              s.addCard,
-              { width: Math.floor(tileSize * ADD_FACTOR), height: tileSize, borderColor: colors.softBorder, opacity: pressed ? 0.6 : 1 },
-            ]}
+          <GradientButton
+            gradient={colors.gradients?.blitz}
+            style={[s.addCard, { width: Math.floor(tileSize * ADD_FACTOR), height: tileSize }]}
+            fallbackStyle={{ borderColor: colors.softBorder }}
             onPress={openNew}
             accessibilityLabel="Geistesblitz anlegen"
           >
-            <Ionicons name="add" size={18} color={colors.textMuted} />
-          </Pressable>
+            <Ionicons name="add" size={18} color={colors.gradients?.blitz?.fg ?? colors.textMuted} />
+          </GradientButton>
         </View>
       )}
 

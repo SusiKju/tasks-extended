@@ -18,6 +18,7 @@ import { View, Text, TextInput, Pressable, StyleSheet, Alert } from 'react-nativ
 import { Ionicons } from '@expo/vector-icons';
 import { Note, QuickNote } from '../types';
 import { useTheme, neonGlow } from '../utils/theme';
+import { GradientButton } from './GradientButton';
 import { useFirebaseAuth } from '../hooks/useFirebaseAuth';
 import { useFamily } from '../hooks/useFamily';
 import { subscribeToQuickNotes, addQuickNote, deleteQuickNote } from '../services/quickNotesService';
@@ -87,10 +88,11 @@ export function IdeasSection({ onToTask }: { onToTask: (text: string) => void })
       <View style={[s.header, { borderBottomColor: colors.border, backgroundColor: colors.surfaceHigh }]}>
         <Ionicons name="bulb-outline" size={18} color={colors.text} />
         <Text style={[s.title, { color: colors.text }]}>Ideen</Text>
-        <Pressable
+        <GradientButton
+          gradient={colors.gradients?.idea}
           onPress={() => inputRef.current?.focus()}
-          style={[
-            s.addBtn,
+          style={s.addBtn}
+          fallbackStyle={[
             {
               backgroundColor: isDark ? 'transparent' : colors.accent,
               borderWidth: isDark ? 1.5 : 0,
@@ -98,11 +100,10 @@ export function IdeasSection({ onToTask }: { onToTask: (text: string) => void })
             },
             isDark ? neonGlow(colors.accentNeon, 'hard') : null,
           ]}
-          hitSlop={4}
           accessibilityLabel="Idee anlegen"
         >
-          <Ionicons name="add" size={26} color={isDark ? colors.accentNeon : '#fff'} />
-        </Pressable>
+          <Ionicons name="add" size={26} color={colors.gradients?.idea?.fg ?? (isDark ? colors.accentNeon : '#fff')} />
+        </GradientButton>
       </View>
 
       <View style={s.body}>

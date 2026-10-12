@@ -3,7 +3,7 @@ import { ThemeName } from '../types';
 
 /** TE-62: Verlauf für einen wichtigen Button – Farbstopps + lesbare Schriftfarbe. */
 export interface ButtonGradient { colors: readonly [string, string, ...string[]]; fg: string }
-export type GradientKind = 'task' | 'idea' | 'blitz' | 'remind';
+export type GradientKind = 'task' | 'idea' | 'blitz' | 'remind' | 'countdown' | 'shared' | 'primary';
 
 export interface ThemeColors {
   background: string;
@@ -130,6 +130,9 @@ const BENTO_NIGHT: ThemeColors = {
     idea:   { colors: ['#FFE600', '#FF7A00'], fg: '#1C1C1E' },   // Gelb → Orange
     blitz:  { colors: ['#FF6B00', '#FF0080', '#7928CA'], fg: '#FFFFFF' },
     remind: { colors: ['#7B2FF7', '#F72585'], fg: '#FFFFFF' },
+    countdown: { colors: ['#FF9F0A', '#FF375F'], fg: '#FFFFFF' },  // Orange → Pink: Vorfreude
+    shared: { colors: ['#30D158', '#00B8D9'], fg: '#FFFFFF' },     // Grün → Türkis: Familie
+    primary: { colors: ['#0A5CFF', '#7B61FF'], fg: '#FFFFFF' },    // Blau → Violett: alles andere
   },
 };
 

@@ -15,6 +15,7 @@ import uuid from 'react-native-uuid';
 import { useStore } from '../store';
 import { Group } from '../types';
 import { useTheme, ThemeColors, neonGlow } from '../utils/theme';
+import { GradientButton } from '../components/GradientButton';
 
 const PRESET_COLORS = [
   '#4F86F7',
@@ -163,9 +164,9 @@ export function GroupsScreen() {
         )}
       />
 
-      <TouchableOpacity style={[styles.fab, { backgroundColor: isDark ? 'transparent' : colors.accent }]} onPress={openCreate}>
-        <Ionicons name="add" size={28} color={isDark ? colors.accentNeon : '#fff'} />
-      </TouchableOpacity>
+      <GradientButton gradient={colors.gradients?.primary} style={styles.fab} fallbackStyle={{ backgroundColor: isDark ? 'transparent' : colors.accent }} onPress={openCreate} accessibilityLabel="Gruppe anlegen">
+        <Ionicons name="add" size={28} color={colors.gradients?.primary?.fg ?? (isDark ? colors.accentNeon : '#fff')} />
+      </GradientButton>
 
       {/* TE-13: Wegwischen / Zurück speichert statt zu verwerfen (ohne Namen → nur schließen). */}
       <Modal

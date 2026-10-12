@@ -10,6 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useStore } from '../store';
 import { TaskCard } from '../components/TaskCard';
 import { useTheme, ThemeColors, neonGlow } from '../utils/theme';
+import { GradientButton } from '../components/GradientButton';
 import { Scratchpad, ScratchEntry, prependScratch } from '../components/Scratchpad';
 import { useScratchpad } from '../hooks/useScratchpad';
 import { IdeasSection } from '../components/IdeasSection';
@@ -89,13 +90,14 @@ export function TaskListScreen() {
           <View style={styles.groupHeader}>
             <Ionicons name="checkbox-outline" size={18} color={colors.text} />
             <Text style={styles.groupTitle}>Aufgaben</Text>
-            <TouchableOpacity
+            <GradientButton
+              gradient={colors.gradients?.task}
               onPress={() => scratchAddRef.current?.()}
               style={styles.bigAddBtn}
-              activeOpacity={0.85}
+              accessibilityLabel="Aufgabe anlegen"
             >
-              <Ionicons name="add" size={26} color={isDark ? colors.accentNeon : '#fff'} />
-            </TouchableOpacity>
+              <Ionicons name="add" size={26} color={colors.gradients?.task?.fg ?? (isDark ? colors.accentNeon : '#fff')} />
+            </GradientButton>
           </View>
           <View style={styles.groupBody}>
             <Scratchpad
