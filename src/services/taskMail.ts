@@ -1,17 +1,12 @@
 /**
  * taskMail.ts
  *
- * Push+Mail-Versand für ein Kind (TE-118) und der automatische Versand an alle
- * (TE-149, TE-163). Als eigenständiger Service ausgelagert, damit der
- * automatische tägliche Versand app-weit im RootLayout laufen kann statt nur
- * so lange der Kinder-Tab gemountet ist (TE-163: das war der Grund, warum
- * „Automatisch täglich senden" nie feuerte, wenn die Kinder-Tab in der
- * Session nicht geöffnet wurde).
+ * Push+Mail-Versand für ein Kind (TE-118). Nur manuell ausgelöst — der
+ * automatische tägliche Versand (TE-149/TE-163) wurde mit TE-72 entfernt.
  */
 
 import { Platform } from 'react-native';
-import { format } from 'date-fns';
-import { ChildTask, writePushTrigger, getInboxTasksForChild } from './kinderTasks';
+import { ChildTask, writePushTrigger } from './kinderTasks';
 import { sendReminderToChild } from './pushNotifications';
 import { sendHtmlMail } from './googleMail';
 
@@ -108,33 +103,4 @@ export async function sendTaskMailToChild(
   } catch (e: any) {
     return 'error';
   }
-}
-
-/**
- * Mail Push für alle Kinder mit hinterlegter E-Mail-Adresse, eines nach dem
- * anderen. Holt die Aufgaben frisch aus Firestore statt aus lokalem State,
- * damit der Aufruf auch ohne gemountete Kinder-Tab funktioniert (TE-163).
- */
-export async function runAutoSendAll(
-  familyId: string,
-  children: Array<{ id: string; name: string }>,
-  childEmails: Partial<Record<string, string>>,
-  accessToken: string
-): Promise<{ sent: number; skipped: number; failed: number }> {
-  const today = format(new Date(), 'yyyy-MM-dd');
-  let sent = 0, skipped = 0, failed = 0;
-  for (const child of children) {
-    const email = childEmails[child.id];
-    if (!email || !accessToken) { skipped++; continue; }
-    try {
-      const tasks = await getInboxTasksForChild(familyId, child.id, today);
-      const openTasks = tasks.filter((t) => !t.done);
-      const doneTasks = tasks.filter((t) => t.done);
-      const result = await sendTaskMailToChild(familyId, child.id, child.name, email, accessToken, openTasks, doneTasks);
-      if (result === 'sent') sent++; else failed++;
-    } catch {
-      failed++;
-    }
-  }
-  return { sent, skipped, failed };
 }

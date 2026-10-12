@@ -6,7 +6,7 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
-import { savePushToken, getPushTokens, getReminderTimes } from './kinderTasks';
+import { savePushToken, getPushTokens } from './kinderTasks';
 
 if (Platform.OS !== 'web') {
   Notifications.setNotificationHandler({
@@ -81,13 +81,4 @@ export async function sendReminderToChild(
   const token = tokens[childId];
   if (!token) throw new Error(`Kein Push-Token für ${childName} gespeichert.`);
   await sendPush(token, childName);
-}
-
-/** Gibt die konfigurierten Erinnerungszeiten als { hour, minute }[] zurück. */
-export async function getReminderSchedule(familyId: string): Promise<{ hour: number; minute: number }[]> {
-  const times = await getReminderTimes(familyId);
-  return times.map((t) => {
-    const [h, m] = t.split(':').map(Number);
-    return { hour: h, minute: m };
-  });
 }

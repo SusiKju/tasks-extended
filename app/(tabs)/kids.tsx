@@ -35,7 +35,6 @@ import {
   subscribeToChildTasks, addTask, updateTask, deleteTask, deleteCompletedTasks, rejectTask, toggleTask,
   releaseTaskReward, markChildTasksSeen,
   getActivityLog,
-  getEmailReminderConfig, setEmailReminderConfig,
 } from '../../src/services/kinderTasks';
 import { useFamily } from '../../src/hooks/useFamily';
 import {
@@ -306,53 +305,6 @@ export default function KinderScreen() {
       setSendingAllMail(false);
     }
   }, [familyChildren, sendTaskMailToChild]);
-
-  // ─── Automatischer täglicher Versand (TE-149) ──────────────────────────────
-  // Nur noch die Konfiguration (An/Aus + Uhrzeiten) lebt hier. Der eigentliche
-  // Scheduler läuft app-weit im RootLayout (TE-163) — vorher lief er lokal in
-  // diesem Tab und feuerte nie, wenn die Kinder-Tab in der Session nicht
-  // geöffnet wurde, obwohl "An" eingestellt war.
-  const [emailAutoEnabled, setEmailAutoEnabled] = useState(false);
-  const [emailTimes, setEmailTimes] = useState<string[]>(['06:00', '14:00']);
-  const [newTimeInput, setNewTimeInput] = useState('');
-
-  // Konfiguration einmal pro Familie laden.
-  useEffect(() => {
-    if (!fid) return;
-    getEmailReminderConfig(fid)
-      .then((c) => { setEmailAutoEnabled(c.enabled); setEmailTimes(c.times); })
-      .catch(() => {});
-  }, [fid]);
-
-  const persistEmailConfig = useCallback((enabled: boolean, times: string[]) => {
-    if (!fid) return;
-    setEmailReminderConfig(fid, { enabled, times }).catch(() => {});
-  }, [fid]);
-
-  const toggleEmailAuto = useCallback(() => {
-    const next = !emailAutoEnabled;
-    setEmailAutoEnabled(next);
-    persistEmailConfig(next, emailTimes);
-  }, [emailAutoEnabled, emailTimes, persistEmailConfig]);
-
-  const addEmailTime = useCallback(() => {
-    const t = newTimeInput.trim();
-    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(t)) {
-      crossInfo('Ungültige Zeit', 'Bitte im Format HH:MM eingeben, z. B. 06:00.');
-      return;
-    }
-    if (emailTimes.includes(t)) { setNewTimeInput(''); return; }
-    const next = [...emailTimes, t].sort();
-    setEmailTimes(next);
-    setNewTimeInput('');
-    persistEmailConfig(emailAutoEnabled, next);
-  }, [newTimeInput, emailTimes, emailAutoEnabled, persistEmailConfig]);
-
-  const removeEmailTime = useCallback((t: string) => {
-    const next = emailTimes.filter((x) => x !== t);
-    setEmailTimes(next);
-    persistEmailConfig(emailAutoEnabled, next);
-  }, [emailTimes, emailAutoEnabled, persistEmailConfig]);
 
   // Gruppenaufgabe bei allen Teilnehmern löschen (TE-56).
   const handleDeleteGroupTask = useCallback((entry: { title: string; members: { childId: string; taskId: string }[] }) => {
@@ -1250,51 +1202,6 @@ export default function KinderScreen() {
             )}
           </TouchableOpacity>
 
-          {/* Automatischer täglicher Versand (TE-149) */}
-          <View style={s.autoMailBox}>
-            <View style={s.autoMailHeader}>
-              <Ionicons name="time-outline" size={16} color={colors.textMuted} />
-              <Text style={s.autoMailTitle}>Automatisch täglich senden</Text>
-              <TouchableOpacity
-                style={[s.autoToggle, emailAutoEnabled && s.autoToggleOn]}
-                onPress={toggleEmailAuto}
-              >
-                <Text style={[s.autoToggleText, emailAutoEnabled && s.autoToggleTextOn]}>
-                  {emailAutoEnabled ? 'An' : 'Aus'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-            <Text style={s.autoMailHint}>
-              Löst „Mail Push für alle" automatisch zu diesen Zeiten aus – nur solange die App geöffnet ist.
-            </Text>
-            <View style={s.timeChips}>
-              {emailTimes.map((t) => (
-                <View key={t} style={s.timeChip}>
-                  <Text style={s.timeChipText}>{t}</Text>
-                  <TouchableOpacity onPress={() => removeEmailTime(t)} hitSlop={8}>
-                    <Ionicons name="close" size={14} color={colors.textMuted} />
-                  </TouchableOpacity>
-                </View>
-              ))}
-              {emailTimes.length === 0 && (
-                <Text style={s.autoMailHint}>Keine Zeiten – bitte unten hinzufügen.</Text>
-              )}
-            </View>
-            <View style={s.inputRow}>
-              <TextInput
-                style={s.input}
-                placeholder="HH:MM (z. B. 06:00)"
-                placeholderTextColor={colors.placeholder}
-                value={newTimeInput}
-                onChangeText={setNewTimeInput}
-                onSubmitEditing={addEmailTime}
-                keyboardType="numbers-and-punctuation"
-              />
-              <GradientButton gradient={colors.gradients?.primary} style={[s.addBtn, PLUS_BUTTON]} onPress={addEmailTime} accessibilityLabel="Uhrzeit hinzufügen">
-                <Ionicons name="add" size={PLUS_ICON_SIZE} color={colors.gradients?.primary?.fg ?? '#000'} />
-              </GradientButton>
-            </View>
-          </View>
         </View>
       )}
     </ScrollView>
@@ -1418,28 +1325,6 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
       backgroundColor: colors.accentNeon, borderRadius: 10,
       paddingHorizontal: 14, justifyContent: 'center',
     },
-    // Automatischer täglicher Versand (TE-149)
-    autoMailBox: {
-      marginTop: 10, gap: 8, padding: 12, borderRadius: 12,
-      backgroundColor: colors.inputBackground, borderWidth: 1, borderColor: colors.border,
-    },
-    autoMailHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-    autoMailTitle: { flex: 1, fontSize: 14, fontWeight: '700', color: colors.text },
-    autoMailHint: { fontSize: 12, color: colors.textMuted, lineHeight: 16 },
-    autoToggle: {
-      paddingHorizontal: 12, paddingVertical: 5, borderRadius: 8,
-      borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface,
-    },
-    autoToggleOn: { backgroundColor: colors.accentNeon, borderColor: colors.accentNeon },
-    autoToggleText: { fontSize: 13, fontWeight: '800', color: colors.textMuted },
-    autoToggleTextOn: { color: '#000' },
-    timeChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-    timeChip: {
-      flexDirection: 'row', alignItems: 'center', gap: 6,
-      borderWidth: 1, borderColor: colors.border, borderRadius: 8,
-      paddingLeft: 10, paddingRight: 6, paddingVertical: 5, backgroundColor: colors.surface,
-    },
-    timeChipText: { fontSize: 14, fontWeight: '700', color: colors.text, letterSpacing: 0.5 },
     emailToggle: {
       flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4,
     },
