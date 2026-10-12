@@ -31,7 +31,7 @@ export default function ChildAvatar({ child, size = 28 }: Props) {
       <Image
         source={src}
         accessibilityLabel={child.name}
-        // TE-73: PNGs sind freigestellte Köpfe (Umgebung transparent), ohne Farbring.
+        // TE-73: Positiv-Zeichnung auf weißem Grund, rund beschnitten = weißer Kreis, ohne Farbring.
         style={circle}
       />
     );
