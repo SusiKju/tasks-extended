@@ -159,18 +159,11 @@ export interface NotizItem {
   deletedAt: string | null;
   /** TE-81: Art der Schnellnotiz aus dem Training. Fehlt bei normalen Notizen. */
   kind?: NotizKind;
-  /** TE-81: Startzeit (ISO) des Trainings, in dem die Notiz entstand. '' = keins. */
+  /** TE-81: Trainingstag (YYYY-MM-DD; ältere Notizen: Startzeit ISO), markiert Trainingsnotizen. Fehlt = keine. */
   trainingId?: string;
 }
 
 export type NotizKind = 'tel' | 'neu' | 'info';
-
-/** TE-81: Trainingsmodus – laufendes und zuletzt beendetes Training (ISO-Zeiten). */
-export interface BambiniTraining {
-  startedAt: string | null;
-  lastStart: string | null;
-  lastEnd: string | null;
-}
 
 function sanitizeNotizItem(n: any): NotizItem | null {
   const text = String(n?.text ?? '').trim();
@@ -229,18 +222,6 @@ export async function loadBambiniTrainingsideenItems(familyId: string): Promise<
   const raw = snap.exists() ? (snap.data() as any) : undefined;
   const rawItems = Array.isArray(raw?.trainingsideenItems) ? raw.trainingsideenItems : [];
   return rawItems.map(sanitizeNotizItem).filter((n: NotizItem | null): n is NotizItem => n !== null);
-}
-
-/** TE-81: Trainingsmodus-Zustand laden (eigenes Feld im Bambini-Dokument). */
-export async function loadBambiniTraining(familyId: string): Promise<BambiniTraining> {
-  const snap = await getDoc(bambiniDoc(familyId));
-  const raw = snap.exists() ? (snap.data() as any)?.training : undefined;
-  const str = (v: any) => (typeof v === 'string' && v ? v : null);
-  return { startedAt: str(raw?.startedAt), lastStart: str(raw?.lastStart), lastEnd: str(raw?.lastEnd) };
-}
-
-export async function saveBambiniTraining(familyId: string, training: BambiniTraining): Promise<void> {
-  await setDoc(bambiniDoc(familyId), { training }, { merge: true });
 }
 
 /** TE-81: Telefonnummer in einer Schnellnotiz erkennen (mind. 6 Ziffern, Leerzeichen/-// erlaubt). */

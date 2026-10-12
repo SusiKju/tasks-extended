@@ -44,9 +44,6 @@ import {
   saveBambiniTrainingsideenItems,
   NotizItem,
   NotizKind,
-  BambiniTraining,
-  loadBambiniTraining,
-  saveBambiniTraining,
   looksLikePhone,
   parseNeuesKind,
   makeId,
@@ -330,42 +327,24 @@ export function BambiniScreen() {
     .sort((a, b) => (b.deletedAt as string).localeCompare(a.deletedAt as string));
   const markedTrainingsideenItems = activeTrainingsideenItems.filter((n) => n.marked);
 
-  // TE-81: Trainingsmodus – Start/Beenden-Kachel, Schnellnotiz während des Trainings,
-  // danach Notizen zuordnen. Notizen landen in den bestehenden Bambini-Notiz-Items.
-  const [training, setTraining] = useState<BambiniTraining>({ startedAt: null, lastStart: null, lastEnd: null });
+  // TE-81/TE-84: Schnellnotiz im Trainingsmodus. Die Ansicht selbst ist der Modus
+  // (kein Starten/Beenden mehr); Notizen landen in den bestehenden Bambini-Notiz-Items.
   const [quickText, setQuickText] = useState('');
   const [quickKind, setQuickKind] = useState<NotizKind | null>(null);
-  const [nowTick, setNowTick] = useState(Date.now());
   const [assignNoteId, setAssignNoteId] = useState<string | null>(null);
   const pendingNeuNoteId = useRef<string | null>(null);
-
-  useEffect(() => {
-    if (!training.startedAt) return;
-    setNowTick(Date.now());
-    const t = setInterval(() => setNowTick(Date.now()), 30000);
-    return () => clearInterval(t);
-  }, [training.startedAt]);
-
-  const persistTraining = useCallback((next: BambiniTraining) => {
-    setTraining(next);
-    if (fid) saveBambiniTraining(fid, next).catch((e) => console.warn('Training speichern fehlgeschlagen', e));
-  }, [fid]);
-
-  const toggleTraining = () => {
-    const now = new Date().toISOString();
-    if (training.startedAt) persistTraining({ startedAt: null, lastStart: training.startedAt, lastEnd: now });
-    else persistTraining({ ...training, startedAt: now });
-  };
+  const todayISO = toISO(new Date());
 
   // Ohne explizit gewählten Chip erkennt die Zeile eine Telefonnummer selbst.
   const quickKindEffective: NotizKind = quickKind ?? (looksLikePhone(quickText) ? 'tel' : 'info');
 
   const addQuickNote = () => {
     const text = quickText.trim();
-    if (!text || !training.startedAt) return;
+    if (!text) return;
+    // trainingId = Trainingstag (YYYY-MM-DD); markiert die Notiz als Trainingsnotiz.
     const item: NotizItem = {
       id: makeId(), text, marked: false, createdAt: new Date().toISOString(), deletedAt: null,
-      kind: quickKindEffective, trainingId: training.startedAt,
+      kind: quickKindEffective, trainingId: todayISO,
     };
     persistNotizItems([item, ...notizItems]);
     setQuickText('');
@@ -395,16 +374,9 @@ export function BambiniScreen() {
     pendingNeuNoteId.current = n.id;
   };
 
-  // TE-83: alle offenen Trainingsnotizen, egal aus welchem Training – sie bleiben,
-  // bis sie zugeordnet oder erledigt sind (vorher nur die des letzten Trainings).
-  const trainingId = training.startedAt ?? training.lastStart;
+  // TE-83: alle offenen Trainingsnotizen, egal von welchem Tag – sie bleiben,
+  // bis sie zugeordnet oder erledigt sind.
   const trainingNotes = notizItems.filter((n) => n.trainingId && !n.deletedAt);
-  const trainingMinutes = training.startedAt
-    ? Math.max(0, Math.floor((nowTick - Date.parse(training.startedAt)) / 60000))
-    : 0;
-  const lastDuration = training.lastStart && training.lastEnd
-    ? Math.round((Date.parse(training.lastEnd) - Date.parse(training.lastStart)) / 60000)
-    : null;
 
   const reload = useCallback(async () => {
     if (!fid) {
@@ -415,16 +387,12 @@ export function BambiniScreen() {
     setLoading(true);
     try {
       await migrateRosterToBambini(fid);
-      const [list, filters, notiz, trainingsideen, trainingState] = await Promise.all([
+      const [list, filters, notiz, trainingsideen] = await Promise.all([
         loadBambini(fid),
         loadBambiniFilters(fid),
         loadBambiniNotizItems(fid),
         loadBambiniTrainingsideenItems(fid),
-        loadBambiniTraining(fid),
       ]);
-      setTraining(trainingState);
-      // TE-82: läuft ein Training, direkt in den Trainingsmodus.
-      if (trainingState.startedAt) setTrainingsideenOpen(true);
       setChildren(list);
       setYearFilter(filters.years);
       setStoppedFilter(filters.stopped);
@@ -682,98 +650,67 @@ export function BambiniScreen() {
     { kind: 'info', label: 'Notiz', icon: 'create' },
   ];
 
-  // TE-81: Trainingsmodus. Eine Kachel startet und beendet an derselben Stelle.
+  // TE-81/TE-84: Inhalt des Trainingsmodus – Notizfeld, offene Notizen, Übungskarten.
   const renderTraining = () => {
     if (loading) return null;
-    const running = !!training.startedAt;
-    const startSub = markedTrainingsideenItems.length
-      ? `${markedTrainingsideenItems.length} ${markedTrainingsideenItems.length === 1 ? 'Übung' : 'Übungen'} für heute`
-      : lastDuration !== null
-        ? `Letztes Training ${formatDE(training.lastEnd!.slice(0, 10))}, ${lastDuration} min`
-        : 'Unten Übungen für heute auswählen';
-    const tileColors: [string, string] = running ? ['#FF375F', '#7928CA'] : ['#30D158', '#00B8D9'];
     return (
       <View style={s.trainSection}>
-        <Pressable style={s.trainTile} onPress={toggleTraining} accessibilityLabel={running ? 'Training beenden' : 'Training starten'}>
-          <LinearGradient colors={[mono(tileColors[0]), mono(tileColors[1])]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
-          <View style={s.trainIcon}>
-            <Ionicons name={running ? 'stop' : 'play'} size={18} color="#FFFFFF" />
+        <View style={s.quickBox}>
+          <View style={s.quickRow}>
+            <TextInput
+              style={[s.input, s.quickInput]}
+              value={quickText}
+              onChangeText={setQuickText}
+              onSubmitEditing={addQuickNote}
+              placeholder="Notiz … z. B. Telefonnummer, neues Kind"
+              placeholderTextColor={colors.placeholder}
+              returnKeyType="send"
+              blurOnSubmit={false}
+            />
+            <Pressable style={s.quickSend} onPress={addQuickNote} accessibilityLabel="Notiz speichern">
+              <LinearGradient colors={[mono('#FFE600'), mono('#FF7A00')]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+              <Ionicons name="arrow-up" size={16} color="#1C1C1E" />
+            </Pressable>
           </View>
-          <View style={s.bMain}>
-            <Text style={s.trainTitle}>{running ? 'Training beenden' : 'Training starten'}</Text>
-            <Text style={s.trainSub} numberOfLines={1}>
-              {running ? `seit ${new Date(training.startedAt!).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}` : startSub}
-            </Text>
-          </View>
-          {running ? <Text style={s.trainTimer}>{trainingMinutes}′</Text> : null}
-        </Pressable>
-
-        {running || trainingNotes.length > 0 ? (
-          <View style={s.quickBox}>
-            {running ? (
-              <>
-                <View style={s.quickRow}>
-                  <TextInput
-                    style={[s.input, s.quickInput]}
-                    value={quickText}
-                    onChangeText={setQuickText}
-                    onSubmitEditing={addQuickNote}
-                    placeholder="Notiz … z. B. Telefonnummer, neues Kind"
-                    placeholderTextColor={colors.placeholder}
-                    returnKeyType="send"
-                    blurOnSubmit={false}
-                  />
-                  <Pressable style={s.quickSend} onPress={addQuickNote} accessibilityLabel="Notiz speichern">
-                    <LinearGradient colors={[mono('#FFE600'), mono('#FF7A00')]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
-                    <Ionicons name="arrow-up" size={16} color="#1C1C1E" />
-                  </Pressable>
-                </View>
-                <View style={s.quickChips}>
-                  {QUICK_CHIPS.map((ch) => {
-                    const on = quickKindEffective === ch.kind && quickText.trim().length > 0;
-                    return (
-                      <Pressable
-                        key={ch.kind}
-                        style={[s.filterChip, on && s.filterChipActive]}
-                        onPress={() => setQuickKind((v) => (v === ch.kind ? null : ch.kind))}
-                      >
-                        <Text style={[s.filterChipText, on && s.filterChipTextActive]}>{ch.label}</Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              </>
-            ) : (
-              <Text style={s.bTileLabel}>Notizen vom Training</Text>
-            )}
-            {trainingNotes.map((n) => {
-              const kind = n.kind ?? 'info';
-              const tag = NOTE_TAG[kind];
+          <View style={s.quickChips}>
+            {QUICK_CHIPS.map((ch) => {
+              const on = quickKindEffective === ch.kind && quickText.trim().length > 0;
               return (
-                <View key={n.id} style={s.quickNote}>
-                  <Text style={[s.quickTag, { color: tag.color, backgroundColor: tag.color + '26' }]}>{tag.label}</Text>
-                  <View style={s.bMain}>
-                    <Text style={s.quickNoteText}>{n.text}</Text>
-                    <Text style={s.quickNoteTime}>
-                      {n.trainingId !== trainingId ? `${formatDE(n.createdAt.slice(0, 10))}, ` : ''}
-                      {new Date(n.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}
-                    </Text>
-                  </View>
-                  {!running || n.trainingId !== trainingId ? (
-                    <Pressable
-                      hitSlop={8}
-                      onPress={() =>
-                        kind === 'tel' ? setAssignNoteId(n.id) : kind === 'neu' ? createFromNeu(n) : resolveNote(n.id)
-                      }
-                    >
-                      <Text style={s.quickAction}>{kind === 'tel' ? 'Zu Kind →' : kind === 'neu' ? 'Anlegen →' : 'Erledigt'}</Text>
-                    </Pressable>
-                  ) : null}
-                </View>
+                <Pressable
+                  key={ch.kind}
+                  style={[s.filterChip, on && s.filterChipActive]}
+                  onPress={() => setQuickKind((v) => (v === ch.kind ? null : ch.kind))}
+                >
+                  <Text style={[s.filterChipText, on && s.filterChipTextActive]}>{ch.label}</Text>
+                </Pressable>
               );
             })}
           </View>
-        ) : null}
+          {trainingNotes.map((n) => {
+            const kind = n.kind ?? 'info';
+            const tag = NOTE_TAG[kind];
+            return (
+              <View key={n.id} style={s.quickNote}>
+                <Text style={[s.quickTag, { color: tag.color, backgroundColor: tag.color + '26' }]}>{tag.label}</Text>
+                <View style={s.bMain}>
+                  <Text style={s.quickNoteText}>{n.text}</Text>
+                  <Text style={s.quickNoteTime}>
+                    {n.createdAt.slice(0, 10) !== todayISO ? `${formatDE(n.createdAt.slice(0, 10))}, ` : ''}
+                    {new Date(n.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}
+                  </Text>
+                </View>
+                <Pressable
+                  hitSlop={8}
+                  onPress={() =>
+                    kind === 'tel' ? setAssignNoteId(n.id) : kind === 'neu' ? createFromNeu(n) : resolveNote(n.id)
+                  }
+                >
+                  <Text style={s.quickAction}>{kind === 'tel' ? 'Zu Kind →' : kind === 'neu' ? 'Anlegen →' : 'Erledigt'}</Text>
+                </Pressable>
+              </View>
+            );
+          })}
+        </View>
 
         {markedTrainingsideenItems.length > 0 ? (
           <>
@@ -1674,11 +1611,6 @@ function makeStyles(c: ThemeColors) {
 
     // TE-81: Trainingsmodus.
     trainSection: { gap: 10, marginBottom: 18 },
-    trainTile: { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 18, paddingVertical: 14, paddingHorizontal: 16, overflow: 'hidden' },
-    trainIcon: { width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(255,255,255,0.22)', alignItems: 'center', justifyContent: 'center' },
-    trainTitle: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
-    trainSub: { color: 'rgba(255,255,255,0.9)', fontSize: 12, marginTop: 1 },
-    trainTimer: { color: '#FFFFFF', fontSize: 24, fontWeight: '800' },
     quickBox: { backgroundColor: c.surface, borderRadius: 16, padding: 10, gap: 8 },
     quickRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
     quickInput: { flex: 1, marginBottom: 0 },
