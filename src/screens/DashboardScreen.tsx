@@ -21,7 +21,6 @@ import { useStore } from '../store';
 import { useTheme, ThemeColors, readableTextOn, neonGlow, cardEdge } from '../utils/theme';
 import { useScratchpad } from '../hooks/useScratchpad';
 import { parseScratchpad, prependScratch, sortScratch, localNoonISO } from '../components/Scratchpad';
-import { DatePickerModal } from '../components/DatePickerModal';
 import { useFirebaseAuth } from '../hooks/useFirebaseAuth';
 import { useGoogleTasksSync } from '../hooks/useGoogleTasksSync';
 import { useGoogleContactsBirthdaysSync } from '../hooks/useGoogleContactsBirthdaysSync';
@@ -38,6 +37,7 @@ import { AllowanceMonth, subscribeToAllowanceMonths, monthKey, formatEuro, forma
 import { useFamily } from '../hooks/useFamily';
 import { SharedNotepad } from '../components/SharedNotepad';
 import { GeistesKacheln, colorFor, extractLinks } from '../components/GeistesKacheln';
+import { QuickAddModal } from '../components/QuickAddModal';
 import { autoIcon } from '../utils/iconSuggest';
 import { addGeistesKachel } from '../services/geistesKacheln';
 import { LinkCardBar } from '../components/LinkCardBar';
@@ -253,7 +253,6 @@ export function DashboardScreen() {
   const [quickAddText, setQuickAddText] = useState('');
   // TE-69: Fälligkeit für „+ Aufgabe" – Standard heute, wählbar morgen/eigenes Datum.
   const [quickAddDue, setQuickAddDue] = useState<Date>(() => new Date());
-  const [quickAddPickerOpen, setQuickAddPickerOpen] = useState(false);
 
   // TE-168: Als Favorit markierte Google-Drive-Dateien für die Kurzübersicht.
   // 401 = abgelaufenes Token → einmal mit frischem Token retryen, analog zum
@@ -991,84 +990,18 @@ export function DashboardScreen() {
       )}
 
 
-      {/* TE-152: Schnell-Anlegen-Modal für Aufgaben & Ideen – ein Textfeld,
-          Absenden legt den Eintrag direkt an (kein voller Formular-Umweg). */}
-      <Modal
+      {/* TE-152/TE-70: Schnell-Anlegen-Modal für Aufgaben, Ideen & Geistesblitze. */}
+      <QuickAddModal
         visible={quickAddKind !== null}
-        animationType="fade"
-        transparent
-        onRequestClose={handleQuickAddSubmit}
-      >
-        <View style={[styles.feedModalOverlay, { backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center' }]}>
-          <Pressable
-            style={StyleSheet.absoluteFill}
-            // TE-13: Tippen daneben legt Getipptes an statt es zu verwerfen.
-            onPress={handleQuickAddSubmit}
-          />
-          <View style={[styles.quickAddCard, { backgroundColor: colors.background }]}>
-            <Text style={[styles.feedModalTitle, { color: colors.text }]}>
-              {quickAddKind === 'personal' ? 'Neue Aufgabe' : quickAddKind === 'blitz' ? 'Neuer Geistesblitz' : 'Neue Idee'}
-            </Text>
-            <TextInput
-              value={quickAddText}
-              onChangeText={setQuickAddText}
-              placeholder="Text eingeben …"
-              placeholderTextColor={colors.textMuted}
-              style={[styles.quickAddInput, { color: colors.text, borderColor: colors.border }]}
-              autoFocus
-              multiline
-              textAlignVertical="top"
-            />
-            {quickAddKind === 'personal' && (() => {
-              // TE-69: Fälligkeit wählen – Heute (Standard), Morgen oder eigenes Datum.
-              const todayStr = localDateStr(new Date().toISOString());
-              const tm = new Date(); tm.setDate(tm.getDate() + 1);
-              const tomorrowStr = localDateStr(tm.toISOString());
-              const dueStr = localDateStr(quickAddDue.toISOString());
-              const custom = dueStr !== todayStr && dueStr !== tomorrowStr;
-              const chip = (label: string, active: boolean, onPress: () => void, icon?: boolean) => (
-                <Pressable
-                  key={label}
-                  onPress={onPress}
-                  style={[styles.quickAddDueChip, { borderColor: active ? colors.accent : colors.border, backgroundColor: active ? colors.accent : colors.surface }]}
-                >
-                  {icon && <Ionicons name="calendar-outline" size={14} color={active ? colors.accentFg : colors.text} />}
-                  <Text style={[styles.quickAddDueText, { color: active ? colors.accentFg : colors.text }]}>{label}</Text>
-                </Pressable>
-              );
-              return (
-                <View style={styles.quickAddDueRow}>
-                  {chip('Heute', dueStr === todayStr, () => setQuickAddDue(new Date()))}
-                  {chip('Morgen', dueStr === tomorrowStr, () => setQuickAddDue(tm))}
-                  {chip(custom ? quickAddDue.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }) : 'Datum…', custom, () => setQuickAddPickerOpen(true), true)}
-                </View>
-              );
-            })()}
-            {(() => {
-              // TE-62: Speichern im Verlauf des Typs (Aufgabe blau / Idee gelb), sonst Akzentfläche.
-              const g = colors.gradients?.[quickAddKind === 'notiz' ? 'idea' : quickAddKind === 'blitz' ? 'blitz' : 'task'];
-              return (
-                <GradientButton
-                  gradient={g}
-                  onPress={handleQuickAddSubmit}
-                  style={styles.quickAddSaveBtn}
-                  fallbackStyle={{ backgroundColor: colors.accent }}
-                >
-                  <Text style={[styles.quickAddSaveText, { color: g ? g.fg : colors.accentFg }]}>Speichern</Text>
-                </GradientButton>
-              );
-            })()}
-          </View>
-        </View>
-        {/* TE-69: im Quick-Add-Modal verschachtelt, damit iOS nicht zwei Modals parallel präsentieren muss. */}
-        <DatePickerModal
-          visible={quickAddPickerOpen}
-          value={quickAddDue}
-          onConfirm={(d) => { setQuickAddDue(d); setQuickAddPickerOpen(false); }}
-          onCancel={() => setQuickAddPickerOpen(false)}
-          colors={colors}
-        />
-      </Modal>
+        title={quickAddKind === 'personal' ? 'Neue Aufgabe' : quickAddKind === 'blitz' ? 'Neuer Geistesblitz' : 'Neue Idee'}
+        value={quickAddText}
+        onChangeText={setQuickAddText}
+        onSubmit={handleQuickAddSubmit}
+        colors={colors}
+        gradient={colors.gradients?.[quickAddKind === 'notiz' ? 'idea' : quickAddKind === 'blitz' ? 'blitz' : 'task']}
+        due={quickAddKind === 'personal' ? quickAddDue : undefined}
+        onDueChange={setQuickAddDue}
+      />
 
       {/* ── Schnellzugriff (privat): Links + Drive-Favoriten (TE-168) in einer
           gemeinsamen, horizontal scrollenden Zeile. ── */}
@@ -1273,51 +1206,6 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
     feedModalTitle: {
       fontSize: 17,
       fontWeight: '700',
-    },
-
-    // TE-152: Schnell-Anlegen-Modal (Personal Tasks / Notizen).
-    quickAddCard: {
-      marginHorizontal: 24,
-      borderRadius: 16,
-      padding: 20,
-      gap: 12,
-    },
-    quickAddInput: {
-      borderWidth: 1,
-      borderRadius: 10,
-      paddingHorizontal: 12,
-      paddingVertical: 10,
-      fontSize: 15,
-      minHeight: 140,
-      maxHeight: 320,
-    },
-    quickAddDueRow: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: 6,
-    },
-    quickAddDueChip: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 4,
-      borderWidth: 1,
-      borderRadius: 999,
-      paddingHorizontal: 12,
-      paddingVertical: 6,
-    },
-    quickAddDueText: {
-      fontSize: 13,
-      fontWeight: '600',
-    },
-    quickAddSaveBtn: {
-      borderRadius: 10,
-      paddingVertical: 10,
-      alignItems: 'center',
-    },
-    quickAddSaveText: {
-      color: '#fff',
-      fontWeight: '600',
-      fontSize: 14,
     },
 
     section: {},

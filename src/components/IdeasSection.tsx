@@ -13,12 +13,13 @@
  * zwei Geräte gleichzeitig migrieren) und danach gelöscht.
  */
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Text, TextInput, Pressable, StyleSheet, Alert } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { View, Text, Pressable, StyleSheet, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Note, QuickNote } from '../types';
 import { useTheme, neonGlow } from '../utils/theme';
 import { GradientButton, PLUS_BUTTON, PLUS_ICON_SIZE } from './GradientButton';
+import { QuickAddModal } from './QuickAddModal';
 import { useFirebaseAuth } from '../hooks/useFirebaseAuth';
 import { useFamily } from '../hooks/useFamily';
 import { subscribeToQuickNotes, addQuickNote, deleteQuickNote } from '../services/quickNotesService';
@@ -44,7 +45,8 @@ export function IdeasSection({ onToTask }: { onToTask: (text: string) => void })
   const uid = user?.uid;
   const [ideas, setIdeas] = useState<QuickNote[]>([]);
   const [draft, setDraft] = useState('');
-  const inputRef = useRef<TextInput>(null);
+  // TE-70: + öffnet das zentrierte Schnell-Anlegen-Modal statt Inline-Zeile.
+  const [addOpen, setAddOpen] = useState(false);
 
   useEffect(() => {
     if (!familyId || !uid) return;
@@ -68,9 +70,9 @@ export function IdeasSection({ onToTask }: { onToTask: (text: string) => void })
 
   const submit = useCallback(() => {
     const text = draft.trim();
-    if (!text || !familyId || !uid) return;
-    addQuickNote(familyId, uid, text).catch(showError);
+    if (text && familyId && uid) addQuickNote(familyId, uid, text).catch(showError);
     setDraft('');
+    setAddOpen(false);
   }, [draft, familyId, uid]);
 
   const remove = useCallback((idea: QuickNote) => {
@@ -90,7 +92,7 @@ export function IdeasSection({ onToTask }: { onToTask: (text: string) => void })
         <Text style={[s.title, { color: colors.text }]}>Ideen</Text>
         <GradientButton
           gradient={colors.gradients?.idea}
-          onPress={() => inputRef.current?.focus()}
+          onPress={() => setAddOpen(true)}
           style={[s.addBtn, PLUS_BUTTON]}
           fallbackStyle={[
             {
@@ -108,26 +110,9 @@ export function IdeasSection({ onToTask }: { onToTask: (text: string) => void })
 
       <View style={s.body}>
         <View style={[s.list, { borderColor: colors.border }]}>
-          <View style={[s.row, ideas.length > 0 && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}>
-            <Ionicons name="add" size={18} color={colors.textSecondary} />
-            <TextInput
-              ref={inputRef}
-              style={[s.input, { color: colors.text }]}
-              value={draft}
-              onChangeText={setDraft}
-              placeholder="Neue Idee…"
-              placeholderTextColor={colors.textMuted}
-              onSubmitEditing={submit}
-              returnKeyType="done"
-              blurOnSubmit={false}
-            />
-            {draft.trim() ? (
-              <Pressable onPress={submit} hitSlop={8}>
-                <Text style={[s.save, { color: colors.accent }]}>Sichern</Text>
-              </Pressable>
-            ) : null}
-          </View>
-
+          {ideas.length === 0 && (
+            <Text style={[s.row, s.text, { color: colors.textMuted }]}>Noch keine Ideen – über + anlegen.</Text>
+          )}
           {ideas.map((idea, i) => (
             <View
               key={idea.id}
@@ -145,6 +130,15 @@ export function IdeasSection({ onToTask }: { onToTask: (text: string) => void })
           ))}
         </View>
       </View>
+      <QuickAddModal
+        visible={addOpen}
+        title="Neue Idee"
+        value={draft}
+        onChangeText={setDraft}
+        onSubmit={submit}
+        colors={colors}
+        gradient={colors.gradients?.idea}
+      />
     </View>
   );
 }

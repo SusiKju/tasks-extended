@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback, useRef } from 'react';
+import React, { useMemo, useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -11,7 +11,8 @@ import { useStore } from '../store';
 import { TaskCard } from '../components/TaskCard';
 import { useTheme, ThemeColors, neonGlow } from '../utils/theme';
 import { GradientButton, PLUS_BUTTON, PLUS_ICON_SIZE } from '../components/GradientButton';
-import { Scratchpad, ScratchEntry, prependScratch } from '../components/Scratchpad';
+import { Scratchpad, ScratchEntry, prependScratch, localNoonISO } from '../components/Scratchpad';
+import { QuickAddModal } from '../components/QuickAddModal';
 import { useScratchpad } from '../hooks/useScratchpad';
 import { IdeasSection } from '../components/IdeasSection';
 import { addQuickNote } from '../services/quickNotesService';
@@ -34,7 +35,16 @@ export function TaskListScreen() {
     removeHistory,
     clearHistory,
   } = useScratchpad();
-  const scratchAddRef = useRef<(() => void) | null>(null);
+  // TE-70: + öffnet dasselbe zentrierte Modal wie im Dashboard.
+  const [addOpen, setAddOpen] = useState(false);
+  const [addText, setAddText] = useState('');
+  const [addDue, setAddDue] = useState<Date>(() => new Date());
+  const submitAdd = useCallback(() => {
+    const text = addText.trim();
+    if (text) onScratchpadChange(prependScratch(useStore.getState().scratchpad, text, localNoonISO(addDue)));
+    setAddText('');
+    setAddOpen(false);
+  }, [addText, addDue, onScratchpadChange]);
 
   // TE-3: Idee → Aufgabe. Frischer Store-Wert statt Closure, damit eine
   // gerade getippte Aufgabe nicht überschrieben wird.
@@ -92,7 +102,7 @@ export function TaskListScreen() {
             <Text style={styles.groupTitle}>Aufgaben</Text>
             <GradientButton
               gradient={colors.gradients?.task}
-              onPress={() => scratchAddRef.current?.()}
+              onPress={() => { setAddDue(new Date()); setAddOpen(true); }}
               style={[styles.bigAddBtn, PLUS_BUTTON]}
               accessibilityLabel="Aufgabe anlegen"
             >
@@ -105,7 +115,6 @@ export function TaskListScreen() {
               onChange={onScratchpadChange}
               isDark={isDark}
               colors={colors}
-              registerAdd={(fn) => { scratchAddRef.current = fn; }}
               history={scratchpadHistory}
               onArchive={archiveNote}
               onRemoveHistory={removeHistory}
@@ -118,6 +127,17 @@ export function TaskListScreen() {
         {/* ── Ideen (TE-3: ehemals Notizen) ── */}
         <IdeasSection onToTask={ideaToTask} />
       </ScrollView>
+      <QuickAddModal
+        visible={addOpen}
+        title="Neue Aufgabe"
+        value={addText}
+        onChangeText={setAddText}
+        onSubmit={submitAdd}
+        colors={colors}
+        gradient={colors.gradients?.task}
+        due={addDue}
+        onDueChange={setAddDue}
+      />
     </View>
   );
 }

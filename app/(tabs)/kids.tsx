@@ -25,6 +25,7 @@ function crossInfo(title: string, message: string) {
 }
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../src/utils/theme';
+import { QuickAddModal } from '../../src/components/QuickAddModal';
 import { GradientButton, PLUS_BUTTON, PLUS_ICON_SIZE } from '../../src/components/GradientButton';
 import { useStore } from '../../src/store';
 import {
@@ -88,6 +89,7 @@ export default function KinderScreen() {
   // Taschengeld-Verlauf pro Kind, echtzeit-synchron mit der Kinder-App (TE-72).
   const [allowanceByChild, setAllowanceByChild] = useState<Record<string, Record<string, AllowanceMonth>>>({});
   const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [addOpen, setAddOpen] = useState(false);
   // Modus-Umschalter (TE-93): Einzelne | Gruppe | Extras. groupMode wird daraus
   // abgeleitet, damit der bestehende Code unverändert auf groupMode zugreifen kann.
   const [mode, setMode] = useState<'single' | 'group' | 'extras'>('single');
@@ -237,6 +239,15 @@ export default function KinderScreen() {
       crossInfo('Fehler', e?.message ?? 'Gruppenaufgabe konnte nicht angelegt werden.');
     }
   }, [fid, familyChildren, newTaskTitle, groupSelection, draftRepeat, buildDraftReward, resetDraftReward]);
+
+  // TE-70: Modal schließen und (falls Text da) anlegen – Tippen daneben speichert (TE-13).
+  // Gruppe ohne gewählte Kinder: Modal bleibt offen, Hinweis kommt aus handleAddGroupTask.
+  const submitAdd = useCallback(() => {
+    if (!newTaskTitle.trim()) { setAddOpen(false); return; }
+    if (groupMode && !familyChildren.some((c) => groupSelection[c.id])) { handleAddGroupTask(); return; }
+    setAddOpen(false);
+    (groupMode ? handleAddGroupTask : handleAddTask)();
+  }, [newTaskTitle, groupMode, familyChildren, groupSelection, handleAddGroupTask, handleAddTask]);
 
   // Verschickt Push & E-Mail für genau ein Kind (HTML-Aufbau + Versand lebt in
   // taskMail.ts, damit der automatische Versand ihn auch ohne gemountete
@@ -693,26 +704,28 @@ export default function KinderScreen() {
 
       {/* Aufgabe hinzufügen — Einzel- oder Gruppenaufgabe (TE-56/TE-111) */}
       <View style={s.section}>
-        <Text style={s.sectionTitle}>
-          {groupMode
-            ? 'Gruppenaufgabe hinzufügen'
-            : `Aufgabe für ${childName(selectedChild)} hinzufügen`}
-        </Text>
-        <View style={s.inputRow}>
-          <TextInput
-            style={s.input}
-            placeholder={groupMode ? 'Neue Gruppenaufgabe...' : 'Neue Aufgabe...'}
-            placeholderTextColor={colors.placeholder}
-            value={newTaskTitle}
-            onChangeText={setNewTaskTitle}
-            onSubmitEditing={groupMode ? handleAddGroupTask : handleAddTask}
-            returnKeyType="done"
-          />
-          <GradientButton gradient={colors.gradients?.task} style={[s.addBtn, PLUS_BUTTON]} onPress={groupMode ? handleAddGroupTask : handleAddTask} accessibilityLabel="Aufgabe hinzufügen">
+        {/* TE-70: + öffnet das zentrierte Schnell-Anlegen-Modal (Textarea + Belohnung + Wiederholung). */}
+        <View style={[s.inputRow, { alignItems: 'center' }]}>
+          <Text style={[s.sectionTitle, { flex: 1 }]}>
+            {groupMode
+              ? 'Gruppenaufgabe hinzufügen'
+              : `Aufgabe für ${childName(selectedChild)} hinzufügen`}
+          </Text>
+          <GradientButton gradient={colors.gradients?.task} style={[s.addBtn, PLUS_BUTTON]} onPress={() => setAddOpen(true)} accessibilityLabel="Aufgabe hinzufügen">
             <Ionicons name="add" size={PLUS_ICON_SIZE} color={colors.gradients?.task?.fg ?? colors.accentFg} />
           </GradientButton>
         </View>
+      </View>
 
+      <QuickAddModal
+        visible={addOpen}
+        title={groupMode ? 'Neue Gruppenaufgabe' : `Neue Aufgabe für ${childName(selectedChild)}`}
+        value={newTaskTitle}
+        onChangeText={setNewTaskTitle}
+        onSubmit={submitAdd}
+        colors={colors}
+        gradient={colors.gradients?.task}
+      >
         {/* Belohnung für diese Aufgabe (TE-61) — Default "Keine", nach Anlegen zurückgesetzt. */}
         <Text style={s.rewardPickerLabel}>Belohnung (optional)</Text>
         <View style={s.rewardPickerRow}>
@@ -752,7 +765,7 @@ export default function KinderScreen() {
         {/* Wiederholung (TE-57) — Default "Einmalig", nach Anlegen zurückgesetzt. */}
         <Text style={s.rewardPickerLabel}>Wiederholung</Text>
         {renderRepeatPicker(draftRepeat, setDraftRepeat)}
-      </View>
+      </QuickAddModal>
 
       {/* Inhalt: Gruppenaufgaben-Liste (Gruppe) oder Aufgaben + Belohnung (Einzelne) (TE-56) */}
       {groupMode ? (

@@ -153,7 +153,7 @@ export function prependScratch(raw: string, text: string, dueDate: string | null
 }
 
 export function Scratchpad({
-  value, onChange, isDark, colors, registerAdd, readOnly = false,
+  value, onChange, isDark, colors, readOnly = false,
   history = [], onArchive, onRemoveHistory, onClearHistory, onToIdea,
 }: {
   value: string;
@@ -161,8 +161,6 @@ export function Scratchpad({
   onChange?: (t: string) => void;
   isDark: boolean;
   colors: ThemeColors;
-  // TE-85: erlaubt dem Header-Plus-Button, eine Notiz oben anzulegen.
-  registerAdd?: (fn: () => void) => void;
   // TE-104: Dashboard zeigt den Notizblock nur an (kein Anlegen/Bearbeiten/Löschen).
   readOnly?: boolean;
   // TE-112: Verlauf gelöschter Notizen (nur im editierbaren Block sichtbar).
@@ -222,23 +220,6 @@ export function Scratchpad({
     emit(serializeScratchpad(next));
   }, [entries, emit]);
 
-  // TE-85: neue Notiz mit höchster Priorität (Position 0) + Default-Pink.
-  // Ist die einzige vorhandene Notiz noch leer, wird sie wiederverwendet statt
-  // eine zweite leere Bubble zu erzeugen.
-  const addEntryAtTop = useCallback(() => {
-    const newId = makeNoteId();
-    if (entries.length === 1 && entries[0].text === '') {
-      const id = entries[0].id ?? newId;
-      emit(serializeScratchpad([{ id, text: '', color: NOTE_DEFAULT_COLOR }]));
-      setDraftId(id);
-    } else {
-      emit(serializeScratchpad([{ id: newId, text: '', color: NOTE_DEFAULT_COLOR }, ...entries]));
-      setDraftId(newId);
-    }
-    setTimeout(() => inputRefs.current[0]?.focus(), 40);
-  }, [entries, emit]);
-
-  useEffect(() => { if (!readOnly) registerAdd?.(addEntryAtTop); }, [registerAdd, addEntryAtTop, readOnly]);
 
   // TE-95: Notizen ohne stabile id (Alt-Daten, oder eine vor dieser Migration
   // angelegte Notiz) bekommen einmalig eine – sonst hängen sich Feed-Highlight

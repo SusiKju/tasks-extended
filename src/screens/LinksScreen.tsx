@@ -142,7 +142,8 @@ function LinkModal({ visible, editing, onSave, onDelete, onClose, colors }: Moda
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={dismiss}>
+    // TE-70: mittig zentriert wie das Schnell-Anlegen-Modal (QuickAddModal).
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={dismiss}>
       <KeyboardAvoidingView style={s.overlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <Pressable style={StyleSheet.absoluteFill} onPress={dismiss} />
         <View style={[s.sheet, { backgroundColor: colors.surface, borderTopColor: color }]}>
@@ -423,11 +424,10 @@ const s = StyleSheet.create({
   },
 
   // Modal
-  overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: '#00000099' },
+  overlay: { flex: 1, justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.5)' },
   sheet: {
-    borderTopLeftRadius: 22, borderTopRightRadius: 22,
-    borderTopWidth: 3, paddingHorizontal: 16,
-    paddingBottom: Platform.OS === 'ios' ? 36 : 20, gap: 12, paddingTop: 20,
+    width: '88%', maxWidth: 520, alignSelf: 'center',
+    borderRadius: 16, borderTopWidth: 3, padding: 20, gap: 12,
   },
   previewWrap: { alignSelf: 'center', marginBottom: 4 },
   input: { borderWidth: 1.5, borderRadius: 10, padding: 12, fontSize: 14 },
