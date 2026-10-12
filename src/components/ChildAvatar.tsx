@@ -6,7 +6,6 @@
 import React from 'react';
 import { View, Text, Image, ImageSourcePropType } from 'react-native';
 import type { ChildConfig } from '../services/family';
-import { useTheme } from '../utils/theme';
 
 const AVATARS: Record<string, ImageSourcePropType> = {
   lenny: require('../../assets/avatars/lenny.png'),
@@ -25,7 +24,6 @@ interface Props {
 }
 
 export default function ChildAvatar({ child, size = 28 }: Props) {
-  const { colors } = useTheme();
   const src = childAvatarSource(child.name);
   const circle = { width: size, height: size, borderRadius: size / 2 };
   if (src) {
@@ -33,8 +31,8 @@ export default function ChildAvatar({ child, size = 28 }: Props) {
       <Image
         source={src}
         accessibilityLabel={child.name}
-        // TE-73: PNGs sind transparente Strichzeichnungen; Linien in Textfarbe (Dark Theme = weiß).
-        style={[circle, { tintColor: colors.text }]}
+        // TE-73: PNGs sind freigestellte Köpfe (Umgebung transparent), ohne Farbring.
+        style={circle}
       />
     );
   }
