@@ -45,6 +45,7 @@ import { NewGradesNotice } from '../components/NewGradesNotice';
 import { useFuerUns } from '../hooks/useFuerUns';
 import { CountdownStrip } from '../components/CountdownStrip';
 import { WeckmodusCard } from '../components/WeckmodusCard';
+import { TodayHero } from '../components/TodayHero';
 import { addQuickNote } from '../services/quickNotesService';
 import { DashboardBlockKey, Task } from '../types';
 
@@ -244,6 +245,8 @@ export function DashboardScreen() {
   // gehen weiterhin über das bestehende Anlegen-Formular, siehe onAdd unten).
   const [quickAddKind, setQuickAddKind] = useState<'personal' | 'notiz' | null>(null);
   const [quickAddText, setQuickAddText] = useState('');
+  // TE-60: „+ Geistesblitz" in der TodayHero-Karte öffnet das Modal in GeistesKacheln.
+  const [blitzRequest, setBlitzRequest] = useState(0);
 
   // TE-168: Als Favorit markierte Google-Drive-Dateien für die Kurzübersicht.
   // 401 = abgelaufenes Token → einmal mit frischem Token retryen, analog zum
@@ -624,6 +627,15 @@ export function DashboardScreen() {
         </View>
       </View>
 
+      {/* ── TE-60: Tagesring + „Als Nächstes" + Schnell-Anlegen (Aufgabe/Idee/Geistesblitz) ── */}
+      <TodayHero
+        colors={colors}
+        todayEvents={showBlock('calendar') && settings.googleCalendarEnabled ? todayEvents : []}
+        onAddTask={() => setQuickAddKind('personal')}
+        onAddIdea={() => setQuickAddKind('notiz')}
+        onAddBlitz={showBlock('geistesblitze') ? () => setBlitzRequest((n) => n + 1) : undefined}
+      />
+
       {/* ── Weckmodus (TE-82): nur morgens 5-7 Uhr an Schultagen relevant, ── */}
       {/* die Karte selbst entscheidet, ob sie überhaupt etwas rendert. ── */}
       {showBlock('weckmodus') && <WeckmodusCard colors={colors} />}
@@ -901,22 +913,7 @@ export function DashboardScreen() {
 
         return (
           <View>
-            <View style={labelStyles.row}>
-              {/* TE-35: „Heute“ steht jetzt in der Datumsspalte der Karte. */}
-              <View />
-              <View style={labelStyles.actions}>
-                {showBlock('scratchpad') && (
-                  <Pressable onPress={() => setQuickAddKind('personal')} hitSlop={8} accessibilityLabel="Aufgabe anlegen">
-                    <Ionicons name="checkbox-outline" size={16} color={colors.textSecondary} />
-                  </Pressable>
-                )}
-                {/* TE-3: Ideen erscheinen nicht auf dem Dashboard, lassen sich hier aber schnell festhalten. */}
-                <Pressable onPress={() => setQuickAddKind('notiz')} hitSlop={8} accessibilityLabel="Idee anlegen">
-                  <Ionicons name="bulb-outline" size={16} color={colors.textSecondary} />
-                </Pressable>
-              </View>
-            </View>
-
+            {/* TE-60: Schnell-Anlegen-Icons sind in die TodayHero-Karte gewandert. */}
             {/* TE-35 (Variante B): Agenda mit Datumsspalte links – Heute groß mit
                 Akzentbalken, Morgen klein und grau als Vorschau. */}
             <View style={[styles.card, styles.todayEventsGlowCard, { elevation: 0 }]}>
@@ -968,7 +965,7 @@ export function DashboardScreen() {
           eingetragen werden kann, ohne erst am gesamten Dashboard vorbei zu
           scrollen. */}
       {showBlock('geistesblitze') && (
-        <GeistesKacheln colors={colors} isDark={isDark} areaWidth={effW} columns={wideCols} compact />
+        <GeistesKacheln colors={colors} isDark={isDark} areaWidth={effW} columns={wideCols} compact newRequest={blitzRequest} />
       )}
 
       {/* ── Countdowns (privat): direkt unter Geistesblitze statt weit unten

@@ -461,7 +461,7 @@ const MIN_TILE = 44;
 
 // ─── Hauptkomponente ──────────────────────────────────────────────────────────
 
-export function GeistesKacheln({ colors, isDark, areaWidth, columns, compact = false }: { colors: ThemeColors; isDark: boolean; areaWidth?: number; columns?: number; compact?: boolean }) {
+export function GeistesKacheln({ colors, isDark, areaWidth, columns, compact = false, newRequest = 0 }: { colors: ThemeColors; isDark: boolean; areaWidth?: number; columns?: number; compact?: boolean; /** TE-60: Zähler – jede Erhöhung öffnet „Neuer Geistesblitz" (z. B. aus TodayHero). */ newRequest?: number }) {
   const { user } = useFirebaseAuth();
   const { familyId } = useFamily();
   const [tiles, setTiles] = useState<GeistesKachel[]>([]);
@@ -483,6 +483,7 @@ export function GeistesKacheln({ colors, isDark, areaWidth, columns, compact = f
 
   const openNew    = useCallback(() => { setEditing(null); setModalVisible(true); }, []);
   const openEdit   = useCallback((k: GeistesKachel) => { setEditing(k); setModalVisible(true); }, []);
+  useEffect(() => { if (newRequest > 0) openNew(); }, [newRequest, openNew]);
 
   const handleSave = useCallback(async (text: string, icon: string, color: string, label: string, stage: GeistesStage, links: string[]) => {
     if (!fid || !uid) return;

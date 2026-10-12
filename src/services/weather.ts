@@ -48,7 +48,17 @@ export interface WeatherForecast {
  * Gibt `null` zurück, wenn die Anfrage fehlschlägt (z. B. kein Netz) –
  * der Aufrufer blendet die Karte dann einfach aus, statt ewig zu laden.
  */
-export async function fetchWeatherForecast(): Promise<WeatherForecast | null> {
+// TE-60: Wetter-Chip und Tagesring laden gleichzeitig – ein gemeinsamer
+// Request pro 10 Minuten statt zwei. Fehlschläge werden nicht gecacht.
+let cached: { at: number; p: Promise<WeatherForecast | null> } | null = null;
+export function fetchWeatherForecast(): Promise<WeatherForecast | null> {
+  if (cached && Date.now() - cached.at < 10 * 60_000) return cached.p;
+  const p = loadWeatherForecast().then((f) => { if (!f) cached = null; return f; });
+  cached = { at: Date.now(), p };
+  return p;
+}
+
+async function loadWeatherForecast(): Promise<WeatherForecast | null> {
   try {
     const url =
       `https://api.open-meteo.com/v1/forecast` +
