@@ -53,6 +53,7 @@ import { DashboardBlockKey, Task } from '../types';
 // Fallback-Farbe falls Kind keine Farbe gesetzt hat
 const CHILD_COLOR_FALLBACK = '#4f86f7';
 import { format, differenceInCalendarDays, parseISO } from 'date-fns';
+import ChildAvatar from '../components/ChildAvatar';
 
 const TODAY = format(new Date(), 'yyyy-MM-dd');
 
@@ -209,7 +210,7 @@ export function DashboardScreen() {
   // Lookup-Helfer für dynamische Kinder-Daten
   const childName = (id: string) => familyChildren.find((c) => c.id === id)?.name ?? id;
   const childColor = (id: string) => familyChildren.find((c) => c.id === id)?.color ?? CHILD_COLOR_FALLBACK;
-  const childEmoji = (id: string) => familyChildren.find((c) => c.id === id)?.emoji ?? null;
+  const childOf = (id: string) => ({ name: childName(id), color: childColor(id), emoji: familyChildren.find((c) => c.id === id)?.emoji ?? null });
   const { settings, birthdays: storeBirthdays, tasks } = useStore();
   // TE-104: Notizblock-Wert + Firestore-Abo zentral aus dem Hook. Das Dashboard
   // zeigt ihn nur an (readOnly); bearbeitet wird er im Tasks-Tab.
@@ -853,9 +854,7 @@ export function DashboardScreen() {
           ].filter(Boolean).join(' · ');
           return (
             <View key={`kr-${childId}`} style={[styles.dezentRow, styles.rowDivider]}>
-              <View style={[styles.kidAvatar, { backgroundColor: childColor(childId) }]}>
-                <Text style={styles.kidAvatarText}>{childEmoji(childId) ?? childName(childId).charAt(0)}</Text>
-              </View>
+              <ChildAvatar child={childOf(childId)} size={30} />
               {/* TE-56: Name vor den Aufgaben (flach, kein Extra-Zeile) – das Emoji allein verrät nicht, wer gemeint ist. */}
               <Pressable style={{ flex: 1, flexDirection: 'row', gap: 8 }} onPress={() => router.push('/(tabs)/kids' as any)}>
                 <Text style={{ fontSize: 13.5, fontWeight: '700', color: colors.text }} numberOfLines={1}>{childName(childId)}</Text>
@@ -1072,11 +1071,7 @@ export function DashboardScreen() {
                     onPress={() => router.push({ pathname: '/(tabs)/schule', params: { child: childId } } as any)}
                     style={({ pressed }) => [styles.kidHeaderRow, styles.rowDivider, { opacity: pressed ? 0.6 : 1 }]}
                   >
-                    <View style={[styles.kidAvatar, { backgroundColor: childColor(childId) }]}>
-                      <Text style={styles.kidAvatarText}>
-                        {childEmoji(childId) ?? childName(childId).charAt(0)}
-                      </Text>
-                    </View>
+                    <ChildAvatar child={childOf(childId)} size={30} />
                     <Text style={[styles.kidHeaderText, { color: colors.textMuted }]}>
                       {childName(childId)}
                     </Text>
@@ -1130,11 +1125,7 @@ export function DashboardScreen() {
                   onPress={() => openAllowanceEdit(child.id)}
                   style={[styles.kidRow, styles.rowDivider]}
                 >
-                  <View style={[styles.kidAvatar, { backgroundColor: childColor(child.id) }]}>
-                    <Text style={styles.kidAvatarText}>
-                      {childEmoji(child.id) ?? childName(child.id).charAt(0)}
-                    </Text>
-                  </View>
+                  <ChildAvatar child={childOf(child.id)} size={30} />
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.kidTaskText, { color: colors.text }]} numberOfLines={1}>
                       {childName(child.id)}
@@ -1463,14 +1454,6 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
       paddingHorizontal: 14,
       paddingVertical: 10,
     },
-    kidAvatar: {
-      width: 22,
-      height: 22,
-      borderRadius: 11,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    kidAvatarText: { fontSize: 11, fontWeight: '800', color: '#fff' },
     // Gruppenarbeit-Karte (TE-115)
     groupTitle: {
       fontSize: 14,

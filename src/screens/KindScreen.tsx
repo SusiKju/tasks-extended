@@ -44,6 +44,7 @@ async function requestWebNotificationPermission(): Promise<void> {
   }
 }
 import { format } from 'date-fns';
+import ChildAvatar from '../components/ChildAvatar';
 
 const TODAY = format(new Date(), 'yyyy-MM-dd');
 const STORAGE_KEY = 'kinder_child_id';
@@ -212,9 +213,8 @@ export default function KindScreen({ onExitChildMode }: Props) {
               style={[s.nameBtn, { backgroundColor: child.color }]}
               onPress={() => handleSelectChild(child.id)}
             >
-              <Text style={s.nameBtnText}>
-                {child.emoji ? `${child.emoji} ` : ''}{child.name}
-              </Text>
+              <ChildAvatar child={child} size={84} />
+              <Text style={s.nameBtnText}>{child.name}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -598,7 +598,7 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
     nameGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 16, justifyContent: 'center' },
     nameBtn: {
       width: 140, height: 140, borderRadius: 24, backgroundColor: colors.accentNeon,
-      justifyContent: 'center', alignItems: 'center',
+      justifyContent: 'center', alignItems: 'center', gap: 6,
     },
     nameBtnText: { fontSize: 24, fontWeight: '800', color: '#000' },
     // Header

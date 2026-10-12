@@ -37,6 +37,7 @@ import {
 import { DatePickerModal } from '../components/DatePickerModal';
 import { useSchuleSyncStatus } from '../hooks/useSchuleSyncStatus';
 import { normalizeUrl } from '../services/links';
+import ChildAvatar from '../components/ChildAvatar';
 
 type SyncState = { status: 'idle' | 'syncing' | 'done' | 'error'; message?: string };
 type ScreenView = 'plan' | 'noten' | 'klassenbuch';
@@ -697,12 +698,11 @@ export default function SchuleScreen() {
           return (
             <TouchableOpacity
               key={child.id}
-              style={[s.childChip, isSelected && { backgroundColor: child.color }]}
+              style={[s.childChip, { flexDirection: 'row', alignItems: 'center', gap: 6, paddingLeft: 4 }, isSelected && { backgroundColor: child.color }]}
               onPress={() => setSelectedChild(child.id)}
             >
-              <Text style={[s.childName, isSelected && { color: readableTextOn(child.color) }]}>
-                {child.emoji ? `${child.emoji} ` : ''}{child.name}
-              </Text>
+              <ChildAvatar child={child} size={28} />
+              <Text style={[s.childName, isSelected && { color: readableTextOn(child.color) }]}>{child.name}</Text>
             </TouchableOpacity>
           );
         })}

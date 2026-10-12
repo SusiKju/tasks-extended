@@ -45,6 +45,7 @@ import { sendTaskMailToChild as sendTaskMailCore } from '../../src/services/task
 import { Match, Standing, subscribeToMatches, subscribeToTable } from '../../src/services/fussballDe';
 import uuid from 'react-native-uuid';
 import { format } from 'date-fns';
+import ChildAvatar from '../../src/components/ChildAvatar';
 
 const TODAY = format(new Date(), 'yyyy-MM-dd');
 // Schiedsrichter-Lehrgang (TE-85/TE-86): fester Link statt Freitext im refereeInfo-Feld.
@@ -632,9 +633,8 @@ export default function KinderScreen() {
                     size={15}
                     color={sel ? '#000' : colors.textMuted}
                   />
-                  <Text style={[s.groupChipText, sel && { color: '#000' }]}>
-                    {child.emoji ? `${child.emoji} ` : ''}{child.name}
-                  </Text>
+                  <ChildAvatar child={child} size={24} />
+                  <Text style={[s.groupChipText, sel && { color: '#000' }]}>{child.name}</Text>
                 </TouchableOpacity>
               );
             })}
@@ -659,8 +659,9 @@ export default function KinderScreen() {
                 }}
               >
                 {unseenIds.length > 0 && <View style={s.childUnseenDot} />}
+                <ChildAvatar child={child} size={44} />
                 <Text style={[s.childName, isSelected && { color: '#000' }]}>
-                  {child.emoji ? `${child.emoji} ` : ''}{child.name}
+                  {child.name}
                 </Text>
                 <Text style={[s.childProgress, isSelected && { color: '#000' }]}>
                   {childDone}/{childTaskList.length}
@@ -1292,7 +1293,7 @@ const styles = (colors: ReturnType<typeof useTheme>['colors']) =>
     container: { padding: 16, gap: 8, paddingBottom: 40 },
     childRow: { flexDirection: 'row', gap: 8, marginBottom: 8 },
     childChip: {
-      flex: 1, alignItems: 'center', paddingVertical: 10,
+      flex: 1, alignItems: 'center', paddingVertical: 10, gap: 4,
       borderRadius: 12, backgroundColor: colors.surface,
       borderWidth: 1, borderColor: colors.border,
       position: 'relative',

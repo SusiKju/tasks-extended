@@ -20,6 +20,7 @@ import {
   TimetableMap, key, todayDayIndex, isBiweeklyActiveWeek, needsWakeUp, subscribeToTimetable,
 } from '../services/timetable';
 import { isSchulfrei } from '../utils/schulferien';
+import ChildAvatar from './ChildAvatar';
 
 const LAST_LESSON_NR = 10;
 
@@ -80,10 +81,8 @@ export function WeckmodusCard({ colors }: { colors: ThemeColors }) {
         const wakeUp = free === 0;
         return (
         <View key={child.id} style={styles.row}>
-          <View style={[styles.dot, { backgroundColor: child.color }]} />
-          <Text style={[styles.name, { color: colors.text }]} numberOfLines={1}>
-            {child.emoji ? `${child.emoji} ` : ''}{child.name}
-          </Text>
+          <ChildAvatar child={child} size={28} />
+          <Text style={[styles.name, { color: colors.text }]} numberOfLines={1}>{child.name}</Text>
           <Ionicons
             name={wakeUp ? 'alarm-outline' : 'moon-outline'}
             size={14}
@@ -103,7 +102,6 @@ const styles = StyleSheet.create({
   wrap: { marginHorizontal: 16, marginBottom: 10, borderWidth: 1, borderRadius: 14, padding: 10, gap: 6 },
   windowLabel: { position: 'absolute', top: 6, right: 10, fontSize: 9, fontWeight: '600' },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  dot: { width: 8, height: 8, borderRadius: 4 },
   name: { fontSize: 13, fontWeight: '700', flexShrink: 1 },
   status: { fontSize: 12, flex: 1 },
 });

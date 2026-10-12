@@ -41,6 +41,7 @@ import {
   monthKey, formatMonthLabel, AllowanceMonth,
 } from '../services/allowance';
 import { parseTeamIdFromUrl } from '../services/fussballDe';
+import ChildAvatar from '../components/ChildAvatar';
 
 /** Eingabe-Toleranz: "5,50" → 5.5, leer → null, ungültig/negativ → null. */
 function parseAllowance(text: string): number | null {
@@ -679,9 +680,7 @@ export function SettingsScreen() {
             {familyChildren.map((child) => (
               <View key={child.id} style={{ width: '100%' as any, gap: 4 }}>
                 <View style={styles.childManageRow}>
-                  <View style={[styles.childColorDot, { backgroundColor: child.color }]}>
-                    <Text style={styles.childColorDotText}>{child.emoji ?? child.name.charAt(0)}</Text>
-                  </View>
+                  <ChildAvatar child={child} size={48} />
                   <Text style={[styles.rowTitle, { flex: 1, fontSize: 14 }]}>{child.name}</Text>
                   <Pressable
                     style={({ pressed }) => [{ padding: 6 }, pressed && { opacity: 0.6 }]}
@@ -765,9 +764,10 @@ export function SettingsScreen() {
               ) : (
                 familyChildren.map((child) => (
                   <View key={child.id} style={{ marginTop: 10 }}>
-                    <Text style={[styles.rowSubtitle, { marginBottom: 4 }]}>
-                      {child.emoji ? `${child.emoji} ` : ''}{child.name} · Schüler-ID
-                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                      <ChildAvatar child={child} size={28} />
+                      <Text style={styles.rowSubtitle}>{child.name} · Schüler-ID</Text>
+                    </View>
                     <TextInput
                       style={styles.settingInput}
                       value={settings.besteSchuleStudentIds?.[child.id] ?? ''}
@@ -803,9 +803,10 @@ export function SettingsScreen() {
               ) : (
                 familyChildren.map((child) => (
                   <View key={child.id} style={{ marginTop: 10 }}>
-                    <Text style={[styles.rowSubtitle, { marginBottom: 4 }]}>
-                      {child.emoji ? `${child.emoji} ` : ''}{child.name} · Mannschafts-URL
-                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                      <ChildAvatar child={child} size={28} />
+                      <Text style={styles.rowSubtitle}>{child.name} · Mannschafts-URL</Text>
+                    </View>
                     <TextInput
                       style={styles.settingInput}
                       value={settings.fussballDeTeamIds?.[child.id] ?? ''}
@@ -853,7 +854,10 @@ export function SettingsScreen() {
                       })}
                     >
                       <View style={styles.rowContent}>
-                        <Text style={styles.rowTitle}>{child.emoji ? `${child.emoji} ` : ''}{child.name}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                          <ChildAvatar child={child} size={32} />
+                          <Text style={styles.rowTitle}>{child.name}</Text>
+                        </View>
                       </View>
                       {active
                         ? <Ionicons name="checkmark-circle" size={22} color={colors.accentNeon} />
@@ -1295,14 +1299,6 @@ function makeStyles(c: ThemeColors) {
       gap: 8,
       width: '100%' as any,
     },
-    childColorDot: {
-      width: 30,
-      height: 30,
-      borderRadius: 15,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    childColorDotText: { fontSize: 14 },
     // Taschengeld-Zeile (TE-52)
     allowanceRow: {
       flexDirection: 'row',
