@@ -26,6 +26,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme, ThemeColors } from '../utils/theme';
 import { GradientButton, PLUS_BUTTON, PLUS_ICON_SIZE } from '../components/GradientButton';
 import { useFamily } from '../hooks/useFamily';
+import { useStore } from '../store';
 import { DatePickerModal } from '../components/DatePickerModal';
 import { FussballKachel } from '../components/FussballKachel';
 import { SearchInput } from '../components/SearchInput';
@@ -93,6 +94,8 @@ export function BambiniScreen() {
   const { familyId } = useFamily();
   const fid = familyId ?? '';
   const s = makeStyles(colors);
+  // TE-74: Bento Dark bekommt eine ruhigere, nach Jahrgang gruppierte Liste.
+  const bento = useStore((st) => st.settings.theme) === 'bento-night';
 
   const [children, setChildren] = useState<Child[]>([]);
   const [loading, setLoading] = useState(true);
@@ -535,6 +538,52 @@ export function BambiniScreen() {
     );
   };
 
+  // TE-74 (Bento Dark): Zeile ohne eigenen Rahmen, Eltern als zweite graue Zeile,
+  // Kontakt/Status als farbige Punkte. Alter steht im Gruppenkopf.
+  const renderBentoRow = (c: Child, first: boolean) => {
+    const dots: { color: string; label: string }[] = [];
+    if (c.whatsapp) dots.push({ color: WHATSAPP_GREEN, label: 'In WhatsApp-Gruppe' });
+    else if (c.sms) dots.push({ color: SMS_BLUE, label: 'Kommunikation per SMS' });
+    if (!c.vereinAngemeldet) dots.push({ color: NOT_ANGEMELDET_RED, label: 'Nicht im Verein angemeldet' });
+    if (c.info) dots.push({ color: INFO_YELLOW, label: 'Info vorhanden' });
+    return (
+      <Pressable
+        key={c.id}
+        style={[s.bRow, c.schnuppertraining && s.rowSchnupper]}
+        onPress={() => openEdit(c)}
+      >
+        {!first ? <View style={s.bDivider} /> : null}
+        <View style={s.bAvatar}>
+          <Text style={s.bAvatarText}>{(c.name || '?').charAt(0).toUpperCase()}</Text>
+        </View>
+        <View style={s.bMain}>
+          <View style={s.rowMain}>
+            <Text style={[s.bName, c.stopped && s.rowNameStopped]} numberOfLines={1}>{c.name}</Text>
+            {c.stopped ? <Text style={s.badgeStopped}>aufgehört</Text> : null}
+          </View>
+          {c.parentName ? <Text style={s.bParent} numberOfLines={1}>{c.parentName}</Text> : null}
+        </View>
+        <View style={s.bDots}>
+          {dots.map((d) => (
+            <View key={d.label} style={[s.bDot, { backgroundColor: d.color }]} accessibilityLabel={d.label} />
+          ))}
+        </View>
+        <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+      </Pressable>
+    );
+  };
+
+  // Gruppen nur bei Jahrgangs-Sortierung; bei „erstes Mal" eine einzige Gruppe ohne Kopf.
+  const bentoGroups: { year: number | null; items: Child[] }[] = [];
+  if (bento) {
+    sorted.forEach((c) => {
+      const key = sortMode === 'jahrgang' ? c.birthYear : null;
+      const last = bentoGroups[bentoGroups.length - 1];
+      if (last && last.year === key) last.items.push(c);
+      else bentoGroups.push({ year: key, items: [c] });
+    });
+  }
+
   return (
     <View style={s.container}>
       {loading ? (
@@ -656,6 +705,20 @@ export function BambiniScreen() {
               <Text style={s.empty}>Noch keine Kinder. Mit „+" anlegen.</Text>
             ) : sorted.length === 0 ? (
               <Text style={s.empty}>Keine Treffer.</Text>
+            ) : bento ? (
+              bentoGroups.map((g) => (
+                <View key={String(g.year)} style={s.bSection}>
+                  {g.year !== null ? (
+                    <View style={s.bGroupHead}>
+                      <Text style={s.bGroupTitle}>
+                        {g.year ? `Jahrgang ${g.year} · ${new Date().getFullYear() - g.year} J.` : 'Ohne Jahrgang'}
+                      </Text>
+                      <Text style={s.bGroupTitle}>{g.items.length}</Text>
+                    </View>
+                  ) : null}
+                  <View style={s.bGroup}>{g.items.map((c, i) => renderBentoRow(c, i === 0))}</View>
+                </View>
+              ))
             ) : (
               sorted.map((c, index) => {
                 const status = c.birthYear ? getJahrgangStatus(c.birthYear) : null;
@@ -1242,6 +1305,28 @@ function makeStyles(c: ThemeColors) {
       paddingVertical: 2,
     },
     rowYear: { color: c.textSecondary, fontSize: 13, fontWeight: '600', width: 30, textAlign: 'right' },
+
+    // TE-74: Bento Dark – gruppierte Liste (iOS inset grouped).
+    bSection: { marginBottom: 16 },
+    bGroupHead: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 6, marginBottom: 6 },
+    bGroupTitle: { color: c.textMuted, fontSize: 12, fontWeight: '600', letterSpacing: 0.6, textTransform: 'uppercase' },
+    bGroup: { backgroundColor: c.surface, borderRadius: 14, overflow: 'hidden' },
+    bRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9, paddingHorizontal: 12 },
+    bDivider: { position: 'absolute', top: 0, left: 52, right: 0, height: StyleSheet.hairlineWidth, backgroundColor: c.border },
+    bAvatar: {
+      width: 30,
+      height: 30,
+      borderRadius: 15,
+      backgroundColor: c.surfaceHigh,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    bAvatarText: { color: c.textSecondary, fontSize: 12, fontWeight: '600' },
+    bMain: { flex: 1, minWidth: 0 },
+    bName: { color: c.text, fontSize: 15, fontWeight: '600', flexShrink: 1 },
+    bParent: { color: c.textMuted, fontSize: 12, marginTop: 1 },
+    bDots: { flexDirection: 'row', gap: 4 },
+    bDot: { width: 7, height: 7, borderRadius: 4 },
 
     fab: {
       position: 'absolute',
