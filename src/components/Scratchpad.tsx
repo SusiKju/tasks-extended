@@ -41,7 +41,7 @@ const OVERDUE_RED = '#EF4444';
 
 // TE-141: ein Date auf lokalen Mittag normalisieren, damit Zeitzonen das Datum
 // nicht um einen Tag verschieben (gleiche Logik wie utils/dateFormat).
-function localNoonISO(d: Date): string {
+export function localNoonISO(d: Date): string {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0).toISOString();
 }
 
@@ -147,9 +147,9 @@ export function serializeScratchpad(entries: ScratchEntry[]): string {
 }
 
 /** Neue Aufgabe oben einfügen (leere Platzhalter fallen dabei weg). */
-export function prependScratch(raw: string, text: string): string {
+export function prependScratch(raw: string, text: string, dueDate: string | null = null): string {
   const current = parseScratchpad(raw).filter((e) => e.text.trim() !== '');
-  return serializeScratchpad([{ id: makeNoteId(), text, color: NOTE_DEFAULT_COLOR }, ...current]);
+  return serializeScratchpad([{ id: makeNoteId(), text, color: NOTE_DEFAULT_COLOR, dueDate }, ...current]);
 }
 
 export function Scratchpad({

@@ -20,7 +20,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useStore } from '../store';
 import { useTheme, ThemeColors, readableTextOn, neonGlow, cardEdge } from '../utils/theme';
 import { useScratchpad } from '../hooks/useScratchpad';
-import { parseScratchpad, prependScratch, sortScratch } from '../components/Scratchpad';
+import { parseScratchpad, prependScratch, sortScratch, localNoonISO } from '../components/Scratchpad';
+import { DatePickerModal } from '../components/DatePickerModal';
 import { useFirebaseAuth } from '../hooks/useFirebaseAuth';
 import { useGoogleTasksSync } from '../hooks/useGoogleTasksSync';
 import { useGoogleContactsBirthdaysSync } from '../hooks/useGoogleContactsBirthdaysSync';
@@ -250,6 +251,9 @@ export function DashboardScreen() {
   // TE-68: auch „+ Geistesblitz" läuft über dieses Modal (einheitliches Design).
   const [quickAddKind, setQuickAddKind] = useState<'personal' | 'notiz' | 'blitz' | null>(null);
   const [quickAddText, setQuickAddText] = useState('');
+  // TE-69: Fälligkeit für „+ Aufgabe" – Standard heute, wählbar morgen/eigenes Datum.
+  const [quickAddDue, setQuickAddDue] = useState<Date>(() => new Date());
+  const [quickAddPickerOpen, setQuickAddPickerOpen] = useState(false);
 
   // TE-168: Als Favorit markierte Google-Drive-Dateien für die Kurzübersicht.
   // 401 = abgelaufenes Token → einmal mit frischem Token retryen, analog zum
@@ -482,7 +486,7 @@ export function DashboardScreen() {
     const text = quickAddText.trim();
     if (!text) { setQuickAddKind(null); return; }
     if (quickAddKind === 'personal') {
-      saveScratchpadText(prependScratch(scratchpad, text));
+      saveScratchpadText(prependScratch(scratchpad, text, localNoonISO(quickAddDue)));
     } else if (quickAddKind === 'notiz') {
       if (fid && user?.uid) addQuickNote(fid, user.uid, text).catch(() => {});
     } else if (quickAddKind === 'blitz') {
@@ -493,7 +497,7 @@ export function DashboardScreen() {
     }
     setQuickAddText('');
     setQuickAddKind(null);
-  }, [quickAddKind, quickAddText, scratchpad, saveScratchpadText, fid, user?.uid]);
+  }, [quickAddKind, quickAddText, quickAddDue, scratchpad, saveScratchpadText, fid, user?.uid]);
 
   // Offene, echte Aufgaben aus dem manuellen Klassenbuch je Kind – Info-
   // Einträge, abgehakte und gelöschte bleiben außen vor. Neueste zuerst,
@@ -639,7 +643,7 @@ export function DashboardScreen() {
       <TodayHero
         colors={colors}
         todayEvents={showBlock('calendar') && settings.googleCalendarEnabled ? todayEvents : []}
-        onAddTask={() => setQuickAddKind('personal')}
+        onAddTask={() => { setQuickAddDue(new Date()); setQuickAddKind('personal'); }}
         onAddIdea={() => setQuickAddKind('notiz')}
         onAddBlitz={showBlock('geistesblitze') ? () => setQuickAddKind('blitz') : undefined}
       />
@@ -1015,6 +1019,31 @@ export function DashboardScreen() {
               multiline
               textAlignVertical="top"
             />
+            {quickAddKind === 'personal' && (() => {
+              // TE-69: Fälligkeit wählen – Heute (Standard), Morgen oder eigenes Datum.
+              const todayStr = localDateStr(new Date().toISOString());
+              const tm = new Date(); tm.setDate(tm.getDate() + 1);
+              const tomorrowStr = localDateStr(tm.toISOString());
+              const dueStr = localDateStr(quickAddDue.toISOString());
+              const custom = dueStr !== todayStr && dueStr !== tomorrowStr;
+              const chip = (label: string, active: boolean, onPress: () => void, icon?: boolean) => (
+                <Pressable
+                  key={label}
+                  onPress={onPress}
+                  style={[styles.quickAddDueChip, { borderColor: active ? colors.accent : colors.border, backgroundColor: active ? colors.accent : colors.surface }]}
+                >
+                  {icon && <Ionicons name="calendar-outline" size={14} color={active ? colors.accentFg : colors.text} />}
+                  <Text style={[styles.quickAddDueText, { color: active ? colors.accentFg : colors.text }]}>{label}</Text>
+                </Pressable>
+              );
+              return (
+                <View style={styles.quickAddDueRow}>
+                  {chip('Heute', dueStr === todayStr, () => setQuickAddDue(new Date()))}
+                  {chip('Morgen', dueStr === tomorrowStr, () => setQuickAddDue(tm))}
+                  {chip(custom ? quickAddDue.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }) : 'Datum…', custom, () => setQuickAddPickerOpen(true), true)}
+                </View>
+              );
+            })()}
             {(() => {
               // TE-62: Speichern im Verlauf des Typs (Aufgabe blau / Idee gelb), sonst Akzentfläche.
               const g = colors.gradients?.[quickAddKind === 'notiz' ? 'idea' : quickAddKind === 'blitz' ? 'blitz' : 'task'];
@@ -1031,6 +1060,14 @@ export function DashboardScreen() {
             })()}
           </View>
         </View>
+        {/* TE-69: im Quick-Add-Modal verschachtelt, damit iOS nicht zwei Modals parallel präsentieren muss. */}
+        <DatePickerModal
+          visible={quickAddPickerOpen}
+          value={quickAddDue}
+          onConfirm={(d) => { setQuickAddDue(d); setQuickAddPickerOpen(false); }}
+          onCancel={() => setQuickAddPickerOpen(false)}
+          colors={colors}
+        />
       </Modal>
 
       {/* ── Schnellzugriff (privat): Links + Drive-Favoriten (TE-168) in einer
@@ -1253,6 +1290,24 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
       fontSize: 15,
       minHeight: 140,
       maxHeight: 320,
+    },
+    quickAddDueRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 6,
+    },
+    quickAddDueChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      borderWidth: 1,
+      borderRadius: 999,
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+    },
+    quickAddDueText: {
+      fontSize: 13,
+      fontWeight: '600',
     },
     quickAddSaveBtn: {
       borderRadius: 10,
