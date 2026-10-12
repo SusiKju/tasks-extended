@@ -36,7 +36,9 @@ import { SchoolItem, subscribeToSchoolItems } from '../services/schoolManual';
 import { AllowanceMonth, subscribeToAllowanceMonths, monthKey, formatEuro, formatMonthLabel, effectiveAllowance, setAllowanceOverride } from '../services/allowance';
 import { useFamily } from '../hooks/useFamily';
 import { SharedNotepad } from '../components/SharedNotepad';
-import { GeistesKacheln } from '../components/GeistesKacheln';
+import { GeistesKacheln, colorFor, extractLinks } from '../components/GeistesKacheln';
+import { autoIcon } from '../utils/iconSuggest';
+import { addGeistesKachel } from '../services/geistesKacheln';
 import { LinkCardBar } from '../components/LinkCardBar';
 import { WeatherWidget } from '../components/WeatherWidget';
 import { GoogleConnectBanner } from '../components/GoogleConnectBanner';
@@ -245,10 +247,9 @@ export function DashboardScreen() {
   // TE-152: Schnell-Anlegen für Personal Tasks & Notizen direkt aus der
   // Kurzübersicht – kleines Text-Modal statt vollem Formular (Google Tasks
   // gehen weiterhin über das bestehende Anlegen-Formular, siehe onAdd unten).
-  const [quickAddKind, setQuickAddKind] = useState<'personal' | 'notiz' | null>(null);
+  // TE-68: auch „+ Geistesblitz" läuft über dieses Modal (einheitliches Design).
+  const [quickAddKind, setQuickAddKind] = useState<'personal' | 'notiz' | 'blitz' | null>(null);
   const [quickAddText, setQuickAddText] = useState('');
-  // TE-60: „+ Geistesblitz" in der TodayHero-Karte öffnet das Modal in GeistesKacheln.
-  const [blitzRequest, setBlitzRequest] = useState(0);
 
   // TE-168: Als Favorit markierte Google-Drive-Dateien für die Kurzübersicht.
   // 401 = abgelaufenes Token → einmal mit frischem Token retryen, analog zum
@@ -484,6 +485,11 @@ export function DashboardScreen() {
       saveScratchpadText(prependScratch(scratchpad, text));
     } else if (quickAddKind === 'notiz') {
       if (fid && user?.uid) addQuickNote(fid, user.uid, text).catch(() => {});
+    } else if (quickAddKind === 'blitz') {
+      // Symbol/Farbe/Link-Chips wie im Geistesblitz-Modal automatisch ableiten.
+      const parsed = extractLinks(text);
+      const icon = autoIcon('', parsed.text);
+      if (fid && user?.uid) addGeistesKachel(fid, user.uid, parsed.text, icon, colorFor(icon, '', parsed.text), null, parsed.links).catch(() => {});
     }
     setQuickAddText('');
     setQuickAddKind(null);
@@ -635,7 +641,7 @@ export function DashboardScreen() {
         todayEvents={showBlock('calendar') && settings.googleCalendarEnabled ? todayEvents : []}
         onAddTask={() => setQuickAddKind('personal')}
         onAddIdea={() => setQuickAddKind('notiz')}
-        onAddBlitz={showBlock('geistesblitze') ? () => setBlitzRequest((n) => n + 1) : undefined}
+        onAddBlitz={showBlock('geistesblitze') ? () => setQuickAddKind('blitz') : undefined}
       />
 
       {/* ── Weckmodus (TE-82): nur morgens 5-7 Uhr an Schultagen relevant, ── */}
@@ -967,7 +973,7 @@ export function DashboardScreen() {
           eingetragen werden kann, ohne erst am gesamten Dashboard vorbei zu
           scrollen. */}
       {showBlock('geistesblitze') && (
-        <GeistesKacheln colors={colors} isDark={isDark} areaWidth={effW} columns={wideCols} compact newRequest={blitzRequest} />
+        <GeistesKacheln colors={colors} isDark={isDark} areaWidth={effW} columns={wideCols} compact />
       )}
 
       {/* ── Countdowns (privat): direkt unter Geistesblitze statt weit unten
@@ -997,7 +1003,7 @@ export function DashboardScreen() {
           />
           <View style={[styles.quickAddCard, { backgroundColor: colors.background }]}>
             <Text style={[styles.feedModalTitle, { color: colors.text }]}>
-              {quickAddKind === 'personal' ? 'Neue Aufgabe' : 'Neue Idee'}
+              {quickAddKind === 'personal' ? 'Neue Aufgabe' : quickAddKind === 'blitz' ? 'Neuer Geistesblitz' : 'Neue Idee'}
             </Text>
             <TextInput
               value={quickAddText}
@@ -1006,12 +1012,12 @@ export function DashboardScreen() {
               placeholderTextColor={colors.textMuted}
               style={[styles.quickAddInput, { color: colors.text, borderColor: colors.border }]}
               autoFocus
-              onSubmitEditing={handleQuickAddSubmit}
-              returnKeyType="done"
+              multiline
+              textAlignVertical="top"
             />
             {(() => {
               // TE-62: Speichern im Verlauf des Typs (Aufgabe blau / Idee gelb), sonst Akzentfläche.
-              const g = colors.gradients?.[quickAddKind === 'notiz' ? 'idea' : 'task'];
+              const g = colors.gradients?.[quickAddKind === 'notiz' ? 'idea' : quickAddKind === 'blitz' ? 'blitz' : 'task'];
               return (
                 <GradientButton
                   gradient={g}
@@ -1245,6 +1251,8 @@ function makeStyles(c: ThemeColors, isDark: boolean) {
       paddingHorizontal: 12,
       paddingVertical: 10,
       fontSize: 15,
+      minHeight: 140,
+      maxHeight: 320,
     },
     quickAddSaveBtn: {
       borderRadius: 10,

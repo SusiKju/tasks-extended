@@ -61,7 +61,7 @@ function symbolFor(k: GeistesKachel): string {
   return autoIcon(k.label ?? '', k.text);
 }
 
-function colorFor(icon: string, label: string, text: string): string {
+export function colorFor(icon: string, label: string, text: string): string {
   return iconColor(icon, label.trim() || text);
 }
 
@@ -74,7 +74,7 @@ function KachelSymbol({ value, size, color }: { value: string; size: number; col
 const URL_RE = /https?:\/\/[^\s<>"']+/g;
 
 /** URLs aus dem Text ziehen; übrig bleibt der Text ohne URLs (Leerzeilen zusammengefasst). */
-function extractLinks(text: string): { text: string; links: string[] } {
+export function extractLinks(text: string): { text: string; links: string[] } {
   const links = (text.match(URL_RE) ?? []).map((u) => u.replace(/[.,;:!?)\]]+$/, ''));
   if (links.length === 0) return { text, links };
   const rest = text.replace(URL_RE, '').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
@@ -461,7 +461,7 @@ const MIN_TILE = 44;
 
 // ─── Hauptkomponente ──────────────────────────────────────────────────────────
 
-export function GeistesKacheln({ colors, isDark, areaWidth, columns, compact = false, newRequest = 0 }: { colors: ThemeColors; isDark: boolean; areaWidth?: number; columns?: number; compact?: boolean; /** TE-60: Zähler – jede Erhöhung öffnet „Neuer Geistesblitz" (z. B. aus TodayHero). */ newRequest?: number }) {
+export function GeistesKacheln({ colors, isDark, areaWidth, columns, compact = false }: { colors: ThemeColors; isDark: boolean; areaWidth?: number; columns?: number; compact?: boolean }) {
   const { user } = useFirebaseAuth();
   const { familyId } = useFamily();
   const [tiles, setTiles] = useState<GeistesKachel[]>([]);
@@ -483,7 +483,6 @@ export function GeistesKacheln({ colors, isDark, areaWidth, columns, compact = f
 
   const openNew    = useCallback(() => { setEditing(null); setModalVisible(true); }, []);
   const openEdit   = useCallback((k: GeistesKachel) => { setEditing(k); setModalVisible(true); }, []);
-  useEffect(() => { if (newRequest > 0) openNew(); }, [newRequest, openNew]);
 
   const handleSave = useCallback(async (text: string, icon: string, color: string, label: string, stage: GeistesStage, links: string[]) => {
     if (!fid || !uid) return;
