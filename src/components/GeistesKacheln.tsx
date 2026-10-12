@@ -44,7 +44,7 @@ import { loadScratchpad, saveScratchpad } from '../services/scratchpadService';
 import { ScratchEntry, makeNoteId, parseScratchpad, serializeScratchpad } from './Scratchpad';
 import { LinkChip } from './LinkChip';
 import { DatePickerModal } from './DatePickerModal';
-import { GradientButton } from './GradientButton';
+import { GradientButton, PLUS_BUTTON, PLUS_ICON_SIZE } from './GradientButton';
 import { addCountdown } from '../services/countdownsService';
 import { DEFAULT_DASHBOARD_BLOCKS } from '../types';
 import { autoIcon, iconColor } from '../utils/iconSuggest';
@@ -457,7 +457,6 @@ function KachelCard({ kachel, onPress, size, colors, compact, attention }: {
 const STEP_GROWTH = 0.125; // je Reifegrad-Step 12,5 % größer: Funke 1, Gedanke 1,125, Plan 1,25
 /** Größenfaktor einer Kachel – wächst mit jedem Step (Punkt) ihres Reifegrads. */
 const sizeFactor = (k: GeistesKachel) => 1 + stageIndex(k.stage) * STEP_GROWTH;
-const ADD_FACTOR = 0.5;  // Plus-Feld neben Kacheln: halb so breit
 const MIN_TILE = 44;
 
 // ─── Hauptkomponente ──────────────────────────────────────────────────────────
@@ -550,8 +549,9 @@ export function GeistesKacheln({ colors, isDark, areaWidth, columns, compact = f
 
   // Kacheln (wachsen mit dem Reifegrad bis 1,25) und schmales Plus-Feld (0,5) sollen in eine Reihe
   // passen; dafür notfalls etwas kleiner, aber nie unter MIN_TILE – dann bricht um.
-  const units = sortedTiles.reduce((n, k) => n + sizeFactor(k), 0) + ADD_FACTOR;
-  const fitSize = Math.floor((aw - 32 - sortedTiles.length * 6) / units);
+  // TE-64: Plus ist jetzt ein fester 44er-Kreis (PLUS_BUTTON) – feste Breite abziehen statt Faktor.
+  const units = sortedTiles.reduce((n, k) => n + sizeFactor(k), 0);
+  const fitSize = Math.floor((aw - 32 - sortedTiles.length * 6 - (PLUS_BUTTON.width as number)) / Math.max(units, 1));
   const tileSize = Math.min(colSize, Math.max(MIN_TILE, fitSize));
 
   return (
@@ -576,12 +576,12 @@ export function GeistesKacheln({ colors, isDark, areaWidth, columns, compact = f
         <View style={s.grid}>
           <GradientButton
             gradient={colors.gradients?.blitz}
-            style={[s.addCard, { width: colSize, height: colSize }]}
+            style={[s.addCard, PLUS_BUTTON]}
             fallbackStyle={{ borderColor: colors.softBorder }}
             onPress={openNew}
             accessibilityLabel="Geistesblitz anlegen"
           >
-            <Ionicons name="add" size={22} color={colors.gradients?.blitz?.fg ?? colors.textMuted} />
+            <Ionicons name="add" size={PLUS_ICON_SIZE} color={colors.gradients?.blitz?.fg ?? colors.textMuted} />
           </GradientButton>
         </View>
       ) : tiles.length === 0 ? (
@@ -608,12 +608,12 @@ export function GeistesKacheln({ colors, isDark, areaWidth, columns, compact = f
           ))}
           <GradientButton
             gradient={colors.gradients?.blitz}
-            style={[s.addCard, { width: Math.floor(tileSize * ADD_FACTOR), height: tileSize }]}
+            style={[s.addCard, PLUS_BUTTON]}
             fallbackStyle={{ borderColor: colors.softBorder }}
             onPress={openNew}
             accessibilityLabel="Geistesblitz anlegen"
           >
-            <Ionicons name="add" size={18} color={colors.gradients?.blitz?.fg ?? colors.textMuted} />
+            <Ionicons name="add" size={PLUS_ICON_SIZE} color={colors.gradients?.blitz?.fg ?? colors.textMuted} />
           </GradientButton>
         </View>
       )}

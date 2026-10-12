@@ -25,7 +25,7 @@ function crossInfo(title: string, message: string) {
 }
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../src/utils/theme';
-import { GradientButton } from '../../src/components/GradientButton';
+import { GradientButton, PLUS_BUTTON, PLUS_ICON_SIZE } from '../../src/components/GradientButton';
 import { useStore } from '../../src/store';
 import {
   ChildTask,
@@ -707,8 +707,8 @@ export default function KinderScreen() {
             onSubmitEditing={groupMode ? handleAddGroupTask : handleAddTask}
             returnKeyType="done"
           />
-          <GradientButton gradient={colors.gradients?.task} style={s.addBtn} onPress={groupMode ? handleAddGroupTask : handleAddTask} accessibilityLabel="Aufgabe hinzufügen">
-            <Ionicons name="add" size={22} color={colors.gradients?.task?.fg ?? colors.accentFg} />
+          <GradientButton gradient={colors.gradients?.task} style={[s.addBtn, PLUS_BUTTON]} onPress={groupMode ? handleAddGroupTask : handleAddTask} accessibilityLabel="Aufgabe hinzufügen">
+            <Ionicons name="add" size={PLUS_ICON_SIZE} color={colors.gradients?.task?.fg ?? colors.accentFg} />
           </GradientButton>
         </View>
 
@@ -1276,8 +1276,8 @@ export default function KinderScreen() {
                 onSubmitEditing={addEmailTime}
                 keyboardType="numbers-and-punctuation"
               />
-              <GradientButton gradient={colors.gradients?.primary} style={s.addBtn} onPress={addEmailTime} accessibilityLabel="Uhrzeit hinzufügen">
-                <Ionicons name="add" size={20} color={colors.gradients?.primary?.fg ?? '#000'} />
+              <GradientButton gradient={colors.gradients?.primary} style={[s.addBtn, PLUS_BUTTON]} onPress={addEmailTime} accessibilityLabel="Uhrzeit hinzufügen">
+                <Ionicons name="add" size={PLUS_ICON_SIZE} color={colors.gradients?.primary?.fg ?? '#000'} />
               </GradientButton>
             </View>
           </View>

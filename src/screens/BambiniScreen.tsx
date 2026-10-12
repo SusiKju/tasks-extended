@@ -24,7 +24,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, ThemeColors } from '../utils/theme';
-import { GradientButton } from '../components/GradientButton';
+import { GradientButton, PLUS_BUTTON, PLUS_ICON_SIZE } from '../components/GradientButton';
 import { useFamily } from '../hooks/useFamily';
 import { DatePickerModal } from '../components/DatePickerModal';
 import { FussballKachel } from '../components/FussballKachel';
@@ -706,8 +706,8 @@ export function BambiniScreen() {
         <Ionicons name="bulb" size={24} color="#0A2A4A" />
       </Pressable>
 
-      <GradientButton gradient={colors.gradients?.primary} style={s.fab} onPress={openNew} accessibilityLabel="Kind hinzufügen">
-        <Ionicons name="add" size={28} color={colors.gradients?.primary?.fg ?? colors.accentFg} />
+      <GradientButton gradient={colors.gradients?.primary} style={[s.fab, PLUS_BUTTON]} onPress={openNew} accessibilityLabel="Kind hinzufügen">
+        <Ionicons name="add" size={PLUS_ICON_SIZE} color={colors.gradients?.primary?.fg ?? colors.accentFg} />
       </GradientButton>
 
       <Modal visible={editing !== null} transparent animationType="fade" onRequestClose={saveEntry}>
@@ -911,8 +911,8 @@ export function BambiniScreen() {
                   onSubmitEditing={addNotizItem}
                   returnKeyType="done"
                 />
-                <GradientButton gradient={colors.gradients?.primary} onPress={addNotizItem} style={[s.btn, s.notizAddBtn]} fallbackStyle={{ backgroundColor: colors.accent }} accessibilityLabel="Notiz hinzufügen">
-                  <Ionicons name="add" size={20} color={colors.gradients?.primary?.fg ?? colors.accentFg} />
+                <GradientButton gradient={colors.gradients?.primary} onPress={addNotizItem} style={[[s.btn, s.notizAddBtn], PLUS_BUTTON]} fallbackStyle={{ backgroundColor: colors.accent }} accessibilityLabel="Notiz hinzufügen">
+                  <Ionicons name="add" size={PLUS_ICON_SIZE} color={colors.gradients?.primary?.fg ?? colors.accentFg} />
                 </GradientButton>
               </View>
             </Pressable>
@@ -1029,8 +1029,8 @@ export function BambiniScreen() {
                   onSubmitEditing={addTrainingsideeItem}
                   returnKeyType="done"
                 />
-                <GradientButton gradient={colors.gradients?.idea} onPress={addTrainingsideeItem} style={[s.btn, s.notizAddBtn]} fallbackStyle={{ backgroundColor: '#4A9EFF' }} accessibilityLabel="Trainingsidee hinzufügen">
-                  <Ionicons name="add" size={20} color={colors.gradients?.idea?.fg ?? '#0A2A4A'} />
+                <GradientButton gradient={colors.gradients?.idea} onPress={addTrainingsideeItem} style={[[s.btn, s.notizAddBtn], PLUS_BUTTON]} fallbackStyle={{ backgroundColor: '#4A9EFF' }} accessibilityLabel="Trainingsidee hinzufügen">
+                  <Ionicons name="add" size={PLUS_ICON_SIZE} color={colors.gradients?.idea?.fg ?? '#0A2A4A'} />
                 </GradientButton>
               </View>
             </Pressable>

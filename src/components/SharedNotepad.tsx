@@ -16,7 +16,7 @@ import { View, Text, TextInput, Pressable, StyleSheet, ActivityIndicator, Platfo
 import { Ionicons } from '@expo/vector-icons';
 import { useStore } from '../store';
 import { ThemeColors } from '../utils/theme';
-import { GradientButton } from './GradientButton';
+import { GradientButton, PLUS_BUTTON, PLUS_ICON_SIZE } from './GradientButton';
 import { useFamilyId } from '../hooks/useFamily';
 import {
   SharedNoteItem,
@@ -257,13 +257,13 @@ export function SharedNotepad({ colors, isDark }: { colors: ThemeColors; isDark:
             />
             <GradientButton
               gradient={colors.gradients?.shared}
-              style={styles.addBtn}
+              style={[styles.addBtn, PLUS_BUTTON]}
               fallbackStyle={{ backgroundColor: accent }}
               onPress={handleAdd}
               disabled={!draft.trim()}
               accessibilityLabel="Eintrag hinzufügen"
             >
-              <Ionicons name="add" size={20} color={colors.gradients?.shared?.fg ?? (isDark ? '#000' : '#fff')} />
+              <Ionicons name="add" size={PLUS_ICON_SIZE} color={colors.gradients?.shared?.fg ?? (isDark ? '#000' : '#fff')} />
             </GradientButton>
           </View>
 

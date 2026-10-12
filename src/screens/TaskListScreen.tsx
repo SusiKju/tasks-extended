@@ -10,7 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useStore } from '../store';
 import { TaskCard } from '../components/TaskCard';
 import { useTheme, ThemeColors, neonGlow } from '../utils/theme';
-import { GradientButton } from '../components/GradientButton';
+import { GradientButton, PLUS_BUTTON, PLUS_ICON_SIZE } from '../components/GradientButton';
 import { Scratchpad, ScratchEntry, prependScratch } from '../components/Scratchpad';
 import { useScratchpad } from '../hooks/useScratchpad';
 import { IdeasSection } from '../components/IdeasSection';
@@ -93,10 +93,10 @@ export function TaskListScreen() {
             <GradientButton
               gradient={colors.gradients?.task}
               onPress={() => scratchAddRef.current?.()}
-              style={styles.bigAddBtn}
+              style={[styles.bigAddBtn, PLUS_BUTTON]}
               accessibilityLabel="Aufgabe anlegen"
             >
-              <Ionicons name="add" size={26} color={colors.gradients?.task?.fg ?? (isDark ? colors.accentNeon : '#fff')} />
+              <Ionicons name="add" size={PLUS_ICON_SIZE} color={colors.gradients?.task?.fg ?? (isDark ? colors.accentNeon : '#fff')} />
             </GradientButton>
           </View>
           <View style={styles.groupBody}>

@@ -17,7 +17,7 @@ import Constants from 'expo-constants';
 import { Ionicons } from '@expo/vector-icons';
 import { useStore } from '../store';
 import { useTheme, ThemeColors, neonGlow, THEMES } from '../utils/theme';
-import { GradientButton } from '../components/GradientButton';
+import { GradientButton, PLUS_BUTTON, PLUS_ICON_SIZE } from '../components/GradientButton';
 import { DASHBOARD_BLOCKS, DEFAULT_DASHBOARD_BLOCKS, TOGGLEABLE_TABS, DEFAULT_VISIBLE_TABS, ThemeName } from '../types';
 
 import {
@@ -669,9 +669,8 @@ export function SettingsScreen() {
           <View style={[styles.row, { flexDirection: 'column', alignItems: 'flex-start', gap: 8 }]}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' as any }}>
               <Text style={styles.rowTitle}>Kinder</Text>
-              <GradientButton gradient={colors.gradients?.primary} style={styles.smallBtn} onPress={openAddChild}>
-                <Ionicons name="add" size={16} color={colors.gradients?.primary?.fg ?? colors.accentFg} />
-                <Text style={[styles.smallBtnText, colors.gradients?.primary && { color: colors.gradients.primary.fg }]}>Hinzufügen</Text>
+              <GradientButton gradient={colors.gradients?.primary} style={[styles.smallBtn, PLUS_BUTTON]} onPress={openAddChild} accessibilityLabel="Kind hinzufügen">
+                <Ionicons name="add" size={PLUS_ICON_SIZE} color={colors.gradients?.primary?.fg ?? colors.accentFg} />
               </GradientButton>
             </View>
             {familyChildren.length === 0 && (

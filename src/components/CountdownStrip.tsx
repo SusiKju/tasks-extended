@@ -19,7 +19,7 @@ import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView, TextInput, Modal, ActivityIndicator, Platform } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { ThemeColors } from '../utils/theme';
-import { GradientButton } from './GradientButton';
+import { GradientButton, PLUS_BUTTON, PLUS_ICON_SIZE } from './GradientButton';
 import { DatePickerModal } from './DatePickerModal';
 import { LinkChip } from './LinkChip';
 import { useFamilyId } from '../hooks/useFamily';
@@ -105,11 +105,11 @@ function AddCard({ colors, onPress }: { colors: ThemeColors; onPress: () => void
     <GradientButton
       gradient={colors.gradients?.countdown}
       onPress={onPress}
-      style={[styles.card, styles.addCard]}
+      style={[[styles.card, styles.addCard], PLUS_BUTTON]}
       fallbackStyle={{ borderColor: colors.softBorder }}
       accessibilityLabel="Countdown anlegen"
     >
-      <Ionicons name="add" size={21} color={colors.gradients?.countdown?.fg ?? colors.textMuted} />
+      <Ionicons name="add" size={PLUS_ICON_SIZE} color={colors.gradients?.countdown?.fg ?? colors.textMuted} />
     </GradientButton>
   );
 }

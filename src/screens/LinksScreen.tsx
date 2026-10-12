@@ -23,7 +23,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, ThemeColors, neonGlow } from '../utils/theme';
-import { GradientButton } from '../components/GradientButton';
+import { GradientButton, PLUS_BUTTON, PLUS_ICON_SIZE } from '../components/GradientButton';
 import { useFirebaseAuth } from '../hooks/useFirebaseAuth';
 import { useFamily } from '../hooks/useFamily';
 import {
@@ -371,12 +371,12 @@ export function LinksScreen() {
       {/* Floating Add-Button (TE-63: Verlauf im Theme, sonst Neon-Fläche) */}
       <GradientButton
         gradient={colors.gradients?.primary}
-        style={[s.fab, isDark && !colors.gradients ? neonGlow(colors.accentNeon, 'medium') : null]}
+        style={[[s.fab, isDark && !colors.gradients ? neonGlow(colors.accentNeon, 'medium') : null], PLUS_BUTTON]}
         fallbackStyle={{ backgroundColor: colors.accentNeon }}
         onPress={openNew}
         accessibilityLabel="Link anlegen"
       >
-        <Ionicons name="add" size={28} color={colors.gradients?.primary?.fg ?? (isDark ? '#000' : '#fff')} />
+        <Ionicons name="add" size={PLUS_ICON_SIZE} color={colors.gradients?.primary?.fg ?? (isDark ? '#000' : '#fff')} />
       </GradientButton>
 
       <LinkModal

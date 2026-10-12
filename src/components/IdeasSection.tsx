@@ -18,7 +18,7 @@ import { View, Text, TextInput, Pressable, StyleSheet, Alert } from 'react-nativ
 import { Ionicons } from '@expo/vector-icons';
 import { Note, QuickNote } from '../types';
 import { useTheme, neonGlow } from '../utils/theme';
-import { GradientButton } from './GradientButton';
+import { GradientButton, PLUS_BUTTON, PLUS_ICON_SIZE } from './GradientButton';
 import { useFirebaseAuth } from '../hooks/useFirebaseAuth';
 import { useFamily } from '../hooks/useFamily';
 import { subscribeToQuickNotes, addQuickNote, deleteQuickNote } from '../services/quickNotesService';
@@ -91,7 +91,7 @@ export function IdeasSection({ onToTask }: { onToTask: (text: string) => void })
         <GradientButton
           gradient={colors.gradients?.idea}
           onPress={() => inputRef.current?.focus()}
-          style={s.addBtn}
+          style={[s.addBtn, PLUS_BUTTON]}
           fallbackStyle={[
             {
               backgroundColor: isDark ? 'transparent' : colors.accent,
@@ -102,7 +102,7 @@ export function IdeasSection({ onToTask }: { onToTask: (text: string) => void })
           ]}
           accessibilityLabel="Idee anlegen"
         >
-          <Ionicons name="add" size={26} color={colors.gradients?.idea?.fg ?? (isDark ? colors.accentNeon : '#fff')} />
+          <Ionicons name="add" size={PLUS_ICON_SIZE} color={colors.gradients?.idea?.fg ?? (isDark ? colors.accentNeon : '#fff')} />
         </GradientButton>
       </View>
 
