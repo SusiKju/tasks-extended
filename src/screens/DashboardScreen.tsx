@@ -854,7 +854,7 @@ export function DashboardScreen() {
           ].filter(Boolean).join(' · ');
           return (
             <View key={`kr-${childId}`} style={[styles.dezentRow, styles.rowDivider]}>
-              <ChildAvatar child={childOf(childId)} size={30} />
+              <ChildAvatar child={childOf(childId)} size={36} />
               {/* TE-56: Name vor den Aufgaben (flach, kein Extra-Zeile) – das Emoji allein verrät nicht, wer gemeint ist. */}
               <Pressable style={{ flex: 1, flexDirection: 'row', gap: 8 }} onPress={() => router.push('/(tabs)/kids' as any)}>
                 <Text style={{ fontSize: 13.5, fontWeight: '700', color: colors.text }} numberOfLines={1}>{childName(childId)}</Text>
@@ -1071,7 +1071,7 @@ export function DashboardScreen() {
                     onPress={() => router.push({ pathname: '/(tabs)/schule', params: { child: childId } } as any)}
                     style={({ pressed }) => [styles.kidHeaderRow, styles.rowDivider, { opacity: pressed ? 0.6 : 1 }]}
                   >
-                    <ChildAvatar child={childOf(childId)} size={30} />
+                    <ChildAvatar child={childOf(childId)} size={36} />
                     <Text style={[styles.kidHeaderText, { color: colors.textMuted }]}>
                       {childName(childId)}
                     </Text>
@@ -1125,7 +1125,7 @@ export function DashboardScreen() {
                   onPress={() => openAllowanceEdit(child.id)}
                   style={[styles.kidRow, styles.rowDivider]}
                 >
-                  <ChildAvatar child={childOf(child.id)} size={30} />
+                  <ChildAvatar child={childOf(child.id)} size={36} />
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.kidTaskText, { color: colors.text }]} numberOfLines={1}>
                       {childName(child.id)}
