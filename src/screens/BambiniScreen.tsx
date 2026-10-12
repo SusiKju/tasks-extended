@@ -395,10 +395,10 @@ export function BambiniScreen() {
     pendingNeuNoteId.current = n.id;
   };
 
+  // TE-83: alle offenen Trainingsnotizen, egal aus welchem Training – sie bleiben,
+  // bis sie zugeordnet oder erledigt sind (vorher nur die des letzten Trainings).
   const trainingId = training.startedAt ?? training.lastStart;
-  const trainingNotes = trainingId
-    ? notizItems.filter((n) => n.trainingId === trainingId && !n.deletedAt)
-    : [];
+  const trainingNotes = notizItems.filter((n) => n.trainingId && !n.deletedAt);
   const trainingMinutes = training.startedAt
     ? Math.max(0, Math.floor((nowTick - Date.parse(training.startedAt)) / 60000))
     : 0;
@@ -755,10 +755,11 @@ export function BambiniScreen() {
                   <View style={s.bMain}>
                     <Text style={s.quickNoteText}>{n.text}</Text>
                     <Text style={s.quickNoteTime}>
+                      {n.trainingId !== trainingId ? `${formatDE(n.createdAt.slice(0, 10))}, ` : ''}
                       {new Date(n.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}
                     </Text>
                   </View>
-                  {!running ? (
+                  {!running || n.trainingId !== trainingId ? (
                     <Pressable
                       hitSlop={8}
                       onPress={() =>
