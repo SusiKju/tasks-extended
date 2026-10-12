@@ -423,6 +423,8 @@ export function BambiniScreen() {
         loadBambiniTraining(fid),
       ]);
       setTraining(trainingState);
+      // TE-82: läuft ein Training, direkt in den Trainingsmodus.
+      if (trainingState.startedAt) setTrainingsideenOpen(true);
       setChildren(list);
       setYearFilter(filters.years);
       setStoppedFilter(filters.stopped);
@@ -688,7 +690,7 @@ export function BambiniScreen() {
       ? `${markedTrainingsideenItems.length} ${markedTrainingsideenItems.length === 1 ? 'Übung' : 'Übungen'} für heute`
       : lastDuration !== null
         ? `Letztes Training ${formatDE(training.lastEnd!.slice(0, 10))}, ${lastDuration} min`
-        : 'Übungen in den Trainingsideen auf „heute“ stellen';
+        : 'Unten Übungen für heute auswählen';
     const tileColors: [string, string] = running ? ['#FF375F', '#7928CA'] : ['#30D158', '#00B8D9'];
     return (
       <View style={s.trainSection}>
@@ -792,6 +794,103 @@ export function BambiniScreen() {
     );
   };
 
+  // TE-82: Trainingsmodus als eigene Ansicht hinter dem Glühbirnen-Button –
+  // Start/Beenden, Übungskarten, Schnellnotiz und Auswahl der Übungen für heute.
+  const renderTrainingView = () => (
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
+        <View style={s.tvHeader}>
+          <Ionicons name="bulb" size={20} color="#4A9EFF" />
+          <Text style={s.tvTitle}>Trainingsmodus</Text>
+          <Pressable onPress={() => setTrainingsideeHistoryOpen(true)} hitSlop={10} accessibilityLabel="Verlauf">
+            <Ionicons name="time-outline" size={20} color={colors.textMuted} />
+          </Pressable>
+          <Pressable onPress={closeTrainingsideen} hitSlop={12} accessibilityLabel="Zur Bambini-Übersicht">
+            <Ionicons name="close" size={24} color={colors.textSecondary} />
+          </Pressable>
+        </View>
+
+        {renderTraining()}
+
+        <Text style={[s.bTileLabel, s.exLabel]}>Übungen auswählen</Text>
+        <View style={s.tvIdeas}>
+          {activeTrainingsideenItems.length === 0 ? (
+            <Text style={s.empty}>Noch keine Trainingsideen.</Text>
+          ) : (
+            activeTrainingsideenItems.map((n, idx) => (
+              <View key={n.id} style={s.notizItemRow}>
+                <View style={s.notizItemMain}>
+                  <View style={s.notizReorder}>
+                    <Pressable onPress={() => moveTrainingsideeItem(n.id, -1)} disabled={idx === 0} hitSlop={4} accessibilityLabel="Nach oben verschieben">
+                      <Ionicons name="chevron-up" size={14} color={idx === 0 ? colors.border : colors.textSecondary} />
+                    </Pressable>
+                    <Pressable onPress={() => moveTrainingsideeItem(n.id, 1)} disabled={idx === activeTrainingsideenItems.length - 1} hitSlop={4} accessibilityLabel="Nach unten verschieben">
+                      <Ionicons name="chevron-down" size={14} color={idx === activeTrainingsideenItems.length - 1 ? colors.border : colors.textSecondary} />
+                    </Pressable>
+                  </View>
+                  {/* TE-81: „heute“ – angeschaltete Ideen erscheinen als Übungskarten auf der Bambini-Seite. */}
+                  <Pressable
+                    onPress={() => toggleTrainingsideeMarked(n.id)}
+                    hitSlop={8}
+                    style={[s.heutePill, n.marked && s.heutePillOn]}
+                    accessibilityLabel={n.marked ? 'Nicht mehr für heute' : 'Für heute einplanen'}
+                  >
+                    {n.marked ? (
+                      <LinearGradient colors={[mono('#0A5CFF'), mono('#00B8D9')]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+                    ) : null}
+                    <Text style={[s.heutePillText, n.marked && s.heutePillTextOn]}>heute</Text>
+                  </Pressable>
+                  {trainingsideeEditId === n.id ? (
+                    <>
+                      <TextInput
+                        style={[s.input, s.notizEditInput]}
+                        value={trainingsideeEditText}
+                        onChangeText={setTrainingsideeEditText}
+                        onSubmitEditing={saveEditTrainingsidee}
+                        returnKeyType="done"
+                        autoFocus
+                      />
+                      <Pressable onPress={saveEditTrainingsidee} hitSlop={8} accessibilityLabel="Speichern">
+                        <Ionicons name="checkmark" size={20} color={colors.accent} />
+                      </Pressable>
+                      <Pressable onPress={cancelEditTrainingsidee} hitSlop={8} accessibilityLabel="Abbrechen">
+                        <Ionicons name="close" size={18} color={colors.textSecondary} />
+                      </Pressable>
+                    </>
+                  ) : (
+                    <>
+                      <Text style={s.notizItemText}>{n.text}</Text>
+                      <Pressable onPress={() => startEditTrainingsidee(n)} hitSlop={8} accessibilityLabel="Bearbeiten">
+                        <Ionicons name="pencil-outline" size={18} color={colors.textSecondary} />
+                      </Pressable>
+                      <Pressable onPress={() => deleteTrainingsideeItem(n.id)} hitSlop={8} accessibilityLabel="Löschen">
+                        <Ionicons name="trash-outline" size={18} color={colors.textSecondary} />
+                      </Pressable>
+                    </>
+                  )}
+                </View>
+              </View>
+            ))
+          )}
+                <View style={s.notizAddRow}>
+          <TextInput
+            style={[s.input, s.notizAddInput]}
+            value={trainingsideeInput}
+            onChangeText={setTrainingsideeInput}
+            placeholder="Neue Trainingsidee…"
+            placeholderTextColor={colors.placeholder}
+            onSubmitEditing={addTrainingsideeItem}
+            returnKeyType="done"
+          />
+          <GradientButton gradient={colors.gradients?.idea} onPress={addTrainingsideeItem} style={[[s.btn, s.notizAddBtn], PLUS_BUTTON]} fallbackStyle={{ backgroundColor: '#4A9EFF' }} accessibilityLabel="Trainingsidee hinzufügen">
+            <Ionicons name="add" size={PLUS_ICON_SIZE} color={colors.gradients?.idea?.fg ?? '#0A2A4A'} />
+          </GradientButton>
+                </View>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
+
   // TE-76: Bento-Kacheln – Zahlen, Jahrgangs-Balken (antippen = filtern), Beitrag, Vereinsseite.
   const renderBentoTiles = () => {
     const maxCount = Math.max(1, ...yearCounts.map((y) => y.count));
@@ -883,6 +982,8 @@ export function BambiniScreen() {
     <View style={s.container}>
       {loading ? (
         <ActivityIndicator style={{ marginTop: 32 }} color={colors.accent} />
+      ) : trainingsideenOpen ? (
+        renderTrainingView()
       ) : (
         <>
           {children.length > 0 ? (
@@ -972,9 +1073,6 @@ export function BambiniScreen() {
           ) : null}
 
           <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
-            {/* TE-81: Trainingsmodus ganz oben – Kachel, Schnellnotiz, Übungen für heute. */}
-            {renderTraining()}
-
             {/* TE-76 (Bento Dark): Kachel-Kopf statt Übersichtszeile und Info-Karten unten. */}
             {bento && children.length > 0 ? renderBentoTiles() : null}
 
@@ -1050,22 +1148,33 @@ export function BambiniScreen() {
         </>
       )}
 
-      {/* TE-87: gleiches Icon/gleiche Aktion wie das Fußball-Icon auf dem Dashboard. */}
-      <FussballKachel forceTheme="fussball" iconStyle={s.fabFussball} iconSize={26} />
+      {/* TE-82: im Trainingsmodus nur die Glühbirne (führt zurück), sonst alle FABs. */}
+      {!trainingsideenOpen ? (
+        <>
+          {/* TE-87: gleiches Icon/gleiche Aktion wie das Fußball-Icon auf dem Dashboard. */}
+          <FussballKachel forceTheme="fussball" iconStyle={s.fabFussball} iconSize={26} />
 
-      {/* TE-44: dritter FAB für freie Notizen (Trainingsideen o. Ä.). */}
-      <Pressable style={s.fabNotizen} onPress={openNotizen} accessibilityLabel="Notizen öffnen">
-        <Ionicons name="document-text" size={24} color="#3A2E00" />
+          {/* TE-44: dritter FAB für freie Notizen (Trainingsideen o. Ä.). */}
+          <Pressable style={s.fabNotizen} onPress={openNotizen} accessibilityLabel="Notizen öffnen">
+            <Ionicons name="document-text" size={24} color="#3A2E00" />
+          </Pressable>
+        </>
+      ) : null}
+
+      {/* TE-113/TE-82: Glühbirne öffnet und schließt den Trainingsmodus. */}
+      <Pressable
+        style={[s.fabTrainingsideen, trainingsideenOpen && s.fabTrainingsideenOn]}
+        onPress={trainingsideenOpen ? closeTrainingsideen : openTrainingsideen}
+        accessibilityLabel={trainingsideenOpen ? 'Trainingsmodus schließen' : 'Trainingsmodus öffnen'}
+      >
+        <Ionicons name={trainingsideenOpen ? 'close' : 'bulb'} size={24} color="#0A2A4A" />
       </Pressable>
 
-      {/* TE-113: vierter FAB, eigene Liste für Trainingsideen zum aktuellen Training. */}
-      <Pressable style={s.fabTrainingsideen} onPress={openTrainingsideen} accessibilityLabel="Trainingsideen öffnen">
-        <Ionicons name="bulb" size={24} color="#0A2A4A" />
-      </Pressable>
-
-      <GradientButton gradient={colors.gradients?.primary} style={[s.fab, PLUS_BUTTON]} onPress={openNew} accessibilityLabel="Kind hinzufügen">
-        <Ionicons name="add" size={PLUS_ICON_SIZE} color={colors.gradients?.primary?.fg ?? colors.accentFg} />
-      </GradientButton>
+      {!trainingsideenOpen ? (
+        <GradientButton gradient={colors.gradients?.primary} style={[s.fab, PLUS_BUTTON]} onPress={openNew} accessibilityLabel="Kind hinzufügen">
+          <Ionicons name="add" size={PLUS_ICON_SIZE} color={colors.gradients?.primary?.fg ?? colors.accentFg} />
+        </GradientButton>
+      ) : null}
 
       <Modal visible={editing !== null} transparent animationType="fade" onRequestClose={saveEntry}>
         <KeyboardAvoidingView style={s.overlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -1329,99 +1438,6 @@ export function BambiniScreen() {
         </Pressable>
       </Modal>
 
-      <Modal visible={trainingsideenOpen} transparent animationType="fade" onRequestClose={closeTrainingsideen}>
-        <Pressable style={s.overlay} onPress={closeTrainingsideen}>
-          <KeyboardAvoidingView style={s.notizenKav} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-            <Pressable style={[s.card, s.notizenCard, s.trainingsideenCard]} onPress={() => {}}>
-              <View style={s.notizenHeader}>
-                <Ionicons name="bulb" size={18} color="#4A9EFF" />
-                <Text style={[s.cardTitle, s.notizenTitle]}>Trainingsideen</Text>
-                <Pressable onPress={() => setTrainingsideeHistoryOpen(true)} hitSlop={10} accessibilityLabel="Verlauf">
-                  <Ionicons name="time-outline" size={20} color={colors.textMuted} />
-                </Pressable>
-                <Pressable onPress={closeTrainingsideen} hitSlop={12} accessibilityLabel="Schließen">
-                  <Ionicons name="close" size={22} color={colors.textSecondary} />
-                </Pressable>
-              </View>
-              <ScrollView style={s.notizenList} keyboardShouldPersistTaps="handled">
-                {activeTrainingsideenItems.length === 0 ? (
-                  <Text style={s.empty}>Noch keine Trainingsideen.</Text>
-                ) : (
-                  activeTrainingsideenItems.map((n, idx) => (
-                    <View key={n.id} style={s.notizItemRow}>
-                      <View style={s.notizItemMain}>
-                        <View style={s.notizReorder}>
-                          <Pressable onPress={() => moveTrainingsideeItem(n.id, -1)} disabled={idx === 0} hitSlop={4} accessibilityLabel="Nach oben verschieben">
-                            <Ionicons name="chevron-up" size={14} color={idx === 0 ? colors.border : colors.textSecondary} />
-                          </Pressable>
-                          <Pressable onPress={() => moveTrainingsideeItem(n.id, 1)} disabled={idx === activeTrainingsideenItems.length - 1} hitSlop={4} accessibilityLabel="Nach unten verschieben">
-                            <Ionicons name="chevron-down" size={14} color={idx === activeTrainingsideenItems.length - 1 ? colors.border : colors.textSecondary} />
-                          </Pressable>
-                        </View>
-                        {/* TE-81: „heute“ – angeschaltete Ideen erscheinen als Übungskarten auf der Bambini-Seite. */}
-                        <Pressable
-                          onPress={() => toggleTrainingsideeMarked(n.id)}
-                          hitSlop={8}
-                          style={[s.heutePill, n.marked && s.heutePillOn]}
-                          accessibilityLabel={n.marked ? 'Nicht mehr für heute' : 'Für heute einplanen'}
-                        >
-                          {n.marked ? (
-                            <LinearGradient colors={[mono('#0A5CFF'), mono('#00B8D9')]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
-                          ) : null}
-                          <Text style={[s.heutePillText, n.marked && s.heutePillTextOn]}>heute</Text>
-                        </Pressable>
-                        {trainingsideeEditId === n.id ? (
-                          <>
-                            <TextInput
-                              style={[s.input, s.notizEditInput]}
-                              value={trainingsideeEditText}
-                              onChangeText={setTrainingsideeEditText}
-                              onSubmitEditing={saveEditTrainingsidee}
-                              returnKeyType="done"
-                              autoFocus
-                            />
-                            <Pressable onPress={saveEditTrainingsidee} hitSlop={8} accessibilityLabel="Speichern">
-                              <Ionicons name="checkmark" size={20} color={colors.accent} />
-                            </Pressable>
-                            <Pressable onPress={cancelEditTrainingsidee} hitSlop={8} accessibilityLabel="Abbrechen">
-                              <Ionicons name="close" size={18} color={colors.textSecondary} />
-                            </Pressable>
-                          </>
-                        ) : (
-                          <>
-                            <Text style={s.notizItemText}>{n.text}</Text>
-                            <Pressable onPress={() => startEditTrainingsidee(n)} hitSlop={8} accessibilityLabel="Bearbeiten">
-                              <Ionicons name="pencil-outline" size={18} color={colors.textSecondary} />
-                            </Pressable>
-                            <Pressable onPress={() => deleteTrainingsideeItem(n.id)} hitSlop={8} accessibilityLabel="Löschen">
-                              <Ionicons name="trash-outline" size={18} color={colors.textSecondary} />
-                            </Pressable>
-                          </>
-                        )}
-                      </View>
-                    </View>
-                  ))
-                )}
-              </ScrollView>
-
-              <View style={s.notizAddRow}>
-                <TextInput
-                  style={[s.input, s.notizAddInput]}
-                  value={trainingsideeInput}
-                  onChangeText={setTrainingsideeInput}
-                  placeholder="Neue Trainingsidee…"
-                  placeholderTextColor={colors.placeholder}
-                  onSubmitEditing={addTrainingsideeItem}
-                  returnKeyType="done"
-                />
-                <GradientButton gradient={colors.gradients?.idea} onPress={addTrainingsideeItem} style={[[s.btn, s.notizAddBtn], PLUS_BUTTON]} fallbackStyle={{ backgroundColor: '#4A9EFF' }} accessibilityLabel="Trainingsidee hinzufügen">
-                  <Ionicons name="add" size={PLUS_ICON_SIZE} color={colors.gradients?.idea?.fg ?? '#0A2A4A'} />
-                </GradientButton>
-              </View>
-            </Pressable>
-          </KeyboardAvoidingView>
-        </Pressable>
-      </Modal>
 
       {/* TE-113: Verlauf-Dialog für gelöschte Trainingsideen. */}
       <Modal visible={trainingsideeHistoryOpen} transparent animationType="fade" onRequestClose={() => setTrainingsideeHistoryOpen(false)}>
@@ -1648,6 +1664,12 @@ function makeStyles(c: ThemeColors) {
     bName: { color: c.text, fontSize: 15, fontWeight: '600', flexShrink: 1 },
     bParent: { color: c.textMuted, fontSize: 12, marginTop: 1 },
     bDots: { flexDirection: 'row', gap: 4 },
+
+    // TE-82: Trainingsmodus-Ansicht.
+    tvHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 4, marginBottom: 12 },
+    tvTitle: { flex: 1, color: c.text, fontSize: 20, fontWeight: '700' },
+    tvIdeas: { backgroundColor: c.surface, borderRadius: 16, padding: 10, gap: 4, marginTop: 6 },
+    fabTrainingsideenOn: { right: 16, borderWidth: 2, borderColor: c.text },
 
     // TE-81: Trainingsmodus.
     trainSection: { gap: 10, marginBottom: 18 },
