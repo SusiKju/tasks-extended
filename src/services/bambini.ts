@@ -157,6 +157,19 @@ export interface NotizItem {
   createdAt: string;
   /** Weiches Löschen (TE-113): Item bleibt erhalten, taucht nur noch im Verlauf-Dialog auf und ist von dort wiederherstellbar. null = aktiv. */
   deletedAt: string | null;
+  /** TE-81: Art der Schnellnotiz aus dem Training. Fehlt bei normalen Notizen. */
+  kind?: NotizKind;
+  /** TE-81: Startzeit (ISO) des Trainings, in dem die Notiz entstand. '' = keins. */
+  trainingId?: string;
+}
+
+export type NotizKind = 'tel' | 'neu' | 'info';
+
+/** TE-81: Trainingsmodus – laufendes und zuletzt beendetes Training (ISO-Zeiten). */
+export interface BambiniTraining {
+  startedAt: string | null;
+  lastStart: string | null;
+  lastEnd: string | null;
 }
 
 function sanitizeNotizItem(n: any): NotizItem | null {
@@ -168,6 +181,8 @@ function sanitizeNotizItem(n: any): NotizItem | null {
     marked: !!n?.marked,
     createdAt: String(n?.createdAt ?? '') || new Date().toISOString(),
     deletedAt: n?.deletedAt ? String(n.deletedAt) : null,
+    ...(n?.kind === 'tel' || n?.kind === 'neu' || n?.kind === 'info' ? { kind: n.kind } : {}),
+    ...(n?.trainingId ? { trainingId: String(n.trainingId) } : {}),
   };
 }
 
@@ -214,6 +229,33 @@ export async function loadBambiniTrainingsideenItems(familyId: string): Promise<
   const raw = snap.exists() ? (snap.data() as any) : undefined;
   const rawItems = Array.isArray(raw?.trainingsideenItems) ? raw.trainingsideenItems : [];
   return rawItems.map(sanitizeNotizItem).filter((n: NotizItem | null): n is NotizItem => n !== null);
+}
+
+/** TE-81: Trainingsmodus-Zustand laden (eigenes Feld im Bambini-Dokument). */
+export async function loadBambiniTraining(familyId: string): Promise<BambiniTraining> {
+  const snap = await getDoc(bambiniDoc(familyId));
+  const raw = snap.exists() ? (snap.data() as any)?.training : undefined;
+  const str = (v: any) => (typeof v === 'string' && v ? v : null);
+  return { startedAt: str(raw?.startedAt), lastStart: str(raw?.lastStart), lastEnd: str(raw?.lastEnd) };
+}
+
+export async function saveBambiniTraining(familyId: string, training: BambiniTraining): Promise<void> {
+  await setDoc(bambiniDoc(familyId), { training }, { merge: true });
+}
+
+/** TE-81: Telefonnummer in einer Schnellnotiz erkennen (mind. 6 Ziffern, Leerzeichen/-// erlaubt). */
+export function looksLikePhone(text: string): boolean {
+  const m = text.match(/\+?\d[\d\s\/-]{4,}\d/);
+  return !!m && m[0].replace(/\D/g, '').length >= 6;
+}
+
+/** TE-81: „Ben, 2021, Papa Thomas“ → Name, Jahrgang, Elternteil für „Kind anlegen“. */
+export function parseNeuesKind(text: string): { name: string; birthYear: number; parentName: string } {
+  const parts = text.split(',').map((p) => p.trim()).filter(Boolean);
+  const yearIdx = parts.findIndex((p) => /^(19|20)\d{2}$/.test(p));
+  const birthYear = yearIdx >= 0 ? Number(parts[yearIdx]) : 0;
+  const rest = parts.filter((_, i) => i !== yearIdx);
+  return { name: rest[0] ?? '', birthYear, parentName: rest.slice(1).join(', ') };
 }
 
 /** Kinder eines Jahrgangs filtern (exakt bzw. ab Jahr), ohne aufgehörte. */

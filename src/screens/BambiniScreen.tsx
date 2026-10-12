@@ -43,6 +43,12 @@ import {
   loadBambiniTrainingsideenItems,
   saveBambiniTrainingsideenItems,
   NotizItem,
+  NotizKind,
+  BambiniTraining,
+  loadBambiniTraining,
+  saveBambiniTraining,
+  looksLikePhone,
+  parseNeuesKind,
   makeId,
   BambiniSortMode,
 } from '../services/bambini';
@@ -91,7 +97,7 @@ const SORT_OPTIONS: { value: BambiniSortMode; label: string }[] = [
 ];
 
 export function BambiniScreen() {
-  const { colors } = useTheme();
+  const { colors, mono } = useTheme();
   const { familyId } = useFamily();
   const fid = familyId ?? '';
   const s = makeStyles(colors);
@@ -324,6 +330,82 @@ export function BambiniScreen() {
     .sort((a, b) => (b.deletedAt as string).localeCompare(a.deletedAt as string));
   const markedTrainingsideenItems = activeTrainingsideenItems.filter((n) => n.marked);
 
+  // TE-81: Trainingsmodus – Start/Beenden-Kachel, Schnellnotiz während des Trainings,
+  // danach Notizen zuordnen. Notizen landen in den bestehenden Bambini-Notiz-Items.
+  const [training, setTraining] = useState<BambiniTraining>({ startedAt: null, lastStart: null, lastEnd: null });
+  const [quickText, setQuickText] = useState('');
+  const [quickKind, setQuickKind] = useState<NotizKind | null>(null);
+  const [nowTick, setNowTick] = useState(Date.now());
+  const [assignNoteId, setAssignNoteId] = useState<string | null>(null);
+  const pendingNeuNoteId = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!training.startedAt) return;
+    setNowTick(Date.now());
+    const t = setInterval(() => setNowTick(Date.now()), 30000);
+    return () => clearInterval(t);
+  }, [training.startedAt]);
+
+  const persistTraining = useCallback((next: BambiniTraining) => {
+    setTraining(next);
+    if (fid) saveBambiniTraining(fid, next).catch((e) => console.warn('Training speichern fehlgeschlagen', e));
+  }, [fid]);
+
+  const toggleTraining = () => {
+    const now = new Date().toISOString();
+    if (training.startedAt) persistTraining({ startedAt: null, lastStart: training.startedAt, lastEnd: now });
+    else persistTraining({ ...training, startedAt: now });
+  };
+
+  // Ohne explizit gewählten Chip erkennt die Zeile eine Telefonnummer selbst.
+  const quickKindEffective: NotizKind = quickKind ?? (looksLikePhone(quickText) ? 'tel' : 'info');
+
+  const addQuickNote = () => {
+    const text = quickText.trim();
+    if (!text || !training.startedAt) return;
+    const item: NotizItem = {
+      id: makeId(), text, marked: false, createdAt: new Date().toISOString(), deletedAt: null,
+      kind: quickKindEffective, trainingId: training.startedAt,
+    };
+    persistNotizItems([item, ...notizItems]);
+    setQuickText('');
+    setQuickKind(null);
+  };
+
+  const resolveNote = (id: string) => {
+    const now = new Date().toISOString();
+    persistNotizItems(notizItems.map((n) => (n.id === id ? { ...n, deletedAt: now } : n)));
+  };
+
+  const assignTelToChild = (c: Child) => {
+    const note = notizItems.find((n) => n.id === assignNoteId);
+    setAssignNoteId(null);
+    if (!note) return;
+    persist(children.map((x) => (x.id === c.id ? { ...x, info: x.info ? `${x.info}\n${note.text}` : note.text } : x)));
+    resolveNote(note.id);
+  };
+
+  const createFromNeu = (n: NotizItem) => {
+    const parsed = parseNeuesKind(n.text);
+    openNew();
+    setNameInput(parsed.name);
+    setYearInput(parsed.birthYear ? String(parsed.birthYear) : '');
+    setParentInput(parsed.parentName);
+    setSchnuppertrainingInput(true);
+    pendingNeuNoteId.current = n.id;
+  };
+
+  const trainingId = training.startedAt ?? training.lastStart;
+  const trainingNotes = trainingId
+    ? notizItems.filter((n) => n.trainingId === trainingId && !n.deletedAt)
+    : [];
+  const trainingMinutes = training.startedAt
+    ? Math.max(0, Math.floor((nowTick - Date.parse(training.startedAt)) / 60000))
+    : 0;
+  const lastDuration = training.lastStart && training.lastEnd
+    ? Math.round((Date.parse(training.lastEnd) - Date.parse(training.lastStart)) / 60000)
+    : null;
+
   const reload = useCallback(async () => {
     if (!fid) {
       setChildren([]);
@@ -333,12 +415,14 @@ export function BambiniScreen() {
     setLoading(true);
     try {
       await migrateRosterToBambini(fid);
-      const [list, filters, notiz, trainingsideen] = await Promise.all([
+      const [list, filters, notiz, trainingsideen, trainingState] = await Promise.all([
         loadBambini(fid),
         loadBambiniFilters(fid),
         loadBambiniNotizItems(fid),
         loadBambiniTrainingsideenItems(fid),
+        loadBambiniTraining(fid),
       ]);
+      setTraining(trainingState);
       setChildren(list);
       setYearFilter(filters.years);
       setStoppedFilter(filters.stopped);
@@ -411,7 +495,10 @@ export function BambiniScreen() {
     setSchnuppertrainingInput(c.schnuppertraining);
   };
 
-  const closeModal = () => setEditing(null);
+  const closeModal = () => {
+    setEditing(null);
+    pendingNeuNoteId.current = null;
+  };
 
   const saveEntry = () => {
     const name = nameInput.trim();
@@ -439,6 +526,8 @@ export function BambiniScreen() {
       persist(children.map((c) => (c.id === editing.id ? { ...c, ...patch } : c)));
     } else {
       persist([...children, { id: makeId(), ...patch }]);
+      // TE-81: aus einer „Neues Kind“-Trainingsnotiz angelegt → Notiz ist erledigt.
+      if (pendingNeuNoteId.current) resolveNote(pendingNeuNoteId.current);
     }
     closeModal();
   };
@@ -571,6 +660,135 @@ export function BambiniScreen() {
         </View>
         <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
       </Pressable>
+    );
+  };
+
+  const EXERCISE_GRADIENTS: [string, string][] = [
+    ['#0A5CFF', '#00B8D9'],
+    ['#7B2FF7', '#F72585'],
+    ['#FF9F0A', '#FF375F'],
+    ['#30D158', '#00B8D9'],
+  ];
+  const NOTE_TAG: Record<NotizKind, { label: string; color: string }> = {
+    tel: { label: 'TEL', color: '#4A9EFF' },
+    neu: { label: 'NEU', color: '#30D158' },
+    info: { label: 'INFO', color: colors.textSecondary },
+  };
+  const QUICK_CHIPS: { kind: NotizKind; label: string; icon: React.ComponentProps<typeof Ionicons>['name'] }[] = [
+    { kind: 'tel', label: 'Telefon', icon: 'call' },
+    { kind: 'neu', label: 'Neues Kind', icon: 'person-add' },
+    { kind: 'info', label: 'Notiz', icon: 'create' },
+  ];
+
+  // TE-81: Trainingsmodus. Eine Kachel startet und beendet an derselben Stelle.
+  const renderTraining = () => {
+    if (loading) return null;
+    const running = !!training.startedAt;
+    const startSub = markedTrainingsideenItems.length
+      ? `${markedTrainingsideenItems.length} ${markedTrainingsideenItems.length === 1 ? 'Übung' : 'Übungen'} für heute`
+      : lastDuration !== null
+        ? `Letztes Training ${formatDE(training.lastEnd!.slice(0, 10))}, ${lastDuration} min`
+        : 'Übungen in den Trainingsideen auf „heute“ stellen';
+    const tileColors: [string, string] = running ? ['#FF375F', '#7928CA'] : ['#30D158', '#00B8D9'];
+    return (
+      <View style={s.trainSection}>
+        <Pressable style={s.trainTile} onPress={toggleTraining} accessibilityLabel={running ? 'Training beenden' : 'Training starten'}>
+          <LinearGradient colors={[mono(tileColors[0]), mono(tileColors[1])]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+          <View style={s.trainIcon}>
+            <Ionicons name={running ? 'stop' : 'play'} size={18} color="#FFFFFF" />
+          </View>
+          <View style={s.bMain}>
+            <Text style={s.trainTitle}>{running ? 'Training beenden' : 'Training starten'}</Text>
+            <Text style={s.trainSub} numberOfLines={1}>
+              {running ? `seit ${new Date(training.startedAt!).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}` : startSub}
+            </Text>
+          </View>
+          {running ? <Text style={s.trainTimer}>{trainingMinutes}′</Text> : null}
+        </Pressable>
+
+        {running || trainingNotes.length > 0 ? (
+          <View style={s.quickBox}>
+            {running ? (
+              <>
+                <View style={s.quickRow}>
+                  <TextInput
+                    style={[s.input, s.quickInput]}
+                    value={quickText}
+                    onChangeText={setQuickText}
+                    onSubmitEditing={addQuickNote}
+                    placeholder="Notiz … z. B. Telefonnummer, neues Kind"
+                    placeholderTextColor={colors.placeholder}
+                    returnKeyType="send"
+                    blurOnSubmit={false}
+                  />
+                  <Pressable style={s.quickSend} onPress={addQuickNote} accessibilityLabel="Notiz speichern">
+                    <LinearGradient colors={[mono('#FFE600'), mono('#FF7A00')]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+                    <Ionicons name="arrow-up" size={16} color="#1C1C1E" />
+                  </Pressable>
+                </View>
+                <View style={s.quickChips}>
+                  {QUICK_CHIPS.map((ch) => {
+                    const on = quickKindEffective === ch.kind && quickText.trim().length > 0;
+                    return (
+                      <Pressable
+                        key={ch.kind}
+                        style={[s.filterChip, on && s.filterChipActive]}
+                        onPress={() => setQuickKind((v) => (v === ch.kind ? null : ch.kind))}
+                      >
+                        <Text style={[s.filterChipText, on && s.filterChipTextActive]}>{ch.label}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </>
+            ) : (
+              <Text style={s.bTileLabel}>Notizen vom Training</Text>
+            )}
+            {trainingNotes.map((n) => {
+              const kind = n.kind ?? 'info';
+              const tag = NOTE_TAG[kind];
+              return (
+                <View key={n.id} style={s.quickNote}>
+                  <Text style={[s.quickTag, { color: tag.color, backgroundColor: tag.color + '26' }]}>{tag.label}</Text>
+                  <View style={s.bMain}>
+                    <Text style={s.quickNoteText}>{n.text}</Text>
+                    <Text style={s.quickNoteTime}>
+                      {new Date(n.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}
+                    </Text>
+                  </View>
+                  {!running ? (
+                    <Pressable
+                      hitSlop={8}
+                      onPress={() =>
+                        kind === 'tel' ? setAssignNoteId(n.id) : kind === 'neu' ? createFromNeu(n) : resolveNote(n.id)
+                      }
+                    >
+                      <Text style={s.quickAction}>{kind === 'tel' ? 'Zu Kind →' : kind === 'neu' ? 'Anlegen →' : 'Erledigt'}</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+              );
+            })}
+          </View>
+        ) : null}
+
+        {markedTrainingsideenItems.length > 0 ? (
+          <>
+            <Text style={[s.bTileLabel, s.exLabel]}>Übungen heute</Text>
+            <View style={s.exGrid}>
+              {markedTrainingsideenItems.map((n, i) => {
+                const g = EXERCISE_GRADIENTS[i % EXERCISE_GRADIENTS.length];
+                return (
+                  <View key={n.id} style={s.exCard}>
+                    <LinearGradient colors={[mono(g[0]), mono(g[1])]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+                    <Text style={s.exText} numberOfLines={3}>{n.text}</Text>
+                  </View>
+                );
+              })}
+            </View>
+          </>
+        ) : null}
+      </View>
     );
   };
 
@@ -754,6 +972,9 @@ export function BambiniScreen() {
           ) : null}
 
           <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
+            {/* TE-81: Trainingsmodus ganz oben – Kachel, Schnellnotiz, Übungen für heute. */}
+            {renderTraining()}
+
             {/* TE-76 (Bento Dark): Kachel-Kopf statt Übersichtszeile und Info-Karten unten. */}
             {bento && children.length > 0 ? renderBentoTiles() : null}
 
@@ -769,17 +990,6 @@ export function BambiniScreen() {
               </View>
             ) : null}
 
-            {/* TE-113: markierte Trainingsideen als blaue Alert-Box, gleiches Blau wie der Trainingsideen-FAB. */}
-            {markedTrainingsideenItems.length > 0 ? (
-              <View style={[s.markedBox, s.markedBoxBlau]}>
-                {markedTrainingsideenItems.map((n) => (
-                  <View key={n.id} style={s.markedItemRow}>
-                    <View style={[s.markedDot, s.markedDotBlau]} />
-                    <Text style={s.markedText} numberOfLines={1}>{n.text}</Text>
-                  </View>
-                ))}
-              </View>
-            ) : null}
 
             {children.length === 0 ? (
               <Text style={s.empty}>Noch keine Kinder. Mit „+" anlegen.</Text>
@@ -1096,6 +1306,29 @@ export function BambiniScreen() {
         </Pressable>
       </Modal>
 
+      {/* TE-81: Telefonnummer aus einer Trainingsnotiz einem Kind zuordnen (landet in dessen Info). */}
+      <Modal visible={assignNoteId !== null} transparent animationType="fade" onRequestClose={() => setAssignNoteId(null)}>
+        <Pressable style={s.overlay} onPress={() => setAssignNoteId(null)}>
+          <Pressable style={[s.card, s.assignCard]} onPress={() => {}}>
+            <Text style={s.cardTitle}>Zu welchem Kind?</Text>
+            <Text style={s.quickNoteTime} numberOfLines={2}>
+              {notizItems.find((n) => n.id === assignNoteId)?.text}
+            </Text>
+            <ScrollView style={{ maxHeight: 380 }}>
+              {[...children]
+                .filter((c) => !c.stopped)
+                .sort((a, b) => a.name.localeCompare(b.name, 'de'))
+                .map((c) => (
+                  <Pressable key={c.id} style={s.assignRow} onPress={() => assignTelToChild(c)}>
+                    <Text style={s.bName}>{c.name}</Text>
+                    {c.parentName ? <Text style={s.bParent}>{c.parentName}</Text> : null}
+                  </Pressable>
+                ))}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       <Modal visible={trainingsideenOpen} transparent animationType="fade" onRequestClose={closeTrainingsideen}>
         <Pressable style={s.overlay} onPress={closeTrainingsideen}>
           <KeyboardAvoidingView style={s.notizenKav} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -1125,12 +1358,17 @@ export function BambiniScreen() {
                             <Ionicons name="chevron-down" size={14} color={idx === activeTrainingsideenItems.length - 1 ? colors.border : colors.textSecondary} />
                           </Pressable>
                         </View>
+                        {/* TE-81: „heute“ – angeschaltete Ideen erscheinen als Übungskarten auf der Bambini-Seite. */}
                         <Pressable
                           onPress={() => toggleTrainingsideeMarked(n.id)}
                           hitSlop={8}
-                          accessibilityLabel={n.marked ? 'Markierung entfernen' : 'Als wichtig markieren'}
+                          style={[s.heutePill, n.marked && s.heutePillOn]}
+                          accessibilityLabel={n.marked ? 'Nicht mehr für heute' : 'Für heute einplanen'}
                         >
-                          <Ionicons name={n.marked ? 'star' : 'star-outline'} size={20} color="#4A9EFF" />
+                          {n.marked ? (
+                            <LinearGradient colors={[mono('#0A5CFF'), mono('#00B8D9')]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+                          ) : null}
+                          <Text style={[s.heutePillText, n.marked && s.heutePillTextOn]}>heute</Text>
                         </Pressable>
                         {trainingsideeEditId === n.id ? (
                           <>
@@ -1411,6 +1649,34 @@ function makeStyles(c: ThemeColors) {
     bParent: { color: c.textMuted, fontSize: 12, marginTop: 1 },
     bDots: { flexDirection: 'row', gap: 4 },
 
+    // TE-81: Trainingsmodus.
+    trainSection: { gap: 10, marginBottom: 18 },
+    trainTile: { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 18, paddingVertical: 14, paddingHorizontal: 16, overflow: 'hidden' },
+    trainIcon: { width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(255,255,255,0.22)', alignItems: 'center', justifyContent: 'center' },
+    trainTitle: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
+    trainSub: { color: 'rgba(255,255,255,0.9)', fontSize: 12, marginTop: 1 },
+    trainTimer: { color: '#FFFFFF', fontSize: 24, fontWeight: '800' },
+    quickBox: { backgroundColor: c.surface, borderRadius: 16, padding: 10, gap: 8 },
+    quickRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    quickInput: { flex: 1, marginBottom: 0 },
+    quickSend: { width: 34, height: 34, borderRadius: 17, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
+    quickChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+    quickNote: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, paddingVertical: 2 },
+    quickTag: { fontSize: 10, fontWeight: '700', letterSpacing: 0.5, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, overflow: 'hidden', marginTop: 1 },
+    quickNoteText: { color: c.text, fontSize: 13 },
+    quickNoteTime: { color: c.textMuted, fontSize: 11 },
+    quickAction: { color: c.accent, fontSize: 12, fontWeight: '700' },
+    exLabel: { paddingHorizontal: 4 },
+    exGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+    exCard: { width: '48.5%', minHeight: 64, borderRadius: 16, padding: 12, overflow: 'hidden', justifyContent: 'center' },
+    exText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
+    heutePill: { borderRadius: 999, paddingHorizontal: 9, paddingVertical: 3, borderWidth: 1, borderColor: c.border, overflow: 'hidden' },
+    heutePillOn: { borderColor: 'transparent' },
+    heutePillText: { color: c.textSecondary, fontSize: 11, fontWeight: '700' },
+    heutePillTextOn: { color: '#FFFFFF' },
+    assignCard: { gap: 8 },
+    assignRow: { paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.border },
+
     // TE-76: Bento-Kacheln oben.
     bSpacer: { flex: 1 },
     bTiles: { gap: 8, marginBottom: 18 },
@@ -1534,8 +1800,6 @@ function makeStyles(c: ThemeColors) {
     markedItemRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6 },
     markedDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#F2C518' },
     markedText: { flex: 1, color: c.text, fontSize: 14 },
-    markedBoxBlau: { backgroundColor: '#4A9EFF26', borderColor: '#4A9EFF' },
-    markedDotBlau: { backgroundColor: '#4A9EFF' },
     input: {
       backgroundColor: c.inputBackground,
       borderWidth: 1,
