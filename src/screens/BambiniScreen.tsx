@@ -22,7 +22,7 @@ import {
   KeyboardAvoidingView,
   Linking,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme, ThemeColors } from '../utils/theme';
 import { GradientButton, PLUS_BUTTON, PLUS_ICON_SIZE } from '../components/GradientButton';
@@ -753,7 +753,7 @@ export function BambiniScreen() {
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
         <View style={s.tvHeader}>
-          <Ionicons name="document-text" size={20} color="#F2C518" />
+          <MaterialCommunityIcons name="notebook-edit" size={22} color="#F2C518" />
           <Text style={s.tvTitle}>Notizen</Text>
           <Pressable onPress={() => setNotizHistoryOpen(true)} hitSlop={10} accessibilityLabel="Verlauf">
             <Ionicons name="time-outline" size={20} color={colors.textMuted} />
@@ -833,11 +833,13 @@ export function BambiniScreen() {
   );
 
   // TE-86: Ansichts-Leiste unten – Dashboard, Training, Notizen, Turnier.
-  const VIEW_TABS: { key: BambiniView; label: string; icon: React.ComponentProps<typeof Ionicons>['name']; colors: [string, string]; fg: string }[] = [
-    { key: 'dashboard', label: 'Dashboard', icon: 'grid', colors: ['#0A5CFF', '#7B61FF'], fg: '#FFFFFF' },
-    { key: 'training', label: 'Training', icon: 'bulb', colors: ['#0A5CFF', '#00B8D9'], fg: '#FFFFFF' },
-    { key: 'notizen', label: 'Notizen', icon: 'document-text', colors: ['#FFE600', '#FF7A00'], fg: '#1C1C1E' },
-    { key: 'turnier', label: 'Turnier', icon: 'football', colors: ['#30D158', '#00B8D9'], fg: '#FFFFFF' },
+  // TE-87: MaterialCommunityIcons – Pfeife/Pokal passen besser als Glühbirne/Ball; aktiv gefüllt, sonst Outline.
+  type McIcon = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
+  const VIEW_TABS: { key: BambiniView; label: string; icon: McIcon; iconOff: McIcon; colors: [string, string]; fg: string }[] = [
+    { key: 'dashboard', label: 'Dashboard', icon: 'view-dashboard', iconOff: 'view-dashboard-outline', colors: ['#0A5CFF', '#7B61FF'], fg: '#FFFFFF' },
+    { key: 'training', label: 'Training', icon: 'whistle', iconOff: 'whistle-outline', colors: ['#0A5CFF', '#00B8D9'], fg: '#FFFFFF' },
+    { key: 'notizen', label: 'Notizen', icon: 'notebook-edit', iconOff: 'notebook-edit-outline', colors: ['#FFE600', '#FF7A00'], fg: '#1C1C1E' },
+    { key: 'turnier', label: 'Turnier', icon: 'trophy', iconOff: 'trophy-outline', colors: ['#30D158', '#00B8D9'], fg: '#FFFFFF' },
   ];
 
   const renderViewDock = () => (
@@ -849,7 +851,7 @@ export function BambiniScreen() {
             {on ? (
               <LinearGradient colors={[mono(v.colors[0]), mono(v.colors[1])]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
             ) : null}
-            <Ionicons name={v.icon} size={18} color={on ? v.fg : colors.textSecondary} />
+            <MaterialCommunityIcons name={on ? v.icon : v.iconOff} size={22} color={on ? v.fg : colors.textSecondary} />
             <Text style={[s.dockLabel, { color: on ? v.fg : colors.textSecondary }]}>{v.label}</Text>
           </Pressable>
         );
@@ -863,7 +865,7 @@ export function BambiniScreen() {
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
         <View style={s.tvHeader}>
-          <Ionicons name="bulb" size={20} color="#4A9EFF" />
+          <MaterialCommunityIcons name="whistle" size={22} color="#4A9EFF" />
           <Text style={s.tvTitle}>Trainingsmodus</Text>
           <Pressable onPress={() => setTrainingsideeHistoryOpen(true)} hitSlop={10} accessibilityLabel="Verlauf">
             <Ionicons name="time-outline" size={20} color={colors.textMuted} />
