@@ -971,8 +971,30 @@ export function BambiniScreen() {
     wackelkandidatFilter ? 'mit Wackelkandidaten' : null,
   ].filter(Boolean).join(' · ');
 
+  // TE-90: Balken lückenlos vom ältesten Jahrgang bis mindestens 2025 (künftige Bambini-Jahrgänge),
+  // leere Jahrgänge mit 0; jeder Balken mit eigenem Verlauf.
+  const BAR_GRADIENTS: [string, string][] = [
+    ['#00B8D9', '#0A5CFF'],
+    ['#7B61FF', '#F72585'],
+    ['#30D158', '#00B8D9'],
+    ['#FF9F0A', '#FF375F'],
+    ['#64D2FF', '#7B61FF'],
+    ['#FFD60A', '#FF7A00'],
+    ['#FF375F', '#7928CA'],
+    ['#00C7BE', '#30D158'],
+  ];
+  const realYears = yearCounts.filter((y) => y.year > 0).map((y) => y.year);
+  const barCounts: { year: number; count: number }[] = [];
+  if (realYears.length) {
+    for (let y = Math.min(...realYears); y <= Math.max(2025, ...realYears); y++) {
+      barCounts.push({ year: y, count: yearCounts.find((x) => x.year === y)?.count ?? 0 });
+    }
+  }
+  const unknownYear = yearCounts.find((y) => y.year === 0);
+  if (unknownYear) barCounts.push(unknownYear);
+
   const renderFilterHead = () => {
-    const maxCount = Math.max(1, ...yearCounts.map((y) => y.count));
+    const maxCount = Math.max(1, ...barCounts.map((y) => y.count));
     const toggleYear = (year: number) =>
       setYearFilter((v) => (v.includes(year) ? v.filter((y) => y !== year) : [...v, year]));
     const toggles: { key: string; label: string; count: number; on: boolean; colors: [string, string]; onPress: () => void }[] = [
@@ -992,15 +1014,16 @@ export function BambiniScreen() {
           ))}
         </View>
         <View style={s.fBars}>
-          {yearCounts.map(({ year, count }) => {
+          {barCounts.map(({ year, count }, i) => {
             // TE-77: aktive Jahrgänge (alle, wenn kein Filter) im Verlauf, übrige gedimmt.
-            const on = yearFilter.length === 0 || yearFilter.includes(year);
+            const on = (yearFilter.length === 0 && count > 0) || yearFilter.includes(year);
+            const g = BAR_GRADIENTS[i % BAR_GRADIENTS.length];
             return (
               <Pressable key={year} style={s.bBarCol} onPress={() => toggleYear(year)} accessibilityLabel={`Jahrgang ${year || 'ohne'} filtern`}>
                 <Text style={[s.bBarCount, !on && s.bBarOff]}>{count}</Text>
                 <View style={[s.bBar, { height: 6 + (count / maxCount) * 34 }]}>
                   {on ? (
-                    <LinearGradient colors={['#00B8D9', '#0A5CFF', '#7B61FF']} style={StyleSheet.absoluteFill} />
+                    <LinearGradient colors={[mono(g[0]), mono(g[1])]} style={StyleSheet.absoluteFill} />
                   ) : (
                     <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.surfaceHigh }]} />
                   )}
@@ -1732,7 +1755,7 @@ function makeStyles(c: ThemeColors) {
     fToggleOn: { borderColor: 'transparent' },
     fToggleLabel: { color: c.textSecondary, fontSize: 10.5, fontWeight: '700', letterSpacing: 0.5, textTransform: 'uppercase' },
     fToggleCount: { color: c.text, fontSize: 20, fontWeight: '800', marginTop: 1 },
-    fBars: { flexDirection: 'row', alignItems: 'flex-end', gap: 12, paddingHorizontal: 6 },
+    fBars: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center', gap: 10, paddingHorizontal: 6 },
     fResult: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, paddingHorizontal: 4 },
     fResultText: { flex: 1, color: c.textMuted, fontSize: 12 },
     fResultCount: { color: c.text, fontWeight: '700' },
@@ -1747,7 +1770,7 @@ function makeStyles(c: ThemeColors) {
     bTileTitle: { color: c.text, fontSize: 16, fontWeight: '700' },
     bTileSub: { color: c.textMuted, fontSize: 13, lineHeight: 18 },
     bIconBadge: { width: 30, height: 30, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-    bBarCol: { flex: 1, alignItems: 'center', gap: 4 },
+    bBarCol: { flex: 1, maxWidth: 52, alignItems: 'center', gap: 4 },
     bBar: { alignSelf: 'stretch', borderTopLeftRadius: 8, borderTopRightRadius: 8, borderBottomLeftRadius: 3, borderBottomRightRadius: 3, overflow: 'hidden' },
     bBarCount: { color: c.text, fontSize: 12, fontWeight: '700' },
     bBarOff: { color: c.textMuted },
