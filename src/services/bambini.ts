@@ -157,6 +157,8 @@ export interface NotizItem {
   createdAt: string;
   /** Weiches Löschen (TE-113): Item bleibt erhalten, taucht nur noch im Verlauf-Dialog auf und ist von dort wiederherstellbar. null = aktiv. */
   deletedAt: string | null;
+  /** TE-92: Abgehakt (erledigt) – wie gelöscht nur noch im Verlauf, von dort wiederherstellbar. null = offen. */
+  completedAt?: string | null;
   /** TE-81: Art der Schnellnotiz aus dem Training. Fehlt bei normalen Notizen. */
   kind?: NotizKind;
   /** TE-81: Trainingstag (YYYY-MM-DD; ältere Notizen: Startzeit ISO), markiert Trainingsnotizen. Fehlt = keine. */
@@ -174,6 +176,7 @@ function sanitizeNotizItem(n: any): NotizItem | null {
     marked: !!n?.marked,
     createdAt: String(n?.createdAt ?? '') || new Date().toISOString(),
     deletedAt: n?.deletedAt ? String(n.deletedAt) : null,
+    ...(n?.completedAt ? { completedAt: String(n.completedAt) } : {}),
     ...(n?.kind === 'tel' || n?.kind === 'neu' || n?.kind === 'info' ? { kind: n.kind } : {}),
     ...(n?.trainingId ? { trainingId: String(n.trainingId) } : {}),
   };

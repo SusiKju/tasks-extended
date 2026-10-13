@@ -206,16 +206,22 @@ export function BambiniScreen() {
   }, [notizItems, persistNotizItems]);
 
   const restoreNotizItem = useCallback((id: string) => {
-    persistNotizItems(notizItems.map((n) => (n.id === id ? { ...n, deletedAt: null } : n)));
+    persistNotizItems(notizItems.map((n) => (n.id === id ? { ...n, deletedAt: null, completedAt: null } : n)));
+  }, [notizItems, persistNotizItems]);
+
+  // TE-92: Abhaken – Notiz ist erledigt, landet (wie Gelöschtes) im Verlauf.
+  const completeNotizItem = useCallback((id: string) => {
+    const now = new Date().toISOString();
+    persistNotizItems(notizItems.map((n) => (n.id === id ? { ...n, completedAt: now } : n)));
   }, [notizItems, persistNotizItems]);
 
   const moveNotizItem = useCallback((id: string, direction: -1 | 1) => {
-    const active = notizItems.filter((n) => !n.deletedAt);
+    const active = notizItems.filter((n) => !n.deletedAt && !n.completedAt);
     const idx = active.findIndex((n) => n.id === id);
     const swapIdx = idx + direction;
     if (idx < 0 || swapIdx < 0 || swapIdx >= active.length) return;
     [active[idx], active[swapIdx]] = [active[swapIdx], active[idx]];
-    persistNotizItems([...active, ...notizItems.filter((n) => n.deletedAt)]);
+    persistNotizItems([...active, ...notizItems.filter((n) => n.deletedAt || n.completedAt)]);
   }, [notizItems, persistNotizItems]);
 
   const startEditNotiz = useCallback((n: NotizItem) => {
@@ -236,10 +242,12 @@ export function BambiniScreen() {
     setNotizEditId(null);
   }, [notizEditId, notizEditText, notizItems, persistNotizItems]);
 
-  const activeNotizItems = notizItems.filter((n) => !n.deletedAt);
-  const deletedNotizItems = notizItems
-    .filter((n) => n.deletedAt)
-    .sort((a, b) => (b.deletedAt as string).localeCompare(a.deletedAt as string));
+  // TE-92: offen = weder abgehakt noch gelöscht; Verlauf = abgehakt ODER gelöscht (wie Schule-Tab).
+  const activeNotizItems = notizItems.filter((n) => !n.deletedAt && !n.completedAt);
+  const notizHistoryAt = (n: NotizItem) => (n.deletedAt ?? n.completedAt ?? n.createdAt) as string;
+  const historyNotizItems = notizItems
+    .filter((n) => n.deletedAt || n.completedAt)
+    .sort((a, b) => notizHistoryAt(b).localeCompare(notizHistoryAt(a)));
   const markedNotizItems = activeNotizItems.filter((n) => n.marked);
 
   // TE-113: zweite freie Item-Liste, gleiche Mechanik wie die Notizen oben,
@@ -371,10 +379,8 @@ export function BambiniScreen() {
     setQuickKind(null);
   };
 
-  const resolveNote = (id: string) => {
-    const now = new Date().toISOString();
-    persistNotizItems(notizItems.map((n) => (n.id === id ? { ...n, deletedAt: now } : n)));
-  };
+  // TE-92: zugeordnete/angelegte Trainingsnotizen gelten als abgehakt (nicht gelöscht).
+  const resolveNote = (id: string) => completeNotizItem(id);
 
   const assignTelToChild = (c: Child) => {
     const note = notizItems.find((n) => n.id === assignNoteId);
@@ -396,7 +402,8 @@ export function BambiniScreen() {
 
   // TE-83: alle offenen Trainingsnotizen, egal von welchem Tag – sie bleiben,
   // bis sie zugeordnet oder erledigt sind.
-  const trainingNotes = notizItems.filter((n) => n.trainingId && !n.deletedAt);
+  // TE-92: Trainingsmodus und Notizen-Tab teilen dieselbe offene Notizliste.
+  const trainingNotes = activeNotizItems;
 
   const reload = useCallback(async () => {
     if (!fid) {
@@ -724,7 +731,12 @@ export function BambiniScreen() {
             const tag = NOTE_TAG[kind];
             return (
               <View key={n.id} style={s.quickNote}>
-                <Text style={[s.quickTag, { color: tag.color, backgroundColor: tag.color + '26' }]}>{tag.label}</Text>
+                <Pressable onPress={() => completeNotizItem(n.id)} hitSlop={8} accessibilityLabel="Abhaken">
+                  <Ionicons name="ellipse-outline" size={20} color={colors.textSecondary} />
+                </Pressable>
+                {n.kind ? (
+                  <Text style={[s.quickTag, { color: tag.color, backgroundColor: tag.color + '26' }]}>{tag.label}</Text>
+                ) : null}
                 <View style={s.bMain}>
                   <Text style={s.quickNoteText}>{n.text}</Text>
                   <Text style={s.quickNoteTime}>
@@ -732,13 +744,13 @@ export function BambiniScreen() {
                     {new Date(n.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}
                   </Text>
                 </View>
-                <Pressable
-                  hitSlop={8}
-                  onPress={() =>
-                    kind === 'tel' ? setAssignNoteId(n.id) : kind === 'neu' ? createFromNeu(n) : resolveNote(n.id)
-                  }
-                >
-                  <Text style={s.quickAction}>{kind === 'tel' ? 'Zu Kind →' : kind === 'neu' ? 'Anlegen →' : 'Erledigt'}</Text>
+                {kind === 'tel' || kind === 'neu' ? (
+                  <Pressable hitSlop={8} onPress={() => (kind === 'tel' ? setAssignNoteId(n.id) : createFromNeu(n))}>
+                    <Text style={s.quickAction}>{kind === 'tel' ? 'Zu Kind →' : 'Anlegen →'}</Text>
+                  </Pressable>
+                ) : null}
+                <Pressable onPress={() => deleteNotizItem(n.id)} hitSlop={8} accessibilityLabel="Löschen">
+                  <Ionicons name="trash-outline" size={17} color={colors.textMuted} />
                 </Pressable>
               </View>
             );
@@ -805,6 +817,10 @@ export function BambiniScreen() {
                       <Ionicons name="chevron-down" size={14} color={idx === activeNotizItems.length - 1 ? colors.border : colors.textSecondary} />
                     </Pressable>
                   </View>
+                  {/* TE-92: Abhaken → Verlauf (Löschen bleibt rechts). */}
+                  <Pressable onPress={() => completeNotizItem(n.id)} hitSlop={8} accessibilityLabel="Abhaken">
+                    <Ionicons name="ellipse-outline" size={20} color={colors.textSecondary} />
+                  </Pressable>
                   <Pressable
                     onPress={() => toggleNotizMarked(n.id)}
                     hitSlop={8}
@@ -884,14 +900,20 @@ export function BambiniScreen() {
         <View style={s.tvHeader}>
           <MaterialCommunityIcons name="whistle" size={22} color="#4A9EFF" />
           <Text style={s.tvTitle}>Trainingsmodus</Text>
-          <Pressable onPress={() => setTrainingsideeHistoryOpen(true)} hitSlop={10} accessibilityLabel="Verlauf">
+          {/* TE-92: Verlauf der Notizen (abgehakt + gelöscht), gleicher wie im Notizen-Tab. */}
+          <Pressable onPress={() => setNotizHistoryOpen(true)} hitSlop={10} accessibilityLabel="Verlauf der Notizen">
             <Ionicons name="time-outline" size={20} color={colors.textMuted} />
           </Pressable>
         </View>
 
         {renderTraining()}
 
-        <Text style={[s.bTileLabel, s.exLabel]}>Übungen auswählen</Text>
+        <View style={s.tvSectionHead}>
+          <Text style={[s.bTileLabel, s.exLabel]}>Übungen auswählen</Text>
+          <Pressable onPress={() => setTrainingsideeHistoryOpen(true)} hitSlop={10} accessibilityLabel="Verlauf der Trainingsideen">
+            <Ionicons name="time-outline" size={18} color={colors.textMuted} />
+          </Pressable>
+        </View>
         <View style={s.tvIdeas}>
           {activeTrainingsideenItems.length === 0 ? (
             <Text style={s.empty}>Noch keine Trainingsideen.</Text>
@@ -1430,7 +1452,7 @@ export function BambiniScreen() {
       </Modal>
 
 
-      {/* TE-113: Verlauf-Dialog für gelöschte Notizen, gleiches Muster wie im Schule-Tab. */}
+      {/* TE-113/TE-92: Verlauf-Dialog für abgehakte und gelöschte Notizen, gleiches Muster wie im Schule-Tab. */}
       <Modal visible={notizHistoryOpen} transparent animationType="fade" onRequestClose={() => setNotizHistoryOpen(false)}>
         <Pressable style={s.overlay} onPress={() => setNotizHistoryOpen(false)}>
           <Pressable style={s.historyBox} onPress={() => {}}>
@@ -1440,19 +1462,33 @@ export function BambiniScreen() {
                 <Ionicons name="close" size={22} color={colors.textSecondary} />
               </Pressable>
             </View>
-            {deletedNotizItems.length === 0 ? (
-              <Text style={s.empty}>Noch nichts gelöscht.</Text>
+            {historyNotizItems.length === 0 ? (
+              <Text style={s.empty}>Noch nichts Abgehaktes oder Gelöschtes.</Text>
             ) : (
               <ScrollView style={{ maxHeight: 420 }}>
-                {deletedNotizItems.map((n) => (
-                  <View key={n.id} style={s.historyRow}>
-                    <Ionicons name="trash" size={18} color={colors.danger} />
-                    <Text style={s.historyTitle} numberOfLines={2}>{n.text}</Text>
-                    <Pressable onPress={() => restoreNotizItem(n.id)} hitSlop={8} accessibilityLabel="Wiederherstellen">
-                      <Ionicons name="arrow-undo-circle-outline" size={20} color={colors.accentNeon} />
-                    </Pressable>
-                  </View>
-                ))}
+                {historyNotizItems.map((n, i) => {
+                  const at = notizHistoryAt(n);
+                  const day = at.slice(0, 10);
+                  const showDate = i === 0 || notizHistoryAt(historyNotizItems[i - 1]).slice(0, 10) !== day;
+                  const isDeleted = !!n.deletedAt;
+                  return (
+                    <View key={n.id}>
+                      {showDate ? <Text style={s.historyDate}>{formatDE(day)}</Text> : null}
+                      <View style={s.historyRow}>
+                        <Ionicons name={isDeleted ? 'trash' : 'checkmark-circle'} size={18} color={isDeleted ? colors.danger : colors.success} />
+                        <View style={{ flex: 1 }}>
+                          <Text style={s.historyTitle} numberOfLines={2}>{n.text}</Text>
+                          <Text style={s.quickNoteTime}>
+                            {isDeleted ? 'Gelöscht' : 'Abgehakt'} · {new Date(at).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}
+                          </Text>
+                        </View>
+                        <Pressable onPress={() => restoreNotizItem(n.id)} hitSlop={8} accessibilityLabel="Wiederherstellen">
+                          <Ionicons name="arrow-undo-circle-outline" size={20} color={colors.accentNeon} />
+                        </Pressable>
+                      </View>
+                    </View>
+                  );
+                })}
               </ScrollView>
             )}
           </Pressable>
@@ -1735,6 +1771,8 @@ function makeStyles(c: ThemeColors) {
     addKindText: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
 
     // TE-82: Trainingsmodus-Ansicht.
+    tvSectionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingRight: 6 },
+    historyDate: { color: c.textMuted, fontSize: 11, fontWeight: '700', letterSpacing: 0.5, marginTop: 10, marginBottom: 2, textTransform: 'uppercase' },
     tvHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 4, marginBottom: 12 },
     tvTitle: { flex: 1, color: c.text, fontSize: 20, fontWeight: '700' },
     tvIdeas: { backgroundColor: c.surface, borderRadius: 16, padding: 10, gap: 4, marginTop: 6 },
