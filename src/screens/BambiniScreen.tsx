@@ -402,8 +402,6 @@ export function BambiniScreen() {
 
   // TE-83: alle offenen Trainingsnotizen, egal von welchem Tag – sie bleiben,
   // bis sie zugeordnet oder erledigt sind.
-  // TE-92: Trainingsmodus und Notizen-Tab teilen dieselbe offene Notizliste.
-  const trainingNotes = activeNotizItems;
 
   const reload = useCallback(async () => {
     if (!fid) {
@@ -726,35 +724,6 @@ export function BambiniScreen() {
               );
             })}
           </View>
-          {trainingNotes.map((n) => {
-            const kind = n.kind ?? 'info';
-            const tag = NOTE_TAG[kind];
-            return (
-              <View key={n.id} style={s.quickNote}>
-                <Pressable onPress={() => completeNotizItem(n.id)} hitSlop={8} accessibilityLabel="Abhaken">
-                  <Ionicons name="ellipse-outline" size={20} color={colors.textSecondary} />
-                </Pressable>
-                {n.kind ? (
-                  <Text style={[s.quickTag, { color: tag.color, backgroundColor: tag.color + '26' }]}>{tag.label}</Text>
-                ) : null}
-                <View style={s.bMain}>
-                  <Text style={s.quickNoteText}>{n.text}</Text>
-                  <Text style={s.quickNoteTime}>
-                    {n.createdAt.slice(0, 10) !== todayISO ? `${formatDE(n.createdAt.slice(0, 10))}, ` : ''}
-                    {new Date(n.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}
-                  </Text>
-                </View>
-                {kind === 'tel' || kind === 'neu' ? (
-                  <Pressable hitSlop={8} onPress={() => (kind === 'tel' ? setAssignNoteId(n.id) : createFromNeu(n))}>
-                    <Text style={s.quickAction}>{kind === 'tel' ? 'Zu Kind →' : 'Anlegen →'}</Text>
-                  </Pressable>
-                ) : null}
-                <Pressable onPress={() => deleteNotizItem(n.id)} hitSlop={8} accessibilityLabel="Löschen">
-                  <Ionicons name="trash-outline" size={17} color={colors.textMuted} />
-                </Pressable>
-              </View>
-            );
-          })}
         </View>
 
         {markedTrainingsideenItems.length > 0 ? (
@@ -847,7 +816,29 @@ export function BambiniScreen() {
                     </>
                   ) : (
                     <>
-                      <Text style={s.notizItemText}>{n.text}</Text>
+                      {/* TE-94: Notizen aus dem Trainingsmodus mit Badge „Training“ (+ Typ), Zuordnen direkt hier. */}
+                      <View style={s.notizBody}>
+                        {n.trainingId || n.kind ? (
+                          <View style={s.notizBadges}>
+                            {n.trainingId ? (
+                              <View style={s.trainBadge}>
+                                <LinearGradient colors={[mono('#0A5CFF'), mono('#00B8D9')]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+                                <MaterialCommunityIcons name="whistle" size={11} color="#FFFFFF" />
+                                <Text style={s.trainBadgeText}>Training</Text>
+                              </View>
+                            ) : null}
+                            {n.kind ? (
+                              <Text style={[s.quickTag, { color: NOTE_TAG[n.kind].color, backgroundColor: NOTE_TAG[n.kind].color + '26' }]}>{NOTE_TAG[n.kind].label}</Text>
+                            ) : null}
+                            {n.kind === 'tel' || n.kind === 'neu' ? (
+                              <Pressable hitSlop={8} onPress={() => (n.kind === 'tel' ? setAssignNoteId(n.id) : createFromNeu(n))}>
+                                <Text style={s.quickAction}>{n.kind === 'tel' ? 'Zu Kind →' : 'Anlegen →'}</Text>
+                              </Pressable>
+                            ) : null}
+                          </View>
+                        ) : null}
+                        <Text style={[s.notizItemText, { flex: 0 }]}>{n.text}</Text>
+                      </View>
                       <Pressable onPress={() => startEditNotiz(n)} hitSlop={8} accessibilityLabel="Bearbeiten">
                         <Ionicons name="pencil-outline" size={18} color={colors.textSecondary} />
                       </Pressable>
@@ -884,7 +875,15 @@ export function BambiniScreen() {
             {on ? (
               <LinearGradient colors={[mono(v.colors[0]), mono(v.colors[1])]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
             ) : null}
-            <MaterialCommunityIcons name={on ? v.icon : v.iconOff} size={22} color={on ? v.fg : colors.textSecondary} />
+            <View>
+              <MaterialCommunityIcons name={on ? v.icon : v.iconOff} size={22} color={on ? v.fg : colors.textSecondary} />
+              {/* TE-94: Anzahl offener Notizen als Badge am Notizen-Tab. */}
+              {v.key === 'notizen' && activeNotizItems.length > 0 ? (
+                <View style={s.dockBadge}>
+                  <Text style={s.dockBadgeText}>{activeNotizItems.length}</Text>
+                </View>
+              ) : null}
+            </View>
             <Text style={[s.dockLabel, { color: on ? v.fg : colors.textSecondary }]}>{v.label}</Text>
           </Pressable>
         );
@@ -900,10 +899,6 @@ export function BambiniScreen() {
         <View style={s.tvHeader}>
           <MaterialCommunityIcons name="whistle" size={22} color="#4A9EFF" />
           <Text style={s.tvTitle}>Trainingsmodus</Text>
-          {/* TE-92: Verlauf der Notizen (abgehakt + gelöscht), gleicher wie im Notizen-Tab. */}
-          <Pressable onPress={() => setNotizHistoryOpen(true)} hitSlop={10} accessibilityLabel="Verlauf der Notizen">
-            <Ionicons name="time-outline" size={20} color={colors.textMuted} />
-          </Pressable>
         </View>
 
         {renderTraining()}
@@ -1767,6 +1762,12 @@ function makeStyles(c: ThemeColors) {
     },
     dockItem: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 2, paddingVertical: 7, borderRadius: 17, overflow: 'hidden' },
     dockLabel: { fontSize: 10.5, fontWeight: '700' },
+    dockBadge: { position: 'absolute', top: -5, right: -11, minWidth: 17, height: 17, borderRadius: 9, paddingHorizontal: 4, backgroundColor: '#FF375F', alignItems: 'center', justifyContent: 'center' },
+    dockBadgeText: { color: '#FFFFFF', fontSize: 10, fontWeight: '800' },
+    notizBody: { flex: 1, gap: 3 },
+    notizBadges: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 },
+    trainBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, overflow: 'hidden' },
+    trainBadgeText: { color: '#FFFFFF', fontSize: 10, fontWeight: '700' },
     addKindBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, height: 32, paddingHorizontal: 12, borderRadius: 16, overflow: 'hidden' },
     addKindText: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
 
