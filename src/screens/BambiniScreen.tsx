@@ -93,6 +93,8 @@ const SORT_OPTIONS: { value: BambiniSortMode; label: string }[] = [
   { value: 'erstesmal', label: 'Dabei seit' },
 ];
 
+type BambiniView = 'dashboard' | 'training' | 'notizen' | 'turnier';
+
 export function BambiniScreen() {
   const { colors, mono } = useTheme();
   const { familyId } = useFamily();
@@ -326,6 +328,20 @@ export function BambiniScreen() {
     .filter((n) => n.deletedAt)
     .sort((a, b) => (b.deletedAt as string).localeCompare(a.deletedAt as string));
   const markedTrainingsideenItems = activeTrainingsideenItems.filter((n) => n.marked);
+
+  // TE-86: vier Ansichten statt FABs. Training/Notizen nutzen ihre bisherigen Open-Flags,
+  // damit Schließen weiterhin Getipptes übernimmt.
+  const [turnierOpen, setTurnierOpen] = useState(false);
+  const view: BambiniView = trainingsideenOpen ? 'training' : notizenOpen ? 'notizen' : turnierOpen ? 'turnier' : 'dashboard';
+  const switchView = (next: BambiniView) => {
+    if (next === view) return;
+    if (view === 'training') closeTrainingsideen();
+    if (view === 'notizen') closeNotizen();
+    if (view === 'turnier') setTurnierOpen(false);
+    if (next === 'training') openTrainingsideen();
+    if (next === 'notizen') openNotizen();
+    if (next === 'turnier') setTurnierOpen(true);
+  };
 
   // TE-81/TE-84: Schnellnotiz im Trainingsmodus. Die Ansicht selbst ist der Modus
   // (kein Starten/Beenden mehr); Notizen landen in den bestehenden Bambini-Notiz-Items.
@@ -732,6 +748,115 @@ export function BambiniScreen() {
     );
   };
 
+  // TE-86: Notizen als eigene Ansicht (vorher Fenster hinter dem gelben Button).
+  const renderNotizenView = () => (
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
+        <View style={s.tvHeader}>
+          <Ionicons name="document-text" size={20} color="#F2C518" />
+          <Text style={s.tvTitle}>Notizen</Text>
+          <Pressable onPress={() => setNotizHistoryOpen(true)} hitSlop={10} accessibilityLabel="Verlauf">
+            <Ionicons name="time-outline" size={20} color={colors.textMuted} />
+          </Pressable>
+        </View>
+        <View style={s.tvIdeas}>
+          <View style={s.notizAddRow}>
+            <TextInput
+              style={[s.input, s.notizAddInput]}
+              value={notizInput}
+              onChangeText={setNotizInput}
+              placeholder="Neue Notiz…"
+              placeholderTextColor={colors.placeholder}
+              onSubmitEditing={addNotizItem}
+              returnKeyType="done"
+            />
+            <GradientButton gradient={colors.gradients?.primary} onPress={addNotizItem} style={[[s.btn, s.notizAddBtn], PLUS_BUTTON]} fallbackStyle={{ backgroundColor: colors.accent }} accessibilityLabel="Notiz hinzufügen">
+              <Ionicons name="add" size={PLUS_ICON_SIZE} color={colors.gradients?.primary?.fg ?? colors.accentFg} />
+            </GradientButton>
+          </View>
+          {activeNotizItems.length === 0 ? (
+            <Text style={s.empty}>Noch keine Notizen.</Text>
+          ) : (
+            activeNotizItems.map((n, idx) => (
+              <View key={n.id} style={s.notizItemRow}>
+                <View style={s.notizItemMain}>
+                  <View style={s.notizReorder}>
+                    <Pressable onPress={() => moveNotizItem(n.id, -1)} disabled={idx === 0} hitSlop={4} accessibilityLabel="Nach oben verschieben">
+                      <Ionicons name="chevron-up" size={14} color={idx === 0 ? colors.border : colors.textSecondary} />
+                    </Pressable>
+                    <Pressable onPress={() => moveNotizItem(n.id, 1)} disabled={idx === activeNotizItems.length - 1} hitSlop={4} accessibilityLabel="Nach unten verschieben">
+                      <Ionicons name="chevron-down" size={14} color={idx === activeNotizItems.length - 1 ? colors.border : colors.textSecondary} />
+                    </Pressable>
+                  </View>
+                  <Pressable
+                    onPress={() => toggleNotizMarked(n.id)}
+                    hitSlop={8}
+                    accessibilityLabel={n.marked ? 'Markierung entfernen' : 'Als wichtig markieren'}
+                  >
+                    <Ionicons name={n.marked ? 'star' : 'star-outline'} size={20} color="#F2C518" />
+                  </Pressable>
+                  {notizEditId === n.id ? (
+                    <>
+                      <TextInput
+                        style={[s.input, s.notizEditInput]}
+                        value={notizEditText}
+                        onChangeText={setNotizEditText}
+                        onSubmitEditing={saveEditNotiz}
+                        returnKeyType="done"
+                        autoFocus
+                      />
+                      <Pressable onPress={saveEditNotiz} hitSlop={8} accessibilityLabel="Speichern">
+                        <Ionicons name="checkmark" size={20} color={colors.accent} />
+                      </Pressable>
+                      <Pressable onPress={cancelEditNotiz} hitSlop={8} accessibilityLabel="Abbrechen">
+                        <Ionicons name="close" size={18} color={colors.textSecondary} />
+                      </Pressable>
+                    </>
+                  ) : (
+                    <>
+                      <Text style={s.notizItemText}>{n.text}</Text>
+                      <Pressable onPress={() => startEditNotiz(n)} hitSlop={8} accessibilityLabel="Bearbeiten">
+                        <Ionicons name="pencil-outline" size={18} color={colors.textSecondary} />
+                      </Pressable>
+                      <Pressable onPress={() => deleteNotizItem(n.id)} hitSlop={8} accessibilityLabel="Löschen">
+                        <Ionicons name="trash-outline" size={18} color={colors.textSecondary} />
+                      </Pressable>
+                    </>
+                  )}
+                </View>
+              </View>
+            ))
+          )}
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
+
+  // TE-86: Ansichts-Leiste unten – Dashboard, Training, Notizen, Turnier.
+  const VIEW_TABS: { key: BambiniView; label: string; icon: React.ComponentProps<typeof Ionicons>['name']; colors: [string, string]; fg: string }[] = [
+    { key: 'dashboard', label: 'Dashboard', icon: 'grid', colors: ['#0A5CFF', '#7B61FF'], fg: '#FFFFFF' },
+    { key: 'training', label: 'Training', icon: 'bulb', colors: ['#0A5CFF', '#00B8D9'], fg: '#FFFFFF' },
+    { key: 'notizen', label: 'Notizen', icon: 'document-text', colors: ['#FFE600', '#FF7A00'], fg: '#1C1C1E' },
+    { key: 'turnier', label: 'Turnier', icon: 'football', colors: ['#30D158', '#00B8D9'], fg: '#FFFFFF' },
+  ];
+
+  const renderViewDock = () => (
+    <View style={s.dock}>
+      {VIEW_TABS.map((v) => {
+        const on = view === v.key;
+        return (
+          <Pressable key={v.key} style={s.dockItem} onPress={() => switchView(v.key)} accessibilityLabel={v.label} accessibilityState={{ selected: on }}>
+            {on ? (
+              <LinearGradient colors={[mono(v.colors[0]), mono(v.colors[1])]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+            ) : null}
+            <Ionicons name={v.icon} size={18} color={on ? v.fg : colors.textSecondary} />
+            <Text style={[s.dockLabel, { color: on ? v.fg : colors.textSecondary }]}>{v.label}</Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+
   // TE-82: Trainingsmodus als eigene Ansicht hinter dem Glühbirnen-Button –
   // Start/Beenden, Übungskarten, Schnellnotiz und Auswahl der Übungen für heute.
   const renderTrainingView = () => (
@@ -742,9 +867,6 @@ export function BambiniScreen() {
           <Text style={s.tvTitle}>Trainingsmodus</Text>
           <Pressable onPress={() => setTrainingsideeHistoryOpen(true)} hitSlop={10} accessibilityLabel="Verlauf">
             <Ionicons name="time-outline" size={20} color={colors.textMuted} />
-          </Pressable>
-          <Pressable onPress={closeTrainingsideen} hitSlop={12} accessibilityLabel="Zur Bambini-Übersicht">
-            <Ionicons name="close" size={24} color={colors.textSecondary} />
           </Pressable>
         </View>
 
@@ -920,13 +1042,23 @@ export function BambiniScreen() {
     <View style={s.container}>
       {loading ? (
         <ActivityIndicator style={{ marginTop: 32 }} color={colors.accent} />
-      ) : trainingsideenOpen ? (
+      ) : view === 'training' ? (
         renderTrainingView()
+      ) : view === 'notizen' ? (
+        renderNotizenView()
+      ) : view === 'turnier' ? (
+        <FussballKachel forceTheme="fussball" inline />
       ) : (
         <>
-          {children.length > 0 ? (
-            <View style={s.filterToggleRow}>
-              {bento ? <View style={s.bSpacer} /> : <Text style={s.overview} numberOfLines={2}>{overviewText}</Text>}
+          <View style={s.filterToggleRow}>
+            {bento || children.length === 0 ? <View style={s.bSpacer} /> : <Text style={s.overview} numberOfLines={2}>{overviewText}</Text>}
+            {/* TE-86: neues Kind anlegen sitzt oben neben dem Filter (statt Plus-FAB). */}
+            <Pressable style={s.addKindBtn} onPress={openNew} accessibilityLabel="Kind hinzufügen">
+              <LinearGradient colors={[mono('#0A5CFF'), mono('#7B61FF')]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+              <Ionicons name="add" size={16} color="#FFFFFF" />
+              <Text style={s.addKindText}>Kind</Text>
+            </Pressable>
+            {children.length > 0 ? (
               <Pressable
                 style={[s.filterToggleBtn, filtersOpen && s.filterToggleBtnActive]}
                 onPress={() => setFiltersOpen((v) => !v)}
@@ -938,8 +1070,8 @@ export function BambiniScreen() {
                   color={filtersOpen ? colors.accentFg : colors.textSecondary}
                 />
               </Pressable>
-            </View>
-          ) : null}
+            ) : null}
+          </View>
 
           {/* TE-110: Such-/Filter-/Sortierbereich – sitzt inline über der Liste (kein
               eigener Layer), ein-/ausblendbar über den Filter-Button oben. */}
@@ -1028,7 +1160,7 @@ export function BambiniScreen() {
 
 
             {children.length === 0 ? (
-              <Text style={s.empty}>Noch keine Kinder. Mit „+" anlegen.</Text>
+              <Text style={s.empty}>Noch keine Kinder. Oben mit „+ Kind“ anlegen.</Text>
             ) : sorted.length === 0 ? (
               <Text style={s.empty}>Keine Treffer.</Text>
             ) : bento ? (
@@ -1086,33 +1218,8 @@ export function BambiniScreen() {
         </>
       )}
 
-      {/* TE-82: im Trainingsmodus nur die Glühbirne (führt zurück), sonst alle FABs. */}
-      {!trainingsideenOpen ? (
-        <>
-          {/* TE-87: gleiches Icon/gleiche Aktion wie das Fußball-Icon auf dem Dashboard. */}
-          <FussballKachel forceTheme="fussball" iconStyle={s.fabFussball} iconSize={26} />
-
-          {/* TE-44: dritter FAB für freie Notizen (Trainingsideen o. Ä.). */}
-          <Pressable style={s.fabNotizen} onPress={openNotizen} accessibilityLabel="Notizen öffnen">
-            <Ionicons name="document-text" size={24} color="#3A2E00" />
-          </Pressable>
-        </>
-      ) : null}
-
-      {/* TE-113/TE-82: Glühbirne öffnet und schließt den Trainingsmodus. */}
-      <Pressable
-        style={[s.fabTrainingsideen, trainingsideenOpen && s.fabTrainingsideenOn]}
-        onPress={trainingsideenOpen ? closeTrainingsideen : openTrainingsideen}
-        accessibilityLabel={trainingsideenOpen ? 'Trainingsmodus schließen' : 'Trainingsmodus öffnen'}
-      >
-        <Ionicons name={trainingsideenOpen ? 'close' : 'bulb'} size={24} color="#0A2A4A" />
-      </Pressable>
-
-      {!trainingsideenOpen ? (
-        <GradientButton gradient={colors.gradients?.primary} style={[s.fab, PLUS_BUTTON]} onPress={openNew} accessibilityLabel="Kind hinzufügen">
-          <Ionicons name="add" size={PLUS_ICON_SIZE} color={colors.gradients?.primary?.fg ?? colors.accentFg} />
-        </GradientButton>
-      ) : null}
+      {/* TE-86: Ansichts-Leiste ersetzt die runden Buttons. */}
+      {renderViewDock()}
 
       <Modal visible={editing !== null} transparent animationType="fade" onRequestClose={saveEntry}>
         <KeyboardAvoidingView style={s.overlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -1235,94 +1342,6 @@ export function BambiniScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
-      <Modal visible={notizenOpen} transparent animationType="fade" onRequestClose={closeNotizen}>
-        <Pressable style={s.overlay} onPress={closeNotizen}>
-          <KeyboardAvoidingView style={s.notizenKav} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-            <Pressable style={[s.card, s.notizenCard]} onPress={() => {}}>
-              <View style={s.notizenHeader}>
-                <Ionicons name="document-text" size={18} color="#F2C518" />
-                <Text style={[s.cardTitle, s.notizenTitle]}>Notizen</Text>
-                <Pressable onPress={() => setNotizHistoryOpen(true)} hitSlop={10} accessibilityLabel="Verlauf">
-                  <Ionicons name="time-outline" size={20} color={colors.textMuted} />
-                </Pressable>
-                <Pressable onPress={closeNotizen} hitSlop={12} accessibilityLabel="Schließen">
-                  <Ionicons name="close" size={22} color={colors.textSecondary} />
-                </Pressable>
-              </View>
-              <ScrollView style={s.notizenList} keyboardShouldPersistTaps="handled">
-                {activeNotizItems.length === 0 ? (
-                  <Text style={s.empty}>Noch keine Notizen.</Text>
-                ) : (
-                  activeNotizItems.map((n, idx) => (
-                    <View key={n.id} style={s.notizItemRow}>
-                      <View style={s.notizItemMain}>
-                        <View style={s.notizReorder}>
-                          <Pressable onPress={() => moveNotizItem(n.id, -1)} disabled={idx === 0} hitSlop={4} accessibilityLabel="Nach oben verschieben">
-                            <Ionicons name="chevron-up" size={14} color={idx === 0 ? colors.border : colors.textSecondary} />
-                          </Pressable>
-                          <Pressable onPress={() => moveNotizItem(n.id, 1)} disabled={idx === activeNotizItems.length - 1} hitSlop={4} accessibilityLabel="Nach unten verschieben">
-                            <Ionicons name="chevron-down" size={14} color={idx === activeNotizItems.length - 1 ? colors.border : colors.textSecondary} />
-                          </Pressable>
-                        </View>
-                        <Pressable
-                          onPress={() => toggleNotizMarked(n.id)}
-                          hitSlop={8}
-                          accessibilityLabel={n.marked ? 'Markierung entfernen' : 'Als wichtig markieren'}
-                        >
-                          <Ionicons name={n.marked ? 'star' : 'star-outline'} size={20} color="#F2C518" />
-                        </Pressable>
-                        {notizEditId === n.id ? (
-                          <>
-                            <TextInput
-                              style={[s.input, s.notizEditInput]}
-                              value={notizEditText}
-                              onChangeText={setNotizEditText}
-                              onSubmitEditing={saveEditNotiz}
-                              returnKeyType="done"
-                              autoFocus
-                            />
-                            <Pressable onPress={saveEditNotiz} hitSlop={8} accessibilityLabel="Speichern">
-                              <Ionicons name="checkmark" size={20} color={colors.accent} />
-                            </Pressable>
-                            <Pressable onPress={cancelEditNotiz} hitSlop={8} accessibilityLabel="Abbrechen">
-                              <Ionicons name="close" size={18} color={colors.textSecondary} />
-                            </Pressable>
-                          </>
-                        ) : (
-                          <>
-                            <Text style={s.notizItemText}>{n.text}</Text>
-                            <Pressable onPress={() => startEditNotiz(n)} hitSlop={8} accessibilityLabel="Bearbeiten">
-                              <Ionicons name="pencil-outline" size={18} color={colors.textSecondary} />
-                            </Pressable>
-                            <Pressable onPress={() => deleteNotizItem(n.id)} hitSlop={8} accessibilityLabel="Löschen">
-                              <Ionicons name="trash-outline" size={18} color={colors.textSecondary} />
-                            </Pressable>
-                          </>
-                        )}
-                      </View>
-                    </View>
-                  ))
-                )}
-              </ScrollView>
-
-              <View style={s.notizAddRow}>
-                <TextInput
-                  style={[s.input, s.notizAddInput]}
-                  value={notizInput}
-                  onChangeText={setNotizInput}
-                  placeholder="Neue Notiz…"
-                  placeholderTextColor={colors.placeholder}
-                  onSubmitEditing={addNotizItem}
-                  returnKeyType="done"
-                />
-                <GradientButton gradient={colors.gradients?.primary} onPress={addNotizItem} style={[[s.btn, s.notizAddBtn], PLUS_BUTTON]} fallbackStyle={{ backgroundColor: colors.accent }} accessibilityLabel="Notiz hinzufügen">
-                  <Ionicons name="add" size={PLUS_ICON_SIZE} color={colors.gradients?.primary?.fg ?? colors.accentFg} />
-                </GradientButton>
-              </View>
-            </Pressable>
-          </KeyboardAvoidingView>
-        </Pressable>
-      </Modal>
 
       {/* TE-113: Verlauf-Dialog für gelöschte Notizen, gleiches Muster wie im Schule-Tab. */}
       <Modal visible={notizHistoryOpen} transparent animationType="fade" onRequestClose={() => setNotizHistoryOpen(false)}>
@@ -1603,11 +1622,34 @@ function makeStyles(c: ThemeColors) {
     bParent: { color: c.textMuted, fontSize: 12, marginTop: 1 },
     bDots: { flexDirection: 'row', gap: 4 },
 
+    // TE-86: Ansichts-Leiste und „+ Kind“.
+    dock: {
+      position: 'absolute',
+      left: 12,
+      right: 12,
+      bottom: 12,
+      flexDirection: 'row',
+      gap: 4,
+      padding: 5,
+      borderRadius: 22,
+      backgroundColor: c.surfaceHigh,
+      borderWidth: 1,
+      borderColor: c.border,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.4,
+      shadowRadius: 14,
+      elevation: 8,
+    },
+    dockItem: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 2, paddingVertical: 7, borderRadius: 17, overflow: 'hidden' },
+    dockLabel: { fontSize: 10.5, fontWeight: '700' },
+    addKindBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, height: 32, paddingHorizontal: 12, borderRadius: 16, overflow: 'hidden' },
+    addKindText: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
+
     // TE-82: Trainingsmodus-Ansicht.
     tvHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 4, marginBottom: 12 },
     tvTitle: { flex: 1, color: c.text, fontSize: 20, fontWeight: '700' },
     tvIdeas: { backgroundColor: c.surface, borderRadius: 16, padding: 10, gap: 4, marginTop: 6 },
-    fabTrainingsideenOn: { right: 16, borderWidth: 2, borderColor: c.text },
 
     // TE-81: Trainingsmodus.
     trainSection: { gap: 10, marginBottom: 18 },
@@ -1653,72 +1695,11 @@ function makeStyles(c: ThemeColors) {
     bBarYear: { color: c.textMuted, fontSize: 12 },
     bDot: { width: 7, height: 7, borderRadius: 4 },
 
-    fab: {
-      position: 'absolute',
-      right: 18,
-      bottom: 24,
-      width: 56,
-      height: 56,
-      borderRadius: 28,
-      backgroundColor: c.accent,
-      alignItems: 'center',
-      justifyContent: 'center',
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.3,
-      shadowRadius: 6,
-      elevation: 6,
-    },
     // TE-87: zweiter FAB links neben dem Plus-Icon, öffnet den Fußball-Notizdialog.
-    fabFussball: {
-      position: 'absolute',
-      right: 86,
-      bottom: 24,
-      width: 56,
-      height: 56,
-      borderRadius: 28,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.3,
-      shadowRadius: 6,
-      elevation: 6,
-    },
 
     // TE-44: dritter FAB links neben Fußball-Icon, öffnet den Notizen-Dialog.
-    fabNotizen: {
-      position: 'absolute',
-      right: 154,
-      bottom: 24,
-      width: 56,
-      height: 56,
-      borderRadius: 28,
-      backgroundColor: '#F2C518',
-      alignItems: 'center',
-      justifyContent: 'center',
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.3,
-      shadowRadius: 6,
-      elevation: 6,
-    },
 
     // TE-113: vierter FAB links neben Notizen, öffnet den Trainingsideen-Dialog.
-    fabTrainingsideen: {
-      position: 'absolute',
-      right: 222,
-      bottom: 24,
-      width: 56,
-      height: 56,
-      borderRadius: 28,
-      backgroundColor: '#4A9EFF',
-      alignItems: 'center',
-      justifyContent: 'center',
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.3,
-      shadowRadius: 6,
-      elevation: 6,
-    },
 
     overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center', padding: 24 },
     card: { width: '100%', maxWidth: 360, backgroundColor: c.surface, borderRadius: 16, borderWidth: 1, borderColor: c.border, padding: 18, gap: 12 },

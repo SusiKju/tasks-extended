@@ -11,7 +11,7 @@
  * Bewusster Farbtupfer im sonst strikt schwarz-weißen App-Theme (TE-7/TE-10).
  */
 
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -416,9 +416,11 @@ interface FussballKachelProps {
   /** Style-Override für die Icon-Kachel, z. B. um sie als FAB zu positionieren. */
   iconStyle?: StyleProp<ViewStyle>;
   iconSize?: number;
+  /** TE-86: Inhalt direkt als Ansicht rendern (Bambini-Turnier-Tab) statt Icon + Modal. */
+  inline?: boolean;
 }
 
-export function FussballKachel({ forceTheme, iconStyle, iconSize = 18 }: FussballKachelProps = {}) {
+export function FussballKachel({ forceTheme, iconStyle, iconSize = 18, inline = false }: FussballKachelProps = {}) {
   const { familyId } = useFamily();
   const fid = familyId ?? '';
 
@@ -474,15 +476,30 @@ export function FussballKachel({ forceTheme, iconStyle, iconSize = 18 }: Fussbal
     );
   }, []);
 
+  // TE-86: Inline-Ansicht lädt beim Einblenden und speichert Ungespeichertes beim Verlassen.
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
+  useEffect(() => {
+    if (!inline || !forceTheme) return;
+    openDialog(forceTheme);
+    return () => {
+      if (editedRef.current && fid) {
+        saveFussballKachel(fid, forceTheme, draftRef.current).catch((e) => console.warn('saveFussballKachel failed', e));
+      }
+    };
+  }, [inline, forceTheme, fid, openDialog]);
+
   // Dialog sofort schließen; im Hintergrund speichern (Fehler nur loggen).
+  // Inline bleibt die Ansicht offen.
   const handleSave = useCallback(() => {
     const theme = openTheme;
-    setOpenTheme(null);
+    if (inline) editedRef.current = false;
+    else setOpenTheme(null);
     if (!fid || !theme) return;
     saveFussballKachel(fid, theme, draft).catch((e) =>
       console.warn('saveFussballKachel failed', e),
     );
-  }, [fid, openTheme, draft]);
+  }, [fid, openTheme, draft, inline]);
 
   // Nur forceTheme öffnet die Kachel (TE-87) – die Dashboard/Settings-Auswahl
   // mehrerer Themen wurde entfernt.
@@ -491,47 +508,22 @@ export function FussballKachel({ forceTheme, iconStyle, iconSize = 18 }: Fussbal
 
   const cfg = openTheme ? (FUN_THEMES[openTheme] ?? FUN_THEMES.fussball) : null;
 
-  return (
-    <>
-      {/* Inline-Icons – eine kleine Kachel pro aktivem Thema (nicht sticky) */}
-      <View style={s.iconRow}>
-        {activeThemes.map((t) => {
-          const c = FUN_THEMES[t];
-          return (
-            <Pressable
-              key={t}
-              style={({ pressed }) => [
-                s.iconTile,
-                { backgroundColor: c.tile },
-                iconStyle,
-                pressed && { opacity: 0.85 },
-              ]}
-              onPress={() => openDialog(t)}
-              accessibilityRole="button"
-              accessibilityLabel={`${c.label}-Notizen öffnen`}
-            >
-              <Ionicons name={c.icon} size={iconSize} color="#FFFFFF" />
-            </Pressable>
-          );
-        })}
-      </View>
-
-      {/* Fast-fullscreen Notizdialog des gewählten Themas */}
-      {/* TE-13: Zurück speichert Änderungen statt sie zu verwerfen. */}
-      <Modal visible={!!openTheme} animationType="slide" transparent onRequestClose={() => (editedRef.current ? handleSave() : setOpenTheme(null))}>
-        {cfg && openTheme && (
+  const dialog = (
+    cfg && openTheme && (
           <KeyboardAvoidingView
-            style={s.backdrop}
+            style={inline ? { flex: 1 } : s.backdrop}
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           >
-            <View style={[s.dialog, { backgroundColor: cfg.dialogBg, borderColor: cfg.line }]}>
+            <View style={[s.dialog, { backgroundColor: cfg.dialogBg, borderColor: cfg.line }, inline && s.dialogInline]}>
               {/* Kopfzeile */}
               <View style={s.header}>
                 <Ionicons name={cfg.icon} size={22} color={cfg.fg} />
                 <Text style={[s.headerTitle, { color: cfg.fg }]}>{cfg.title}</Text>
-                <Pressable onPress={() => setOpenTheme(null)} hitSlop={12} style={s.closeBtn} accessibilityLabel="Schließen">
-                  <Ionicons name="close" size={22} color={cfg.fg} />
-                </Pressable>
+                {!inline && (
+                  <Pressable onPress={() => setOpenTheme(null)} hitSlop={12} style={s.closeBtn} accessibilityLabel="Schließen">
+                    <Ionicons name="close" size={22} color={cfg.fg} />
+                  </Pressable>
+                )}
               </View>
 
               {/* Dekorativer Hintergrund + füllendes 2×2-Raster */}
@@ -619,7 +611,40 @@ export function FussballKachel({ forceTheme, iconStyle, iconSize = 18 }: Fussbal
               </Pressable>
             </View>
           </KeyboardAvoidingView>
-        )}
+        )
+  );
+
+  if (inline) return <View style={{ flex: 1 }}>{dialog}</View>;
+
+  return (
+    <>
+      {/* Inline-Icons – eine kleine Kachel pro aktivem Thema (nicht sticky) */}
+      <View style={s.iconRow}>
+        {activeThemes.map((t) => {
+          const c = FUN_THEMES[t];
+          return (
+            <Pressable
+              key={t}
+              style={({ pressed }) => [
+                s.iconTile,
+                { backgroundColor: c.tile },
+                iconStyle,
+                pressed && { opacity: 0.85 },
+              ]}
+              onPress={() => openDialog(t)}
+              accessibilityRole="button"
+              accessibilityLabel={`${c.label}-Notizen öffnen`}
+            >
+              <Ionicons name={c.icon} size={iconSize} color="#FFFFFF" />
+            </Pressable>
+          );
+        })}
+      </View>
+
+      {/* Fast-fullscreen Notizdialog des gewählten Themas */}
+      {/* TE-13: Zurück speichert Änderungen statt sie zu verwerfen. */}
+      <Modal visible={!!openTheme} animationType="slide" transparent onRequestClose={() => (editedRef.current ? handleSave() : setOpenTheme(null))}>
+        {dialog}
       </Modal>
     </>
   );
@@ -650,6 +675,9 @@ const s = StyleSheet.create({
     padding: 14,
     gap: 12,
   },
+
+  // TE-86: im Bambini-Turnier-Tab Platz für die Ansichts-Leiste unten lassen.
+  dialogInline: { marginTop: 8, marginBottom: 88 },
 
   header: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   headerTitle: { flex: 1, fontSize: 18, fontWeight: '700', letterSpacing: 0.3 },
