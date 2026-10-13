@@ -121,6 +121,8 @@ export function BambiniScreen() {
   const [sortMode, setSortMode] = useState<BambiniSortMode>('jahrgang');
   const [sortReversed, setSortReversed] = useState(false);
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
+  // TE-89: Suchfeld in Bento Dark nur auf Tipp auf die Lupe.
+  const [searchOpen, setSearchOpen] = useState(false);
   // TE-110: Such-/Filter-/Sortierbereich ein-/ausblendbar, sitzt inline über der
   // Liste (kein Modal) – Zustand ebenfalls family-weit persistiert.
   const [filtersOpen, setFiltersOpen] = useState(true);
@@ -953,81 +955,99 @@ export function BambiniScreen() {
     </KeyboardAvoidingView>
   );
 
-  // TE-76: Bento-Kacheln – Zahlen, Jahrgangs-Balken (antippen = filtern), Beitrag, Vereinsseite.
-  const renderBentoTiles = () => {
+  // TE-89: Filterkopf (Bento Dark) – ersetzt Chips + große Kacheln. Kleine Toggle-Kacheln
+  // für Aktiv/Aufgehört/Wackelkandidaten, darunter die Jahrgangsbalken; ohne Hintergrundkarte.
+  const wackelCount = children.filter((c) => c.schnuppertraining).length;
+  const anyFilter = yearFilter.length > 0 || stoppedFilter !== null || wackelkandidatFilter || q.length >= 3;
+  const resetFilters = () => {
+    setYearFilter([]);
+    setStoppedFilter(null);
+    setWackelkandidatFilter(false);
+    setQuery('');
+  };
+  const filterSummary = [
+    yearFilter.length ? [...yearFilter].sort((x, y) => x - y).map((y) => y || '—').join(', ') : null,
+    stoppedFilter === false ? 'aktiv' : stoppedFilter === true ? 'aufgehört' : null,
+    wackelkandidatFilter ? 'mit Wackelkandidaten' : null,
+  ].filter(Boolean).join(' · ');
+
+  const renderFilterHead = () => {
     const maxCount = Math.max(1, ...yearCounts.map((y) => y.count));
     const toggleYear = (year: number) =>
       setYearFilter((v) => (v.includes(year) ? v.filter((y) => y !== year) : [...v, year]));
+    const toggles: { key: string; label: string; count: number; on: boolean; colors: [string, string]; onPress: () => void }[] = [
+      { key: 'aktiv', label: 'Aktiv', count: children.length - stoppedCount, on: stoppedFilter === false, colors: ['#30D158', '#00B8D9'], onPress: () => setStoppedFilter((v) => (v === false ? null : false)) },
+      { key: 'stop', label: 'Aufgehört', count: stoppedCount, on: stoppedFilter === true, colors: ['#FF375F', '#7928CA'], onPress: () => setStoppedFilter((v) => (v === true ? null : true)) },
+      { key: 'wackel', label: 'Wackel', count: wackelCount, on: wackelkandidatFilter, colors: ['#FF9F0A', '#FF375F'], onPress: () => setWackelkandidatFilter((v) => !v) },
+    ];
     return (
-      <View style={s.bTiles}>
-        <View style={s.bTileRow}>
-          <Pressable style={[s.bTile, s.bTileHalf]} onPress={() => setStoppedFilter((v) => (v === false ? null : false))}>
-            {/* TE-77: Verläufe aus der Button-Palette (theme.ts gradients). */}
-            <LinearGradient colors={['#30D158', '#00B8D9']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
-            <View style={s.bTileHead}>
-              <Text style={[s.bTileLabel, s.bOnColor]}>Aktiv</Text>
-              <Ionicons name="people" size={18} color="#FFFFFF" />
-            </View>
-            <Text style={[s.bTileNumber, s.bOnColor]}>{children.length - stoppedCount}</Text>
-          </Pressable>
-          <Pressable style={[s.bTile, s.bTileHalf]} onPress={() => setStoppedFilter((v) => (v === true ? null : true))}>
-            <LinearGradient colors={['#FF375F', '#7928CA']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
-            <View style={s.bTileHead}>
-              <Text style={[s.bTileLabel, s.bOnColor]}>Aufgehört</Text>
-              <Ionicons name="exit-outline" size={18} color="#FFFFFF" />
-            </View>
-            <Text style={[s.bTileNumber, s.bOnColor]}>{stoppedCount}</Text>
-          </Pressable>
+      <View style={s.fHead}>
+        <View style={s.fToggles}>
+          {toggles.map((tg) => (
+            <Pressable key={tg.key} style={[s.fToggle, tg.on && s.fToggleOn]} onPress={tg.onPress} accessibilityState={{ selected: tg.on }} accessibilityLabel={`${tg.label} filtern`}>
+              {tg.on ? <LinearGradient colors={tg.colors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} /> : null}
+              <Text style={[s.fToggleLabel, tg.on && s.bOnColor]}>{tg.label}</Text>
+              <Text style={[s.fToggleCount, tg.on && s.bOnColor]}>{tg.count}</Text>
+            </Pressable>
+          ))}
         </View>
-
-        <View style={s.bTile}>
-          <View style={s.bTileHead}>
-            <Text style={s.bTileLabel}>Jahrgänge</Text>
-            <Ionicons name="bar-chart" size={18} color={colors.accent} />
-          </View>
-          <View style={s.bBars}>
-            {yearCounts.map(({ year, count }) => {
-              // TE-77: aktive Jahrgänge (alle, wenn kein Filter) im Verlauf, übrige gedimmt.
-              const on = yearFilter.length === 0 || yearFilter.includes(year);
-              return (
-                <Pressable key={year} style={s.bBarCol} onPress={() => toggleYear(year)} accessibilityLabel={`Jahrgang ${year || 'ohne'} filtern`}>
-                  <Text style={[s.bBarCount, !on && s.bBarOff]}>{count}</Text>
-                  <View style={[s.bBar, { height: 8 + (count / maxCount) * 52 }]}>
-                    {on ? (
-                      <LinearGradient colors={['#00B8D9', '#0A5CFF', '#7B61FF']} style={StyleSheet.absoluteFill} />
-                    ) : (
-                      <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.surfaceHigh }]} />
-                    )}
-                  </View>
-                  <Text style={[s.bBarYear, on && { color: colors.text }]}>{year ? String(year).slice(2) : '—'}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
+        <View style={s.fBars}>
+          {yearCounts.map(({ year, count }) => {
+            // TE-77: aktive Jahrgänge (alle, wenn kein Filter) im Verlauf, übrige gedimmt.
+            const on = yearFilter.length === 0 || yearFilter.includes(year);
+            return (
+              <Pressable key={year} style={s.bBarCol} onPress={() => toggleYear(year)} accessibilityLabel={`Jahrgang ${year || 'ohne'} filtern`}>
+                <Text style={[s.bBarCount, !on && s.bBarOff]}>{count}</Text>
+                <View style={[s.bBar, { height: 6 + (count / maxCount) * 34 }]}>
+                  {on ? (
+                    <LinearGradient colors={['#00B8D9', '#0A5CFF', '#7B61FF']} style={StyleSheet.absoluteFill} />
+                  ) : (
+                    <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.surfaceHigh }]} />
+                  )}
+                </View>
+                <Text style={[s.bBarYear, on && { color: colors.text }]}>{year ? String(year).slice(2) : '—'}</Text>
+              </Pressable>
+            );
+          })}
         </View>
-
-        <View style={s.bTileRow}>
-          <Pressable style={[s.bTile, s.bTileHalf]} onPress={() => Linking.openURL('https://serkowitzer-fsv.de/dokumente/')}>
-            <View style={[s.bIconBadge, { backgroundColor: colors.warning + '26' }]}>
-              <Ionicons name="wallet" size={16} color={colors.warning} />
-            </View>
-            <Text style={s.bTileTitle}>Beitrag</Text>
-            <Text style={s.bTileSub}>70 € / Jahr{'\n'}35 € / Halbjahr</Text>
-          </Pressable>
-          <Pressable style={[s.bTile, s.bTileHalf]} onPress={() => Linking.openURL('https://serkowitzer-fsv.de/g-junioren/#')}>
-            <View style={s.bTileHead}>
-              <View style={[s.bIconBadge, { backgroundColor: colors.accent + '26' }]}>
-                <Ionicons name="football" size={16} color={colors.accent} />
-              </View>
-              <Ionicons name="arrow-up-outline" size={16} color={colors.textMuted} style={{ transform: [{ rotate: '45deg' }] }} />
-            </View>
-            <Text style={s.bTileTitle}>Vereinsseite</Text>
-            <Text style={s.bTileSub}>G-Junioren auf serkowitzer-fsv.de</Text>
-          </Pressable>
+        <View style={s.fResult}>
+          <Text style={s.fResultText} numberOfLines={1}>
+            <Text style={s.fResultCount}>{filtered.length} Kinder</Text>
+            {filterSummary ? ` · ${filterSummary}` : ''}
+          </Text>
+          {anyFilter ? (
+            <Pressable style={s.fReset} onPress={resetFilters} hitSlop={6} accessibilityLabel="Filter zurücksetzen">
+              <Ionicons name="close" size={12} color={colors.textSecondary} />
+              <Text style={s.fResetText}>Filter</Text>
+            </Pressable>
+          ) : null}
         </View>
       </View>
     );
   };
+
+  // TE-89: Beitrag und Vereinsseite am Ende der Liste (Bento Dark).
+  const renderInfoTiles = () => (
+    <View style={s.bTileRow}>
+      <Pressable style={[s.bTile, s.bTileHalf]} onPress={() => Linking.openURL('https://serkowitzer-fsv.de/dokumente/')}>
+        <View style={[s.bIconBadge, { backgroundColor: colors.warning + '26' }]}>
+          <Ionicons name="wallet" size={16} color={colors.warning} />
+        </View>
+        <Text style={s.bTileTitle}>Beitrag</Text>
+        <Text style={s.bTileSub}>70 € / Jahr{'\n'}35 € / Halbjahr</Text>
+      </Pressable>
+      <Pressable style={[s.bTile, s.bTileHalf]} onPress={() => Linking.openURL('https://serkowitzer-fsv.de/g-junioren/#')}>
+        <View style={s.bTileHead}>
+          <View style={[s.bIconBadge, { backgroundColor: colors.accent + '26' }]}>
+            <Ionicons name="football" size={16} color={colors.accent} />
+          </View>
+          <Ionicons name="arrow-up-outline" size={16} color={colors.textMuted} style={{ transform: [{ rotate: '45deg' }] }} />
+        </View>
+        <Text style={s.bTileTitle}>Vereinsseite</Text>
+        <Text style={s.bTileSub}>G-Junioren auf serkowitzer-fsv.de</Text>
+      </Pressable>
+    </View>
+  );
 
   // Gruppen nur bei Jahrgangs-Sortierung; bei „erstes Mal" eine einzige Gruppe ohne Kopf.
   const bentoGroups: { year: number | null; items: Child[] }[] = [];
@@ -1054,13 +1074,28 @@ export function BambiniScreen() {
         <>
           <View style={s.filterToggleRow}>
             {bento || children.length === 0 ? <View style={s.bSpacer} /> : <Text style={s.overview} numberOfLines={2}>{overviewText}</Text>}
+            {/* TE-89: Suche und Sortierung als Icons (Bento Dark). */}
+            {bento && children.length > 0 ? (
+              <>
+                <Pressable
+                  style={[s.filterToggleBtn, (searchOpen || q.length > 0) && s.filterToggleBtnActive]}
+                  onPress={() => setSearchOpen((v) => !v)}
+                  accessibilityLabel="Suchen"
+                >
+                  <Ionicons name="search" size={17} color={searchOpen || q.length > 0 ? colors.accentFg : colors.textSecondary} />
+                </Pressable>
+                <Pressable style={s.filterToggleBtn} onPress={() => setSortMenuOpen(true)} accessibilityLabel="Sortierung wählen">
+                  <Ionicons name="swap-vertical" size={17} color={colors.textSecondary} />
+                </Pressable>
+              </>
+            ) : null}
             {/* TE-86: neues Kind anlegen sitzt oben neben dem Filter (statt Plus-FAB). */}
             <Pressable style={s.addKindBtn} onPress={openNew} accessibilityLabel="Kind hinzufügen">
               <LinearGradient colors={[mono('#0A5CFF'), mono('#7B61FF')]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
               <Ionicons name="add" size={16} color="#FFFFFF" />
               <Text style={s.addKindText}>Kind</Text>
             </Pressable>
-            {children.length > 0 ? (
+            {children.length > 0 && !bento ? (
               <Pressable
                 style={[s.filterToggleBtn, filtersOpen && s.filterToggleBtnActive]}
                 onPress={() => setFiltersOpen((v) => !v)}
@@ -1077,7 +1112,17 @@ export function BambiniScreen() {
 
           {/* TE-110: Such-/Filter-/Sortierbereich – sitzt inline über der Liste (kein
               eigener Layer), ein-/ausblendbar über den Filter-Button oben. */}
-          {children.length > 0 && filtersOpen ? (
+          {bento && (searchOpen || q.length > 0) ? (
+            <SearchInput
+              value={query}
+              onChangeText={setQuery}
+              placeholder="Kind, Eltern oder Jahrgang (ab 3 Zeichen)"
+              colors={colors}
+              style={s.searchInputMargin}
+            />
+          ) : null}
+
+          {children.length > 0 && filtersOpen && !bento ? (
             <>
               <SearchInput
                 value={query}
@@ -1146,7 +1191,7 @@ export function BambiniScreen() {
 
           <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
             {/* TE-76 (Bento Dark): Kachel-Kopf statt Übersichtszeile und Info-Karten unten. */}
-            {bento && children.length > 0 ? renderBentoTiles() : null}
+            {bento && children.length > 0 ? renderFilterHead() : null}
 
             {/* TE-101/TE-103: markierte Notiz-Items (wichtig/nächste Aufgabe) als gelbe Alert-Box, gleiches Gelb wie der Notizen-FAB. */}
             {markedNotizItems.length > 0 ? (
@@ -1186,6 +1231,8 @@ export function BambiniScreen() {
                 return <React.Fragment key={c.id}>{renderChildRow(c, index, status, gewechselt)}</React.Fragment>;
               })
             )}
+
+            {bento ? renderInfoTiles() : null}
 
             {!bento ? (
             <>
@@ -1678,18 +1725,28 @@ function makeStyles(c: ThemeColors) {
 
     // TE-76: Bento-Kacheln oben.
     bSpacer: { flex: 1 },
-    bTiles: { gap: 8, marginBottom: 18 },
+    // TE-89: Filterkopf ohne Hintergrundkarte.
+    fHead: { gap: 14, marginBottom: 16, paddingHorizontal: 2 },
+    fToggles: { flexDirection: 'row', gap: 8 },
+    fToggle: { flex: 1, borderRadius: 14, paddingVertical: 9, paddingHorizontal: 11, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface, overflow: 'hidden' },
+    fToggleOn: { borderColor: 'transparent' },
+    fToggleLabel: { color: c.textSecondary, fontSize: 10.5, fontWeight: '700', letterSpacing: 0.5, textTransform: 'uppercase' },
+    fToggleCount: { color: c.text, fontSize: 20, fontWeight: '800', marginTop: 1 },
+    fBars: { flexDirection: 'row', alignItems: 'flex-end', gap: 12, paddingHorizontal: 6 },
+    fResult: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, paddingHorizontal: 4 },
+    fResultText: { flex: 1, color: c.textMuted, fontSize: 12 },
+    fResultCount: { color: c.text, fontWeight: '700' },
+    fReset: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: c.surfaceHigh, borderRadius: 999, paddingHorizontal: 9, paddingVertical: 4 },
+    fResetText: { color: c.textSecondary, fontSize: 11, fontWeight: '600' },
     bTileRow: { flexDirection: 'row', gap: 8 },
     bTile: { backgroundColor: c.surface, borderRadius: 18, padding: 14, overflow: 'hidden', gap: 6 },
     bTileHalf: { flex: 1 },
     bTileHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     bTileLabel: { color: c.textMuted, fontSize: 12, fontWeight: '600', letterSpacing: 0.6, textTransform: 'uppercase' },
-    bTileNumber: { color: c.text, fontSize: 40, fontWeight: '800', lineHeight: 44 },
     bOnColor: { color: '#FFFFFF' },
     bTileTitle: { color: c.text, fontSize: 16, fontWeight: '700' },
     bTileSub: { color: c.textMuted, fontSize: 13, lineHeight: 18 },
     bIconBadge: { width: 30, height: 30, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-    bBars: { flexDirection: 'row', alignItems: 'flex-end', gap: 10, marginTop: 4 },
     bBarCol: { flex: 1, alignItems: 'center', gap: 4 },
     bBar: { alignSelf: 'stretch', borderTopLeftRadius: 8, borderTopRightRadius: 8, borderBottomLeftRadius: 3, borderBottomRightRadius: 3, overflow: 'hidden' },
     bBarCount: { color: c.text, fontSize: 12, fontWeight: '700' },
