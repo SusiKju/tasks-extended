@@ -196,10 +196,6 @@ export function BambiniScreen() {
     setNotizInput('');
   }, [notizInput, notizItems, persistNotizItems]);
 
-  const toggleNotizMarked = useCallback((id: string) => {
-    persistNotizItems(notizItems.map((n) => (n.id === id ? { ...n, marked: !n.marked } : n)));
-  }, [notizItems, persistNotizItems]);
-
   const deleteNotizItem = useCallback((id: string) => {
     const now = new Date().toISOString();
     persistNotizItems(notizItems.map((n) => (n.id === id ? { ...n, deletedAt: now } : n)));
@@ -215,21 +211,10 @@ export function BambiniScreen() {
     persistNotizItems(notizItems.map((n) => (n.id === id ? { ...n, completedAt: now } : n)));
   }, [notizItems, persistNotizItems]);
 
-  const moveNotizItem = useCallback((id: string, direction: -1 | 1) => {
-    const active = notizItems.filter((n) => !n.deletedAt && !n.completedAt);
-    const idx = active.findIndex((n) => n.id === id);
-    const swapIdx = idx + direction;
-    if (idx < 0 || swapIdx < 0 || swapIdx >= active.length) return;
-    [active[idx], active[swapIdx]] = [active[swapIdx], active[idx]];
-    persistNotizItems([...active, ...notizItems.filter((n) => n.deletedAt || n.completedAt)]);
-  }, [notizItems, persistNotizItems]);
-
   const startEditNotiz = useCallback((n: NotizItem) => {
     setNotizEditId(n.id);
     setNotizEditText(n.text);
   }, []);
-
-  const cancelEditNotiz = useCallback(() => setNotizEditId(null), []);
 
   const saveEditNotiz = useCallback(() => {
     const text = notizEditText.trim();
@@ -248,7 +233,6 @@ export function BambiniScreen() {
   const historyNotizItems = notizItems
     .filter((n) => n.deletedAt || n.completedAt)
     .sort((a, b) => notizHistoryAt(b).localeCompare(notizHistoryAt(a)));
-  const markedNotizItems = activeNotizItems.filter((n) => n.marked);
 
   // TE-113: zweite freie Item-Liste, gleiche Mechanik wie die Notizen oben,
   // eigener Speicherort (trainingsideenItems) für Trainingsideen zum aktuellen Training.
@@ -772,86 +756,60 @@ export function BambiniScreen() {
               <Ionicons name="add" size={PLUS_ICON_SIZE} color={colors.gradients?.primary?.fg ?? colors.accentFg} />
             </GradientButton>
           </View>
-          {activeNotizItems.length === 0 ? (
-            <Text style={s.empty}>Noch keine Notizen.</Text>
-          ) : (
-            activeNotizItems.map((n, idx) => (
-              <View key={n.id} style={s.notizItemRow}>
-                <View style={s.notizItemMain}>
-                  <View style={s.notizReorder}>
-                    <Pressable onPress={() => moveNotizItem(n.id, -1)} disabled={idx === 0} hitSlop={4} accessibilityLabel="Nach oben verschieben">
-                      <Ionicons name="chevron-up" size={14} color={idx === 0 ? colors.border : colors.textSecondary} />
-                    </Pressable>
-                    <Pressable onPress={() => moveNotizItem(n.id, 1)} disabled={idx === activeNotizItems.length - 1} hitSlop={4} accessibilityLabel="Nach unten verschieben">
-                      <Ionicons name="chevron-down" size={14} color={idx === activeNotizItems.length - 1 ? colors.border : colors.textSecondary} />
-                    </Pressable>
-                  </View>
-                  {/* TE-92: Abhaken → Verlauf (Löschen bleibt rechts). */}
-                  <Pressable onPress={() => completeNotizItem(n.id)} hitSlop={8} accessibilityLabel="Abhaken">
-                    <Ionicons name="ellipse-outline" size={20} color={colors.textSecondary} />
-                  </Pressable>
-                  <Pressable
-                    onPress={() => toggleNotizMarked(n.id)}
-                    hitSlop={8}
-                    accessibilityLabel={n.marked ? 'Markierung entfernen' : 'Als wichtig markieren'}
-                  >
-                    <Ionicons name={n.marked ? 'star' : 'star-outline'} size={20} color="#F2C518" />
-                  </Pressable>
-                  {notizEditId === n.id ? (
-                    <>
-                      <TextInput
-                        style={[s.input, s.notizEditInput]}
-                        value={notizEditText}
-                        onChangeText={setNotizEditText}
-                        onSubmitEditing={saveEditNotiz}
-                        returnKeyType="done"
-                        autoFocus
-                      />
-                      <Pressable onPress={saveEditNotiz} hitSlop={8} accessibilityLabel="Speichern">
-                        <Ionicons name="checkmark" size={20} color={colors.accent} />
-                      </Pressable>
-                      <Pressable onPress={cancelEditNotiz} hitSlop={8} accessibilityLabel="Abbrechen">
-                        <Ionicons name="close" size={18} color={colors.textSecondary} />
-                      </Pressable>
-                    </>
-                  ) : (
-                    <>
-                      {/* TE-94: Notizen aus dem Trainingsmodus mit Badge „Training“ (+ Typ), Zuordnen direkt hier. */}
-                      <View style={s.notizBody}>
-                        {n.trainingId || n.kind ? (
-                          <View style={s.notizBadges}>
-                            {n.trainingId ? (
-                              <View style={s.trainBadge}>
-                                <LinearGradient colors={[mono('#0A5CFF'), mono('#00B8D9')]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
-                                <MaterialCommunityIcons name="whistle" size={11} color="#FFFFFF" />
-                                <Text style={s.trainBadgeText}>Training</Text>
-                              </View>
-                            ) : null}
-                            {n.kind ? (
-                              <Text style={[s.quickTag, { color: NOTE_TAG[n.kind].color, backgroundColor: NOTE_TAG[n.kind].color + '26' }]}>{NOTE_TAG[n.kind].label}</Text>
-                            ) : null}
-                            {n.kind === 'tel' || n.kind === 'neu' ? (
-                              <Pressable hitSlop={8} onPress={() => (n.kind === 'tel' ? setAssignNoteId(n.id) : createFromNeu(n))}>
-                                <Text style={s.quickAction}>{n.kind === 'tel' ? 'Zu Kind →' : 'Anlegen →'}</Text>
-                              </Pressable>
-                            ) : null}
-                          </View>
-                        ) : null}
-                        <Text style={[s.notizItemText, { flex: 0 }]}>{n.text}</Text>
-                      </View>
-                      <Pressable onPress={() => startEditNotiz(n)} hitSlop={8} accessibilityLabel="Bearbeiten">
-                        <Ionicons name="pencil-outline" size={18} color={colors.textSecondary} />
-                      </Pressable>
-                      <Pressable onPress={() => deleteNotizItem(n.id)} hitSlop={8} accessibilityLabel="Löschen">
-                        <Ionicons name="trash-outline" size={18} color={colors.textSecondary} />
-                      </Pressable>
-                    </>
-                  )}
-                </View>
-              </View>
-            ))
-          )}
         </View>
+
+        {/* TE-95: aufgeräumte Liste – Abhaken links, Text mit voller Breite (antippen = bearbeiten),
+            Badges/Zeit darunter, rechts nur Löschen. */}
+        {activeNotizItems.length === 0 ? (
+          <Text style={s.empty}>Noch keine Notizen.</Text>
+        ) : (
+          <View style={s.nList}>
+            {activeNotizItems.map((n, idx) => (
+              <View key={n.id} style={s.nRow}>
+                {idx > 0 ? <View style={s.nDivider} /> : null}
+                <Pressable onPress={() => completeNotizItem(n.id)} hitSlop={10} accessibilityLabel="Abhaken" style={s.nCheck}>
+                  <Ionicons name="ellipse-outline" size={22} color={colors.textMuted} />
+                </Pressable>
+                {notizEditId === n.id ? (
+                  <TextInput
+                    style={[s.input, s.notizEditInput, s.nEdit]}
+                    value={notizEditText}
+                    onChangeText={setNotizEditText}
+                    onBlur={saveEditNotiz}
+                    multiline
+                    autoFocus
+                  />
+                ) : (
+                  <Pressable style={s.nBody} onPress={() => startEditNotiz(n)} accessibilityLabel="Notiz bearbeiten">
+                    <Text style={s.nText}>{n.text}</Text>
+                    <View style={s.nMeta}>
+                      {/* TE-94: Notizen aus dem Trainingsmodus mit Badge „Training“ (+ Typ), Zuordnen direkt hier. */}
+                      {n.trainingId ? (
+                        <View style={s.trainBadge}>
+                          <LinearGradient colors={[mono('#0A5CFF'), mono('#00B8D9')]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+                          <MaterialCommunityIcons name="whistle" size={11} color="#FFFFFF" />
+                          <Text style={s.trainBadgeText}>Training</Text>
+                        </View>
+                      ) : null}
+                      {n.kind && n.kind !== 'info' ? (
+                        <Text style={[s.quickTag, { color: NOTE_TAG[n.kind].color, backgroundColor: NOTE_TAG[n.kind].color + '26' }]}>{NOTE_TAG[n.kind].label}</Text>
+                      ) : null}
+                      <Text style={s.quickNoteTime}>{formatDE(n.createdAt.slice(0, 10))}</Text>
+                      {n.kind === 'tel' || n.kind === 'neu' ? (
+                        <Pressable hitSlop={8} onPress={() => (n.kind === 'tel' ? setAssignNoteId(n.id) : createFromNeu(n))}>
+                          <Text style={s.quickAction}>{n.kind === 'tel' ? 'Zu Kind →' : 'Anlegen →'}</Text>
+                        </Pressable>
+                      ) : null}
+                    </View>
+                  </Pressable>
+                )}
+                <Pressable onPress={() => deleteNotizItem(n.id)} hitSlop={10} accessibilityLabel="Löschen" style={s.nTrash}>
+                  <Ionicons name="trash-outline" size={17} color={colors.textMuted} />
+                </Pressable>
+              </View>
+            ))}
+          </View>
+        )}
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -1248,17 +1206,6 @@ export function BambiniScreen() {
             {/* TE-76 (Bento Dark): Kachel-Kopf statt Übersichtszeile und Info-Karten unten. */}
             {bento && children.length > 0 ? renderFilterHead() : null}
 
-            {/* TE-101/TE-103: markierte Notiz-Items (wichtig/nächste Aufgabe) als gelbe Alert-Box, gleiches Gelb wie der Notizen-FAB. */}
-            {markedNotizItems.length > 0 ? (
-              <View style={s.markedBox}>
-                {markedNotizItems.map((n) => (
-                  <View key={n.id} style={s.markedItemRow}>
-                    <View style={s.markedDot} />
-                    <Text style={s.markedText} numberOfLines={1}>{n.text}</Text>
-                  </View>
-                ))}
-              </View>
-            ) : null}
 
 
             {children.length === 0 ? (
@@ -1764,8 +1711,6 @@ function makeStyles(c: ThemeColors) {
     dockLabel: { fontSize: 10.5, fontWeight: '700' },
     dockBadge: { position: 'absolute', top: -5, right: -11, minWidth: 17, height: 17, borderRadius: 9, paddingHorizontal: 4, backgroundColor: '#FF375F', alignItems: 'center', justifyContent: 'center' },
     dockBadgeText: { color: '#FFFFFF', fontSize: 10, fontWeight: '800' },
-    notizBody: { flex: 1, gap: 3 },
-    notizBadges: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 },
     trainBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, overflow: 'hidden' },
     trainBadgeText: { color: '#FFFFFF', fontSize: 10, fontWeight: '700' },
     addKindBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, height: 32, paddingHorizontal: 12, borderRadius: 16, overflow: 'hidden' },
@@ -1854,6 +1799,16 @@ function makeStyles(c: ThemeColors) {
     notizReorder: { gap: 2 },
     notizItemText: { flex: 1, color: c.text, fontSize: 15 },
     notizEditInput: { flex: 1, paddingVertical: 4, fontSize: 15 },
+    // TE-95: aufgeräumte Notizliste.
+    nList: { backgroundColor: c.surface, borderRadius: 16, overflow: 'hidden', marginTop: 12 },
+    nRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingVertical: 11, paddingHorizontal: 12 },
+    nDivider: { position: 'absolute', top: 0, left: 44, right: 0, height: StyleSheet.hairlineWidth, backgroundColor: c.border },
+    nCheck: { paddingTop: 1 },
+    nBody: { flex: 1, minWidth: 0, gap: 5 },
+    nText: { color: c.text, fontSize: 15, lineHeight: 21 },
+    nMeta: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 },
+    nEdit: { flex: 1, minHeight: 40 },
+    nTrash: { paddingTop: 2 },
     notizAddRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
     notizAddInput: { flex: 1 },
     notizAddBtn: { paddingHorizontal: 14 },
@@ -1861,18 +1816,6 @@ function makeStyles(c: ThemeColors) {
     historyBox: { backgroundColor: c.surface, borderRadius: 20, padding: 20, width: 340, maxWidth: '92%', gap: 10, borderWidth: 1, borderColor: c.border },
     historyRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, borderBottomWidth: 1, borderColor: c.border },
     historyTitle: { flex: 1, fontSize: 14, color: c.text },
-    markedBox: {
-      backgroundColor: '#F2C51826',
-      borderWidth: 1,
-      borderColor: '#F2C518',
-      borderRadius: 10,
-      paddingHorizontal: 12,
-      paddingVertical: 2,
-      marginBottom: 16,
-    },
-    markedItemRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6 },
-    markedDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#F2C518' },
-    markedText: { flex: 1, color: c.text, fontSize: 14 },
     input: {
       backgroundColor: c.inputBackground,
       borderWidth: 1,
