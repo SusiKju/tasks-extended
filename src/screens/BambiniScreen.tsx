@@ -55,6 +55,8 @@ const NOT_ANGEMELDET_RED = '#EF4444';
 const WHATSAPP_GREEN = '#25D366';
 const SMS_BLUE = '#007AFF';
 const INFO_YELLOW = '#F5B301';
+/** TE-91: Verlauf für Schnupperkinder (Filterkachel, Avatar, Pill). */
+const SCHNUPPER_GRADIENT: [string, string] = ['#FF9F0A', '#FF375F'];
 import { getJahrgangStatus } from '../utils/bambiniSeason';
 
 /** ISO 'YYYY-MM-DD' → 'DD.MM.YYYY' (string-basiert, ohne Zeitzonen-Fallen). */
@@ -570,6 +572,14 @@ export function BambiniScreen() {
   const yearSummary = yearCounts.map(({ year, count }) => `${year || '—'}: ${count}`).join(', ');
   const overviewText = `${children.length} Kinder · ${stoppedCount} aufgehört${yearSummary ? ' · ' + yearSummary : ''}`;
 
+  // TE-91: Schnupperkind-Pill im Verlauf (gleicher wie die Schnupper-Filterkachel).
+  const renderSchnupperPill = () => (
+    <View style={s.schnupperPill}>
+      <LinearGradient colors={[mono(SCHNUPPER_GRADIENT[0]), mono(SCHNUPPER_GRADIENT[1])]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+      <Text style={s.schnupperPillText}>Schnupper</Text>
+    </View>
+  );
+
   const renderChildRow = (c: Child, index: number, status: 'aktiv' | 'gewechselt' | null, gewechselt: boolean) => {
     return (
       <Pressable
@@ -577,7 +587,6 @@ export function BambiniScreen() {
           s.row,
           status === 'aktiv' && s.rowActive,
           gewechselt && s.rowMoved,
-          c.schnuppertraining && s.rowSchnupper,
         ]}
         onPress={() => openEdit(c)}
       >
@@ -588,6 +597,7 @@ export function BambiniScreen() {
             {c.name}
             {c.parentName ? <Text style={s.rowParent}>{'  '}{c.parentName.toUpperCase()}</Text> : null}
           </Text>
+          {c.schnuppertraining ? renderSchnupperPill() : null}
           {c.stopped ? <Text style={s.badgeStopped}>aufgehört</Text> : null}
         </View>
         {/* TE-39: Icons + Alter als enger Block, eigener kleiner gap statt Zeilen-gap 8. */}
@@ -627,16 +637,21 @@ export function BambiniScreen() {
     return (
       <Pressable
         key={c.id}
-        style={[s.bRow, c.schnuppertraining && s.rowSchnupper]}
+        style={s.bRow}
         onPress={() => openEdit(c)}
       >
         {!first ? <View style={s.bDivider} /> : null}
         <View style={s.bAvatar}>
-          <Text style={s.bAvatarText}>{(c.name || '?').charAt(0).toUpperCase()}</Text>
+          {/* TE-91: Schnupperkinder mit Verlauf hervorheben statt ausgrauen. */}
+          {c.schnuppertraining ? (
+            <LinearGradient colors={[mono(SCHNUPPER_GRADIENT[0]), mono(SCHNUPPER_GRADIENT[1])]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+          ) : null}
+          <Text style={[s.bAvatarText, c.schnuppertraining && s.bOnColor]}>{(c.name || '?').charAt(0).toUpperCase()}</Text>
         </View>
         <View style={s.bMain}>
           <View style={s.rowMain}>
             <Text style={[s.bName, c.stopped && s.rowNameStopped]} numberOfLines={1}>{c.name}</Text>
+            {c.schnuppertraining ? renderSchnupperPill() : null}
             {c.stopped ? <Text style={s.badgeStopped}>aufgehört</Text> : null}
           </View>
           {c.parentName ? <Text style={s.bParent} numberOfLines={1}>{c.parentName}</Text> : null}
@@ -968,7 +983,7 @@ export function BambiniScreen() {
   const filterSummary = [
     yearFilter.length ? [...yearFilter].sort((x, y) => x - y).map((y) => y || '—').join(', ') : null,
     stoppedFilter === false ? 'aktiv' : stoppedFilter === true ? 'aufgehört' : null,
-    wackelkandidatFilter ? 'mit Wackelkandidaten' : null,
+    wackelkandidatFilter ? 'mit Schnupperkindern' : null,
   ].filter(Boolean).join(' · ');
 
   // TE-90: Balken lückenlos vom ältesten Jahrgang bis mindestens 2025 (künftige Bambini-Jahrgänge),
@@ -1000,7 +1015,7 @@ export function BambiniScreen() {
     const toggles: { key: string; label: string; count: number; on: boolean; colors: [string, string]; onPress: () => void }[] = [
       { key: 'aktiv', label: 'Aktiv', count: children.length - stoppedCount, on: stoppedFilter === false, colors: ['#30D158', '#00B8D9'], onPress: () => setStoppedFilter((v) => (v === false ? null : false)) },
       { key: 'stop', label: 'Aufgehört', count: stoppedCount, on: stoppedFilter === true, colors: ['#FF375F', '#7928CA'], onPress: () => setStoppedFilter((v) => (v === true ? null : true)) },
-      { key: 'wackel', label: 'Wackel', count: wackelCount, on: wackelkandidatFilter, colors: ['#FF9F0A', '#FF375F'], onPress: () => setWackelkandidatFilter((v) => !v) },
+      { key: 'wackel', label: 'Schnupper', count: wackelCount, on: wackelkandidatFilter, colors: SCHNUPPER_GRADIENT, onPress: () => setWackelkandidatFilter((v) => !v) },
     ];
     return (
       <View style={s.fHead}>
@@ -1178,7 +1193,7 @@ export function BambiniScreen() {
                   style={[s.filterChip, wackelkandidatFilter && s.filterChipActive]}
                   onPress={() => setWackelkandidatFilter((v) => !v)}
                 >
-                  <Text style={[s.filterChipText, wackelkandidatFilter && s.filterChipTextActive]}>Wackelkandidaten</Text>
+                  <Text style={[s.filterChipText, wackelkandidatFilter && s.filterChipTextActive]}>Schnupperkinder</Text>
                 </Pressable>
                 {yearCounts.map(({ year }) => (
                   <Pressable
@@ -1369,7 +1384,7 @@ export function BambiniScreen() {
                 size={22}
                 color={schnuppertrainingInput ? colors.accent : colors.textSecondary}
               />
-              <Text style={[s.checkLabel, { color: colors.text }]}>Wackelkandidat</Text>
+              <Text style={[s.checkLabel, { color: colors.text }]}>Schnupperkind</Text>
             </Pressable>
 
             <TextInput
@@ -1649,9 +1664,9 @@ function makeStyles(c: ThemeColors) {
     },
     rowActive: { borderColor: c.border, borderWidth: 1.5 },
     rowMoved: { borderColor: c.border + '40' },
-    // TE-110: Wackelkandidaten früher per Wobble-Animation hervorgehoben, jetzt
-    // stattdessen einfach etwas transparenter.
-    rowSchnupper: { opacity: 0.55 },
+    // TE-91: Schnupperkinder per Verlauf-Pill hervorgehoben (vorher ausgegraut, TE-110).
+    schnupperPill: { borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, overflow: 'hidden' },
+    schnupperPillText: { color: '#FFFFFF', fontSize: 10, fontWeight: '700' },
     rowIndex: { color: c.textSecondary, fontSize: 12, fontWeight: '600', width: 24, textAlign: 'right' },
     rowMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 },
     rowName: { color: c.text, fontSize: 14, fontWeight: '600', flexShrink: 1 },
@@ -1687,6 +1702,7 @@ function makeStyles(c: ThemeColors) {
       backgroundColor: c.surfaceHigh,
       alignItems: 'center',
       justifyContent: 'center',
+      overflow: 'hidden',
     },
     bAvatarText: { color: c.textSecondary, fontSize: 12, fontWeight: '600' },
     bMain: { flex: 1, minWidth: 0 },
