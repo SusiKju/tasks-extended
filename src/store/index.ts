@@ -125,8 +125,13 @@ export const useStore = create<TaskState>()(
       scratchpadHistory: '',
       deletedGoogleEventIds: [],
 
+      // Idempotent: parallele Syncs (App-Start + Dashboard) legten sonst
+      // denselben Google-Task doppelt an.
       addTask: (task) =>
-        set((state) => ({ tasks: [task, ...state.tasks] })),
+        set((state) =>
+          state.tasks.some((t) => t.id === task.id || (!!task.googleEventId && t.googleEventId === task.googleEventId))
+            ? state
+            : { tasks: [task, ...state.tasks] }),
 
       updateTask: (id, updates) =>
         set((state) => ({

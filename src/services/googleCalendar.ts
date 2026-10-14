@@ -14,10 +14,11 @@ const SCOPES = [
   'openid',
   'email',
   'profile',
-  'https://www.googleapis.com/auth/calendar.events',
+  // Kalender & Tasks nur lesend – die App darf dort nie etwas anlegen/ändern.
   'https://www.googleapis.com/auth/calendar.readonly',
-  'https://www.googleapis.com/auth/tasks',
-  'https://www.googleapis.com/auth/gmail.modify',
+  'https://www.googleapis.com/auth/tasks.readonly',
+  // Nur Senden (Kinder-Erinnerung per Mail, taskMail.ts) – kein Lesen/Ändern.
+  'https://www.googleapis.com/auth/gmail.send',
   'https://www.googleapis.com/auth/contacts.readonly',
   // TE-168: nur Metadaten (Name, Icon, Link, starred-Flag) für die
   // Drive-Favoriten-Kurzübersicht – kein Zugriff auf Dateiinhalte.
@@ -82,6 +83,8 @@ async function getWebTokenClient(): Promise<any> {
     webTokenClient = oauth2.initTokenClient({
       client_id: GOOGLE_CLIENT_ID,
       scope: SCOPES.join(' '),
+      // Keine früher erteilten (Schreib-)Rechte mitschleppen.
+      include_granted_scopes: false,
       callback: () => {}, // wird pro Anfrage gesetzt
     });
   }
@@ -112,6 +115,7 @@ async function getWebCodeClient(): Promise<any> {
     webCodeClient = oauth2.initCodeClient({
       client_id: GOOGLE_CLIENT_ID,
       scope: SCOPES.join(' '),
+      include_granted_scopes: false,
       ux_mode: 'popup',
       callback: () => {}, // wird pro Anfrage gesetzt
     });
@@ -532,12 +536,23 @@ export async function listGoogleTasks(accessToken: string, taskListId?: string):
   return listGoogleTasksById(accessToken, taskListId);
 }
 
-export async function listGoogleTasksById(accessToken: string, taskListId: string): Promise<Array<any>> {
-  const res = await tasksFetch(
-    `/lists/${encodeURIComponent(taskListId)}/tasks?showCompleted=true&maxResults=100`,
-    accessToken
-  );
-  if (!res.ok) return [];
-  const data = await res.json();
-  return data.items ?? [];
+/**
+ * Alle Tasks einer Liste, inkl. erledigter. showHidden ist nötig: in der
+ * Google-App/im Kalender abgehakte Tasks sind „hidden“ und fehlen sonst.
+ * Gelöschte Tasks liefert Google nicht (showDeleted=false). null bei Fehler –
+ * damit der Sync eine leere Antwort nicht mit „alles gelöscht“ verwechselt.
+ */
+export async function listGoogleTasksById(accessToken: string, taskListId: string): Promise<Array<any> | null> {
+  const items: any[] = [];
+  let pageToken = '';
+  do {
+    const params = new URLSearchParams({ showCompleted: 'true', showHidden: 'true', maxResults: '100' });
+    if (pageToken) params.set('pageToken', pageToken);
+    const res = await tasksFetch(`/lists/${encodeURIComponent(taskListId)}/tasks?${params}`, accessToken);
+    if (!res.ok) return null;
+    const data = await res.json();
+    items.push(...(data.items ?? []));
+    pageToken = data.nextPageToken ?? '';
+  } while (pageToken);
+  return items;
 }

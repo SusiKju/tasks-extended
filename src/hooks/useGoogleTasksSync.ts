@@ -42,7 +42,9 @@ export function useGoogleTasksSync() {
     if (taskLists.length === 0) return null;
 
     // ── 2. Fetch all Google Tasks ───────────────────────────────────────────────
-    const googleTasks = await listGoogleTasksById(token, taskLists[0].id).catch(() => [] as any[]);
+    const googleTasks = await listGoogleTasksById(token, taskLists[0].id).catch(() => null);
+    // Fehler ≠ leere Liste: ohne vollständige Antwort lokal nichts entfernen.
+    if (!googleTasks) return null;
 
     const result: SyncResult = { imported: 0, updated: 0 };
 
@@ -63,6 +65,7 @@ export function useGoogleTasksSync() {
       const local = localTasks.find((t) => t.googleEventId === gt.id);
 
       if (!local) {
+        if (remote.completed) continue; // erledigte nicht erst importieren
         addTask({
           id: `gtask-${gt.id}`,
           ...remote,
@@ -90,24 +93,18 @@ export function useGoogleTasksSync() {
       }
     }
 
-    // ── 4. Diagnose: bereits bestehende Duplikate sichtbar machen ───────────────
-    // Nicht-destruktiv (kein Auto-Löschen) – nur Hinweis, falls zwei offene
-    // Tasks mit gleichem Titel unterschiedliche googleEventId haben.
-    const finalTasks = useStore.getState().tasks.filter((t) => !t.completed && t.googleEventId);
-    const byTitle = new Map<string, typeof finalTasks>();
-    for (const t of finalTasks) {
-      const key = t.title.trim().toLowerCase();
-      byTitle.set(key, [...(byTitle.get(key) ?? []), t]);
-    }
-    for (const [title, group] of byTitle) {
-      const distinctGoogleIds = new Set(group.map((t) => t.googleEventId));
-      if (distinctGoogleIds.size > 1) {
-        console.warn(
-          `[TaskSync] Mögliches Duplikat erkannt: "${title}" existiert ${distinctGoogleIds.size}× mit unterschiedlicher googleEventId`,
-          group.map((t) => ({ id: t.id, googleEventId: t.googleEventId })),
-        );
-      }
-    }
+    // ── 4. In Google gelöschte Tasks und Doppel-Einträge lokal entfernen ───────
+    // Nur lokal (setState, nicht deleteTask → kein Eintrag in deletedGoogleEventIds).
+    const remoteIds = new Set(googleTasks.map((gt) => gt.id as string));
+    const seen = new Set<string>();
+    useStore.setState((state) => ({
+      tasks: state.tasks.filter((t) => {
+        if (!t.googleEventId) return true;
+        if (!remoteIds.has(t.googleEventId) || seen.has(t.googleEventId)) return false;
+        seen.add(t.googleEventId);
+        return true;
+      }),
+    }));
 
     return result;
   }, []);
