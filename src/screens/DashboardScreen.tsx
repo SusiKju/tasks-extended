@@ -555,14 +555,32 @@ export function DashboardScreen() {
   // Termine "heute" / "morgen" – auf Komponentenebene berechnet (statt nur lokal
   // im Render), damit der Glow-Effekt unten auf "heutige Termine vorhanden?"
   // reagieren kann (TE-120: gleiche Hervorhebung wie Geburtstage).
+  // Google Tasks mit Uhrzeit laufen wie Termine: mit Zeit, nach Zeit sortiert,
+  // in der Uhr und bei „Als Nächstes“ (statt als undatierte Task-Zeile).
+  const timedTaskEvents = useMemo<CalendarEvent[]>(
+    () =>
+      showBlock('googleTasks')
+        ? dashboardTasks
+            .filter((t) => t.dueDate && t.dueTime)
+            .map((t) => {
+              const start = new Date(`${localDateStr(t.dueDate!)}T${t.dueTime}:00`).toISOString();
+              return { id: `task::${t.id}`, summary: t.title, start, end: start, allDay: false, calendarName: 'Google Tasks', color: C.tasks };
+            })
+        : [],
+    [dashboardTasks, showBlock],
+  );
+
   const { todayEvents, tomorrowEvents } = useMemo(() => {
     const todayStr    = new Date().toDateString();
     const tomorrowStr = new Date(Date.now() + 86400000).toDateString();
+    const all = [...calEvents, ...timedTaskEvents].sort(
+      (a, b) => new Date(a.start).getTime() - new Date(b.start).getTime(),
+    );
     return {
-      todayEvents:    calEvents.filter((e) => new Date(e.start).toDateString() === todayStr),
-      tomorrowEvents: calEvents.filter((e) => new Date(e.start).toDateString() === tomorrowStr),
+      todayEvents:    all.filter((e) => new Date(e.start).toDateString() === todayStr),
+      tomorrowEvents: all.filter((e) => new Date(e.start).toDateString() === tomorrowStr),
     };
-  }, [calEvents]);
+  }, [calEvents, timedTaskEvents]);
 
   // TE-168: Drive-Favoriten beim Laden automatisch ziehen – analog zum
   // Kalender. Nur wenn der Block überhaupt sichtbar ist (kein unnötiger Call).
@@ -828,7 +846,8 @@ export function DashboardScreen() {
         // Kalendertermin gibt (z. B. Altlast aus der Zeit vor TE-45, als pro Task ein
         // Termin angelegt wurde), nur einmal zeigen – der Task gewinnt, der Termin
         // wird ausgeblendet.
-        const gtList = showBlock('googleTasks') ? dashboardTasks.slice(0, 6) : [];
+        // Tasks mit Uhrzeit stehen schon als Termin in todayEvents/tomorrowEvents.
+        const gtList = showBlock('googleTasks') ? dashboardTasks.filter((t) => !t.dueTime).slice(0, 6) : [];
         const todayKey = localDateStr(new Date().toISOString());
         const gtKeys = new Set(
           gtList.map((t) => `${t.dueDate ? localDateStr(t.dueDate) : todayKey}|${t.title.trim().toLowerCase()}`),

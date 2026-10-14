@@ -7,6 +7,10 @@ import {
 } from '../services/googleCalendar';
 import { localDateStr, fromGoogleDate } from '../utils/dateFormat';
 
+// Die Tasks-API liefert die Uhrzeit nicht im due-Feld (dort nur das Datum,
+// immer 00:00 UTC). Google legt sie aber als „[17:00]“ in den Notizen ab.
+const TIME_IN_NOTES = /\[(\d{1,2}):(\d{2})\]/;
+
 export interface SyncResult {
   imported: number;
   updated: number;
@@ -56,10 +60,13 @@ export function useGoogleTasksSync() {
       if (!gt.title) continue;
       if (deletedGoogleEventIds.includes(gt.id)) continue;
 
+      const notes = (gt.notes ?? '') as string;
+      const time = notes.match(TIME_IN_NOTES);
       const remote = {
         title: gt.title as string,
-        description: (gt.notes ?? '') as string,
+        description: notes.replace(TIME_IN_NOTES, '').trim(),
         dueDate: gt.due ? fromGoogleDate(gt.due) : null,
+        dueTime: gt.due && time ? `${time[1].padStart(2, '0')}:${time[2]}` : null,
         completed: gt.status === 'completed',
       };
       const local = localTasks.find((t) => t.googleEventId === gt.id);
@@ -86,6 +93,7 @@ export function useGoogleTasksSync() {
       const localDue = local.dueDate ? localDateStr(local.dueDate) : null;
       const remoteDue = remote.dueDate ? localDateStr(remote.dueDate) : null;
       if (localDue !== remoteDue) changes.dueDate = remote.dueDate;
+      if ((local.dueTime ?? null) !== remote.dueTime) changes.dueTime = remote.dueTime;
       if (local.completed !== remote.completed) changes.completed = remote.completed;
       if (Object.keys(changes).length > 0) {
         updateTask(local.id, changes);
