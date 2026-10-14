@@ -19,7 +19,7 @@ import { fetchWeatherForecast, DailyWeather } from '../services/weather';
 
 const SEGMENTS = 60;
 const RING_SIZE = 92;
-const RING_STOPS = ['#10c88a', '#7b2ff7', '#f72585'];
+const RING_STOPS = ['#10c88a', '#4f86f7', '#7b2ff7', '#f72585'];
 const DEFAULT_TASK: ButtonGradient = { colors: ['#7b2ff7', '#f72585'], fg: '#FFFFFF' };
 
 function hexToRgb(hex: string): [number, number, number] {
@@ -39,14 +39,18 @@ function gradientAt(stops: string[], t: number): string {
 }
 
 const HALF_DAY = 12 * 60;
+const PAST = 60;
+const FUTURE = HALF_DAY - PAST;
 const MARKER_OVERHANG = 7;
 
 /**
- * TE-71: 12-Stunden-Ziffernblatt der aktuellen Tageshälfte (oben = 12/0 Uhr).
- * Ein Segment = 12 min, jedes 5. ist eine Stundenmarke (länger, heller).
- * Termine der Hälfte stehen als lange Striche nach außen; der nächste ist
- * dicker, vergangene blass. Termine der anderen Hälfte werden bewusst nicht
- * gezeigt – sie würden sonst über die schon gefüllte Zeit fallen.
+ * 12-Stunden-Ziffernblatt (oben = 12/0 Uhr) mit Blick nach vorn: die nächsten
+ * 11 h leuchten im Verlauf grün → blau → violett → pink und werden nach hinten
+ * blasser, die letzte Stunde bleibt grau. Ein heller Zeiger innen markiert
+ * „jetzt“. Ein Segment = 12 min, jedes 5. ist eine Stundenmarke. Termine im
+ * Fenster stehen als lange Striche nach außen; der nächste ist dicker,
+ * vergangene blass. Termine außerhalb des Fensters fehlen bewusst – sie lägen
+ * sonst auf derselben Stelle des Ziffernblatts wie ein Zeitpunkt darin.
  */
 function DayRing({
   nowMin,
@@ -63,32 +67,38 @@ function DayRing({
   marker: string;
   children: React.ReactNode;
 }) {
-  const start = nowMin >= HALF_DAY ? HALF_DAY : 0;
-  const filled = Math.round(((nowMin - start) / HALF_DAY) * SEGMENTS);
-  const inHalf = eventMins.filter((m) => m >= start && m < start + HALF_DAY);
-  const nextMin = Math.min(...inHalf.filter((m) => m >= nowMin));
+  const inWindow = eventMins.filter((m) => m >= nowMin - PAST && m < nowMin + FUTURE);
+  const nextMin = Math.min(...inWindow.filter((m) => m >= nowMin));
+  // Minuten, bis die Segment-Position auf dem Ziffernblatt wieder erreicht ist (0..719).
+  const ahead = (i: number) => ((i * HALF_DAY) / SEGMENTS - (nowMin % HALF_DAY) + HALF_DAY) % HALF_DAY;
   return (
     <View
       style={styles.ring}
       accessibilityRole="image"
-      accessibilityLabel={`Uhr, ${inHalf.filter((m) => m >= nowMin).length} anstehende Termine bis ${start ? '24' : '12'} Uhr`}
+      accessibilityLabel={`Uhr, ${inWindow.filter((m) => m >= nowMin).length} anstehende Termine in den nächsten 11 Stunden`}
     >
       {Array.from({ length: SEGMENTS }, (_, i) => {
         const hour = i % 5 === 0;
+        const t = ahead(i) / FUTURE;
         return (
           <View key={i} style={[StyleSheet.absoluteFill, { transform: [{ rotate: `${(i * 360) / SEGMENTS}deg` }] }]}>
             <View
               style={[
                 styles.segment,
                 hour && styles.hourSegment,
-                { backgroundColor: i < filled ? gradientAt(RING_STOPS, filled > 1 ? i / (filled - 1) : 0) : hour ? hourTrack : track },
+                t < 1
+                  ? { backgroundColor: gradientAt(RING_STOPS, t), opacity: 1 - 0.65 * t }
+                  : { backgroundColor: hour ? hourTrack : track },
               ]}
             />
           </View>
         );
       })}
-      {inHalf.map((m, i) => (
-        <View key={`e${i}`} style={[StyleSheet.absoluteFill, { transform: [{ rotate: `${((m - start) / HALF_DAY) * 360}deg` }] }]}>
+      <View style={[StyleSheet.absoluteFill, { transform: [{ rotate: `${((nowMin % HALF_DAY) / HALF_DAY) * 360}deg` }] }]}>
+        <View style={[styles.hand, { backgroundColor: marker }]} />
+      </View>
+      {inWindow.map((m, i) => (
+        <View key={`e${i}`} style={[StyleSheet.absoluteFill, { transform: [{ rotate: `${((m % HALF_DAY) / HALF_DAY) * 360}deg` }] }]}>
           <View
             style={[
               styles.marker,
@@ -222,6 +232,7 @@ const styles = StyleSheet.create({
   segment: { position: 'absolute', top: 0, left: RING_SIZE / 2 - 1.5, width: 3, height: 9, borderRadius: 2 },
   hourSegment: { height: 12 },
   marker: { position: 'absolute', top: -MARKER_OVERHANG, left: RING_SIZE / 2 - 1.5, width: 3, height: 9 + MARKER_OVERHANG + 1, borderRadius: 2 },
+  hand: { position: 'absolute', top: 13, left: RING_SIZE / 2 - 1.2, width: 2.4, height: 4, borderRadius: 1.2 },
   markerNext: { left: RING_SIZE / 2 - 2, width: 4 },
   ringCenter: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
   time: { fontSize: 20, fontWeight: '800', fontVariant: ['tabular-nums'] },

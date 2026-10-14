@@ -21,6 +21,8 @@ export interface TimetableEntry {
   pause?: boolean;
   /** Findet nur alle 2 Wochen statt (z. B. Werken), siehe BIWEEKLY_ANCHOR_MONDAY. */
   biweekly?: boolean;
+  /** Findet nur nach Einladung statt, unregelmäßig (z. B. Förderunterricht) – rein optische Kennzeichnung, kein Einfluss auf Weckmodus/Wochen-Turnus. */
+  optional?: boolean;
 }
 
 /** Key = "Tag-Stunde", Tag 1=Montag..5=Freitag, Stunde = Period.nr. */
@@ -215,6 +217,7 @@ function sanitizeEntry(raw: any): TimetableEntry | null {
     lehrer: String(raw?.lehrer ?? ''),
     ...(raw?.pause === true ? { pause: true } : {}),
     ...(raw?.biweekly === true ? { biweekly: true } : {}),
+    ...(raw?.optional === true ? { optional: true } : {}),
   };
 }
 

@@ -59,6 +59,11 @@ Push nach `main` löst automatisch `.github/workflows/deploy.yml` aus: Web-Expor
   hinterlegter Team-ID (Einstellungen → fussball.de) und schreibt sie nach Firestore.
   Läuft alle paar Stunden automatisch über `.github/workflows/sync-fussball-de.yml`
   (braucht das Repo-Secret `FIREBASE_SERVICE_ACCOUNT`, siehe unten).
+- `sync-bambini-to-wissensdatenbank.mjs` — liest die Bambini-Kinderliste aus Firestore
+  und schreibt sie als Markdown-Tabelle in die private Wissensdatenbank
+  (`familie/bambini.md`). Läuft **nicht** über GitHub Actions, da das Zielverzeichnis
+  ein lokal gemountetes Google-Drive-Verzeichnis ist, kein Repo — daher manuell bzw.
+  per lokalem Cron/launchd ausführen.
 
 Diese Skripte benötigen `serviceAccount.json` (nicht versioniert, siehe `.gitignore`)
 und werden mit Node direkt ausgeführt, z. B. `node scripts/check-membership.mjs`.
