@@ -169,12 +169,13 @@ export const DEFAULT_DASHBOARD_BLOCKS: Record<DashboardBlockKey, boolean> =
  * TE-49: Vom Elternteil ein-/ausschaltbare Tabs zwischen Dashboard und
  * Settings (die beiden Anker-Tabs selbst sind nicht abschaltbar).
  */
-export type TabKey = 'tasks' | 'links' | 'kids' | 'schule' | 'bambini' | 'fuerUns';
+export type TabKey = 'tasks' | 'links' | 'kids' | 'kinderPlan' | 'schule' | 'bambini' | 'fuerUns';
 
 export const TOGGLEABLE_TABS: { key: TabKey; label: string; description: string }[] = [
   { key: 'tasks',   label: 'Tasks',   description: 'Aufgabenliste.' },
   { key: 'links',   label: 'Links',   description: 'Schnellleiste mit Links.' },
   { key: 'kids',    label: 'Kinder',  description: 'Kinder-Übersicht mit Taschengeld und Aufgaben.' },
+  { key: 'kinderPlan', label: 'Kinder 2', description: 'Neuer Kinder-Tab: Strafpunkte, Wochenaufgaben und Strafaufgaben (Testphase).' },
   { key: 'schule',  label: 'Schule',  description: 'beste.schule-Anbindung.' },
   { key: 'bambini', label: 'Bambini', description: 'Fußball-Training.' },
   { key: 'fuerUns', label: 'Für uns', description: 'Private Wertschätzungsnachrichten zwischen den Eltern (TE-55).' },

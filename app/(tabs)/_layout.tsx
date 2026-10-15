@@ -131,6 +131,18 @@ function TabsLayoutInner() {
           ),
         }}
       />
+      {/* Neuer Kinder-Tab (Strafpunkte, Wochenaufgaben, Strafaufgaben) läuft
+          parallel zum alten, bis er reif ist. */}
+      <Tabs.Screen
+        name="kinder-plan"
+        options={{
+          title: 'Kinder 2',
+          href: hrefFor('kinderPlan'),
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="ribbon-outline" size={size} color={color} />
+          ),
+        }}
+      />
       <Tabs.Screen
         name="schule"
         options={{
