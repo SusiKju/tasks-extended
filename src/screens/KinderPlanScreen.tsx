@@ -23,11 +23,12 @@ import {
   subscribeStrafaufgaben, addStrafaufgabe, setStrafaufgabeDone, deleteStrafaufgabe, syncStrafaufgaben,
 } from '../services/kinderPlan';
 import {
-  KinderRegeln, KinderWoche, Strafaufgabe, Mark, Takt, DEFAULT_REGELN,
+  KinderRegeln, KinderWoche, Strafaufgabe, Mark, DEFAULT_REGELN, TAG_KURZ, aufgabenVon, aktuellerTag,
   weekKey, weekDays, kalenderwoche, isoDate, markKey, punkte, faelligeStufen, bisNaechsteStufe, quote, rotiere,
 } from '../utils/kinderPlanLogic';
 
-const DAY_LABELS = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
+const DAY_LABELS = TAG_KURZ;
+const tageText = (tage: number[]) => (tage.length === 7 ? 'täglich' : tage.map((t) => TAG_KURZ[t]).join(', '));
 const STUFEN_FARBEN = ['#FFD60A', '#FF453A', '#BF5AF2'];
 
 /** Alert funktioniert auf Web nicht — window.confirm als Fallback (wie im Kinder-Tab). */
@@ -158,6 +159,21 @@ export function KinderPlanScreen() {
 
   const updateRegeln = (fn: (r: KinderRegeln) => KinderRegeln) => run(saveRegeln(fid, fn(regeln)));
 
+  /** Kind bei einer Wochenaufgabe an-/abwählen. */
+  const toggleKind = (aufgabeId: string, childId: string) => updateRegeln((r) => {
+    const cur = r.zuteilung[aufgabeId] ?? [];
+    return { ...r, zuteilung: { ...r.zuteilung, [aufgabeId]: cur.includes(childId) ? cur.filter((x) => x !== childId) : [...cur, childId] } };
+  });
+  /** Wochentag an-/abwählen; der letzte Tag bleibt immer stehen. */
+  const toggleTag = (aufgabeId: string, tag: number) => updateRegeln((r) => ({
+    ...r,
+    wochenaufgaben: r.wochenaufgaben.map((x) => {
+      if (x.id !== aufgabeId) return x;
+      if (!x.tage.includes(tag)) return { ...x, tage: [...x.tage, tag].sort((p, q) => p - q) };
+      return x.tage.length > 1 ? { ...x, tage: x.tage.filter((y) => y !== tag) } : x;
+    }),
+  }));
+
   // ── Bausteine ─────────────────────────────────────────────────────────────
 
   const PlusButtons = ({ childId }: { childId: string }) => (
@@ -259,7 +275,7 @@ export function KinderPlanScreen() {
 
   const renderKind = (c: ChildConfig) => {
     const { pts, due, bis, offen } = kidInfo(c);
-    const aufgaben = regeln.wochenaufgaben.filter((a) => regeln.zuteilung[a.id] === c.id);
+    const aufgaben = aufgabenVon(regeln, c.id);
     const eintraege = Object.entries(woche.punkte).filter(([, e]) => e.childId === c.id).sort((a, b) => b[1].at.localeCompare(a[1].at));
     return (
       <>
@@ -318,19 +334,22 @@ export function KinderPlanScreen() {
 
         <View style={s.tile}>
           <View style={s.rowBetween}>
-            <Text style={s.label}>Wochenaufgaben heute</Text>
+            <Text style={s.label}>Wochenaufgaben</Text>
             <Pressable onPress={() => setSheetChild(c.id)} hitSlop={8}><Text style={s.link}>+ zuweisen</Text></Pressable>
           </View>
           {aufgaben.length === 0 ? <Text style={s.muted}>Keine Wochenaufgaben zugewiesen.</Text> : aufgaben.map((a) => {
-            const date = a.takt === 'woechentlich' ? wk : today;
-            const m = woche.marks[markKey(c.id, a.id, date)] ?? '';
+            const cur = aktuellerTag(a, c.id, woche, wk, today);
+            if (!cur) return null;
+            const m = woche.marks[markKey(c.id, a.id, cur.date)] ?? '';
+            const status = cur.kommt ? `fällig ${TAG_KURZ[cur.tag]}` : cur.ueberfaellig ? `überfällig (${TAG_KURZ[cur.tag]})` : cur.date === today ? 'heute' : TAG_KURZ[cur.tag];
             return (
               <View key={a.id} style={[s.rowCenter, s.divider]}>
                 <View style={{ flex: 1 }}>
-                  <Text style={s.bold}>{a.label} <Text style={s.muted}>{a.takt === 'taeglich' ? 'täglich' : 'diese Woche'}</Text></Text>
-                  {a.takt === 'taeglich' ? (
-                    <View style={s.strip} accessibilityLabel={days.map((d, i) => `${DAY_LABELS[i]} ${({ ok: 'erledigt', no: 'vergessen' } as Record<string, string>)[woche.marks[markKey(c.id, a.id, d)] ?? ''] ?? (d <= today ? 'offen' : '')}`).join(', ')}>
-                      {days.map((d) => {
+                  <Text style={s.bold}>{a.label} <Text style={[s.muted, cur.ueberfaellig && !m && s.alertText]}>{status}</Text></Text>
+                  {a.tage.length > 1 ? (
+                    <View style={s.strip} accessibilityLabel={a.tage.map((t) => `${TAG_KURZ[t]} ${({ ok: 'erledigt', no: 'vergessen' } as Record<string, string>)[woche.marks[markKey(c.id, a.id, days[t])] ?? ''] ?? (days[t] <= today ? 'offen' : 'kommt')}`).join(', ')}>
+                      {days.map((d, i) => {
+                        if (!a.tage.includes(i)) return <View key={d} style={[s.stripSeg, { backgroundColor: 'transparent' }]} />;
                         const dm = woche.marks[markKey(c.id, a.id, d)];
                         const bg = dm === 'ok' ? colors.success : dm === 'no' ? colors.danger : d <= today ? colors.textMuted : colors.surfaceHigh;
                         return <View key={d} style={[s.stripSeg, { backgroundColor: bg }]} />;
@@ -338,16 +357,20 @@ export function KinderPlanScreen() {
                     </View>
                   ) : null}
                 </View>
-                <Pressable onPress={() => setWochenMark(c.id, a.id, a.label, date, 'ok')} style={[s.markBtn, m === 'ok' && s.markBtnOn]}
-                  accessibilityLabel={`${a.label} erledigt`} accessibilityState={{ selected: m === 'ok' }}>
-                  {m === 'ok' ? <Fill kind="ok" mono={mono} /> : null}
-                  <Ionicons name="checkmark" size={22} color={m === 'ok' ? '#FFFFFF' : colors.success} />
-                </Pressable>
-                <Pressable onPress={() => setWochenMark(c.id, a.id, a.label, date, 'no')} style={[s.markBtn, m === 'no' && s.markBtnOn]}
-                  accessibilityLabel={`${a.label} vergessen, plus ${regeln.vergessenPts} Strafpunkte`} accessibilityState={{ selected: m === 'no' }}>
-                  {m === 'no' ? <Fill kind="danger" mono={mono} /> : null}
-                  <Ionicons name="close" size={22} color={m === 'no' ? '#FFFFFF' : colors.danger} />
-                </Pressable>
+                {cur.kommt ? null : (
+                  <>
+                    <Pressable onPress={() => setWochenMark(c.id, a.id, a.label, cur.date, 'ok')} style={[s.markBtn, m === 'ok' && s.markBtnOn]}
+                      accessibilityLabel={`${a.label} erledigt`} accessibilityState={{ selected: m === 'ok' }}>
+                      {m === 'ok' ? <Fill kind="ok" mono={mono} /> : null}
+                      <Ionicons name="checkmark" size={22} color={m === 'ok' ? '#FFFFFF' : colors.success} />
+                    </Pressable>
+                    <Pressable onPress={() => setWochenMark(c.id, a.id, a.label, cur.date, 'no')} style={[s.markBtn, m === 'no' && s.markBtnOn]}
+                      accessibilityLabel={`${a.label} vergessen, plus ${regeln.vergessenPts} Strafpunkte`} accessibilityState={{ selected: m === 'no' }}>
+                      {m === 'no' ? <Fill kind="danger" mono={mono} /> : null}
+                      <Ionicons name="close" size={22} color={m === 'no' ? '#FFFFFF' : colors.danger} />
+                    </Pressable>
+                  </>
+                )}
               </View>
             );
           })}
@@ -451,18 +474,10 @@ export function KinderPlanScreen() {
 
       <View style={s.tile}>
         <Text style={s.label}>Wochenaufgaben</Text>
-        {regeln.wochenaufgaben.map((a) => {
-          const owner = children.find((c) => c.id === regeln.zuteilung[a.id]);
-          return (
-            <View key={a.id} style={[s.rowCenter, s.divider]}>
-              <View style={{ flex: 1 }}>
-                <Text style={s.body}>{a.label}</Text>
-                <Text style={s.muted}>{owner ? `jetzt ${owner.name}` : 'niemandem zugewiesen'}</Text>
-              </View>
-              <Pressable onPress={() => updateRegeln((r) => ({ ...r, wochenaufgaben: r.wochenaufgaben.map((x) => (x.id === a.id ? { ...x, takt: (x.takt === 'taeglich' ? 'woechentlich' : 'taeglich') as Takt } : x)) }))}
-                style={s.chip} accessibilityLabel={`Takt von ${a.label} wechseln`}>
-                <Text style={s.chipText}>{a.takt === 'taeglich' ? 'täglich' : 'wöchentlich'}</Text>
-              </Pressable>
+        {regeln.wochenaufgaben.map((a) => (
+          <View key={a.id} style={[{ gap: 8 }, s.divider]}>
+            <View style={s.rowCenter}>
+              <Text style={[s.bold, { flex: 1 }]}>{a.label}</Text>
               <Pressable onPress={() => confirmDelete(`„${a.label}“ löschen?`, () => updateRegeln((r) => {
                 const { [a.id]: _, ...zuteilung } = r.zuteilung;
                 return { ...r, wochenaufgaben: r.wochenaufgaben.filter((x) => x.id !== a.id), zuteilung };
@@ -470,11 +485,39 @@ export function KinderPlanScreen() {
                 <Ionicons name="trash-outline" size={18} color={colors.textMuted} />
               </Pressable>
             </View>
-          );
-        })}
+            <View style={s.rowCenter}>
+              <Text style={s.rowLabel}>Wer</Text>
+              <View style={[s.chips, { flex: 1 }]}>
+                {children.map((c) => {
+                  const on = (regeln.zuteilung[a.id] ?? []).includes(c.id);
+                  return (
+                    <Pressable key={c.id} onPress={() => toggleKind(a.id, c.id)} style={[s.kidChip, on && s.chipOn]}
+                      accessibilityLabel={`${a.label}: ${c.name}`} accessibilityState={{ selected: on }}>
+                      <View style={!on && { opacity: 0.4 }}><ChildAvatar child={c} size={26} /></View>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+            <View style={s.rowCenter}>
+              <Text style={s.rowLabel}>Wann</Text>
+              <View style={s.dayRow}>
+                {TAG_KURZ.map((t, i) => {
+                  const on = a.tage.includes(i);
+                  return (
+                    <Pressable key={t} onPress={() => toggleTag(a.id, i)} style={s.dayBtn} accessibilityLabel={`${a.label}: ${t}`} accessibilityState={{ selected: on }}>
+                      {on ? <Fill kind="primary" mono={mono} /> : null}
+                      <Text style={[s.dayText, on && { color: '#FFFFFF' }]}>{t}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+          </View>
+        ))}
         {AddRow({
           value: newWA, onChange: setNewWA, placeholder: 'Neue Wochenaufgabe',
-          onAdd: () => { const t = newWA.trim(); if (!t) return; updateRegeln((r) => ({ ...r, wochenaufgaben: [...r.wochenaufgaben, { id: newId(), label: t, takt: 'taeglich' }] })); setNewWA(''); },
+          onAdd: () => { const t = newWA.trim(); if (!t) return; updateRegeln((r) => ({ ...r, wochenaufgaben: [...r.wochenaufgaben, { id: newId(), label: t, tage: [0, 1, 2, 3, 4, 5, 6] }] })); setNewWA(''); },
         })}
         <View style={[s.rowCenter, s.divider]}>
           <View style={{ flex: 1 }}>
@@ -486,7 +529,7 @@ export function KinderPlanScreen() {
         <View style={[s.rowCenter, s.divider]}>
           <View style={{ flex: 1 }}>
             <Text style={s.body}>Jeden Montag rotieren</Text>
-            <Text style={s.muted}>Alle Wochenaufgaben wandern zum nächsten Kind.</Text>
+            <Text style={s.muted}>Jedes Kind rückt zum nächsten weiter. Aufgaben für alle bleiben bei allen.</Text>
           </View>
           <Switch value={regeln.rotieren} onValueChange={(v) => updateRegeln((r) => ({ ...r, rotieren: v, letzteRotation: wk }))} />
         </View>
@@ -504,8 +547,8 @@ export function KinderPlanScreen() {
 
   const sheetSubmit = () => {
     if (!sheetKid) return;
-    if (sheetMode === 'woche' && sheetPick) {
-      updateRegeln((r) => ({ ...r, zuteilung: { ...r.zuteilung, [sheetPick]: sheetKid.id } }));
+    if (sheetMode === 'woche') {
+      // Häkchen werden sofort gespeichert, hier nur schließen.
     } else if (sheetMode === 'einmalig' && sheetText.trim()) {
       run(addTask(fid, sheetKid.id, { title: sheetText.trim(), done: false, date: today, createdAt: new Date().toISOString() }));
     } else if (sheetMode === 'straf' && sheetPick) {
@@ -516,7 +559,7 @@ export function KinderPlanScreen() {
   };
 
   const sheetLabel = !sheetKid ? '' : sheetMode === 'woche'
-    ? (sheetPick ? `${regeln.wochenaufgaben.find((a) => a.id === sheetPick)?.label} an ${sheetKid.name} geben` : 'Wochenaufgabe wählen')
+    ? 'Fertig'
     : sheetMode === 'einmalig' ? `An ${sheetKid.name} schicken`
     : (sheetPick ? `${sheetPick.split('|').slice(1).join('|')} zuweisen` : 'Strafaufgabe wählen');
 
@@ -539,17 +582,18 @@ export function KinderPlanScreen() {
         </View>
         <ScrollView style={{ maxHeight: 360 }} keyboardShouldPersistTaps="handled">
           {sheetMode === 'woche' ? regeln.wochenaufgaben.map((a) => {
-            const owner = children.find((c) => c.id === regeln.zuteilung[a.id]);
-            const mine = owner?.id === sheetKid?.id;
+            const kids = regeln.zuteilung[a.id] ?? [];
+            const mine = !!sheetKid && kids.includes(sheetKid.id);
+            const andere = children.filter((c) => kids.includes(c.id) && c.id !== sheetKid?.id).map((c) => c.name);
             return (
-              <Pressable key={a.id} disabled={mine} onPress={() => setSheetPick(a.id)} style={[s.rowCenter, s.divider, { paddingVertical: 10 }, mine && { opacity: 0.45 }]}
-                accessibilityState={{ selected: sheetPick === a.id, disabled: mine }}>
-                <Ionicons name={sheetPick === a.id ? 'radio-button-on' : 'radio-button-off'} size={22} color={sheetPick === a.id ? colors.accentNeon : colors.textMuted} />
+              <Pressable key={a.id} onPress={() => sheetKid && toggleKind(a.id, sheetKid.id)} style={[s.rowCenter, s.divider, { paddingVertical: 10 }]}
+                accessibilityRole="checkbox" accessibilityState={{ checked: mine }}>
+                <Ionicons name={mine ? 'checkbox' : 'square-outline'} size={24} color={mine ? colors.accentNeon : colors.textMuted} />
                 <View style={{ flex: 1 }}>
                   <Text style={s.bold}>{a.label}</Text>
-                  <Text style={s.muted}>{a.takt === 'taeglich' ? 'täglich' : 'wöchentlich'}</Text>
+                  <Text style={s.muted}>{tageText(a.tage)}</Text>
                 </View>
-                <Text style={s.muted}>{mine ? `hat ${owner?.name}` : owner ? `jetzt ${owner.name}` : 'frei'}</Text>
+                <Text style={[s.muted, { maxWidth: 130, textAlign: 'right' }]} numberOfLines={2}>{andere.length ? `auch ${andere.join(', ')}` : ''}</Text>
               </Pressable>
             );
           }) : sheetMode === 'einmalig' ? (
@@ -689,6 +733,12 @@ function makeStyles(c: ThemeColors) {
     chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
     chip: { minHeight: 34, paddingHorizontal: 12, borderRadius: 17, backgroundColor: c.surfaceHigh, borderWidth: 1.5, borderColor: c.border, justifyContent: 'center' },
     chipDanger: { borderColor: c.danger },
+    chipOn: { borderColor: c.accentNeon },
+    kidChip: { padding: 3, borderRadius: 20, borderWidth: 2, borderColor: 'transparent' },
+    rowLabel: { color: c.textMuted, fontSize: 12, fontWeight: '600', width: 40 },
+    dayRow: { flex: 1, flexDirection: 'row', gap: 4 },
+    dayBtn: { flex: 1, height: 34, borderRadius: 10, overflow: 'hidden', backgroundColor: c.surfaceHigh, alignItems: 'center', justifyContent: 'center' },
+    dayText: { color: c.textSecondary, fontSize: 12, fontWeight: '800' },
     chipText: { color: c.text, fontSize: 14, fontWeight: '600' },
     markBtn: { width: 48, height: 44, borderRadius: 12, overflow: 'hidden', backgroundColor: c.surfaceHigh, alignItems: 'center', justifyContent: 'center' },
     markBtnOn: { backgroundColor: 'transparent' },
