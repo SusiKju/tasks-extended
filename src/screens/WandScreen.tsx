@@ -8,6 +8,7 @@
  * Stundenplan von heute je Kind; an Ferien-/Feiertagen und am Wochenende statt-
  * dessen ein Hinweis im Kopf (schulfreiGrund, Sachsen).
  * Familienfotos (TE-101): Tipp auf „Fotos“ zeigt sie im Vollbild, Tipp zurück.
+ * Im Vollbild wischen zum Blättern, Pause-Knopf hält das Bild an (TE-104).
  * Schmales Display (Handy quer, TE-102): ein Kind pro Seite, wischen zum nächsten.
  */
 
@@ -96,18 +97,31 @@ export default function WandScreen({ onExit }: Props) {
   const nowHM = now.toTimeString().slice(0, 5);
   const biweeklyActive = isBiweeklyActiveWeek(now);
 
-  // Fotos: Diashow nur nach Tipp, wechselt alle 8 s und kehrt nach 5 min von selbst zur Übersicht zurück.
+  // Fotos: Diashow nur nach Tipp, wechselt alle 8 s (außer pausiert), wischen blättert,
+  // nach 5 min ohne Berührung geht es von selbst zurück zur Übersicht.
   const [fotos, setFotos] = useState<WandFoto[]>([]);
   const [fotoIdx, setFotoIdx] = useState<number | null>(null);
+  const [paused, setPaused] = useState(false);
+  const [touchTick, setTouchTick] = useState(0);
+  const swipeStart = useRef<number | null>(null);
+  const swiped = useRef(false);
+  const nFotos = Math.max(fotos.length, 1);
   useEffect(() => (fid ? subscribeWandFotos(fid, setFotos) : undefined), [fid]);
+  // Läuft nach jedem Wechsel neu an, ein Wisch bekommt also wieder volle 8 s.
+  useEffect(() => {
+    if (fotoIdx === null || paused) return;
+    const next = setTimeout(() => setFotoIdx((i) => (i === null ? null : (i + 1) % nFotos)), 8_000);
+    return () => clearTimeout(next);
+  }, [fotoIdx, paused, nFotos]);
   useEffect(() => {
     if (fotoIdx === null) return;
-    const next = setInterval(() => setFotoIdx((i) => (i === null ? null : (i + 1) % Math.max(fotos.length, 1))), 8_000);
     const back = setTimeout(() => setFotoIdx(null), 5 * 60_000);
-    return () => { clearInterval(next); clearTimeout(back); };
+    return () => clearTimeout(back);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fotoIdx === null, fotos.length]);
-  const foto = fotoIdx !== null ? fotos[fotoIdx % Math.max(fotos.length, 1)] : undefined;
+  }, [fotoIdx === null, touchTick]);
+  const openFotos = () => { setPaused(false); setFotoIdx(0); };
+  const blaettern = (d: number) => { setTouchTick((x) => x + 1); setFotoIdx((i) => (i === null ? null : (i + d + nFotos) % nFotos)); };
+  const foto = fotoIdx !== null ? fotos[fotoIdx % nFotos] : undefined;
 
   const { width } = useWindowDimensions();
   const paged = width < PAGED_BELOW;
@@ -254,7 +268,7 @@ export default function WandScreen({ onExit }: Props) {
           </View>
         ) : null}
         {fotos.length > 0 ? (
-          <Pressable onPress={() => setFotoIdx(0)} style={s.fotoBtn} accessibilityLabel="Fotos ansehen">
+          <Pressable onPress={openFotos} style={s.fotoBtn} accessibilityLabel="Fotos ansehen">
             <Ionicons name="images-outline" size={22} color={colors.text} />
             {paged ? null : <Text style={s.item}>Fotos</Text>}
           </Pressable>
@@ -284,10 +298,29 @@ export default function WandScreen({ onExit }: Props) {
       )}
 
       {foto ? (
-        <Pressable onPress={() => setFotoIdx(null)} style={s.fotoView} accessibilityLabel="Zurück zur Übersicht">
-          <Image source={{ uri: foto.data }} style={StyleSheet.absoluteFill} resizeMode="contain" />
-          <Text style={s.fotoHint}>{(fotoIdx! % fotos.length) + 1} / {fotos.length} · Tippen für Übersicht</Text>
-        </Pressable>
+        <View style={s.fotoView}>
+          {/* Wisch = Weg zwischen Drücken und Loslassen (Touch und Maus); kurzer Weg = Tipp zurück zur Übersicht. */}
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            accessibilityLabel="Zurück zur Übersicht"
+            onPressIn={(e) => { swipeStart.current = e.nativeEvent.pageX; swiped.current = false; }}
+            onPressOut={(e) => {
+              const dx = e.nativeEvent.pageX - (swipeStart.current ?? e.nativeEvent.pageX);
+              swipeStart.current = null;
+              if (Math.abs(dx) > 40) { swiped.current = true; blaettern(dx < 0 ? 1 : -1); }
+            }}
+            onPress={() => { if (!swiped.current) setFotoIdx(null); }}
+          >
+            <Image source={{ uri: foto.data }} style={StyleSheet.absoluteFill} resizeMode="contain" />
+          </Pressable>
+          <Text style={s.fotoHint} pointerEvents="none">
+            {(fotoIdx! % nFotos) + 1} / {fotos.length} · Wischen zum Blättern · Tippen für Übersicht
+          </Text>
+          <Pressable onPress={() => { setTouchTick((x) => x + 1); setPaused((p) => !p); }} style={s.pauseBtn}
+            accessibilityLabel={paused ? 'Diashow fortsetzen' : 'Diashow anhalten'}>
+            <Ionicons name={paused ? 'play' : 'pause'} size={28} color="#fff" />
+          </Pressable>
+        </View>
       ) : null}
 
       <Pressable onPress={() => setPinOpen(true)} style={s.exitBtn} accessibilityLabel="Wand-Modus verlassen">
@@ -344,6 +377,7 @@ function makeStyles(c: ThemeColors) {
     fotoBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: c.surfaceHigh, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 10 },
     fotoView: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#000' },
     fotoHint: { position: 'absolute', bottom: 16, alignSelf: 'center', color: 'rgba(255,255,255,0.6)', fontSize: 15 },
+    pauseBtn: { position: 'absolute', left: 16, bottom: 16, width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.18)' },
     exitBtn: { position: 'absolute', right: 12, bottom: 12, padding: 10, opacity: 0.4 },
     modalBg: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center' },
     modal: { backgroundColor: c.surface, borderRadius: 18, padding: 20, gap: 12, width: 300 },
