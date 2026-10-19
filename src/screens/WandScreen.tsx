@@ -8,10 +8,11 @@
  * Stundenplan von heute je Kind; an Ferien-/Feiertagen und am Wochenende statt-
  * dessen ein Hinweis im Kopf (schulfreiGrund, Sachsen).
  * Familienfotos (TE-101): Tipp auf „Fotos“ zeigt sie im Vollbild, Tipp zurück.
+ * Schmales Display (Handy quer, TE-102): ein Kind pro Seite, wischen zum nächsten.
  */
 
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Modal, TextInput, Image } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, Pressable, Modal, TextInput, Image, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { THEMES, ThemeColors } from '../utils/theme';
 import { useFamily } from '../hooks/useFamily';
@@ -33,6 +34,9 @@ import {
 
 const colors = THEMES['bento-night'].colors;
 const s = makeStyles(colors);
+
+// Unter dieser Breite (Handy quer) eine Seite pro Kind statt aller Spalten nebeneinander.
+const PAGED_BELOW = 1000;
 
 const WOCHENTAG = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
 
@@ -105,6 +109,11 @@ export default function WandScreen({ onExit }: Props) {
   }, [fotoIdx === null, fotos.length]);
   const foto = fotoIdx !== null ? fotos[fotoIdx % Math.max(fotos.length, 1)] : undefined;
 
+  const { width } = useWindowDimensions();
+  const paged = width < PAGED_BELOW;
+  const [page, setPage] = useState(0);
+  const pager = useRef<ScrollView>(null);
+
   const [pinOpen, setPinOpen] = useState(false);
   const [pin, setPin] = useState('');
   const [pinError, setPinError] = useState(false);
@@ -140,7 +149,7 @@ export default function WandScreen({ onExit }: Props) {
       .filter((x): x is { p: typeof x.p; e: NonNullable<typeof x.e> } => !!x.e && !(x.e.biweekly && !biweeklyActive));
 
     return (
-      <View key={c.id} style={[s.col, alarm && s.colAlert]}>
+      <View key={c.id} style={[s.col, paged && { flexGrow: 0, flexShrink: 0, flexBasis: 'auto' }, alarm && s.colAlert]}>
         <View style={s.rowCenter}>
           <ChildAvatar child={c} size={44} />
           <Text style={[s.name, { flex: 1 }]} numberOfLines={1}>{c.name}</Text>
@@ -217,25 +226,43 @@ export default function WandScreen({ onExit }: Props) {
 
   return (
     <View style={s.screen}>
-      <View style={s.header}>
-        <Text style={s.title}>{WOCHENTAG[now.getDay()]}, {now.toLocaleDateString('de-DE', { day: 'numeric', month: 'long' })} · KW {kalenderwoche(now)}</Text>
+      <View style={[s.header, paged && s.headerSmall]}>
+        <Text style={[s.title, paged && { fontSize: 17 }]} numberOfLines={1}>{WOCHENTAG[now.getDay()]}, {now.toLocaleDateString('de-DE', { day: 'numeric', month: 'long' })} · KW {kalenderwoche(now)}</Text>
         {schulfreiText ? (
           <View style={s.freiBanner}>
             <Ionicons name={dayIdx < 0 && !frei ? 'happy-outline' : 'sunny-outline'} size={22} color="#000" />
-            <Text style={s.freiText}>{schulfreiText}</Text>
+            <Text style={[s.freiText, paged && { fontSize: 15 }]} numberOfLines={1}>{schulfreiText}</Text>
           </View>
         ) : null}
         {fotos.length > 0 ? (
           <Pressable onPress={() => setFotoIdx(0)} style={s.fotoBtn} accessibilityLabel="Fotos ansehen">
             <Ionicons name="images-outline" size={22} color={colors.text} />
-            <Text style={s.item}>Fotos</Text>
+            {paged ? null : <Text style={s.item}>Fotos</Text>}
           </Pressable>
         ) : null}
-        <Text style={s.clock}>{now.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}</Text>
+        {paged && children.length > 1 ? (
+          <View style={s.rowCenter}>
+            {children.map((c, i) => (
+              <Pressable key={c.id} onPress={() => pager.current?.scrollTo({ x: i * width, animated: false })} hitSlop={8} accessibilityLabel={c.name}>
+                <View style={[s.pageDot, { backgroundColor: c.color }, i !== page && { opacity: 0.3 }]} />
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
+        <Text style={[s.clock, paged && { fontSize: 26 }]}>{now.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}</Text>
       </View>
-      <ScrollView contentContainerStyle={s.grid}>
-        {children.length === 0 ? <Text style={s.muted}>Noch keine Kinder in der Familie angelegt.</Text> : children.map(renderKind)}
-      </ScrollView>
+      {children.length === 0 ? (
+        <Text style={[s.muted, { padding: 16 }]}>Noch keine Kinder in der Familie angelegt.</Text>
+      ) : paged ? (
+        <ScrollView ref={pager} horizontal pagingEnabled showsHorizontalScrollIndicator={false} scrollEventThrottle={100}
+          onScroll={(e) => setPage(Math.round(e.nativeEvent.contentOffset.x / width))}>
+          {children.map((c) => (
+            <ScrollView key={c.id} style={{ width }} contentContainerStyle={s.pageInner}>{renderKind(c)}</ScrollView>
+          ))}
+        </ScrollView>
+      ) : (
+        <ScrollView contentContainerStyle={s.grid}>{children.map(renderKind)}</ScrollView>
+      )}
 
       {foto ? (
         <Pressable onPress={() => setFotoIdx(null)} style={s.fotoView} accessibilityLabel="Zurück zur Übersicht">
@@ -269,9 +296,12 @@ function makeStyles(c: ThemeColors) {
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: c.background },
     header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 24, paddingTop: 20, paddingBottom: 8 },
-    title: { color: c.text, fontSize: 24, fontWeight: '800' },
+    headerSmall: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4, gap: 10 },
+    title: { flexShrink: 1, color: c.text, fontSize: 24, fontWeight: '800' },
     clock: { color: c.text, fontSize: 40, fontWeight: '800' },
     // Alle Kinder nebeneinander in einer Reihe (Display im Querformat).
+    pageInner: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 48 },
+    pageDot: { width: 12, height: 12, borderRadius: 6 },
     grid: { flexDirection: 'row', alignItems: 'flex-start', gap: 16, padding: 16 },
     col: { flex: 1, minWidth: 0, backgroundColor: c.surface, borderRadius: 20, padding: 18, gap: 10, borderWidth: 2, borderColor: 'transparent' },
     colAlert: { borderColor: c.danger },
