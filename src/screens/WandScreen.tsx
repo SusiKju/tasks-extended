@@ -5,6 +5,8 @@
  * Aufgaben aus der Kinder-App. Keine Buttons außer dem PIN-Ausstieg.
  * Daten live per onSnapshot, gleiche Quellen wie „Kinder 2“ (KinderPlanScreen).
  * Immer im Theme „Bento Dark“, unabhängig von der Einstellung auf dem Gerät.
+ * Stundenplan von heute je Kind; an Ferien-/Feiertagen und am Wochenende statt-
+ * dessen ein Hinweis im Kopf (schulfreiGrund, Sachsen).
  */
 
 import React, { useEffect, useState } from 'react';
@@ -16,6 +18,11 @@ import { useStore } from '../store';
 import ChildAvatar from '../components/ChildAvatar';
 import type { ChildConfig } from '../services/family';
 import { ChildTask, subscribeToChildTasks } from '../services/kinderTasks';
+import {
+  PERIODS, TimetableMap, PeriodTimesMap, key as ttKey, applyPeriodTimes, isBiweeklyActiveWeek, isAusfallstunde,
+  subjectColor, subscribeToTimetable, subscribeToPeriodTimes,
+} from '../services/timetable';
+import { schulfreiGrund } from '../utils/schulferien';
 import { subscribeRegeln, subscribeWoche, subscribeStrafaufgaben } from '../services/kinderPlan';
 import {
   KinderRegeln, KinderWoche, Strafaufgabe, DEFAULT_REGELN, TAG_KURZ, aufgabenVon, aktuellerTag,
@@ -60,6 +67,29 @@ export default function WandScreen({ onExit }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fid, children, today]);
 
+  const [timetables, setTimetables] = useState<Record<string, TimetableMap>>({});
+  const [periodTimes, setPeriodTimes] = useState<Record<string, PeriodTimesMap>>({});
+  useEffect(() => {
+    if (!fid || children.length === 0) return;
+    const unsubs = children.flatMap((c) => [
+      subscribeToTimetable(fid, c.id, (m) => setTimetables((p) => ({ ...p, [c.id]: m }))),
+      subscribeToPeriodTimes(fid, c.id, (m) => setPeriodTimes((p) => ({ ...p, [c.id]: m }))),
+    ]);
+    return () => unsubs.forEach((u) => u());
+  }, [fid, children]);
+
+  // Schultag? Wochenende und sächsische Ferien/Feiertage zeigen statt Stundenplan einen Hinweis.
+  const dow = now.getDay();
+  const dayIdx = dow >= 1 && dow <= 5 ? dow - 1 : -1;
+  const frei = schulfreiGrund(now);
+  const bisText = frei ? new Date(`${frei.bis}T12:00:00`).toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'numeric' }) : '';
+  const schulfreiText = frei?.art === 'ferien' ? `Ferien bis ${bisText} – keine Schule`
+    : frei?.art === 'feiertag' ? 'Feiertag – keine Schule'
+    : frei?.art === 'frei' ? 'Heute schulfrei'
+    : dayIdx < 0 ? 'Wochenende – keine Schule' : null;
+  const nowHM = now.toTimeString().slice(0, 5);
+  const biweeklyActive = isBiweeklyActiveWeek(now);
+
   const [pinOpen, setPinOpen] = useState(false);
   const [pin, setPin] = useState('');
   const [pinError, setPinError] = useState(false);
@@ -88,18 +118,23 @@ export default function WandScreen({ onExit }: Props) {
       .filter((x): x is { a: typeof x.a; cur: NonNullable<typeof x.cur> } => !!x.cur);
     const tasks = (tasksByChild[c.id] ?? []).filter((t) => !strafTaskIds.has(t.id));
     const alarm = due.length > 0 || offen.length > 0;
+    const tt = timetables[c.id] ?? {};
+    const lessons = schulfreiText ? [] : applyPeriodTimes(PERIODS, periodTimes[c.id] ?? {})
+      .filter((p) => !p.pause)
+      .map((p) => ({ p, e: tt[ttKey(dayIdx, p.nr)] }))
+      .filter((x): x is { p: typeof x.p; e: NonNullable<typeof x.e> } => !!x.e && !(x.e.biweekly && !biweeklyActive));
 
     return (
       <View key={c.id} style={[s.col, alarm && s.colAlert]}>
         <View style={s.rowCenter}>
-          <ChildAvatar child={c} size={56} />
+          <ChildAvatar child={c} size={44} />
           <Text style={[s.name, { flex: 1 }]} numberOfLines={1}>{c.name}</Text>
-          <View style={{ alignItems: 'flex-end' }}>
-            <Text style={s.bigNum}>{pts}</Text>
-            <Text style={s.muted}>Strafpunkte</Text>
-          </View>
         </View>
-        <View style={s.bar}><View style={[s.barFill, { width: `${Math.round(barPct(pts) * 100)}%`, backgroundColor: c.color }]} /></View>
+        {/* Punkte in eigener Zeile neben dem Balken, damit der Name auch in schmalen Spalten ganz bleibt. */}
+        <View style={s.rowCenter}>
+          <Text style={s.bigNum} accessibilityLabel={`${pts} Strafpunkte`}>{pts}</Text>
+          <View style={[s.bar, { flex: 1 }]}><View style={[s.barFill, { width: `${Math.round(barPct(pts) * 100)}%`, backgroundColor: c.color }]} /></View>
+        </View>
         <Text style={[s.muted, bis === 1 && { color: colors.warning, fontWeight: '800' }]}>
           {bis === null ? 'Höchste Stufe erreicht' : `Noch ${bis} bis zur Strafaufgabe`}
         </Text>
@@ -109,6 +144,27 @@ export default function WandScreen({ onExit }: Props) {
             <Text style={[s.label, { color: colors.danger }]}>Strafaufgaben</Text>
             {offen.map((a) => <Text key={a.id} style={s.item}>• {a.label}</Text>)}
             {due.map((st) => <Text key={st} style={s.item}>• Stufe {st + 1}: kommt noch</Text>)}
+          </View>
+        ) : null}
+
+        {lessons.length > 0 ? (
+          <View style={s.section}>
+            <Text style={s.label}>Stundenplan heute</Text>
+            {lessons.map(({ p, e }) => {
+              const ausfall = isAusfallstunde(e);
+              const jetzt = nowHM >= p.start && nowHM < p.end;
+              const vorbei = nowHM >= p.end;
+              return (
+                <View key={String(p.nr)} style={[s.rowCenter, jetzt && s.lessonNow, vorbei && { opacity: 0.45 }]}>
+                  <Text style={[s.muted, { width: 48 }]}>{p.start}</Text>
+                  <View style={[s.dot, { backgroundColor: e.pause ? colors.warning : subjectColor(e.fach) }]} />
+                  <Text style={[s.item, { flex: 1 }, ausfall && s.done, e.pause && { fontStyle: 'italic', color: colors.warning }]} numberOfLines={1}>
+                    {ausfall ? 'fällt aus' : e.fach}{e.optional ? <Text style={s.muted}> (optional)</Text> : null}
+                  </Text>
+                  {e.raum && !ausfall ? <Text style={s.muted}>{e.raum}</Text> : null}
+                </View>
+              );
+            })}
           </View>
         ) : null}
 
@@ -148,6 +204,12 @@ export default function WandScreen({ onExit }: Props) {
     <View style={s.screen}>
       <View style={s.header}>
         <Text style={s.title}>{WOCHENTAG[now.getDay()]}, {now.toLocaleDateString('de-DE', { day: 'numeric', month: 'long' })} · KW {kalenderwoche(now)}</Text>
+        {schulfreiText ? (
+          <View style={s.freiBanner}>
+            <Ionicons name={dayIdx < 0 && !frei ? 'happy-outline' : 'sunny-outline'} size={22} color="#000" />
+            <Text style={s.freiText}>{schulfreiText}</Text>
+          </View>
+        ) : null}
         <Text style={s.clock}>{now.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}</Text>
       </View>
       <ScrollView contentContainerStyle={s.grid}>
@@ -186,7 +248,7 @@ function makeStyles(c: ThemeColors) {
     col: { flex: 1, minWidth: 0, backgroundColor: c.surface, borderRadius: 20, padding: 18, gap: 10, borderWidth: 2, borderColor: 'transparent' },
     colAlert: { borderColor: c.danger },
     rowCenter: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-    name: { color: c.text, fontSize: 28, fontWeight: '800' },
+    name: { color: c.text, fontSize: 24, fontWeight: '800' },
     bigNum: { color: c.text, fontSize: 44, fontWeight: '800', lineHeight: 48 },
     bar: { height: 10, borderRadius: 5, backgroundColor: c.surfaceHigh, overflow: 'hidden' },
     barFill: { height: '100%', borderRadius: 5 },
@@ -195,6 +257,10 @@ function makeStyles(c: ThemeColors) {
     item: { color: c.text, fontSize: 19, fontWeight: '600' },
     done: { color: c.textMuted, textDecorationLine: 'line-through' },
     muted: { color: c.textMuted, fontSize: 15 },
+    dot: { width: 10, height: 10, borderRadius: 5 },
+    lessonNow: { backgroundColor: c.surfaceHigh, borderRadius: 10, marginHorizontal: -6, paddingHorizontal: 6, paddingVertical: 2 },
+    freiBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: c.warning, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 8 },
+    freiText: { color: '#000', fontSize: 20, fontWeight: '800' },
     exitBtn: { position: 'absolute', right: 12, bottom: 12, padding: 10, opacity: 0.4 },
     modalBg: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center' },
     modal: { backgroundColor: c.surface, borderRadius: 18, padding: 20, gap: 12, width: 300 },

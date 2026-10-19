@@ -10,7 +10,7 @@
  */
 
 /** [von, bis] inklusive, ISO yyyy-MM-dd. Einzeltage haben von === bis. */
-const SCHULFREI_SN: [string, string][] = [
+const FERIEN_SN: [string, string][] = [
   // Schulferien + unterrichtsfreie Tage
   ['2025-12-22', '2026-01-02'],
   ['2026-02-09', '2026-02-21'],
@@ -30,14 +30,15 @@ const SCHULFREI_SN: [string, string][] = [
   ['2028-04-14', '2028-04-22'],
   ['2028-05-26', '2028-05-26'],
   ['2028-07-22', '2028-09-01'],
-  // Gesetzliche Feiertage Sachsen (nur die außerhalb der Ferien sind relevant)
-  ...[
-    '2026-01-01', '2026-04-06', '2026-05-01', '2026-05-14', '2026-05-25', '2026-10-03',
-    '2026-10-31', '2026-11-18', '2026-12-25', '2026-12-26',
-    '2027-03-29', '2027-05-01', '2027-05-06', '2027-05-17', '2027-10-03', '2027-10-31',
-    '2027-11-17', '2027-12-25', '2027-12-26',
-    '2028-01-01', '2028-04-17', '2028-05-01', '2028-05-25', '2028-06-05',
-  ].map((d): [string, string] => [d, d]),
+];
+
+// Gesetzliche Feiertage Sachsen (nur die außerhalb der Ferien sind relevant)
+const FEIERTAGE_SN: string[] = [
+  '2026-01-01', '2026-04-06', '2026-05-01', '2026-05-14', '2026-05-25', '2026-10-03',
+  '2026-10-31', '2026-11-18', '2026-12-25', '2026-12-26',
+  '2027-03-29', '2027-05-01', '2027-05-06', '2027-05-17', '2027-10-03', '2027-10-31',
+  '2027-11-17', '2027-12-25', '2027-12-26',
+  '2028-01-01', '2028-04-17', '2028-05-01', '2028-05-25', '2028-06-05',
 ];
 
 function isoLocal(d: Date): string {
@@ -45,8 +46,16 @@ function isoLocal(d: Date): string {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
+/** Warum `date` in Sachsen schulfrei ist, oder null. Ferien gewinnen vor Feiertag,
+ *  `bis` ist der letzte freie Tag (ISO) – für „Ferien bis …“ auf der Wand-Ansicht. */
+export function schulfreiGrund(date: Date = new Date()): { art: 'ferien' | 'frei' | 'feiertag'; bis: string } | null {
+  const iso = isoLocal(date);
+  const f = FERIEN_SN.find(([von, bis]) => iso >= von && iso <= bis);
+  if (f) return { art: f[0] === f[1] ? 'frei' : 'ferien', bis: f[1] };
+  return FEIERTAGE_SN.includes(iso) ? { art: 'feiertag', bis: iso } : null;
+}
+
 /** true, wenn `date` in Sachsen ein Ferien- oder Feiertag ist. */
 export function isSchulfrei(date: Date = new Date()): boolean {
-  const iso = isoLocal(date);
-  return SCHULFREI_SN.some(([von, bis]) => iso >= von && iso <= bis);
+  return schulfreiGrund(date) !== null;
 }
