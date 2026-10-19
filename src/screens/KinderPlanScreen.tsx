@@ -8,16 +8,20 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, Pressable, TextInput, Modal, Switch, Alert, Platform,
+  View, Text, StyleSheet, ScrollView, Pressable, TextInput, Modal, Switch,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import uuid from 'react-native-uuid';
 import { useTheme, ThemeColors } from '../utils/theme';
 import { useFamily } from '../hooks/useFamily';
 import ChildAvatar from '../components/ChildAvatar';
 import type { ChildConfig } from '../services/family';
-import { addTask } from '../services/kinderTasks';
+import { addTask, ChildTask, RepeatInterval, subscribeToChildTasks } from '../services/kinderTasks';
+import { sendTaskMailToChild } from '../services/taskMail';
+import { useStore } from '../store';
+import {
+  KindKacheln, KindAufgaben, Fill, HEAT_FG, confirmAction as confirmDelete, confirmAction, info, run, newId, repeatLabel,
+} from '../components/KinderPlanKind';
 import {
   subscribeRegeln, saveRegeln, subscribeWoche, addPunkt, setPunktGrund, deletePunkt, setMark,
   subscribeStrafaufgaben, addStrafaufgabe, setStrafaufgabeDone, deleteStrafaufgabe, syncStrafaufgaben,
@@ -30,39 +34,6 @@ import {
 const DAY_LABELS = TAG_KURZ;
 const tageText = (tage: number[]) => (tage.length === 7 ? 'täglich' : tage.map((t) => TAG_KURZ[t]).join(', '));
 const STUFEN_FARBEN = ['#FFD60A', '#FF453A', '#BF5AF2'];
-
-/** Alert funktioniert auf Web nicht — window.confirm als Fallback (wie im Kinder-Tab). */
-function confirmDelete(title: string, onConfirm: () => void) {
-  if (Platform.OS === 'web') {
-    if (window.confirm(title)) onConfirm();
-  } else {
-    Alert.alert(title, '', [
-      { text: 'Abbrechen', style: 'cancel' },
-      { text: 'Löschen', style: 'destructive', onPress: onConfirm },
-    ]);
-  }
-}
-function showError(e: unknown) {
-  const msg = (e as { message?: string })?.message ?? 'Speichern fehlgeschlagen.';
-  if (Platform.OS === 'web') window.alert(msg); else Alert.alert('Fehler', msg);
-}
-const run = (p: Promise<unknown>) => { p.catch(showError); };
-
-/** Verläufe für Action-Buttons (Text darauf immer weiß). */
-const GRAD = {
-  danger: ['#FF6B3D', '#FF2D78'],
-  ok: ['#1FA64A', '#0A8F9E'],
-  primary: ['#0A5CFF', '#7B61FF'],
-  // Heatmap für +1 / +2 / +3: je mehr Punkte, desto röter.
-  heat1: ['#FFC53D', '#FF9500'],
-  heat2: ['#FF8A1F', '#FF453A'],
-  heat3: ['#FF3B30', '#B0002A'],
-} as const;
-const HEAT_FG = ['#1C1C1E', '#FFFFFF', '#FFFFFF'];
-function Fill({ kind, mono }: { kind: keyof typeof GRAD; mono: (hex: string) => string }) {
-  return <LinearGradient colors={[mono(GRAD[kind][0]), mono(GRAD[kind][1])]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />;
-}
-const newId = () => uuid.v4() as string;
 
 type View_ = 'uebersicht' | 'regeln' | string; // sonst: childId
 
@@ -83,6 +54,9 @@ export function KinderPlanScreen() {
   const [straf, setStraf] = useState<Record<string, Strafaufgabe>>({});
   const [snack, setSnack] = useState<{ id: string; childId: string; pts: number } | null>(null);
   const [sheetChild, setSheetChild] = useState<string | null>(null);
+  const [tasksByChild, setTasksByChild] = useState<Record<string, ChildTask[]>>({});
+  const [sendingMail, setSendingMail] = useState(false);
+  const { settings } = useStore();
   const snackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -91,6 +65,13 @@ export function KinderPlanScreen() {
   }, [fid]);
   useEffect(() => (fid ? subscribeWoche(fid, wk, setWoche) : undefined), [fid, wk]);
   useEffect(() => (fid ? subscribeStrafaufgaben(fid, setStraf) : undefined), [fid]);
+  // Aufgaben der Kinder-App (offen + heute erledigt), wie im alten Kinder-Tab.
+  useEffect(() => {
+    if (!fid || children.length === 0) return;
+    const unsubs = children.map((c) => subscribeToChildTasks(fid, c.id, today, (ts) => setTasksByChild((p) => ({ ...p, [c.id]: ts }))));
+    return () => unsubs.forEach((u) => u());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fid, children, today]);
 
   // Von der Kinder-App abgehakte Strafaufgaben übernehmen (nur wenn sich die offenen ändern).
   const openKey = Object.entries(straf).filter(([, a]) => !a.done).map(([id]) => id).sort().join(',');
@@ -116,6 +97,17 @@ export function KinderPlanScreen() {
   }, [children, view]);
 
   const strafListe = Object.entries(straf).map(([id, a]) => ({ id, ...a }));
+  const strafTaskIds = new Set(strafListe.map((a) => a.taskId).filter((x): x is string => !!x));
+
+  /** Wochenaufgaben, die heute fällig oder diese Woche überfällig sind, je Kind. */
+  const heuteFaellig = regeln.wochenaufgaben.map((a) => ({
+    a,
+    kids: children
+      .filter((c) => (regeln.zuteilung[a.id] ?? []).includes(c.id))
+      .map((c) => ({ c, cur: aktuellerTag(a, c.id, woche, wk, today) }))
+      .filter((x): x is { c: ChildConfig; cur: NonNullable<typeof x.cur> } => !!x.cur && !x.cur.kommt && (x.cur.date === today || x.cur.ueberfaellig))
+      .map((x) => ({ ...x, m: woche.marks[markKey(x.c.id, a.id, x.cur.date)] ?? '' })),
+  })).filter((r) => r.kids.length > 0);
 
   const kidInfo = (c: ChildConfig) => {
     const pts = punkte(woche, c.id);
@@ -125,6 +117,9 @@ export function KinderPlanScreen() {
       bis: bisNaechsteStufe(regeln, pts),
       q: quote(regeln, woche, c.id, wk, today),
       offen: strafListe.filter((a) => a.childId === c.id && !a.done),
+      heuteOffen: heuteFaellig.reduce((n, r) => n + r.kids.filter((k) => k.c.id === c.id && !k.m).length, 0),
+      heuteGesamt: heuteFaellig.reduce((n, r) => n + r.kids.filter((k) => k.c.id === c.id).length, 0),
+      zuPruefen: (tasksByChild[c.id] ?? []).filter((t) => t.done && t.seenByParent === false && !strafTaskIds.has(t.id)).length,
     };
   };
 
@@ -153,6 +148,32 @@ export function KinderPlanScreen() {
       }
     })());
   };
+
+  /** Kinderbild in „Heute fällig“: offen → ✓ → ✗ (Strafpunkte) → offen. */
+  const cycleMark = (childId: string, aufgabeId: string, label: string, date: string) => {
+    const m = woche.marks[markKey(childId, aufgabeId, date)] ?? '';
+    setWochenMark(childId, aufgabeId, label, date, m === '' ? 'ok' : 'no');
+  };
+
+  /** Push + Aufgaben-Mail an jedes Kind mit E-Mail-Adresse (wie „Mail Push für alle“ im alten Tab). */
+  const mailAnAlle = () => confirmAction('Push + Mail an alle Kinder schicken?', async () => {
+    const token = settings.googleAccessToken;
+    if (!token) { info('Google nicht verbunden', 'Bitte in den Einstellungen das Google-Konto verbinden.'); return; }
+    setSendingMail(true);
+    let sent = 0, skipped = 0, failed = 0;
+    try {
+      for (const c of children) {
+        const email = (settings.childEmails ?? {})[c.id];
+        if (!email) { skipped++; continue; }
+        const ts = tasksByChild[c.id] ?? [];
+        const r = await sendTaskMailToChild(fid, c.id, c.name, email, token, ts.filter((t) => !t.done), ts.filter((t) => t.done));
+        if (r === 'sent') sent++; else failed++;
+      }
+    } finally {
+      setSendingMail(false);
+    }
+    info('Mail Push für alle', [`${sent} verschickt`, skipped ? `${skipped} ohne E-Mail-Adresse` : '', failed ? `${failed} fehlgeschlagen` : ''].filter(Boolean).join(' · '));
+  }, 'Senden');
 
   const vergebeStrafaufgabe = (childId: string, label: string, stufe: number) =>
     run(addStrafaufgabe(fid, newId(), { childId, label, stufe, week: wk }));
@@ -188,12 +209,14 @@ export function KinderPlanScreen() {
     </View>
   );
 
-  const Bar = ({ pts, color }: { pts: number; color: string }) => {
+  const barPct = (pts: number) => {
     const prev = [...regeln.stufen].reverse().find((st) => st.min <= pts)?.min ?? 0;
     const next = regeln.stufen.find((st) => st.min > pts)?.min;
-    const pct = next ? (pts - prev) / (next - prev) : 1;
-    return <View style={s.bar}><View style={[s.barFill, { width: `${Math.round(pct * 100)}%`, backgroundColor: mono(color) }]} /></View>;
+    return next ? (pts - prev) / (next - prev) : 1;
   };
+  const Bar = ({ pts, color }: { pts: number; color: string }) => (
+    <View style={s.bar}><View style={[s.barFill, { width: `${Math.round(barPct(pts) * 100)}%`, backgroundColor: mono(color) }]} /></View>
+  );
 
   const StrafRow = ({ a }: { a: Strafaufgabe & { id: string } }) => (
     <View style={s.rowBetween}>
@@ -223,9 +246,14 @@ export function KinderPlanScreen() {
     ]);
     return (
       <>
-        <Text style={s.sub}>KW {kalenderwoche()} · {sum} Strafpunkte{q.soll ? ` · ${Math.round((q.ok / q.soll) * 100)} % Aufgaben erledigt` : ''}</Text>
+        <View style={s.rowBetween}>
+          <Text style={[s.sub, { flex: 1 }]}>KW {kalenderwoche()} · {sum} Strafpunkte{q.soll ? ` · ${Math.round((q.ok / q.soll) * 100)} % Aufgaben erledigt` : ''}</Text>
+          <Pressable onPress={mailAnAlle} disabled={sendingMail} style={s.bellBtn} accessibilityLabel="Push und Mail an alle Kinder">
+            <Ionicons name={sendingMail ? 'hourglass-outline' : 'notifications-outline'} size={20} color={colors.text} />
+          </Pressable>
+        </View>
         <View style={s.grid}>
-          {infos.map(({ c, pts, due, bis, q: kq, offen }) => (
+          {infos.map(({ c, pts, due, bis, offen, heuteOffen, heuteGesamt, zuPruefen }) => (
             <Pressable key={c.id} onPress={() => setView(c.id)} style={[s.tile, s.half, (due.length > 0 || offen.length > 0) && s.tileAlert]}
               accessibilityLabel={`${c.name} öffnen`}>
               <View style={s.rowCenter}>
@@ -238,14 +266,44 @@ export function KinderPlanScreen() {
                 : offen.length > 0 ? <Text style={s.alertText}>Strafaufgabe offen</Text>
                 : <Text style={[s.muted, bis === 1 && { color: colors.warning, fontWeight: '700' }]}>{bis === null ? 'Höchste Stufe erreicht' : `Noch ${bis} bis Strafaufgabe`}</Text>}
               <Text style={s.muted}>
-                Aufgaben <Text style={s.boldSmall}>{kq.ok} / {kq.soll}</Text>
-                {kq.soll > 0 && kq.ok === kq.soll ? <Text style={{ color: colors.success, fontWeight: '700' }}> · alles erledigt</Text> : null}
+                {heuteGesamt === 0 ? 'heute keine Aufgaben'
+                  : heuteOffen === 0 ? <Text style={{ color: colors.success, fontWeight: '700' }}>heute alles erledigt</Text>
+                  : <>heute <Text style={s.boldSmall}>{heuteOffen} offen</Text></>}
+                {zuPruefen > 0 ? <Text style={s.link}> · {zuPruefen} prüfen</Text> : null}
               </Text>
               <PlusButtons childId={c.id} />
             </Pressable>
           ))}
         </View>
         {children.length === 0 ? <Text style={s.muted}>Noch keine Kinder in der Familie angelegt.</Text> : null}
+        {heuteFaellig.length > 0 ? (
+          <View style={s.tile}>
+            <Text style={s.label}>Heute fällig · {['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'][new Date().getDay()]}</Text>
+            {heuteFaellig.every((r) => r.kids.every((k) => k.m)) ? (
+              <Text style={[s.bold, { color: colors.success }]}>Heute alles abgehakt ✓</Text>
+            ) : heuteFaellig.map(({ a, kids }) => (
+              <View key={a.id} style={[s.rowCenter, s.divider]}>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.bold} numberOfLines={1}>{a.label}</Text>
+                  {kids.some((k) => k.cur.ueberfaellig && !k.m) ? <Text style={s.alertText}>überfällig</Text> : null}
+                </View>
+                {kids.map(({ c, cur, m }) => (
+                  <Pressable key={c.id} onPress={() => cycleMark(c.id, a.id, a.label, cur.date)} hitSlop={4}
+                    style={[s.heuteAva, { borderColor: m === 'ok' ? colors.success : m === 'no' ? colors.danger : cur.ueberfaellig ? colors.warning : 'transparent' }]}
+                    accessibilityLabel={`${a.label}, ${c.name}: ${m === 'ok' ? 'erledigt' : m === 'no' ? 'vergessen' : 'offen'}. Antippen wechselt.`}>
+                    <View style={!m ? undefined : { opacity: 0.55 }}><ChildAvatar child={c} size={34} /></View>
+                    {m ? (
+                      <View style={[s.heuteBadge, { backgroundColor: m === 'ok' ? colors.success : colors.danger }]}>
+                        <Ionicons name={m === 'ok' ? 'checkmark' : 'close'} size={12} color="#FFFFFF" />
+                      </View>
+                    ) : null}
+                  </Pressable>
+                ))}
+              </View>
+            ))}
+            {heuteFaellig.every((r) => r.kids.every((k) => k.m)) ? null : <Text style={s.muted}>Bild antippen: offen → ✓ → ✗ (+{regeln.vergessenPts} Strafpunkte) → offen</Text>}
+          </View>
+        ) : null}
         {offene.length > 0 ? (
           <View style={s.tile}>
             <Text style={s.label}>Offene Strafaufgaben</Text>
@@ -283,20 +341,17 @@ export function KinderPlanScreen() {
           <ChildAvatar child={c} size={52} />
           <View style={{ flex: 1 }}>
             <Text style={s.h1}>{c.name}</Text>
-            <Text style={s.muted}>KW {kalenderwoche()} · {bis === null ? 'höchste Stufe erreicht' : `noch ${bis} bis zur nächsten Strafaufgabe`}</Text>
-          </View>
-          <View style={{ alignItems: 'flex-end' }}>
-            <Text style={s.bigNum}>{pts}</Text>
-            <Text style={s.muted}>Strafpunkte</Text>
+            <Text style={s.muted}>KW {kalenderwoche()} · {['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'][new Date().getDay()]}</Text>
           </View>
         </View>
-        <Bar pts={pts} color={c.color} />
 
         {/* Strafpunkte werden nur auf der Übersicht vergeben. */}
-        <Pressable onPress={() => setSheetChild(c.id)} style={s.gradBtn} accessibilityLabel="Aufgabe vergeben">
+        <Pressable onPress={() => openSheet(c.id)} style={s.gradBtn} accessibilityLabel="Aufgabe vergeben">
           <Fill kind="primary" mono={mono} />
           <Text style={s.gradBtnText}>+ Aufgabe vergeben</Text>
         </Pressable>
+
+        <KindKacheln fid={fid} child={c} pts={pts} bis={bis} barPct={barPct(pts)} today={today} s={s} colors={colors} mono={mono} />
 
         {due.map((st) => {
           const choices = regeln.stufen[st]?.aufgaben ?? [];
@@ -334,10 +389,10 @@ export function KinderPlanScreen() {
 
         <View style={s.tile}>
           <View style={s.rowBetween}>
-            <Text style={s.label}>Wochenaufgaben</Text>
-            <Pressable onPress={() => setSheetChild(c.id)} hitSlop={8}><Text style={s.link}>+ zuweisen</Text></Pressable>
+            <Text style={s.label}>Heute</Text>
+            <Pressable onPress={() => openSheet(c.id)} hitSlop={8}><Text style={s.link}>+ Aufgabe</Text></Pressable>
           </View>
-          {aufgaben.length === 0 ? <Text style={s.muted}>Keine Wochenaufgaben zugewiesen.</Text> : aufgaben.map((a) => {
+          {aufgaben.map((a) => {
             const cur = aktuellerTag(a, c.id, woche, wk, today);
             if (!cur) return null;
             const m = woche.marks[markKey(c.id, a.id, cur.date)] ?? '';
@@ -375,6 +430,8 @@ export function KinderPlanScreen() {
             );
           })}
           {aufgaben.length > 0 ? <Text style={s.muted}>✗ = vergessen, trägt automatisch +{regeln.vergessenPts} Strafpunkte ein.</Text> : null}
+          <KindAufgaben fid={fid} child={c} tasks={tasksByChild[c.id] ?? []} alleTasks={tasksByChild} hideIds={strafTaskIds}
+            today={today} s={s} colors={colors} mono={mono} />
         </View>
 
         <View style={s.tile}>
@@ -542,15 +599,29 @@ export function KinderPlanScreen() {
   const [sheetMode, setSheetMode] = useState<'woche' | 'einmalig' | 'straf'>('woche');
   const [sheetPick, setSheetPick] = useState<string | null>(null);
   const [sheetText, setSheetText] = useState('');
+  const [sheetFor, setSheetFor] = useState<string[]>([]);
+  const [sheetRepeat, setSheetRepeat] = useState<RepeatInterval | null>(null);
   const sheetKid = children.find((c) => c.id === sheetChild);
-  const closeSheet = () => { setSheetChild(null); setSheetPick(null); setSheetText(''); };
+  const closeSheet = () => { setSheetChild(null); setSheetPick(null); setSheetText(''); setSheetRepeat(null); };
+  const openSheet = (childId: string) => { setSheetFor([childId]); setSheetChild(childId); };
+
+  /** Einmalige Aufgabe an ein Kind oder – bei mehreren – als Gruppenaufgabe (gemeinsame groupId, TE-111). */
+  const schickeEinmalig = (title: string) => {
+    const targets = children.map((c) => c.id).filter((id) => sheetFor.includes(id));
+    const groupId = targets.length > 1 ? newId() : null;
+    run(Promise.all(targets.map((id) => addTask(fid, id, {
+      title, done: false, date: today, createdAt: new Date().toISOString(),
+      ...(groupId ? { groupId, groupChildren: targets as ChildTask["groupChildren"] } : {}),
+      ...(sheetRepeat ? { repeat: sheetRepeat } : {}),
+    }))));
+  };
 
   const sheetSubmit = () => {
     if (!sheetKid) return;
     if (sheetMode === 'woche') {
       // Häkchen werden sofort gespeichert, hier nur schließen.
-    } else if (sheetMode === 'einmalig' && sheetText.trim()) {
-      run(addTask(fid, sheetKid.id, { title: sheetText.trim(), done: false, date: today, createdAt: new Date().toISOString() }));
+    } else if (sheetMode === 'einmalig' && sheetText.trim() && sheetFor.length > 0) {
+      schickeEinmalig(sheetText.trim());
     } else if (sheetMode === 'straf' && sheetPick) {
       const [stufe, label] = [Number(sheetPick.split('|')[0]), sheetPick.split('|').slice(1).join('|')];
       vergebeStrafaufgabe(sheetKid.id, label, stufe);
@@ -560,7 +631,7 @@ export function KinderPlanScreen() {
 
   const sheetLabel = !sheetKid ? '' : sheetMode === 'woche'
     ? 'Fertig'
-    : sheetMode === 'einmalig' ? `An ${sheetKid.name} schicken`
+    : sheetMode === 'einmalig' ? `An ${children.filter((c) => sheetFor.includes(c.id)).map((c) => c.name).join(' und ') || '…'} schicken`
     : (sheetPick ? `${sheetPick.split('|').slice(1).join('|')} zuweisen` : 'Strafaufgabe wählen');
 
   const renderSheet = () => (
@@ -569,7 +640,7 @@ export function KinderPlanScreen() {
       <View style={s.sheet}>
         <View style={s.handle} />
         <View style={s.rowBetween}>
-          <Text style={s.h2}>Aufgabe für {sheetKid?.name}</Text>
+          <Text style={s.h2}>{sheetMode === 'einmalig' ? 'Aufgabe vergeben' : `Aufgabe für ${sheetKid?.name}`}</Text>
           <Pressable onPress={closeSheet} style={s.closeBtn} accessibilityLabel="Schließen"><Ionicons name="close" size={20} color={colors.textMuted} /></Pressable>
         </View>
         <View style={s.segment}>
@@ -598,9 +669,31 @@ export function KinderPlanScreen() {
             );
           }) : sheetMode === 'einmalig' ? (
             <View style={{ gap: 8, paddingVertical: 8 }}>
+              <Text style={s.label}>Was?</Text>
               <TextInput value={sheetText} onChangeText={setSheetText} placeholder="z. B. Hausaufgaben zeigen" placeholderTextColor={colors.placeholder}
                 style={s.input} onSubmitEditing={sheetSubmit} autoFocus />
-              <Text style={s.muted}>Landet als normale Aufgabe in der Kinder-App.</Text>
+              <Text style={s.label}>Für wen? <Text style={[s.muted, { textTransform: 'none', letterSpacing: 0 }]}>mehrere = Gruppenaufgabe</Text></Text>
+              <View style={s.chips}>
+                {children.map((c) => {
+                  const on = sheetFor.includes(c.id);
+                  return (
+                    <Pressable key={c.id} onPress={() => setSheetFor((p) => (on ? p.filter((x) => x !== c.id) : [...p, c.id]))}
+                      style={[s.kidChip, on && s.chipOn]} accessibilityLabel={c.name} accessibilityState={{ selected: on }}>
+                      <View style={!on && { opacity: 0.4 }}><ChildAvatar child={c} size={40} /></View>
+                    </Pressable>
+                  );
+                })}
+              </View>
+              <Text style={s.label}>Wiederholen</Text>
+              <View style={s.segment}>
+                {([null, 'daily', 'weekly', 'monthly'] as (RepeatInterval | null)[]).map((r) => (
+                  <Pressable key={r ?? 'none'} onPress={() => setSheetRepeat(r)} style={s.segItem} accessibilityState={{ selected: sheetRepeat === r }}>
+                    {sheetRepeat === r ? <Fill kind="primary" mono={mono} /> : null}
+                    <Text style={[s.segText, sheetRepeat === r && { color: '#FFFFFF' }]}>{repeatLabel(r)}</Text>
+                  </Pressable>
+                ))}
+              </View>
+              <Text style={s.muted}>Landet in der Kinder-App. Push/Mail an alle über die Glocke auf der Übersicht.</Text>
             </View>
           ) : regeln.stufen.map((st, i) => (
             <View key={i} style={{ gap: 6, paddingVertical: 8 }}>
@@ -642,7 +735,7 @@ export function KinderPlanScreen() {
     { key: 'uebersicht', label: 'Übersicht', icon: 'view-dashboard', iconOff: 'view-dashboard-outline', colors: ['#0A5CFF', '#7B61FF'] },
     ...children.map((c) => {
       const i = kidInfo(c);
-      return { key: c.id, label: c.name, child: c, colors: [c.color, '#7B61FF'] as [string, string], badge: i.due.length + i.offen.length };
+      return { key: c.id, label: c.name, child: c, colors: [c.color, '#7B61FF'] as [string, string], badge: i.due.length + i.offen.length + i.zuPruefen };
     }),
     { key: 'regeln', label: 'Regeln', icon: 'cog', iconOff: 'cog-outline', colors: ['#FF9F0A', '#FF375F'] },
   ];
@@ -695,6 +788,8 @@ export function KinderPlanScreen() {
   );
 }
 
+export type KPStyles = ReturnType<typeof makeStyles>;
+
 function makeStyles(c: ThemeColors) {
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: c.background },
@@ -734,6 +829,15 @@ function makeStyles(c: ThemeColors) {
     chip: { minHeight: 34, paddingHorizontal: 12, borderRadius: 17, backgroundColor: c.surfaceHigh, borderWidth: 1.5, borderColor: c.border, justifyContent: 'center' },
     chipDanger: { borderColor: c.danger },
     chipOn: { borderColor: c.accentNeon },
+    bellBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: c.surface, alignItems: 'center', justifyContent: 'center' },
+    heuteAva: { borderWidth: 2, borderRadius: 22, padding: 2 },
+    heuteBadge: { position: 'absolute', right: -2, bottom: -2, width: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: c.surface },
+    okBtnSmall: { height: 32, borderRadius: 10, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', marginTop: 2 },
+    outlineBtn: { height: 36, borderRadius: 12, borderWidth: 1.5, borderColor: c.border, alignItems: 'center', justifyContent: 'center' },
+    badgeYellow: { fontSize: 11, fontWeight: '800', color: '#1C1C1E', backgroundColor: '#FFD60A', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2, overflow: 'hidden' },
+    doneText: { color: c.textMuted, textDecorationLine: 'line-through' },
+    ownRow: { color: c.accentNeon, fontWeight: '800' },
+    yellowCard: { width: 22, height: 30, borderRadius: 4, backgroundColor: '#FFD60A', transform: [{ rotate: '-8deg' }], marginVertical: 2, marginLeft: 4 },
     kidChip: { padding: 3, borderRadius: 20, borderWidth: 2, borderColor: 'transparent' },
     rowLabel: { color: c.textMuted, fontSize: 12, fontWeight: '600', width: 40 },
     dayRow: { flex: 1, flexDirection: 'row', gap: 4 },
