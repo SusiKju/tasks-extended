@@ -150,21 +150,39 @@ export default function WandScreen({ onExit }: Props) {
 
     return (
       <View key={c.id} style={[s.col, paged && { flexGrow: 0, flexShrink: 0, flexBasis: 'auto' }, alarm && s.colAlert]}>
-        <View style={s.rowCenter}>
-          <ChildAvatar child={c} size={44} />
-          <Text style={[s.name, { flex: 1 }]} numberOfLines={1}>{c.name}</Text>
-        </View>
-        {/* Punkte in eigener Zeile neben dem Balken, damit der Name auch in schmalen Spalten ganz bleibt. */}
-        <View style={s.rowCenter}>
-          <Text style={s.bigNum} accessibilityLabel={`${pts} Strafpunkte`}>{pts}</Text>
-          <View style={[s.bar, { flex: 1 }]}><View style={[s.barFill, { width: `${Math.round(barPct(pts) * 100)}%`, backgroundColor: c.color }]} /></View>
-        </View>
-        <Text style={[s.muted, bis === 1 && { color: colors.warning, fontWeight: '800' }]}>
-          {bis === null ? 'Höchste Stufe erreicht' : `Noch ${bis} bis zur Strafaufgabe`}
-        </Text>
+        {paged ? (
+          // Handy quer: Name, Punkte, Balken und Hinweis in einer Zeile.
+          <View style={s.rowCenter}>
+            <ChildAvatar child={c} size={36} />
+            <Text style={s.name} numberOfLines={1}>{c.name}</Text>
+            <Text style={[s.bigNum, { fontSize: 32, lineHeight: 36 }]} accessibilityLabel={`${pts} Strafpunkte`}>{pts}</Text>
+            <View style={[s.bar, { flex: 1 }]}><View style={[s.barFill, { width: `${Math.round(barPct(pts) * 100)}%`, backgroundColor: c.color }]} /></View>
+            <Text style={[s.muted, bis === 1 && { color: colors.warning, fontWeight: '800' }]} numberOfLines={1}>
+              {bis === null ? 'Höchste Stufe' : `Noch ${bis} bis Strafaufgabe`}
+            </Text>
+          </View>
+        ) : (
+          <>
+            <View style={s.rowCenter}>
+              <ChildAvatar child={c} size={44} />
+              <Text style={[s.name, { flex: 1 }]} numberOfLines={1}>{c.name}</Text>
+            </View>
+            {/* Punkte in eigener Zeile neben dem Balken, damit der Name auch in schmalen Spalten ganz bleibt. */}
+            <View style={s.rowCenter}>
+              <Text style={s.bigNum} accessibilityLabel={`${pts} Strafpunkte`}>{pts}</Text>
+              <View style={[s.bar, { flex: 1 }]}><View style={[s.barFill, { width: `${Math.round(barPct(pts) * 100)}%`, backgroundColor: c.color }]} /></View>
+            </View>
+            <Text style={[s.muted, bis === 1 && { color: colors.warning, fontWeight: '800' }]}>
+              {bis === null ? 'Höchste Stufe erreicht' : `Noch ${bis} bis zur Strafaufgabe`}
+            </Text>
+          </>
+        )}
+
+        {/* Handy quer: Bereiche nebeneinander statt untereinander, damit kaum gescrollt werden muss. */}
+        <View style={paged ? s.sectionsRow : s.sectionsCol}>
 
         {due.length > 0 || offen.length > 0 ? (
-          <View style={s.section}>
+          <View style={[s.section, paged && s.sectionCell]}>
             <Text style={[s.label, { color: colors.danger }]}>Strafaufgaben</Text>
             {offen.map((a) => <Text key={a.id} style={s.item}>• {a.label}</Text>)}
             {due.map((st) => <Text key={st} style={s.item}>• Stufe {st + 1}: kommt noch</Text>)}
@@ -172,7 +190,7 @@ export default function WandScreen({ onExit }: Props) {
         ) : null}
 
         {lessons.length > 0 ? (
-          <View style={s.section}>
+          <View style={[s.section, paged && s.sectionCell]}>
             <Text style={s.label}>Stundenplan heute</Text>
             {lessons.map(({ p, e }) => {
               const ausfall = isAusfallstunde(e);
@@ -192,7 +210,7 @@ export default function WandScreen({ onExit }: Props) {
           </View>
         ) : null}
 
-        <View style={s.section}>
+        <View style={[s.section, paged && s.sectionCell]}>
           <Text style={s.label}>Wochenaufgaben</Text>
           {wochen.length === 0 ? <Text style={s.muted}>keine</Text> : wochen.map(({ a, cur }) => {
             const m = woche.marks[markKey(c.id, a.id, cur.date)] ?? '';
@@ -211,7 +229,7 @@ export default function WandScreen({ onExit }: Props) {
           })}
         </View>
 
-        <View style={s.section}>
+        <View style={[s.section, paged && s.sectionCell]}>
           <Text style={s.label}>Aufgaben</Text>
           {tasks.length === 0 ? <Text style={s.muted}>keine</Text> : tasks.map((t) => (
             <View key={t.id} style={s.rowCenter}>
@@ -219,6 +237,7 @@ export default function WandScreen({ onExit }: Props) {
               <Text style={[s.item, { flex: 1 }, t.done && s.done]} numberOfLines={2}>{t.title}</Text>
             </View>
           ))}
+        </View>
         </View>
       </View>
     );
@@ -310,6 +329,9 @@ function makeStyles(c: ThemeColors) {
     bigNum: { color: c.text, fontSize: 44, fontWeight: '800', lineHeight: 48 },
     bar: { height: 10, borderRadius: 5, backgroundColor: c.surfaceHigh, overflow: 'hidden' },
     barFill: { height: '100%', borderRadius: 5 },
+    sectionsCol: { gap: 10 },
+    sectionsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 16 },
+    sectionCell: { flex: 1, minWidth: 200 },
     section: { gap: 6, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.border, paddingTop: 10 },
     label: { color: c.textMuted, fontSize: 14, fontWeight: '700', letterSpacing: 0.6, textTransform: 'uppercase' },
     item: { color: c.text, fontSize: 19, fontWeight: '600' },
