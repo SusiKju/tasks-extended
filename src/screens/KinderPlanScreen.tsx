@@ -8,7 +8,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, Pressable, TextInput, Modal, Switch,
+  View, Text, StyleSheet, ScrollView, Pressable, TextInput, Modal, Switch, Image,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -30,6 +30,7 @@ import {
   KinderRegeln, KinderWoche, Strafaufgabe, Mark, DEFAULT_REGELN, TAG_KURZ, aufgabenVon, aktuellerTag,
   weekKey, weekDays, kalenderwoche, isoDate, markKey, punkte, faelligeStufen, bisNaechsteStufe, quote, rotiere,
 } from '../utils/kinderPlanLogic';
+import { WandFoto, subscribeWandFotos, pickAndUploadWandFotos, deleteWandFoto } from '../services/wandFotos';
 
 const DAY_LABELS = TAG_KURZ;
 const tageText = (tage: number[]) => (tage.length === 7 ? 'täglich' : tage.map((t) => TAG_KURZ[t]).join(', '));
@@ -65,6 +66,9 @@ export function KinderPlanScreen() {
   }, [fid]);
   useEffect(() => (fid ? subscribeWoche(fid, wk, setWoche) : undefined), [fid, wk]);
   useEffect(() => (fid ? subscribeStrafaufgaben(fid, setStraf) : undefined), [fid]);
+  const [fotos, setFotos] = useState<WandFoto[]>([]);
+  const [uploading, setUploading] = useState(false);
+  useEffect(() => (fid ? subscribeWandFotos(fid, setFotos) : undefined), [fid]);
   // Aufgaben der Kinder-App (offen + heute erledigt), wie im alten Kinder-Tab.
   useEffect(() => {
     if (!fid || children.length === 0) return;
@@ -591,6 +595,35 @@ export function KinderPlanScreen() {
           <Switch value={regeln.rotieren} onValueChange={(v) => updateRegeln((r) => ({ ...r, rotieren: v, letzteRotation: wk }))} />
         </View>
       </View>
+
+      {/* TE-101: Familienfotos für den Wand-Modus (?wall=1), dort per Tipp auf „Fotos“. */}
+      <View style={s.tile}>
+        <Text style={s.label}>Fotos für die Wand</Text>
+        <View style={s.chips}>
+          {fotos.map((f) => (
+            <View key={f.id}>
+              <Image source={{ uri: f.data }} style={s.fotoThumb} />
+              <Pressable onPress={() => confirmDelete('Foto entfernen?', () => run(deleteWandFoto(fid, f.id)))} style={s.fotoDel} hitSlop={6} accessibilityLabel="Foto entfernen">
+                <Ionicons name="close" size={14} color="#FFFFFF" />
+              </Pressable>
+            </View>
+          ))}
+        </View>
+        <Pressable disabled={uploading} style={s.outlineBtn} accessibilityLabel="Fotos hinzufügen" onPress={async () => {
+          setUploading(true);
+          try {
+            const r = await pickAndUploadWandFotos(fid, newId);
+            if (r.tooBig) info('Zu groß', `${r.tooBig} Foto${r.tooBig > 1 ? 's' : ''} konnte${r.tooBig > 1 ? 'n' : ''} nicht gespeichert werden.`);
+          } catch (e) {
+            info('Fehler', String(e));
+          } finally {
+            setUploading(false);
+          }
+        }}>
+          <Text style={s.link}>{uploading ? 'Lädt hoch …' : '+ Fotos hinzufügen'}</Text>
+        </Pressable>
+        <Text style={s.muted}>Im Wand-Modus erscheinen sie nach Tipp auf „Fotos“, neueste zuerst.</Text>
+      </View>
     </>
   );
 
@@ -833,6 +866,8 @@ function makeStyles(c: ThemeColors) {
     heuteAva: { borderWidth: 2, borderRadius: 22, padding: 2 },
     heuteBadge: { position: 'absolute', right: -2, bottom: -2, width: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: c.surface },
     okBtnSmall: { height: 32, borderRadius: 10, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', marginTop: 2 },
+    fotoThumb: { width: 72, height: 72, borderRadius: 10, backgroundColor: c.surfaceHigh },
+    fotoDel: { position: 'absolute', top: 3, right: 3, width: 20, height: 20, borderRadius: 10, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center' },
     outlineBtn: { height: 36, borderRadius: 12, borderWidth: 1.5, borderColor: c.border, alignItems: 'center', justifyContent: 'center' },
     badgeYellow: { fontSize: 11, fontWeight: '800', color: '#1C1C1E', backgroundColor: '#FFD60A', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2, overflow: 'hidden' },
     doneText: { color: c.textMuted, textDecorationLine: 'line-through' },

@@ -7,10 +7,11 @@
  * Immer im Theme „Bento Dark“, unabhängig von der Einstellung auf dem Gerät.
  * Stundenplan von heute je Kind; an Ferien-/Feiertagen und am Wochenende statt-
  * dessen ein Hinweis im Kopf (schulfreiGrund, Sachsen).
+ * Familienfotos (TE-101): Tipp auf „Fotos“ zeigt sie im Vollbild, Tipp zurück.
  */
 
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Modal, TextInput } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, Modal, TextInput, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { THEMES, ThemeColors } from '../utils/theme';
 import { useFamily } from '../hooks/useFamily';
@@ -23,6 +24,7 @@ import {
   subjectColor, subscribeToTimetable, subscribeToPeriodTimes,
 } from '../services/timetable';
 import { schulfreiGrund } from '../utils/schulferien';
+import { WandFoto, subscribeWandFotos } from '../services/wandFotos';
 import { subscribeRegeln, subscribeWoche, subscribeStrafaufgaben } from '../services/kinderPlan';
 import {
   KinderRegeln, KinderWoche, Strafaufgabe, DEFAULT_REGELN, TAG_KURZ, aufgabenVon, aktuellerTag,
@@ -89,6 +91,19 @@ export default function WandScreen({ onExit }: Props) {
     : dayIdx < 0 ? 'Wochenende – keine Schule' : null;
   const nowHM = now.toTimeString().slice(0, 5);
   const biweeklyActive = isBiweeklyActiveWeek(now);
+
+  // Fotos: Diashow nur nach Tipp, wechselt alle 8 s und kehrt nach 5 min von selbst zur Übersicht zurück.
+  const [fotos, setFotos] = useState<WandFoto[]>([]);
+  const [fotoIdx, setFotoIdx] = useState<number | null>(null);
+  useEffect(() => (fid ? subscribeWandFotos(fid, setFotos) : undefined), [fid]);
+  useEffect(() => {
+    if (fotoIdx === null) return;
+    const next = setInterval(() => setFotoIdx((i) => (i === null ? null : (i + 1) % Math.max(fotos.length, 1))), 8_000);
+    const back = setTimeout(() => setFotoIdx(null), 5 * 60_000);
+    return () => { clearInterval(next); clearTimeout(back); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fotoIdx === null, fotos.length]);
+  const foto = fotoIdx !== null ? fotos[fotoIdx % Math.max(fotos.length, 1)] : undefined;
 
   const [pinOpen, setPinOpen] = useState(false);
   const [pin, setPin] = useState('');
@@ -210,11 +225,24 @@ export default function WandScreen({ onExit }: Props) {
             <Text style={s.freiText}>{schulfreiText}</Text>
           </View>
         ) : null}
+        {fotos.length > 0 ? (
+          <Pressable onPress={() => setFotoIdx(0)} style={s.fotoBtn} accessibilityLabel="Fotos ansehen">
+            <Ionicons name="images-outline" size={22} color={colors.text} />
+            <Text style={s.item}>Fotos</Text>
+          </Pressable>
+        ) : null}
         <Text style={s.clock}>{now.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}</Text>
       </View>
       <ScrollView contentContainerStyle={s.grid}>
         {children.length === 0 ? <Text style={s.muted}>Noch keine Kinder in der Familie angelegt.</Text> : children.map(renderKind)}
       </ScrollView>
+
+      {foto ? (
+        <Pressable onPress={() => setFotoIdx(null)} style={s.fotoView} accessibilityLabel="Zurück zur Übersicht">
+          <Image source={{ uri: foto.data }} style={StyleSheet.absoluteFill} resizeMode="contain" />
+          <Text style={s.fotoHint}>{(fotoIdx! % fotos.length) + 1} / {fotos.length} · Tippen für Übersicht</Text>
+        </Pressable>
+      ) : null}
 
       <Pressable onPress={() => setPinOpen(true)} style={s.exitBtn} accessibilityLabel="Wand-Modus verlassen">
         <Ionicons name="lock-closed-outline" size={18} color={colors.textMuted} />
@@ -261,6 +289,9 @@ function makeStyles(c: ThemeColors) {
     lessonNow: { backgroundColor: c.surfaceHigh, borderRadius: 10, marginHorizontal: -6, paddingHorizontal: 6, paddingVertical: 2 },
     freiBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: c.warning, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 8 },
     freiText: { color: '#000', fontSize: 20, fontWeight: '800' },
+    fotoBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: c.surfaceHigh, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 10 },
+    fotoView: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#000' },
+    fotoHint: { position: 'absolute', bottom: 16, alignSelf: 'center', color: 'rgba(255,255,255,0.6)', fontSize: 15 },
     exitBtn: { position: 'absolute', right: 12, bottom: 12, padding: 10, opacity: 0.4 },
     modalBg: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center' },
     modal: { backgroundColor: c.surface, borderRadius: 18, padding: 20, gap: 12, width: 300 },
