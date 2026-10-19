@@ -4,12 +4,13 @@
  * Eine Spalte pro Kind mit Strafpunkten, Strafaufgaben, Wochenaufgaben und
  * Aufgaben aus der Kinder-App. Keine Buttons außer dem PIN-Ausstieg.
  * Daten live per onSnapshot, gleiche Quellen wie „Kinder 2“ (KinderPlanScreen).
+ * Immer im Theme „Bento Dark“, unabhängig von der Einstellung auf dem Gerät.
  */
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, Modal, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useTheme, ThemeColors } from '../utils/theme';
+import { THEMES, ThemeColors } from '../utils/theme';
 import { useFamily } from '../hooks/useFamily';
 import { useStore } from '../store';
 import ChildAvatar from '../components/ChildAvatar';
@@ -21,6 +22,9 @@ import {
   weekKey, kalenderwoche, isoDate, markKey, punkte, faelligeStufen, bisNaechsteStufe,
 } from '../utils/kinderPlanLogic';
 
+const colors = THEMES['bento-night'].colors;
+const s = makeStyles(colors);
+
 const WOCHENTAG = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
 
 interface Props {
@@ -28,8 +32,6 @@ interface Props {
 }
 
 export default function WandScreen({ onExit }: Props) {
-  const { colors, mono } = useTheme();
-  const s = useMemo(() => makeStyles(colors), [colors]);
   const { familyId, children } = useFamily();
   const fid = familyId ?? '';
   const parentPin = useStore((st) => st.settings.parentPin ?? '1234');
@@ -97,7 +99,7 @@ export default function WandScreen({ onExit }: Props) {
             <Text style={s.muted}>Strafpunkte</Text>
           </View>
         </View>
-        <View style={s.bar}><View style={[s.barFill, { width: `${Math.round(barPct(pts) * 100)}%`, backgroundColor: mono(c.color) }]} /></View>
+        <View style={s.bar}><View style={[s.barFill, { width: `${Math.round(barPct(pts) * 100)}%`, backgroundColor: c.color }]} /></View>
         <Text style={[s.muted, bis === 1 && { color: colors.warning, fontWeight: '800' }]}>
           {bis === null ? 'Höchste Stufe erreicht' : `Noch ${bis} bis zur Strafaufgabe`}
         </Text>
@@ -179,8 +181,9 @@ function makeStyles(c: ThemeColors) {
     header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 24, paddingTop: 20, paddingBottom: 8 },
     title: { color: c.text, fontSize: 24, fontWeight: '800' },
     clock: { color: c.text, fontSize: 40, fontWeight: '800' },
-    grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 16, padding: 16 },
-    col: { flexBasis: 300, flexGrow: 1, backgroundColor: c.surface, borderRadius: 20, padding: 18, gap: 10, borderWidth: 2, borderColor: 'transparent' },
+    // Alle Kinder nebeneinander in einer Reihe (Display im Querformat).
+    grid: { flexDirection: 'row', alignItems: 'flex-start', gap: 16, padding: 16 },
+    col: { flex: 1, minWidth: 0, backgroundColor: c.surface, borderRadius: 20, padding: 18, gap: 10, borderWidth: 2, borderColor: 'transparent' },
     colAlert: { borderColor: c.danger },
     rowCenter: { flexDirection: 'row', alignItems: 'center', gap: 10 },
     name: { color: c.text, fontSize: 28, fontWeight: '800' },
