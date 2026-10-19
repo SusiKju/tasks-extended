@@ -3,14 +3,19 @@ import { Redirect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { View, ActivityIndicator, Platform } from 'react-native';
 import KindScreen from '../src/screens/KindScreen';
+import WandScreen from '../src/screens/WandScreen';
+
+const WAND_KEY = 'wand_mode';
 
 export default function Index() {
   const [loading, setLoading] = useState(true);
   const [isChildMode, setIsChildMode] = useState(false);
+  const [isWandMode, setIsWandMode] = useState(false);
 
   const check = useCallback(() => {
-    AsyncStorage.getItem('kinder_child_id').then((id) => {
+    AsyncStorage.multiGet(['kinder_child_id', WAND_KEY]).then(([[, id], [, wand]]) => {
       setIsChildMode(!!id);
+      setIsWandMode(wand === '1');
       setLoading(false);
     });
   }, []);
@@ -27,6 +32,12 @@ export default function Index() {
       const params = new URLSearchParams(window.location.search);
       const childParam = params.get('child');
       const familyParam = params.get('family');
+      // ?wall=1: Wand-Modus fürs Display. Bleibt gespeichert, damit ein
+      // Neustart des Kiosk-Browsers ohne Parameter wieder dort landet.
+      if (params.get('wall') === '1') {
+        AsyncStorage.setItem(WAND_KEY, '1').then(check);
+        return;
+      }
       if (childParam) {
         const writes = [AsyncStorage.setItem('kinder_child_id', childParam)];
         if (familyParam) writes.push(AsyncStorage.setItem('kinder_family_id', familyParam));
@@ -42,6 +53,16 @@ export default function Index() {
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
         <ActivityIndicator />
       </View>
+    );
+  }
+
+  if (isWandMode) {
+    return (
+      <WandScreen onExit={() => {
+        // Parameter aus der URL nehmen, sonst landet ein Reload wieder im Wand-Modus.
+        if (Platform.OS === 'web' && typeof window !== 'undefined') window.history.replaceState(null, '', window.location.pathname);
+        AsyncStorage.removeItem(WAND_KEY).then(check);
+      }} />
     );
   }
 
