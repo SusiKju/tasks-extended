@@ -26,6 +26,7 @@ import {
 import { setDoc, updateDoc, deleteDoc } from './firestoreWrites';
 import { addDays, addMonths, addWeeks, format, parseISO } from 'date-fns';
 import { db } from './firebase';
+import { localDateStr } from '../utils/dateFormat';
 
 /** @deprecated Wird durch dynamische Kinder aus Firestore ersetzt (Task 5).
  *  Bleibt temporär für die Migration und Legacy-Code. */
@@ -225,7 +226,9 @@ export async function getInboxTasksForChild(familyId: string, childId: string, d
  *  Aufgaben mit späterem Datum (Folge-Instanzen wiederkehrender Aufgaben, TE-57)
  *  bleiben bis zu ihrem Termin unsichtbar. */
 function isInbox(t: ChildTask, date: string): boolean {
-  return t.done ? t.date === date : t.date <= date;
+  // Heute abgehakte überfällige Aufgaben bleiben sichtbar, damit man sie zurückholen kann.
+  if (t.done) return t.date === date || (!!t.completedAt && localDateStr(t.completedAt) === date);
+  return t.date <= date;
 }
 
 /**

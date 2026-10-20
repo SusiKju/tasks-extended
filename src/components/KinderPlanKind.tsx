@@ -290,9 +290,10 @@ export function KindAufgaben({ fid, child, tasks, alleTasks, hideIds, today, s, 
               </View>
               {zuPruefen ? <Text style={s.badgeYellow}>von {child.name} abgehakt</Text> : (
                 <Pressable onPress={() => run(toggleTask(fid, child.id, t.id, !t.done, { actor: 'parent', title: t.title }))}
-                  style={[s.markBtn, t.done && s.markBtnOn]} accessibilityLabel={`${t.title} ${t.done ? 'wieder öffnen' : 'erledigt'}`} accessibilityState={{ checked: t.done }}>
-                  {t.done ? <Fill kind="ok" mono={mono} /> : null}
-                  <Ionicons name="checkmark" size={22} color={t.done ? '#FFFFFF' : colors.success} />
+                  style={[s.markBtn, t.done ? s.markBtnOn : { borderWidth: 2, borderColor: colors.border }]}
+                  accessibilityLabel={`${t.title} ${t.done ? 'wieder öffnen' : 'erledigt'}`} accessibilityState={{ checked: t.done }}>
+                  {/* Offen = leeres Kästchen, erledigt = grün gefüllt mit Haken; erneut tippen holt zurück. */}
+                  {t.done ? <><Fill kind="ok" mono={mono} /><Ionicons name="checkmark" size={22} color="#FFFFFF" /></> : null}
                 </Pressable>
               )}
             </View>
@@ -311,7 +312,7 @@ export function KindAufgaben({ fid, child, tasks, alleTasks, hideIds, today, s, 
         );
       })}
       <View style={[s.rowBetween, s.divider]}>
-        <Text style={s.muted}>{liste.length ? 'Lange drücken = bearbeiten / löschen' : 'Keine weiteren Aufgaben in der Kinder-App.'}</Text>
+        <Text style={s.muted}>{liste.length ? 'Kästchen = abhaken / zurückholen · lange drücken = bearbeiten' : 'Keine weiteren Aufgaben in der Kinder-App.'}</Text>
         <Pressable onPress={openVerlauf} hitSlop={8} accessibilityLabel={`Verlauf von ${child.name}`}><Text style={s.link}>Verlauf ›</Text></Pressable>
       </View>
 
