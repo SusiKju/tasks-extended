@@ -884,7 +884,7 @@ export function DashboardScreen() {
             <View key={`kr-${childId}`} style={[styles.dezentRow, styles.rowDivider]}>
               <ChildAvatar child={childOf(childId)} size={36} />
               {/* TE-56: Name vor den Aufgaben (flach, kein Extra-Zeile) – das Emoji allein verrät nicht, wer gemeint ist. */}
-              <Pressable style={{ flex: 1, flexDirection: 'row', gap: 8 }} onPress={() => router.push('/(tabs)/kids' as any)}>
+              <Pressable style={{ flex: 1, flexDirection: 'row', gap: 8 }} onPress={() => router.push('/(tabs)/kinder-plan' as any)}>
                 <Text style={{ fontSize: 13.5, fontWeight: '700', color: colors.text }} numberOfLines={1}>{childName(childId)}</Text>
                 <View style={{ flex: 1 }}>
                   {open.map((t) => (
@@ -1104,7 +1104,7 @@ export function DashboardScreen() {
           <SectionLabel
             title="Taschengeld offen"
             icon="wallet-outline"
-            onMore={() => router.push('/(tabs)/kids' as any)}
+            onMore={() => router.push('/(tabs)/kinder-plan' as any)}
             colors={colors}
           />
           {/* TE-18: grüner Akzentbalken + Betrags-Pille, damit Geld nicht wie eine rote Aufgabenzeile aussieht. */}

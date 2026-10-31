@@ -256,7 +256,12 @@ export function KindAufgaben({ fid, child, tasks, alleTasks, hideIds, today, s, 
     if (!edit) return;
     const title = edit.title.trim();
     if (!title) { setEdit(null); return; }
-    run(updateTask(fid, child.id, edit.task.id, { title, repeat: edit.repeat }, { actor: 'parent', title }));
+    // Gruppenaufgabe: alle Kopien mit gleicher groupId anpassen (wie im alten Tab).
+    const gid = edit.task.groupId;
+    const targets = gid
+      ? Object.entries(alleTasks).flatMap(([cid, ts]) => ts.filter((x) => x.groupId === gid).map((x) => ({ cid, id: x.id })))
+      : [{ cid: child.id, id: edit.task.id }];
+    run(Promise.all(targets.map((x) => updateTask(fid, x.cid, x.id, { title, repeat: edit.repeat }, { actor: 'parent', title }))));
     setEdit(null);
   };
 

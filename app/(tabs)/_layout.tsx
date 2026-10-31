@@ -121,22 +121,19 @@ function TabsLayoutInner() {
           href: null,
         }}
       />
+      {/* Alter Kinder-Tab ausgeblendet (Version 2.85.0) – abgelöst durch
+          kinder-plan. Route bleibt vorerst erreichbar; komplett entfernen,
+          sobald sich der neue Tab bewährt hat. */}
       <Tabs.Screen
         name="kids"
         options={{
-          title: 'Kinder',
-          href: hrefFor('kids'),
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="people-outline" size={size} color={color} />
-          ),
+          href: null,
         }}
       />
-      {/* Neuer Kinder-Tab (Strafpunkte, Wochenaufgaben, Strafaufgaben) läuft
-          parallel zum alten, bis er reif ist. */}
       <Tabs.Screen
         name="kinder-plan"
         options={{
-          title: 'Kinder 2',
+          title: 'Kinder',
           href: hrefFor('kinderPlan'),
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="ribbon-outline" size={size} color={color} />
