@@ -28,7 +28,7 @@ import {
 } from '../services/kinderPlan';
 import {
   KinderRegeln, KinderWoche, Strafaufgabe, Mark, DEFAULT_REGELN, TAG_KURZ, aufgabenVon, aktuellerTag,
-  weekKey, weekDays, kalenderwoche, isoDate, markKey, punkte, faelligeStufen, bisNaechsteStufe, quote, rotiere,
+  weekKey, weekDays, kalenderwoche, tvKontingent, isoDate, markKey, punkte, faelligeStufen, bisNaechsteStufe, quote, rotiere,
 } from '../utils/kinderPlanLogic';
 import { WandFoto, subscribeWandFotos, pickAndUploadWandFotos, deleteWandFoto } from '../services/wandFotos';
 
@@ -355,7 +355,7 @@ export function KinderPlanScreen() {
           <Text style={s.gradBtnText}>+ Aufgabe vergeben</Text>
         </Pressable>
 
-        <KindKacheln fid={fid} child={c} pts={pts} bis={bis} barPct={barPct(pts)} today={today} s={s} colors={colors} mono={mono} />
+        <KindKacheln fid={fid} child={c} pts={pts} bis={bis} barPct={barPct(pts)} today={today} regeln={regeln} woche={woche} wk={wk} s={s} colors={colors} mono={mono} />
 
         {due.map((st) => {
           const choices = regeln.stufen[st]?.aufgaben ?? [];
@@ -461,11 +461,11 @@ export function KinderPlanScreen() {
   const [newWA, setNewWA] = useState('');
   const [newStufeAufgabe, setNewStufeAufgabe] = useState<Record<number, string>>({});
 
-  const Stepper = ({ value, onChange, min = 0, label }: { value: number; onChange: (n: number) => void; min?: number; label: string }) => (
+  const Stepper = ({ value, onChange, min = 0, step = 1, label }: { value: number; onChange: (n: number) => void; min?: number; step?: number; label: string }) => (
     <View style={s.rowCenter}>
-      <Pressable onPress={() => value > min && onChange(value - 1)} style={s.stepBtn} accessibilityLabel={`${label} verringern`}><Text style={s.stepText}>–</Text></Pressable>
+      <Pressable onPress={() => value - step >= min && onChange(value - step)} style={s.stepBtn} accessibilityLabel={`${label} verringern`}><Text style={s.stepText}>–</Text></Pressable>
       <Text style={[s.alertText, { minWidth: 20, textAlign: 'center', fontSize: 15 }]}>{value}</Text>
-      <Pressable onPress={() => onChange(value + 1)} style={s.stepBtn} accessibilityLabel={`${label} erhöhen`}><Text style={s.stepText}>+</Text></Pressable>
+      <Pressable onPress={() => onChange(value + step)} style={s.stepBtn} accessibilityLabel={`${label} erhöhen`}><Text style={s.stepText}>+</Text></Pressable>
     </View>
   );
 
@@ -480,6 +480,18 @@ export function KinderPlanScreen() {
   const renderRegeln = () => (
     <>
       <Text style={s.sub}>Gilt für alle Kinder. Alles wird nur hier eingestellt.</Text>
+
+      <View style={s.tile}>
+        <Text style={s.label}>Fernsehzeit pro Woche</Text>
+        <Text style={s.muted}>Minuten je Kind. Jeden Montag wieder voll, Reste verfallen.</Text>
+        {children.map((c) => (
+          <View key={c.id} style={[s.rowCenter, s.divider]}>
+            <Text style={[s.body, { flex: 1 }]}>{c.name}</Text>
+            <Stepper value={tvKontingent(regeln, c)} step={10} label={`Fernsehminuten ${c.name}`}
+              onChange={(n) => updateRegeln((r) => ({ ...r, tvMinuten: { ...r.tvMinuten, [c.id]: n } }))} />
+          </View>
+        ))}
+      </View>
 
       <View style={s.tile}>
         <Text style={s.label}>Gründe für Strafpunkte</Text>

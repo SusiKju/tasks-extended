@@ -45,6 +45,8 @@ async function requestWebNotificationPermission(): Promise<void> {
 }
 import { format } from 'date-fns';
 import ChildAvatar from '../components/ChildAvatar';
+import { subscribeRegeln, subscribeWoche } from '../services/kinderPlan';
+import { KinderRegeln, KinderWoche, DEFAULT_REGELN, weekKey, tvKontingent, tvRest, tvText } from '../utils/kinderPlanLogic';
 
 const TODAY = format(new Date(), 'yyyy-MM-dd');
 const STORAGE_KEY = 'kinder_child_id';
@@ -76,6 +78,9 @@ export default function KindScreen({ onExitChildMode }: Props) {
   const [familyChildren, setFamilyChildren] = useState<ChildConfig[]>([]);
   const [tasks, setTasks] = useState<ChildTask[]>([]);
   const [allowanceMonths, setAllowanceMonths] = useState<Record<string, AllowanceMonth>>({});
+  // Fernsehzeit (TE-110): Kontingent aus den Kinderplan-Regeln, Abbuchungen aus dem Wochen-Doc.
+  const [kpRegeln, setKpRegeln] = useState<KinderRegeln>(DEFAULT_REGELN);
+  const [kpWoche, setKpWoche] = useState<KinderWoche>({ punkte: {}, marks: {} });
   const [timetable, setTimetable] = useState<TimetableMap>({});
   const [matches, setMatches] = useState<Match[]>([]);
   const [standings, setStandings] = useState<Standing[]>([]);
@@ -134,7 +139,9 @@ export default function KindScreen({ onExitChildMode }: Props) {
     const unsubTimetable = subscribeToTimetable(familyId, childId, setTimetable);
     const unsubMatches = subscribeToMatches(familyId, childId, setMatches);
     const unsubTable = subscribeToTable(familyId, childId, setStandings);
-    return () => { unsubTasks(); unsubPush(); unsubAllowance(); unsubTimetable(); unsubMatches(); unsubTable(); };
+    const unsubRegeln = subscribeRegeln(familyId, setKpRegeln);
+    const unsubWoche = subscribeWoche(familyId, weekKey(), setKpWoche);
+    return () => { unsubTasks(); unsubPush(); unsubAllowance(); unsubTimetable(); unsubMatches(); unsubTable(); unsubRegeln(); unsubWoche(); };
   }, [childId, familyId]);
 
   // Schatzkiste-Animation auslösen, sobald eine Aufgabe NEU abgehakt wurde (TE-100)
@@ -469,6 +476,22 @@ export default function KindScreen({ onExitChildMode }: Props) {
           </View>
         </View>
       </View>
+
+      {/* Fernsehzeit (TE-110) – nur Anzeige, abgezogen wird im Eltern-Tab. */}
+      {selectedChild && (() => {
+        const max = tvKontingent(kpRegeln, selectedChild);
+        const rest = tvRest(kpRegeln, kpWoche, selectedChild);
+        return (
+          <View style={s.allowanceCard}>
+            <Text style={s.allowanceEmoji}>📺</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={s.allowanceLabel}>Fernsehen diese Woche</Text>
+              <Text style={s.allowanceAmount}>noch {tvText(rest)}</Text>
+              <Text style={s.allowanceHint}>{rest === 0 ? 'Aufgebraucht – ab Montag wieder voll.' : `von ${tvText(max)}`}</Text>
+            </View>
+          </View>
+        );
+      })()}
 
       {/* Taschengeld-Karte (TE-53) – wenn ein Betrag konfiguriert oder korrigiert ist */}
       {(configuredAllowance > 0 || allowanceCorrected) && (

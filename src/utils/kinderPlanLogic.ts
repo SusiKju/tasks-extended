@@ -26,6 +26,8 @@ export interface KinderRegeln {
   rotieren: boolean;
   /** weekKey der letzten automatischen Rotation. */
   letzteRotation: string | null;
+  /** Fernsehzeit pro Woche in Minuten je Kind (childId → Minuten). Fehlt ein Kind → tvKontingent(). */
+  tvMinuten: Record<string, number>;
 }
 
 export interface PunktEintrag {
@@ -37,9 +39,17 @@ export interface PunktEintrag {
   markKey: string | null;
 }
 
+/** Eine Fernseh-Abbuchung. Liegt im Wochen-Doc → jeden Montag volles Kontingent, kein Übertrag. */
+export interface TvEintrag {
+  childId: string;
+  min: number;
+  at: string;
+}
+
 export interface KinderWoche {
   punkte: Record<string, PunktEintrag>;
   marks: Record<string, Mark>;
+  tv?: Record<string, TvEintrag>;
 }
 
 export interface Strafaufgabe {
@@ -81,6 +91,7 @@ export const DEFAULT_REGELN: KinderRegeln = {
   zuteilung: {},
   rotieren: false,
   letzteRotation: null,
+  tvMinuten: {},
 };
 
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -193,4 +204,32 @@ export function normalisiereRegeln(raw: Partial<KinderRegeln> | undefined): Kind
     zuteilung[k] = Array.isArray(v) ? v : v ? [v] : [];
   }
   return { ...r, wochenaufgaben, zuteilung, stufen: [...r.stufen].sort((a, b) => a.min - b.min) };
+}
+
+// ── Fernsehzeit ─────────────────────────────────────────────────────────────
+
+/** Abbuchen-Knöpfe in Minuten. */
+export const TV_SCHRITTE = [10, 20, 30, 90];
+export const TV_STANDARD = 30;
+/** Startwerte, solange unter „Regeln“ nichts eingestellt ist. */
+const TV_NACH_NAME: Record<string, number> = { lenny: 80, emil: 60, hannes: 40 };
+
+export function tvKontingent(regeln: KinderRegeln, child: { id: string; name: string }): number {
+  return regeln.tvMinuten[child.id] ?? TV_NACH_NAME[child.name.trim().toLowerCase()] ?? TV_STANDARD;
+}
+
+export function tvVerbraucht(woche: KinderWoche, childId: string): number {
+  return Object.values(woche.tv ?? {}).filter((e) => e.childId === childId).reduce((s, e) => s + e.min, 0);
+}
+
+/** Restminuten dieser Woche, nie negativ. */
+export function tvRest(regeln: KinderRegeln, woche: KinderWoche, child: { id: string; name: string }): number {
+  return Math.max(0, tvKontingent(regeln, child) - tvVerbraucht(woche, child.id));
+}
+
+/** "90" → "1½ h", "40" → "40 min". */
+export function tvText(min: number): string {
+  if (min < 60) return `${min} min`;
+  const h = Math.floor(min / 60), r = min % 60;
+  return r === 0 ? `${h} h` : r === 30 ? `${h}½ h` : `${h} h ${r} min`;
 }

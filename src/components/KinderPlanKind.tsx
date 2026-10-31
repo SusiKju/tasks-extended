@@ -2,7 +2,7 @@
  * KinderPlanKind.tsx
  * Bausteine der Kind-Seite im Kinderplan-Tab („Kinder 2“), übernommen aus dem
  * alten Kinder-Tab, damit beim Ablösen nichts verloren geht:
- *  - KindKacheln: Strafpunkte, Taschengeld, Fußball (Spiele/Tabelle), Schiedsrichter
+ *  - KindKacheln: Strafpunkte, Fernsehzeit, Taschengeld, Fußball (Spiele/Tabelle), Schiedsrichter
  *  - KindAufgaben: Aufgaben der Kinder-App (bestätigen/ablehnen, bearbeiten, löschen, Verlauf)
  * Belohnungen werden bewusst nicht mehr angeboten.
  */
@@ -24,6 +24,8 @@ import {
   updateTask, deleteTask, getActivityLog,
 } from '../services/kinderTasks';
 import type { KPStyles } from '../screens/KinderPlanScreen';
+import { addTv, deleteTv } from '../services/kinderPlan';
+import { KinderRegeln, KinderWoche, TV_SCHRITTE, tvKontingent, tvRest, tvText } from '../utils/kinderPlanLogic';
 
 // Schiedsrichter-Lehrgang (TE-85): fester Link, wie im alten Kinder-Tab.
 const REFEREE_COURSE_URL = 'https://claude.ai/code/artifact/4146ef89-451a-41f2-bfcc-9b0787895549';
@@ -81,16 +83,19 @@ interface KachelnProps {
   bis: number | null;
   barPct: number;
   today: string;
+  regeln: KinderRegeln;
+  woche: KinderWoche;
+  wk: string;
   s: KPStyles;
   colors: ThemeColors;
   mono: (hex: string) => string;
 }
 
-export function KindKacheln({ fid, child, pts, bis, barPct, today, s, colors, mono }: KachelnProps) {
+export function KindKacheln({ fid, child, pts, bis, barPct, today, regeln, woche, wk, s, colors, mono }: KachelnProps) {
   const [months, setMonths] = useState<Record<string, AllowanceMonth>>({});
   const [matches, setMatches] = useState<Match[]>([]);
   const [table, setTable] = useState<Standing[]>([]);
-  const [open, setOpen] = useState<'geld' | 'fussball' | null>(null);
+  const [open, setOpen] = useState<'geld' | 'fussball' | 'tv' | null>(null);
   const [fussballView, setFussballView] = useState<'spiele' | 'tabelle'>('spiele');
 
   useEffect(() => (fid ? subscribeToAllowanceMonths(fid, child.id, setMonths) : undefined), [fid, child.id]);
@@ -108,6 +113,16 @@ export function KindKacheln({ fid, child, pts, bis, barPct, today, s, colors, mo
   const toggleMonth = (key: string, received: boolean, amount: number) =>
     run(setAllowanceReceived(fid, child.id, key, !received, amount));
 
+  // Fernsehzeit: Kontingent pro Woche, kein Übertrag (Wochen-Doc), kein Minus (Knopf > Rest gesperrt).
+  const tvMax = tvKontingent(regeln, child);
+  const tvLeft = tvRest(regeln, woche, child);
+  const tvLog = Object.entries(woche.tv ?? {}).filter(([, e]) => e.childId === child.id).sort(([, a], [, b]) => b.at.localeCompare(a.at));
+  const abbuchen = (min: number) => {
+    // ponytail: Rest wird lokal geprüft; zwei Eltern gleichzeitig könnten knapp überziehen – Transaktion, falls das je passiert.
+    if (min > tvLeft) return;
+    run(addTv(fid, wk, newId(), { childId: child.id, min, at: new Date().toISOString() }));
+  };
+
   return (
     <>
       <View style={s.grid}>
@@ -116,6 +131,30 @@ export function KindKacheln({ fid, child, pts, bis, barPct, today, s, colors, mo
           <Text style={s.bigNum}>{pts}</Text>
           <View style={s.bar}><View style={[s.barFill, { width: `${Math.round(barPct * 100)}%`, backgroundColor: mono(child.color) }]} /></View>
           <Text style={s.muted}>{bis === null ? 'höchste Stufe erreicht' : `noch ${bis} bis Strafaufgabe`}</Text>
+        </View>
+
+        <View style={[s.tile, { flexBasis: '100%' }]}>
+          <Pressable onPress={() => setOpen('tv')} style={s.rowBetween} accessibilityLabel="Fernsehzeit-Verlauf öffnen">
+            <Text style={s.label}>Fernsehen diese Woche</Text>
+            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+          </Pressable>
+          <View style={s.rowBetween}>
+            <Text style={s.bigNum}>{tvText(tvLeft)}</Text>
+            <Text style={s.muted}>von {tvText(tvMax)} übrig</Text>
+          </View>
+          <View style={s.bar}><View style={[s.barFill, { width: `${tvMax ? Math.round((tvLeft / tvMax) * 100) : 0}%`, backgroundColor: mono(child.color) }]} /></View>
+          <View style={s.rowCenter}>
+            {TV_SCHRITTE.map((m) => {
+              const gesperrt = m > tvLeft;
+              return (
+                <Pressable key={m} onPress={() => abbuchen(m)} disabled={gesperrt} style={[s.outlineBtn, { flex: 1 }, gesperrt && { opacity: 0.35 }]}
+                  accessibilityLabel={`${tvText(m)} Fernsehen abziehen`} accessibilityState={{ disabled: gesperrt }}>
+                  <Text style={s.bold}>−{tvText(m)}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          {tvLeft === 0 ? <Text style={s.muted}>Kontingent aufgebraucht – ab Montag wieder voll.</Text> : null}
         </View>
 
         {allowance > 0 ? (
@@ -159,7 +198,7 @@ export function KindKacheln({ fid, child, pts, bis, barPct, today, s, colors, mo
         <View style={s.sheet}>
           <View style={s.handle} />
           <View style={s.rowBetween}>
-            <Text style={s.h2}>{open === 'geld' ? `Taschengeld · ${child.name}` : `Fußball · ${child.name}`}</Text>
+            <Text style={s.h2}>{open === 'geld' ? `Taschengeld · ${child.name}` : open === 'tv' ? `Fernsehen · ${child.name}` : `Fußball · ${child.name}`}</Text>
             <Pressable onPress={() => setOpen(null)} style={s.closeBtn} accessibilityLabel="Schließen"><Ionicons name="close" size={20} color={colors.textMuted} /></Pressable>
           </View>
           {open === 'fussball' ? (
@@ -173,7 +212,17 @@ export function KindKacheln({ fid, child, pts, bis, barPct, today, s, colors, mo
             </View>
           ) : null}
           <ScrollView style={{ maxHeight: 420 }}>
-            {open === 'geld' ? (
+            {open === 'tv' ? (
+              tvLog.length === 0 ? <Text style={s.muted}>Diese Woche noch nichts abgezogen.</Text> : tvLog.map(([id, e]) => (
+                <View key={id} style={[s.rowCenter, s.divider, { paddingVertical: 6 }]}>
+                  <Text style={[s.body, { flex: 1 }]}>{fmtTs(e.at)}</Text>
+                  <Text style={s.bold}>−{tvText(e.min)}</Text>
+                  <Pressable onPress={() => confirmAction(`${tvText(e.min)} zurückbuchen?`, () => run(deleteTv(fid, wk, id)), 'Zurückbuchen')} hitSlop={8} accessibilityLabel={`${tvText(e.min)} zurückbuchen`}>
+                    <Ionicons name="arrow-undo-outline" size={18} color={colors.textMuted} />
+                  </Pressable>
+                </View>
+              ))
+            ) : open === 'geld' ? (
               history.length === 0 ? <Text style={s.muted}>Noch keine Taschengeld-Einträge.</Text> : history.map(([key, m]) => {
                 const amount = effectiveAllowance(allowance, m);
                 return (
