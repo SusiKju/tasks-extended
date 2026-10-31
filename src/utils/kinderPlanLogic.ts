@@ -233,3 +233,6 @@ export function tvText(min: number): string {
   const h = Math.floor(min / 60), r = min % 60;
   return r === 0 ? `${h} h` : r === 30 ? `${h}½ h` : `${h} h ${r} min`;
 }
+
+// Fernsehzeit-Balken (TE-111, Wand TE-112): bewusst bunt, auch im Schwarz-Weiß-Theme nicht durch mono().
+export const REGENBOGEN = ['#FF3B30', '#FF9500', '#FFCC00', '#34C759', '#00C7BE', '#007AFF', '#AF52DE'] as const;

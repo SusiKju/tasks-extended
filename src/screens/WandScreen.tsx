@@ -31,7 +31,9 @@ import { subscribeRegeln, subscribeWoche, subscribeStrafaufgaben } from '../serv
 import {
   KinderRegeln, KinderWoche, Strafaufgabe, DEFAULT_REGELN, TAG_KURZ, aufgabenVon, aktuellerTag,
   weekKey, kalenderwoche, isoDate, markKey, punkte, faelligeStufen, bisNaechsteStufe,
+  tvKontingent, tvRest, tvText, REGENBOGEN,
 } from '../utils/kinderPlanLogic';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const colors = THEMES['bento-night'].colors;
 const s = makeStyles(colors);
@@ -156,6 +158,8 @@ export default function WandScreen({ onExit }: Props) {
       .filter((x): x is { a: typeof x.a; cur: NonNullable<typeof x.cur> } => !!x.cur);
     const tasks = (tasksByChild[c.id] ?? []).filter((t) => !strafTaskIds.has(t.id));
     const alarm = due.length > 0 || offen.length > 0;
+    const tvMax = tvKontingent(regeln, c);
+    const tvLeft = tvRest(regeln, woche, c);
     const tt = timetables[c.id] ?? {};
     const lessons = schulfreiText ? [] : applyPeriodTimes(PERIODS, periodTimes[c.id] ?? {})
       .filter((p) => !p.pause)
@@ -223,6 +227,18 @@ export default function WandScreen({ onExit }: Props) {
             })}
           </View>
         ) : null}
+
+        <View style={[s.section, paged && s.sectionCell]} accessibilityLabel={`Fernsehen: noch ${tvText(tvLeft)} von ${tvText(tvMax)}`}>
+          <View style={s.rowCenter}>
+            <Text style={[s.label, { flex: 1 }]}>Fernsehen</Text>
+            <Text style={[s.item, tvLeft === 0 && { color: colors.textMuted }]}>{tvText(tvLeft)} / {tvText(tvMax)}</Text>
+          </View>
+          <View style={s.bar}>
+            <View style={[s.barFill, { width: `${tvMax ? Math.round((tvLeft / tvMax) * 100) : 0}%`, overflow: 'hidden' }]}>
+              <LinearGradient colors={[...REGENBOGEN]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} />
+            </View>
+          </View>
+        </View>
 
         <View style={[s.section, paged && s.sectionCell]}>
           <Text style={s.label}>Wochenaufgaben</Text>
