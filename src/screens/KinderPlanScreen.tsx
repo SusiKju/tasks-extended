@@ -28,13 +28,15 @@ import {
 } from '../services/kinderPlan';
 import {
   KinderRegeln, KinderWoche, Strafaufgabe, Mark, DEFAULT_REGELN, TAG_KURZ, aufgabenVon, aktuellerTag,
-  weekKey, weekDays, kalenderwoche, tvKontingent, isoDate, markKey, punkte, faelligeStufen, bisNaechsteStufe, quote, rotiere,
+  weekKey, weekDays, kalenderwoche, tvKontingent, tvRest, tvText, isoDate, markKey, punkte, faelligeStufen, bisNaechsteStufe, quote, rotiere,
 } from '../utils/kinderPlanLogic';
 import { WandFoto, subscribeWandFotos, pickAndUploadWandFotos, deleteWandFoto } from '../services/wandFotos';
 
 const DAY_LABELS = TAG_KURZ;
 const tageText = (tage: number[]) => (tage.length === 7 ? 'täglich' : tage.map((t) => TAG_KURZ[t]).join(', '));
 const STUFEN_FARBEN = ['#FFD60A', '#FF453A', '#BF5AF2'];
+// Fernsehzeit-Balken (TE-111): bewusst bunt, auch im Schwarz-Weiß-Theme nicht durch mono().
+const REGENBOGEN = ['#FF3B30', '#FF9500', '#FFCC00', '#34C759', '#00C7BE', '#007AFF', '#AF52DE'] as const;
 
 type View_ = 'uebersicht' | 'regeln' | string; // sonst: childId
 
@@ -280,6 +282,28 @@ export function KinderPlanScreen() {
           ))}
         </View>
         {children.length === 0 ? <Text style={s.muted}>Noch keine Kinder in der Familie angelegt.</Text> : null}
+        {children.length > 0 ? (
+          <View style={s.tile}>
+            <Text style={s.label}>Fernsehen diese Woche</Text>
+            {children.map((c) => {
+              const max = tvKontingent(regeln, c);
+              const rest = tvRest(regeln, woche, c);
+              return (
+                <Pressable key={c.id} onPress={() => setView(c.id)} style={{ gap: 4 }} accessibilityLabel={`${c.name}: noch ${tvText(rest)} von ${tvText(max)} Fernsehen`}>
+                  <View style={s.rowBetween}>
+                    <Text style={s.bold}>{c.name}</Text>
+                    <Text style={s.muted}>{tvText(rest)} / {tvText(max)}</Text>
+                  </View>
+                  <View style={[s.bar, { height: 10, borderRadius: 5 }]}>
+                    <View style={{ width: `${max ? Math.round((rest / max) * 100) : 0}%`, height: '100%', borderRadius: 5, overflow: 'hidden' }}>
+                      <LinearGradient colors={[...REGENBOGEN]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} />
+                    </View>
+                  </View>
+                </Pressable>
+              );
+            })}
+          </View>
+        ) : null}
         {heuteFaellig.length > 0 ? (
           <View style={s.tile}>
             <Text style={s.label}>Heute fällig · {['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'][new Date().getDay()]}</Text>
