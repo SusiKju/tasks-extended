@@ -1,0 +1,94 @@
+name: CI
+
+# Prüft jeden Pull Request gegen main. Sind alle Prüfungen grün, wird der PR
+# automatisch (squash) nach main gemergt und anschließend das Deploy gestartet.
+#
+# Kein Auto-Merge bei: Draft-PRs, PRs aus Forks oder PRs mit dem Label
+# "kein-automerge".
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: Typecheck · Lint · Tests · Version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # für den Versionsvergleich mit main
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --legacy-peer-deps
+      - name: TypeScript
+        run: npm run typecheck
+      - name: ESLint
+        run: npm run lint -- --quiet
+      - name: Unit-Tests
+        run: npm test
+      - name: Syntax Cloud Functions & Skripte
+        run: npm run check:syntax
+      - name: Version (package.json = app.json, gegenüber main hochgesetzt)
+        run: |
+          if [ -n "${{ github.base_ref }}" ]; then
+            node scripts/check-version.mjs "origin/${{ github.base_ref }}"
+          else
+            node scripts/check-version.mjs
+          fi
+
+  build-web:
+    name: Web-Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --legacy-peer-deps
+      - run: npx expo export -p web
+      - run: node scripts/build-sw.mjs ${{ github.sha }}
+
+  automerge:
+    name: Auto-Merge nach main
+    needs: [checks, build-web]
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'pull_request' &&
+      !github.event.pull_request.draft &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      !contains(github.event.pull_request.labels.*.name, 'kein-automerge')
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+      PR: ${{ github.event.pull_request.number }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - name: PR mergen
+        # --match-head-commit: nur mergen, wenn genau dieser geprüfte Stand der
+        # Kopf des PRs ist (kein ungeprüfter Nachschub-Commit).
+        run: gh pr merge "$PR" --squash --match-head-commit "$HEAD_SHA"
+      - name: Branch löschen
+        run: gh api -X DELETE "repos/$GH_REPO/git/refs/heads/$HEAD_REF" || true
+        env:
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+      - name: Deploy starten
+        # Ein Merge über GITHUB_TOKEN löst den push-Trigger von deploy.yml nicht
+        # aus – deshalb das Deploy hier explizit anstoßen.
+        run: gh workflow run deploy.yml --ref main

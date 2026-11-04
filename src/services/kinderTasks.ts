@@ -78,7 +78,7 @@ export interface ChildTask {
   /** Alle bei dieser Gruppenaufgabe teilnehmenden Kinder (zum Erstellzeitpunkt).
    *  Auf jeder Kopie gespeichert, damit Eltern- UND Kinder-App die Teilnehmer ohne
    *  Cross-Collection-Zugriff anzeigen können. (TE-113/TE-114) */
-  groupChildren?: ChildId[];
+  groupChildren?: string[];
   /** Optionale Belohnung für genau diese Aufgabe (TE-61). undefined/null = keine.
    *  Default beim Anlegen ist immer "keine". Bei Gruppenaufgaben trägt jede Kopie
    *  dieselbe Belohnung, wird aber pro Kind eigenständig freigegeben. */

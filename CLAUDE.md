@@ -26,3 +26,16 @@ Im Zweifel: MINOR. Bei reinen Fixes: PATCH.
   nie einen echten Bump. `2.0.0` markiert den Umfang, der bereits existiert, bevor die
   Regel oben griff. Kein Breaking Change im SemVer-Sinn, sondern reine Standortbestimmung.
   Ab hier gilt die PATCH/MINOR/MAJOR-Regel strikt pro Commit.
+
+# Automatische Prüfungen & Auto-Merge
+
+Jeder PR gegen `main` läuft durch `.github/workflows/ci.yml`:
+
+- TypeScript (`npm run typecheck`), ESLint ohne Fehler (`npm run lint`),
+  Unit-Tests (`npm test`, Vitest, `src/**/*.test.ts`), Syntax-Check für
+  `functions/` und `scripts/`, Versions-Check (package.json = app.json und
+  gegenüber `main` hochgesetzt), Web-Build (`expo export -p web`).
+- Lokal alles auf einmal: `npm run check`.
+- Sind alle Jobs grün, wird der PR automatisch squash-gemergt, der Branch
+  gelöscht und `deploy.yml` gestartet. Ausnahmen: Draft-PRs, Fork-PRs und PRs
+  mit Label `kein-automerge`.

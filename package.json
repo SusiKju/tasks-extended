@@ -1,12 +1,18 @@
 {
   "name": "tasks-extended",
-  "version": "2.88.1",
+  "version": "2.88.2",
   "main": "expo-router/entry",
   "scripts": {
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "TZ=Europe/Berlin vitest run",
+    "check:version": "node scripts/check-version.mjs",
+    "check:syntax": "for f in functions/*.js scripts/*.mjs; do node --check \"$f\" || exit 1; done",
+    "check": "npm run typecheck && npm run lint && npm test && npm run check:version && npm run check:syntax"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.2",
@@ -44,7 +50,10 @@
   "devDependencies": {
     "@babel/core": "^7.24.0",
     "@types/react": "~19.2.0",
+    "eslint": "^9.39.5",
+    "eslint-config-expo": "~56.0.0",
     "firebase-admin": "^14.0.0",
-    "typescript": "~6.0.3"
+    "typescript": "~6.0.3",
+    "vitest": "^3.2.7"
   }
 }

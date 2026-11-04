@@ -237,9 +237,8 @@ export async function signInWithGoogle(): Promise<CalendarAuthResult | null> {
       return null;
     }
 
-    const redirectUri = Platform.OS === 'web'
-      ? AuthSession.makeRedirectUri({})
-      : 'https://auth.expo.io/@susikju/tasks-extended';
+    // Web ist oben schon komplett abgehandelt – hier nur noch Native.
+    const redirectUri = 'https://auth.expo.io/@susikju/tasks-extended';
 
     const request = new AuthSession.AuthRequest({
       clientId: GOOGLE_CLIENT_ID,
@@ -533,7 +532,7 @@ export async function listGoogleTasks(accessToken: string, taskListId?: string):
     if (lists.length === 0) return [];
     taskListId = lists[0].id;
   }
-  return listGoogleTasksById(accessToken, taskListId);
+  return (await listGoogleTasksById(accessToken, taskListId)) ?? [];
 }
 
 /**

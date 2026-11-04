@@ -25,6 +25,7 @@ import { useFirebaseAuth } from '../hooks/useFirebaseAuth';
 import { useGoogleTasksSync } from '../hooks/useGoogleTasksSync';
 import { useGoogleContactsBirthdaysSync } from '../hooks/useGoogleContactsBirthdaysSync';
 import { isOverdue, isDueToday, localDateStr } from '../utils/dateFormat';
+import { isUndatedOrSoon, isDashboardTask, showsAsTimedEvent, showsInTaskList } from '../utils/dashboardTasks';
 import { listUpcomingEvents, CalendarEvent, getValidAccessToken } from '../services/googleCalendar';
 import { syncBesteSchuleChild } from '../services/besteSchule';
 import { listStarredDriveFiles, DriveFile } from '../services/googleDrive';
@@ -91,12 +92,6 @@ function taskDue(dateStr?: string | null): { label: string; overdue: boolean } |
   return { label: `${d}.${m}.`, overdue };
 }
 
-/** TE-5: Kurzübersicht zeigt nur Einträge ohne Datum oder mit Datum heute/morgen. */
-function isUndatedOrSoon(dateStr?: string | null): boolean {
-  if (!dateStr) return true;
-  const d = localDateStr(dateStr);
-  return d === TODAY || d === format(new Date(Date.now() + 86400000), 'yyyy-MM-dd');
-}
 
 // ─── Colors ───────────────────────────────────────────────────────────────────
 const C = {
@@ -455,7 +450,7 @@ export function DashboardScreen() {
   const dashboardTasks = useMemo<Task[]>(
     () =>
       tasks
-        .filter((t) => !t.completed && isUndatedOrSoon(t.dueDate))
+        .filter(isDashboardTask)
         .sort((a, b) => {
           if (!!a.important !== !!b.important) return a.important ? -1 : 1;
           const da = a.dueDate ? new Date(a.dueDate).getTime() : Infinity;
@@ -561,7 +556,7 @@ export function DashboardScreen() {
     () =>
       showBlock('googleTasks')
         ? dashboardTasks
-            .filter((t) => t.dueDate && t.dueTime)
+            .filter(showsAsTimedEvent)
             .map((t) => {
               const start = new Date(`${localDateStr(t.dueDate!)}T${t.dueTime}:00`).toISOString();
               return { id: `task::${t.id}`, summary: t.title, start, end: start, allDay: false, calendarName: 'Google Tasks', color: C.tasks };
@@ -712,6 +707,8 @@ export function DashboardScreen() {
       {!!fuerUns.myName && fuerUns.loaded && !fuerUns.loadError && <FuerUnsReminderBanner colors={colors} fuerUns={fuerUns} />}
 
       {/* TE-52: neue Noten der Kinder – dezent oberhalb der Heute-Karte, nicht in der Liste */}
+      {/* `children` = Kinder der Familie, nicht React-Children. */}
+      {/* eslint-disable-next-line react/no-children-prop */}
       {!!fid && <NewGradesNotice familyId={fid} children={familyChildren} childColor={childColor} />}
 
       {/* TE-25: „Heutige Termine" und „Kurzübersicht" sind ein gemeinsamer Block
@@ -847,7 +844,7 @@ export function DashboardScreen() {
         // Termin angelegt wurde), nur einmal zeigen – der Task gewinnt, der Termin
         // wird ausgeblendet.
         // Tasks mit Uhrzeit stehen schon als Termin in todayEvents/tomorrowEvents.
-        const gtList = showBlock('googleTasks') ? dashboardTasks.filter((t) => !t.dueTime).slice(0, 6) : [];
+        const gtList = showBlock('googleTasks') ? dashboardTasks.filter(showsInTaskList).slice(0, 6) : [];
         const todayKey = localDateStr(new Date().toISOString());
         const gtKeys = new Set(
           gtList.map((t) => `${t.dueDate ? localDateStr(t.dueDate) : todayKey}|${t.title.trim().toLowerCase()}`),
