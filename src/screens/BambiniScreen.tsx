@@ -44,6 +44,9 @@ import {
   saveBambiniTrainingsideenItems,
   NotizItem,
   NotizKind,
+  TrainingsOrt,
+  saisonOrt,
+  ortPasst,
   looksLikePhone,
   parseNeuesKind,
   makeId,
@@ -57,6 +60,9 @@ const SMS_BLUE = '#007AFF';
 const INFO_YELLOW = '#F5B301';
 /** TE-91: Verlauf für Schnupperkinder (Filterkachel, Avatar, Pill). */
 const SCHNUPPER_GRADIENT: [string, string] = ['#FF9F0A', '#FF375F'];
+// TE-114: Anzeigenamen für den Ort einer Trainingsidee bzw. den Filter.
+const ORT_LABEL: Record<TrainingsOrt, string> = { draussen: 'Draußen', halle: 'Halle', beides: 'Beides' };
+const ORT_FILTER_LABEL = { draussen: 'Draußen', halle: 'Halle', alle: 'Alle' } as const;
 import { getJahrgangStatus } from '../utils/bambiniSeason';
 
 /** ISO 'YYYY-MM-DD' → 'DD.MM.YYYY' (string-basiert, ohne Zeitzonen-Fallen). */
@@ -243,6 +249,15 @@ export function BambiniScreen() {
   const [trainingsideeEditId, setTrainingsideeEditId] = useState<string | null>(null);
   const [trainingsideeEditText, setTrainingsideeEditText] = useState('');
 
+  // TE-114: Ort-Filter über der Übungsliste. Ohne Wahl (oder Wahl von gestern) gilt die Saison.
+  const heuteKey = new Date().toDateString();
+  const [ortWahl, setOrtWahl] = useState<{ tag: string; ort: 'draussen' | 'halle' | 'alle' } | null>(null);
+  const ortAuto = !ortWahl || ortWahl.tag !== heuteKey;
+  const ortFilter: 'draussen' | 'halle' | 'alle' = ortAuto ? saisonOrt(new Date()) : ortWahl!.ort;
+  // Ort für neue Ideen: explizit gewählt, sonst der aktuelle Filter.
+  const [neuOrt, setNeuOrt] = useState<TrainingsOrt | null>(null);
+  const neuOrtEff: TrainingsOrt = neuOrt ?? (ortFilter === 'alle' ? 'beides' : ortFilter);
+
   const openTrainingsideen = useCallback(() => {
     setTrainingsideeInput('');
     setTrainingsideenOpen(true);
@@ -263,21 +278,29 @@ export function BambiniScreen() {
     const edited = trainingsideeEditText.trim();
     if (trainingsideeEditId && edited) items = items.map((n) => (n.id === trainingsideeEditId ? { ...n, text: edited } : n));
     const text = trainingsideeInput.trim();
-    if (text) items = [{ id: makeId(), text, marked: false, createdAt: new Date().toISOString(), deletedAt: null }, ...items];
+    if (text) items = [{ id: makeId(), text, marked: false, createdAt: new Date().toISOString(), deletedAt: null, ort: neuOrtEff }, ...items];
     if (items !== trainingsideenItems) persistTrainingsideenItems(items);
     setTrainingsideeEditId(null);
     setTrainingsideeInput('');
+    setNeuOrt(null);
     setTrainingsideenOpen(false);
-  }, [trainingsideenItems, trainingsideeEditId, trainingsideeEditText, trainingsideeInput, persistTrainingsideenItems]);
+  }, [trainingsideenItems, trainingsideeEditId, trainingsideeEditText, trainingsideeInput, neuOrtEff, persistTrainingsideenItems]);
 
   const addTrainingsideeItem = useCallback(() => {
     const text = trainingsideeInput.trim();
     if (!text) return;
     const now = new Date().toISOString();
-    const item: NotizItem = { id: makeId(), text, marked: false, createdAt: now, deletedAt: null };
+    const item: NotizItem = { id: makeId(), text, marked: false, createdAt: now, deletedAt: null, ort: neuOrtEff };
     persistTrainingsideenItems([item, ...trainingsideenItems]);
     setTrainingsideeInput('');
-  }, [trainingsideeInput, trainingsideenItems, persistTrainingsideenItems]);
+    setNeuOrt(null);
+  }, [trainingsideeInput, trainingsideenItems, neuOrtEff, persistTrainingsideenItems]);
+
+  // TE-114: Ort-Etikett antippen: Beides → Draußen → Halle → Beides.
+  const cycleTrainingsideeOrt = useCallback((id: string) => {
+    const next: Record<TrainingsOrt, TrainingsOrt> = { beides: 'draussen', draussen: 'halle', halle: 'beides' };
+    persistTrainingsideenItems(trainingsideenItems.map((n) => (n.id === id ? { ...n, ort: next[n.ort ?? 'beides'] } : n)));
+  }, [trainingsideenItems, persistTrainingsideenItems]);
 
   const toggleTrainingsideeMarked = useCallback((id: string) => {
     persistTrainingsideenItems(trainingsideenItems.map((n) => (n.id === id ? { ...n, marked: !n.marked } : n)));
@@ -295,11 +318,13 @@ export function BambiniScreen() {
   const moveTrainingsideeItem = useCallback((id: string, direction: -1 | 1) => {
     const active = trainingsideenItems.filter((n) => !n.deletedAt);
     const idx = active.findIndex((n) => n.id === id);
-    const swapIdx = idx + direction;
+    // TE-114: ausgeblendete Nachbarn überspringen, sonst wirkt der Pfeil wie tot.
+    let swapIdx = idx + direction;
+    while (swapIdx >= 0 && swapIdx < active.length && !ortPasst(active[swapIdx].ort, ortFilter)) swapIdx += direction;
     if (idx < 0 || swapIdx < 0 || swapIdx >= active.length) return;
     [active[idx], active[swapIdx]] = [active[swapIdx], active[idx]];
     persistTrainingsideenItems([...active, ...trainingsideenItems.filter((n) => n.deletedAt)]);
-  }, [trainingsideenItems, persistTrainingsideenItems]);
+  }, [trainingsideenItems, ortFilter, persistTrainingsideenItems]);
 
   const startEditTrainingsidee = useCallback((n: NotizItem) => {
     setTrainingsideeEditId(n.id);
@@ -324,6 +349,8 @@ export function BambiniScreen() {
     .filter((n) => n.deletedAt)
     .sort((a, b) => (b.deletedAt as string).localeCompare(a.deletedAt as string));
   const markedTrainingsideenItems = activeTrainingsideenItems.filter((n) => n.marked);
+  const sichtbareIdeen = activeTrainingsideenItems.filter((n) => ortPasst(n.ort, ortFilter));
+  const ausgeblendetCount = activeTrainingsideenItems.length - sichtbareIdeen.length;
 
   // TE-86: vier Ansichten statt FABs. Training/Notizen nutzen ihre bisherigen Open-Flags,
   // damit Schließen weiterhin Getipptes übernimmt.
@@ -656,6 +683,8 @@ export function BambiniScreen() {
     );
   };
 
+  // TE-114: Ort-Farben bewusst ohne mono() – sie unterscheiden Kategorien.
+  const ortColor = (o?: TrainingsOrt) => (o === 'draussen' ? '#30D158' : o === 'halle' ? '#4A9EFF' : colors.textSecondary);
   const EXERCISE_GRADIENTS: [string, string][] = [
     ['#0A5CFF', '#00B8D9'],
     ['#7B2FF7', '#F72585'],
@@ -721,6 +750,7 @@ export function BambiniScreen() {
                   <View key={n.id} style={s.exCard}>
                     <LinearGradient colors={[mono(g[0]), mono(g[1])]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
                     <Text style={s.exText} numberOfLines={3}>{n.text}</Text>
+                    <Text style={s.exOrt}>{ORT_LABEL[n.ort ?? 'beides']}</Text>
                   </View>
                 );
               })}
@@ -868,19 +898,33 @@ export function BambiniScreen() {
             <Ionicons name="time-outline" size={18} color={colors.textMuted} />
           </Pressable>
         </View>
+        {/* TE-114: Ort-Umschalter; ohne Wahl automatisch nach Saison. */}
+        <View style={s.ortSeg}>
+          {(['draussen', 'halle', 'alle'] as const).map((o) => {
+            const on = ortFilter === o;
+            return (
+              <Pressable key={o} style={[s.ortSegItem, on && s.ortSegItemOn]} onPress={() => setOrtWahl({ tag: heuteKey, ort: o })} accessibilityLabel={`Übungen: ${ORT_FILTER_LABEL[o]}`}>
+                <Text style={[s.ortSegText, on && s.ortSegTextOn]}>{ORT_FILTER_LABEL[o]}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+        {ortAuto ? (
+          <Text style={s.ortSegHint}>{ortFilter === 'halle' ? 'Automatisch: Hallensaison Okt–März' : 'Automatisch: Draußen-Saison Apr–Sep'} · tippen zum Ändern</Text>
+        ) : null}
         <View style={s.tvIdeas}>
           {activeTrainingsideenItems.length === 0 ? (
             <Text style={s.empty}>Noch keine Trainingsideen.</Text>
           ) : (
-            activeTrainingsideenItems.map((n, idx) => (
+            sichtbareIdeen.map((n, idx) => (
               <View key={n.id} style={s.notizItemRow}>
                 <View style={s.notizItemMain}>
                   <View style={s.notizReorder}>
                     <Pressable onPress={() => moveTrainingsideeItem(n.id, -1)} disabled={idx === 0} hitSlop={4} accessibilityLabel="Nach oben verschieben">
                       <Ionicons name="chevron-up" size={14} color={idx === 0 ? colors.border : colors.textSecondary} />
                     </Pressable>
-                    <Pressable onPress={() => moveTrainingsideeItem(n.id, 1)} disabled={idx === activeTrainingsideenItems.length - 1} hitSlop={4} accessibilityLabel="Nach unten verschieben">
-                      <Ionicons name="chevron-down" size={14} color={idx === activeTrainingsideenItems.length - 1 ? colors.border : colors.textSecondary} />
+                    <Pressable onPress={() => moveTrainingsideeItem(n.id, 1)} disabled={idx === sichtbareIdeen.length - 1} hitSlop={4} accessibilityLabel="Nach unten verschieben">
+                      <Ionicons name="chevron-down" size={14} color={idx === sichtbareIdeen.length - 1 ? colors.border : colors.textSecondary} />
                     </Pressable>
                   </View>
                   {/* TE-81: „heute“ – angeschaltete Ideen erscheinen als Übungskarten auf der Bambini-Seite. */}
@@ -914,7 +958,12 @@ export function BambiniScreen() {
                     </>
                   ) : (
                     <>
-                      <Text style={s.notizItemText}>{n.text}</Text>
+                      <View style={s.ideeMain}>
+                        <Text style={s.ideeText}>{n.text}</Text>
+                        <Pressable onPress={() => cycleTrainingsideeOrt(n.id)} hitSlop={6} style={[s.ortChip, { borderColor: ortColor(n.ort) }]} accessibilityLabel={`Ort: ${ORT_LABEL[n.ort ?? 'beides']}, tippen zum Wechseln`}>
+                          <Text style={[s.ortChipText, { color: ortColor(n.ort) }]}>{ORT_LABEL[n.ort ?? 'beides']}</Text>
+                        </Pressable>
+                      </View>
                       <Pressable onPress={() => startEditTrainingsidee(n)} hitSlop={8} accessibilityLabel="Bearbeiten">
                         <Ionicons name="pencil-outline" size={18} color={colors.textSecondary} />
                       </Pressable>
@@ -927,6 +976,9 @@ export function BambiniScreen() {
               </View>
             ))
           )}
+          {ausgeblendetCount > 0 ? (
+            <Text style={s.ortHidden}>{ausgeblendetCount === 1 ? '1 Übung' : `${ausgeblendetCount} Übungen`} für {ortFilter === 'halle' ? 'draußen' : 'die Halle'} ausgeblendet</Text>
+          ) : null}
                 <View style={s.notizAddRow}>
           <TextInput
             style={[s.input, s.notizAddInput]}
@@ -941,6 +993,17 @@ export function BambiniScreen() {
             <Ionicons name="add" size={PLUS_ICON_SIZE} color={colors.gradients?.idea?.fg ?? '#0A2A4A'} />
           </GradientButton>
                 </View>
+          {/* TE-114: Ort der neuen Idee, vorausgewählt nach aktuellem Filter. */}
+          <View style={s.ortNewRow}>
+            {(['draussen', 'halle', 'beides'] as const).map((o) => {
+              const on = neuOrtEff === o;
+              return (
+                <Pressable key={o} onPress={() => setNeuOrt(o)} style={[s.ortChip, s.ortNewChip, on && { borderColor: ortColor(o), backgroundColor: ortColor(o) + '22' }]} accessibilityLabel={`Neue Idee: ${ORT_LABEL[o]}`}>
+                  <Text style={[s.ortChipText, { color: on ? ortColor(o) : colors.textSecondary }]}>{ORT_LABEL[o]}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -1744,6 +1807,20 @@ function makeStyles(c: ThemeColors) {
     exGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
     exCard: { width: '48.5%', minHeight: 64, borderRadius: 16, padding: 12, overflow: 'hidden', justifyContent: 'center' },
     exText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
+    exOrt: { position: 'absolute', right: 8, bottom: 6, color: '#FFFFFF', fontSize: 10, fontWeight: '700', backgroundColor: 'rgba(0,0,0,0.28)', borderRadius: 999, paddingHorizontal: 6, paddingVertical: 1, overflow: 'hidden' },
+    ortSeg: { flexDirection: 'row', backgroundColor: c.card, borderRadius: 999, padding: 3, gap: 3, marginBottom: 6 },
+    ortSegItem: { flex: 1, alignItems: 'center', paddingVertical: 7, borderRadius: 999 },
+    ortSegItemOn: { backgroundColor: c.accent },
+    ortSegText: { color: c.textSecondary, fontSize: 13, fontWeight: '600' },
+    ortSegTextOn: { color: c.accentFg },
+    ortSegHint: { color: c.textMuted, fontSize: 11, textAlign: 'center', marginBottom: 8 },
+    ideeMain: { flex: 1, gap: 4, alignItems: 'flex-start' },
+    ideeText: { color: c.text, fontSize: 15 },
+    ortChip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 7, paddingVertical: 1 },
+    ortChipText: { fontSize: 10, fontWeight: '700' },
+    ortNewRow: { flexDirection: 'row', gap: 6, marginTop: 8 },
+    ortNewChip: { paddingHorizontal: 11, paddingVertical: 4, borderColor: c.border },
+    ortHidden: { color: c.textMuted, fontSize: 12, textAlign: 'center', paddingVertical: 8 },
     heutePill: { borderRadius: 999, paddingHorizontal: 9, paddingVertical: 3, borderWidth: 1, borderColor: c.border, overflow: 'hidden' },
     heutePillOn: { borderColor: 'transparent' },
     heutePillText: { color: c.textSecondary, fontSize: 11, fontWeight: '700' },

@@ -17,6 +17,7 @@ import uuid from 'react-native-uuid';
 import { db } from './firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { setDoc } from './firestoreWrites';
+import type { TrainingsOrt } from '../utils/bambiniSeason';
 import {
   loadFussballKachel,
   saveFussballKachel,
@@ -163,9 +164,15 @@ export interface NotizItem {
   kind?: NotizKind;
   /** TE-81: Trainingstag (YYYY-MM-DD; ältere Notizen: Startzeit ISO), markiert Trainingsnotizen. Fehlt = keine. */
   trainingId?: string;
+  /** TE-114: Ort einer Trainingsidee. Fehlt = beides (ältere Ideen). */
+  ort?: TrainingsOrt;
 }
 
 export type NotizKind = 'tel' | 'neu' | 'info';
+
+// TE-114: Ort-Typ und -Helfer liegen firebase-frei (testbar) in bambiniSeason.
+export { saisonOrt, ortPasst } from '../utils/bambiniSeason';
+export type { TrainingsOrt } from '../utils/bambiniSeason';
 
 function sanitizeNotizItem(n: any): NotizItem | null {
   const text = String(n?.text ?? '').trim();
@@ -179,6 +186,10 @@ function sanitizeNotizItem(n: any): NotizItem | null {
     ...(n?.completedAt ? { completedAt: String(n.completedAt) } : {}),
     ...(n?.kind === 'tel' || n?.kind === 'neu' || n?.kind === 'info' ? { kind: n.kind } : {}),
     ...(n?.trainingId ? { trainingId: String(n.trainingId) } : {}),
+    // TE-114: gespeicherten Ort übernehmen; alte Ideen mit „Halle:“ im Text gelten als Halle.
+    ...(n?.ort === 'draussen' || n?.ort === 'halle' || n?.ort === 'beides'
+      ? { ort: n.ort as TrainingsOrt }
+      : /^halle\s*:/i.test(text) ? { ort: 'halle' as TrainingsOrt } : {}),
   };
 }
 
