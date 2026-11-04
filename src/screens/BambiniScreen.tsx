@@ -53,6 +53,7 @@ import {
   makeId,
   BambiniSortMode,
 } from '../services/bambini';
+import { FlagFilterMode, matchesFlagFilter, nextFlagFilterMode } from '../utils/bambiniFlagFilter';
 
 /** Bewusst nicht über colors.danger (wird in mono() vergraut) – wie NotesScreen IMPORTANT_RED. */
 const NOT_ANGEMELDET_RED = '#EF4444';
@@ -123,11 +124,11 @@ export function BambiniScreen() {
   // stoppedFilter: null = alle, true = nur aufgehört, false = nur aktiv (nicht aufgehört).
   const [yearFilter, setYearFilter] = useState<number[]>([]);
   const [stoppedFilter, setStoppedFilter] = useState<boolean | null>(null);
-  // Schnupper- und Wackel-Filter funktionieren gleich: aus = alle Kinder (mit Pill markiert),
-  // an = nur diese Kinder, kombinierbar mit Jahrgang und Aktiv/Aufgehört.
+  // Schnupper- und Wackel-Filter funktionieren gleich und dreistufig: alle → nur → ohne,
+  // kombinierbar mit Jahrgang und Aktiv/Aufgehört.
   // (Bis 2.91 waren Schnupperkinder standardmäßig ausgeblendet, TE-112.)
-  const [schnupperFilter, setSchnupperFilter] = useState(false);
-  const [wackelFilter, setWackelFilter] = useState(false);
+  const [schnupperFilter, setSchnupperFilter] = useState<FlagFilterMode>('alle');
+  const [wackelFilter, setWackelFilter] = useState<FlagFilterMode>('alle');
   // TE-109: Sortierung der flachen Liste (keine Jahrgangs-Überschriften mehr) –
   // family-weit persistiert, wie die übrigen Quickfilter (siehe filtersLoaded unten).
   const [sortMode, setSortMode] = useState<BambiniSortMode>('jahrgang');
@@ -449,8 +450,8 @@ export function BambiniScreen() {
       setChildren(list);
       setYearFilter(filters.years);
       setStoppedFilter(filters.stopped);
-      setSchnupperFilter(filters.nurSchnupper);
-      setWackelFilter(filters.nurWackelkandidaten);
+      setSchnupperFilter(filters.schnupperMode);
+      setWackelFilter(filters.wackelMode);
       setSortMode(filters.sortMode);
       setSortReversed(filters.sortReversed);
       setFiltersOpen(filters.filtersOpen);
@@ -474,8 +475,8 @@ export function BambiniScreen() {
     saveBambiniFilters(fid, {
       years: yearFilter,
       stopped: stoppedFilter,
-      nurSchnupper: schnupperFilter,
-      nurWackelkandidaten: wackelFilter,
+      schnupperMode: schnupperFilter,
+      wackelMode: wackelFilter,
       sortMode,
       sortReversed,
       filtersOpen,
@@ -581,8 +582,8 @@ export function BambiniScreen() {
     }
     if (yearFilter.length > 0 && !yearFilter.includes(c.birthYear)) return false;
     if (stoppedFilter !== null && c.stopped !== stoppedFilter) return false;
-    if (schnupperFilter && !c.schnuppertraining) return false;
-    if (wackelFilter && !c.wackelkandidat) return false;
+    if (!matchesFlagFilter(schnupperFilter, c.schnuppertraining)) return false;
+    if (!matchesFlagFilter(wackelFilter, c.wackelkandidat)) return false;
     return true;
   });
 
@@ -1044,19 +1045,19 @@ export function BambiniScreen() {
   // für Aktiv/Aufgehört/Schnupper/Wackelkandidaten, darunter die Jahrgangsbalken; ohne Hintergrundkarte.
   const schnupperCount = children.filter((c) => c.schnuppertraining).length;
   const wackelCandidateCount = children.filter((c) => c.wackelkandidat).length;
-  const anyFilter = yearFilter.length > 0 || stoppedFilter !== null || schnupperFilter || wackelFilter || q.length >= 3;
+  const anyFilter = yearFilter.length > 0 || stoppedFilter !== null || schnupperFilter !== 'alle' || wackelFilter !== 'alle' || q.length >= 3;
   const resetFilters = () => {
     setYearFilter([]);
     setStoppedFilter(null);
-    setSchnupperFilter(false);
-    setWackelFilter(false);
+    setSchnupperFilter('alle');
+    setWackelFilter('alle');
     setQuery('');
   };
   const filterSummary = [
     yearFilter.length ? [...yearFilter].sort((x, y) => x - y).map((y) => y || '—').join(', ') : null,
     stoppedFilter === false ? 'aktiv' : stoppedFilter === true ? 'aufgehört' : null,
-    schnupperFilter ? 'nur Schnupperkinder' : null,
-    wackelFilter ? 'nur Wackelkandidaten' : null,
+    schnupperFilter === 'nur' ? 'nur Schnupperkinder' : schnupperFilter === 'ohne' ? 'ohne Schnupperkinder' : null,
+    wackelFilter === 'nur' ? 'nur Wackelkandidaten' : wackelFilter === 'ohne' ? 'ohne Wackelkandidaten' : null,
   ].filter(Boolean).join(' · ');
 
   // TE-90: Balken lückenlos vom ältesten Jahrgang bis mindestens 2025 (künftige Bambini-Jahrgänge),
@@ -1085,19 +1086,21 @@ export function BambiniScreen() {
     const maxCount = Math.max(1, ...barCounts.map((y) => y.count));
     const toggleYear = (year: number) =>
       setYearFilter((v) => (v.includes(year) ? v.filter((y) => y !== year) : [...v, year]));
-    const toggles: { key: string; label: string; count: number; on: boolean; colors: [string, string]; onPress: () => void }[] = [
+    // Schnupper/Wackel: dreistufig (alle → nur → ohne). „ohne“ = umrandet + durchgestrichen,
+    // Zahl = Kinder ohne dieses Flag.
+    const toggles: { key: string; label: string; count: number; on: boolean; off?: boolean; colors: [string, string]; onPress: () => void }[] = [
       { key: 'aktiv', label: 'Aktiv', count: children.length - stoppedCount, on: stoppedFilter === false, colors: ['#30D158', '#00B8D9'], onPress: () => setStoppedFilter((v) => (v === false ? null : false)) },
       { key: 'stop', label: 'Aufgehört', count: stoppedCount, on: stoppedFilter === true, colors: ['#FF375F', '#7928CA'], onPress: () => setStoppedFilter((v) => (v === true ? null : true)) },
-      { key: 'schnupper', label: 'Schnupper', count: schnupperCount, on: schnupperFilter, colors: SCHNUPPER_GRADIENT, onPress: () => setSchnupperFilter((v) => !v) },
-      { key: 'wackel', label: 'Wackel', count: wackelCandidateCount, on: wackelFilter, colors: WACKEL_GRADIENT, onPress: () => setWackelFilter((v) => !v) },
+      { key: 'schnupper', label: 'Schnupper', count: schnupperFilter === 'ohne' ? children.length - schnupperCount : schnupperCount, on: schnupperFilter === 'nur', off: schnupperFilter === 'ohne', colors: SCHNUPPER_GRADIENT, onPress: () => setSchnupperFilter(nextFlagFilterMode) },
+      { key: 'wackel', label: 'Wackel', count: wackelFilter === 'ohne' ? children.length - wackelCandidateCount : wackelCandidateCount, on: wackelFilter === 'nur', off: wackelFilter === 'ohne', colors: WACKEL_GRADIENT, onPress: () => setWackelFilter(nextFlagFilterMode) },
     ];
     return (
       <View style={s.fHead}>
         <View style={s.fToggles}>
           {toggles.map((tg) => (
-            <Pressable key={tg.key} style={[s.fToggle, tg.on && s.fToggleOn]} onPress={tg.onPress} accessibilityState={{ selected: tg.on }} accessibilityLabel={`${tg.label} filtern`}>
+            <Pressable key={tg.key} style={[s.fToggle, tg.on && s.fToggleOn, tg.off && { borderColor: mono(tg.colors[0]), borderWidth: 1.5 }]} onPress={tg.onPress} accessibilityState={{ selected: tg.on || !!tg.off }} accessibilityLabel={tg.off ? `ohne ${tg.label}` : tg.on ? `nur ${tg.label}` : `${tg.label} filtern`}>
               {tg.on ? <LinearGradient colors={tg.colors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} /> : null}
-              <Text style={[s.fToggleLabel, tg.on && s.bOnColor]} numberOfLines={1} adjustsFontSizeToFit>{tg.label}</Text>
+              <Text style={[s.fToggleLabel, tg.on && s.bOnColor, tg.off && s.fToggleLabelOff]} numberOfLines={1} adjustsFontSizeToFit>{tg.label}</Text>
               <Text style={[s.fToggleCount, tg.on && s.bOnColor]}>{tg.count}</Text>
             </Pressable>
           ))}
@@ -1264,16 +1267,20 @@ export function BambiniScreen() {
                   <Text style={[s.filterChipText, stoppedFilter === true && s.filterChipTextActive]}>Aufgehört</Text>
                 </Pressable>
                 <Pressable
-                  style={[s.filterChip, schnupperFilter && s.filterChipActive]}
-                  onPress={() => setSchnupperFilter((v) => !v)}
+                  style={[s.filterChip, schnupperFilter !== 'alle' && s.filterChipActive]}
+                  onPress={() => setSchnupperFilter(nextFlagFilterMode)}
                 >
-                  <Text style={[s.filterChipText, schnupperFilter && s.filterChipTextActive]}>Schnupperkinder</Text>
+                  <Text style={[s.filterChipText, schnupperFilter !== 'alle' && s.filterChipTextActive]}>
+                    {schnupperFilter === 'ohne' ? 'Ohne Schnupperkinder' : 'Schnupperkinder'}
+                  </Text>
                 </Pressable>
                 <Pressable
-                  style={[s.filterChip, wackelFilter && s.filterChipActive]}
-                  onPress={() => setWackelFilter((v) => !v)}
+                  style={[s.filterChip, wackelFilter !== 'alle' && s.filterChipActive]}
+                  onPress={() => setWackelFilter(nextFlagFilterMode)}
                 >
-                  <Text style={[s.filterChipText, wackelFilter && s.filterChipTextActive]}>Wackelkandidaten</Text>
+                  <Text style={[s.filterChipText, wackelFilter !== 'alle' && s.filterChipTextActive]}>
+                    {wackelFilter === 'ohne' ? 'Ohne Wackelkandidaten' : 'Wackelkandidaten'}
+                  </Text>
                 </Pressable>
                 {yearCounts.map(({ year }) => (
                   <Pressable
@@ -1301,7 +1308,7 @@ export function BambiniScreen() {
                 </Pressable>
               </View>
 
-              {yearFilter.length > 0 || stoppedFilter !== null || schnupperFilter || wackelFilter ? (
+              {yearFilter.length > 0 || stoppedFilter !== null || schnupperFilter !== 'alle' || wackelFilter !== 'alle' ? (
                 <Text style={s.resultCount}>{filtered.length} Treffer</Text>
               ) : null}
             </>
@@ -1885,6 +1892,7 @@ function makeStyles(c: ThemeColors) {
     fToggles: { flexDirection: 'row', gap: 8 },
     fToggle: { flex: 1, borderRadius: 14, paddingVertical: 9, paddingHorizontal: 9, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface, overflow: 'hidden' },
     fToggleOn: { borderColor: 'transparent' },
+    fToggleLabelOff: { color: c.text, textDecorationLine: 'line-through' },
     fToggleLabel: { color: c.textSecondary, fontSize: 10.5, fontWeight: '700', letterSpacing: 0.5, textTransform: 'uppercase' },
     fToggleCount: { color: c.text, fontSize: 20, fontWeight: '800', marginTop: 1 },
     fBars: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center', gap: 10, paddingHorizontal: 6 },
