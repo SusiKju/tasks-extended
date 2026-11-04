@@ -25,6 +25,7 @@ import {
   ROSTER_FIELDS,
   defaultJahrgang,
 } from './fussballKachel';
+import { FlagFilterMode, parseFlagFilterMode } from '../utils/bambiniFlagFilter';
 
 export interface Child {
   /** Stabile ID (uuid v4). */
@@ -65,13 +66,12 @@ export interface BambiniFilters {
   /** null = alle, true = nur aufgehört, false = nur aktiv. */
   stopped: boolean | null;
   /**
-   * Nur Schnupperkinder zeigen, Default false. Funktioniert wie `nurWackelkandidaten`.
-   * (Der frühere Key `wackelkandidat` bedeutete „Schnupperkinder zusätzlich einblenden“
-   * und wird bewusst nicht mehr gelesen.)
+   * Schnupper-Filter: alle / nur Schnupperkinder / ohne Schnupperkinder. Default 'alle'.
+   * (Frühere Keys `wackelkandidat` und `nurSchnupper` werden bewusst nicht mehr gelesen.)
    */
-  nurSchnupper: boolean;
-  /** Nur Kinder mit Wackelkandidat-Flag zeigen, Default false. */
-  nurWackelkandidaten: boolean;
+  schnupperMode: FlagFilterMode;
+  /** Wackelkandidaten-Filter: alle / nur / ohne. Default 'alle' (früher Key `nurWackelkandidaten`). */
+  wackelMode: FlagFilterMode;
   /** Sortiermodus der Liste (TE-109). */
   sortMode: BambiniSortMode;
   /** Sortierrichtung umgekehrt (TE-109). */
@@ -146,12 +146,12 @@ export async function loadBambiniFilters(familyId: string): Promise<BambiniFilte
     ? raw.years.filter((y: any) => Number.isFinite(y)).map((y: number) => Math.trunc(y))
     : [];
   const stopped = raw?.stopped === true ? true : raw?.stopped === false ? false : null;
-  const nurSchnupper = raw?.nurSchnupper === true;
-  const nurWackelkandidaten = raw?.nurWackelkandidaten === true;
+  const schnupperMode = parseFlagFilterMode(raw?.schnupperMode);
+  const wackelMode = parseFlagFilterMode(raw?.wackelMode);
   const sortMode: BambiniSortMode = raw?.sortMode === 'erstesmal' ? 'erstesmal' : 'jahrgang';
   const sortReversed = !!raw?.sortReversed;
   const filtersOpen = raw?.filtersOpen !== false;
-  return { years, stopped, nurSchnupper, nurWackelkandidaten, sortMode, sortReversed, filtersOpen };
+  return { years, stopped, schnupperMode, wackelMode, sortMode, sortReversed, filtersOpen };
 }
 
 /** Quickfilter-Auswahl (TE-20) speichern. */
