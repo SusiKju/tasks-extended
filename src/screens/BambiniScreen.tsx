@@ -617,7 +617,7 @@ export function BambiniScreen() {
 
   // TE-74 (Bento Dark): Zeile ohne eigenen Rahmen, Eltern als zweite graue Zeile,
   // Kontakt/Status als farbige Punkte. Alter steht im Gruppenkopf.
-  const renderBentoRow = (c: Child, first: boolean) => {
+  const renderBentoRow = (c: Child, first: boolean, nr: number) => {
     const dots: { color: string; label: string }[] = [];
     if (c.whatsapp) dots.push({ color: WHATSAPP_GREEN, label: 'In WhatsApp-Gruppe' });
     else if (c.sms) dots.push({ color: SMS_BLUE, label: 'Kommunikation per SMS' });
@@ -635,7 +635,8 @@ export function BambiniScreen() {
           {c.schnuppertraining ? (
             <LinearGradient colors={[mono(SCHNUPPER_GRADIENT[0]), mono(SCHNUPPER_GRADIENT[1])]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
           ) : null}
-          <Text style={[s.bAvatarText, c.schnuppertraining && s.bOnColor]}>{(c.name || '?').charAt(0).toUpperCase()}</Text>
+          {/* Laufende Nummer statt Initiale – zeigt sofort, wie viele Kinder in der Liste sind. */}
+          <Text style={[s.bAvatarText, c.schnuppertraining && s.bOnColor]}>{nr}</Text>
         </View>
         <View style={s.bMain}>
           <View style={s.rowMain}>
@@ -1213,7 +1214,10 @@ export function BambiniScreen() {
             ) : sorted.length === 0 ? (
               <Text style={s.empty}>Keine Treffer.</Text>
             ) : bento ? (
-              bentoGroups.map((g) => (
+              bentoGroups.map((g, gi) => {
+                // Durchgehende Nummerierung über alle Jahrgangsgruppen hinweg.
+                const offset = bentoGroups.slice(0, gi).reduce((n, x) => n + x.items.length, 0);
+                return (
                 <View key={String(g.year)} style={s.bSection}>
                   {g.year !== null ? (
                     <View style={s.bGroupHead}>
@@ -1223,9 +1227,10 @@ export function BambiniScreen() {
                       <Text style={s.bGroupTitle}>{g.items.length}</Text>
                     </View>
                   ) : null}
-                  <View style={s.bGroup}>{g.items.map((c, i) => renderBentoRow(c, i === 0))}</View>
+                  <View style={s.bGroup}>{g.items.map((c, i) => renderBentoRow(c, i === 0, offset + i + 1))}</View>
                 </View>
-              ))
+                );
+              })
             ) : (
               sorted.map((c, index) => {
                 const status = c.birthYear ? getJahrgangStatus(c.birthYear) : null;
