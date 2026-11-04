@@ -123,11 +123,10 @@ export function BambiniScreen() {
   // stoppedFilter: null = alle, true = nur aufgehört, false = nur aktiv (nicht aufgehört).
   const [yearFilter, setYearFilter] = useState<number[]>([]);
   const [stoppedFilter, setStoppedFilter] = useState<boolean | null>(null);
-  // TE-112: Schnupperkinder (früher „Wackelkandidaten“) sind standardmäßig ausgeblendet und werden nur mit
-  // explizit aktiviertem Chip zusätzlich zu den übrigen Filtern (Jahrgang etc.)
-  // eingeblendet – kein exklusiver "nur Schnupper"-Modus.
+  // Schnupper- und Wackel-Filter funktionieren gleich: aus = alle Kinder (mit Pill markiert),
+  // an = nur diese Kinder, kombinierbar mit Jahrgang und Aktiv/Aufgehört.
+  // (Bis 2.91 waren Schnupperkinder standardmäßig ausgeblendet, TE-112.)
   const [schnupperFilter, setSchnupperFilter] = useState(false);
-  // Nur Wackelkandidaten zeigen (exklusiver Filter, kombinierbar mit Jahrgang/Status).
   const [wackelFilter, setWackelFilter] = useState(false);
   // TE-109: Sortierung der flachen Liste (keine Jahrgangs-Überschriften mehr) –
   // family-weit persistiert, wie die übrigen Quickfilter (siehe filtersLoaded unten).
@@ -450,7 +449,7 @@ export function BambiniScreen() {
       setChildren(list);
       setYearFilter(filters.years);
       setStoppedFilter(filters.stopped);
-      setSchnupperFilter(filters.wackelkandidat);
+      setSchnupperFilter(filters.nurSchnupper);
       setWackelFilter(filters.nurWackelkandidaten);
       setSortMode(filters.sortMode);
       setSortReversed(filters.sortReversed);
@@ -475,7 +474,7 @@ export function BambiniScreen() {
     saveBambiniFilters(fid, {
       years: yearFilter,
       stopped: stoppedFilter,
-      wackelkandidat: schnupperFilter,
+      nurSchnupper: schnupperFilter,
       nurWackelkandidaten: wackelFilter,
       sortMode,
       sortReversed,
@@ -582,7 +581,7 @@ export function BambiniScreen() {
     }
     if (yearFilter.length > 0 && !yearFilter.includes(c.birthYear)) return false;
     if (stoppedFilter !== null && c.stopped !== stoppedFilter) return false;
-    if (c.schnuppertraining && !schnupperFilter) return false;
+    if (schnupperFilter && !c.schnuppertraining) return false;
     if (wackelFilter && !c.wackelkandidat) return false;
     return true;
   });
@@ -1056,7 +1055,7 @@ export function BambiniScreen() {
   const filterSummary = [
     yearFilter.length ? [...yearFilter].sort((x, y) => x - y).map((y) => y || '—').join(', ') : null,
     stoppedFilter === false ? 'aktiv' : stoppedFilter === true ? 'aufgehört' : null,
-    schnupperFilter ? 'mit Schnupperkindern' : null,
+    schnupperFilter ? 'nur Schnupperkinder' : null,
     wackelFilter ? 'nur Wackelkandidaten' : null,
   ].filter(Boolean).join(' · ');
 
