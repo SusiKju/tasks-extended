@@ -670,7 +670,7 @@ export function KinderPlanScreen() {
     const groupId = targets.length > 1 ? newId() : null;
     run(Promise.all(targets.map((id) => addTask(fid, id, {
       title, done: false, date: today, createdAt: new Date().toISOString(),
-      ...(groupId ? { groupId, groupChildren: targets as ChildTask["groupChildren"] } : {}),
+      ...(groupId ? { groupId, groupChildren: targets } : {}),
       ...(sheetRepeat ? { repeat: sheetRepeat } : {}),
     }))));
   };

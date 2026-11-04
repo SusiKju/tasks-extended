@@ -192,7 +192,7 @@ export function SharedNotepad({ colors, isDark }: { colors: ThemeColors; isDark:
         </Pressable>
       </View>
       {tooltipVisible && (
-        <Text style={[styles.tooltip, { backgroundColor: colors.surfaceAlt ?? colors.surface, color: colors.textMuted, borderColor: colors.border ?? colors.textMuted }]}>
+        <Text style={[styles.tooltip, { backgroundColor: colors.surfaceHigh, color: colors.textMuted, borderColor: colors.border }]}>
           Für Dinge, die ihr gemeinsam im Blick behalten wollt – z. B. den Einkauf.
         </Text>
       )}
