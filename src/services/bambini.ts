@@ -166,12 +166,14 @@ export interface NotizItem {
   trainingId?: string;
   /** TE-114: Ort einer Trainingsidee. Fehlt = beides (ältere Ideen). */
   ort?: TrainingsOrt;
+  /** TE-115: Position unter „Übungen heute“ – höher = weiter vorne. Fehlt = hinten, in Listenreihenfolge. */
+  heuteRang?: number;
 }
 
 export type NotizKind = 'tel' | 'neu' | 'info';
 
 // TE-114: Ort-Typ und -Helfer liegen firebase-frei (testbar) in bambiniSeason.
-export { saisonOrt, ortPasst } from '../utils/bambiniSeason';
+export { saisonOrt, ortPasst, sortHeute } from '../utils/bambiniSeason';
 export type { TrainingsOrt } from '../utils/bambiniSeason';
 
 function sanitizeNotizItem(n: any): NotizItem | null {
@@ -190,6 +192,7 @@ function sanitizeNotizItem(n: any): NotizItem | null {
     ...(n?.ort === 'draussen' || n?.ort === 'halle' || n?.ort === 'beides'
       ? { ort: n.ort as TrainingsOrt }
       : /^halle\s*:/i.test(text) ? { ort: 'halle' as TrainingsOrt } : {}),
+    ...(typeof n?.heuteRang === 'number' && Number.isFinite(n.heuteRang) ? { heuteRang: n.heuteRang } : {}),
   };
 }
 

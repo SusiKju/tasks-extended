@@ -47,6 +47,7 @@ import {
   TrainingsOrt,
   saisonOrt,
   ortPasst,
+  sortHeute,
   looksLikePhone,
   parseNeuesKind,
   makeId,
@@ -303,7 +304,19 @@ export function BambiniScreen() {
   }, [trainingsideenItems, persistTrainingsideenItems]);
 
   const toggleTrainingsideeMarked = useCallback((id: string) => {
-    persistTrainingsideenItems(trainingsideenItems.map((n) => (n.id === id ? { ...n, marked: !n.marked } : n)));
+    // TE-115: Abwählen vergisst die Position unter „Übungen heute“.
+    persistTrainingsideenItems(trainingsideenItems.map((n) => {
+      if (n.id !== id) return n;
+      if (!n.marked) return { ...n, marked: true };
+      const { heuteRang: _drop, ...rest } = n;
+      return { ...rest, marked: false };
+    }));
+  }, [trainingsideenItems, persistTrainingsideenItems]);
+
+  // TE-115: Karte unter „Übungen heute“ antippen = auf Platz 1 holen.
+  const heuteNachVorne = useCallback((id: string) => {
+    const max = Math.max(0, ...trainingsideenItems.map((n) => n.heuteRang ?? 0));
+    persistTrainingsideenItems(trainingsideenItems.map((n) => (n.id === id ? { ...n, heuteRang: max + 1 } : n)));
   }, [trainingsideenItems, persistTrainingsideenItems]);
 
   const deleteTrainingsideeItem = useCallback((id: string) => {
@@ -348,7 +361,7 @@ export function BambiniScreen() {
   const deletedTrainingsideenItems = trainingsideenItems
     .filter((n) => n.deletedAt)
     .sort((a, b) => (b.deletedAt as string).localeCompare(a.deletedAt as string));
-  const markedTrainingsideenItems = activeTrainingsideenItems.filter((n) => n.marked);
+  const markedTrainingsideenItems = sortHeute(activeTrainingsideenItems.filter((n) => n.marked));
   const sichtbareIdeen = activeTrainingsideenItems.filter((n) => ortPasst(n.ort, ortFilter));
   const ausgeblendetCount = activeTrainingsideenItems.length - sichtbareIdeen.length;
 
@@ -747,11 +760,11 @@ export function BambiniScreen() {
               {markedTrainingsideenItems.map((n, i) => {
                 const g = EXERCISE_GRADIENTS[i % EXERCISE_GRADIENTS.length];
                 return (
-                  <View key={n.id} style={s.exCard}>
+                  <Pressable key={n.id} style={s.exCard} onPress={() => heuteNachVorne(n.id)} disabled={i === 0} accessibilityLabel={`${n.text} – nach vorne holen`}>
                     <LinearGradient colors={[mono(g[0]), mono(g[1])]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
                     <Text style={s.exText} numberOfLines={3}>{n.text}</Text>
                     <Text style={s.exOrt}>{ORT_LABEL[n.ort ?? 'beides']}</Text>
-                  </View>
+                  </Pressable>
                 );
               })}
             </View>
