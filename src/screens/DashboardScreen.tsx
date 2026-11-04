@@ -452,10 +452,11 @@ export function DashboardScreen() {
 
   // TE-150: Google Tasks fürs Dashboard – offene Tasks, wichtig zuerst, dann nach
   // Fälligkeit. Zeilenweise & dezent über den Links dargestellt (Klick → Tasks-Tab).
+  // Überfällige (abgelaufen, aber nicht abgehakt) bleiben ebenfalls sichtbar.
   const dashboardTasks = useMemo<Task[]>(
     () =>
       tasks
-        .filter((t) => !t.completed && isUndatedOrSoon(t.dueDate))
+        .filter((t) => !t.completed && (isUndatedOrSoon(t.dueDate) || isOverdue(t.dueDate ?? null)))
         .sort((a, b) => {
           if (!!a.important !== !!b.important) return a.important ? -1 : 1;
           const da = a.dueDate ? new Date(a.dueDate).getTime() : Infinity;
@@ -561,7 +562,7 @@ export function DashboardScreen() {
     () =>
       showBlock('googleTasks')
         ? dashboardTasks
-            .filter((t) => t.dueDate && t.dueTime)
+            .filter((t) => t.dueDate && t.dueTime && !isOverdue(t.dueDate))
             .map((t) => {
               const start = new Date(`${localDateStr(t.dueDate!)}T${t.dueTime}:00`).toISOString();
               return { id: `task::${t.id}`, summary: t.title, start, end: start, allDay: false, calendarName: 'Google Tasks', color: C.tasks };
@@ -847,7 +848,7 @@ export function DashboardScreen() {
         // Termin angelegt wurde), nur einmal zeigen – der Task gewinnt, der Termin
         // wird ausgeblendet.
         // Tasks mit Uhrzeit stehen schon als Termin in todayEvents/tomorrowEvents.
-        const gtList = showBlock('googleTasks') ? dashboardTasks.filter((t) => !t.dueTime).slice(0, 6) : [];
+        const gtList = showBlock('googleTasks') ? dashboardTasks.filter((t) => !t.dueTime || isOverdue(t.dueDate ?? null)).slice(0, 6) : [];
         const todayKey = localDateStr(new Date().toISOString());
         const gtKeys = new Set(
           gtList.map((t) => `${t.dueDate ? localDateStr(t.dueDate) : todayKey}|${t.title.trim().toLowerCase()}`),
