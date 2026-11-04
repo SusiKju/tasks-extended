@@ -51,6 +51,8 @@ export interface Child {
   vereinAngemeldet: boolean;
   /** Schnuppertraining – ganz neu, evtl. nur zum Reinschnuppern, noch keine festen Daten (TE-84). */
   schnuppertraining: boolean;
+  /** Wackelkandidat – unsicher, ob das Kind dabeibleibt. Wird markiert und ist filterbar. */
+  wackelkandidat: boolean;
 }
 
 /** Sortierung der Bambini-Liste (TE-109): nach Jahrgang oder nach "dabei seit". */
@@ -62,8 +64,14 @@ export interface BambiniFilters {
   years: number[];
   /** null = alle, true = nur aufgehört, false = nur aktiv. */
   stopped: boolean | null;
-  /** Wackelkandidaten zusätzlich zu den übrigen Filtern einblenden (TE-112), Default false. */
+  /**
+   * Schnupperkinder zusätzlich zu den übrigen Filtern einblenden (TE-112), Default false.
+   * Der Feldname stammt noch aus der Zeit, als das Schnupper-Flag „Wackelkandidat" hieß –
+   * bleibt aus Kompatibilität mit gespeicherten Filtern so.
+   */
   wackelkandidat: boolean;
+  /** Nur Kinder mit Wackelkandidat-Flag zeigen, Default false. */
+  nurWackelkandidaten: boolean;
   /** Sortiermodus der Liste (TE-109). */
   sortMode: BambiniSortMode;
   /** Sortierrichtung umgekehrt (TE-109). */
@@ -94,6 +102,7 @@ function sanitizeChild(c: any): Child | null {
     sms: !!c?.sms,
     vereinAngemeldet: !!c?.vereinAngemeldet,
     schnuppertraining: !!c?.schnuppertraining,
+    wackelkandidat: !!c?.wackelkandidat,
   };
 }
 
@@ -138,10 +147,11 @@ export async function loadBambiniFilters(familyId: string): Promise<BambiniFilte
     : [];
   const stopped = raw?.stopped === true ? true : raw?.stopped === false ? false : null;
   const wackelkandidat = raw?.wackelkandidat === true;
+  const nurWackelkandidaten = raw?.nurWackelkandidaten === true;
   const sortMode: BambiniSortMode = raw?.sortMode === 'erstesmal' ? 'erstesmal' : 'jahrgang';
   const sortReversed = !!raw?.sortReversed;
   const filtersOpen = raw?.filtersOpen !== false;
-  return { years, stopped, wackelkandidat, sortMode, sortReversed, filtersOpen };
+  return { years, stopped, wackelkandidat, nurWackelkandidaten, sortMode, sortReversed, filtersOpen };
 }
 
 /** Quickfilter-Auswahl (TE-20) speichern. */
@@ -314,6 +324,7 @@ export async function migrateRosterToBambini(familyId: string): Promise<void> {
         sms: false,
         vereinAngemeldet: false,
         schnuppertraining: false,
+        wackelkandidat: false,
       });
     });
   });
