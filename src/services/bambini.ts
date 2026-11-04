@@ -65,11 +65,11 @@ export interface BambiniFilters {
   /** null = alle, true = nur aufgehört, false = nur aktiv. */
   stopped: boolean | null;
   /**
-   * Schnupperkinder zusätzlich zu den übrigen Filtern einblenden (TE-112), Default false.
-   * Der Feldname stammt noch aus der Zeit, als das Schnupper-Flag „Wackelkandidat" hieß –
-   * bleibt aus Kompatibilität mit gespeicherten Filtern so.
+   * Nur Schnupperkinder zeigen, Default false. Funktioniert wie `nurWackelkandidaten`.
+   * (Der frühere Key `wackelkandidat` bedeutete „Schnupperkinder zusätzlich einblenden“
+   * und wird bewusst nicht mehr gelesen.)
    */
-  wackelkandidat: boolean;
+  nurSchnupper: boolean;
   /** Nur Kinder mit Wackelkandidat-Flag zeigen, Default false. */
   nurWackelkandidaten: boolean;
   /** Sortiermodus der Liste (TE-109). */
@@ -146,12 +146,12 @@ export async function loadBambiniFilters(familyId: string): Promise<BambiniFilte
     ? raw.years.filter((y: any) => Number.isFinite(y)).map((y: number) => Math.trunc(y))
     : [];
   const stopped = raw?.stopped === true ? true : raw?.stopped === false ? false : null;
-  const wackelkandidat = raw?.wackelkandidat === true;
+  const nurSchnupper = raw?.nurSchnupper === true;
   const nurWackelkandidaten = raw?.nurWackelkandidaten === true;
   const sortMode: BambiniSortMode = raw?.sortMode === 'erstesmal' ? 'erstesmal' : 'jahrgang';
   const sortReversed = !!raw?.sortReversed;
   const filtersOpen = raw?.filtersOpen !== false;
-  return { years, stopped, wackelkandidat, nurWackelkandidaten, sortMode, sortReversed, filtersOpen };
+  return { years, stopped, nurSchnupper, nurWackelkandidaten, sortMode, sortReversed, filtersOpen };
 }
 
 /** Quickfilter-Auswahl (TE-20) speichern. */
