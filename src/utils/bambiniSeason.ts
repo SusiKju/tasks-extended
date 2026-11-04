@@ -42,3 +42,14 @@ export function saisonOrt(now: Date): 'draussen' | 'halle' {
 export function ortPasst(ort: TrainingsOrt | undefined, filter: 'draussen' | 'halle' | 'alle'): boolean {
   return filter === 'alle' || !ort || ort === 'beides' || ort === filter;
 }
+
+/**
+ * TE-115: Reihenfolge der Karten „Übungen heute“. Nach vorne geholte Karten (heuteRang)
+ * zuerst, die zuletzt geholte ganz vorne; Rest in Listenreihenfolge dahinter.
+ */
+export function sortHeute<T extends { heuteRang?: number }>(items: T[]): T[] {
+  return items
+    .map((item, i) => ({ item, i }))
+    .sort((a, b) => (b.item.heuteRang ?? -Infinity) - (a.item.heuteRang ?? -Infinity) || a.i - b.i)
+    .map((x) => x.item);
+}
