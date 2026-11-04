@@ -61,6 +61,8 @@ const SMS_BLUE = '#007AFF';
 const INFO_YELLOW = '#F5B301';
 /** TE-91: Verlauf für Schnupperkinder (Filterkachel, Avatar, Pill). */
 const SCHNUPPER_GRADIENT: [string, string] = ['#FF9F0A', '#FF375F'];
+/** Verlauf für Wackelkandidaten (Filterkachel, Pill). */
+const WACKEL_GRADIENT: [string, string] = ['#7B61FF', '#F72585'];
 // TE-114: Anzeigenamen für den Ort einer Trainingsidee bzw. den Filter.
 const ORT_LABEL: Record<TrainingsOrt, string> = { draussen: 'Draußen', halle: 'Halle', beides: 'Beides' };
 const ORT_FILTER_LABEL = { draussen: 'Draußen', halle: 'Halle', alle: 'Alle' } as const;
@@ -121,10 +123,12 @@ export function BambiniScreen() {
   // stoppedFilter: null = alle, true = nur aufgehört, false = nur aktiv (nicht aufgehört).
   const [yearFilter, setYearFilter] = useState<number[]>([]);
   const [stoppedFilter, setStoppedFilter] = useState<boolean | null>(null);
-  // TE-112: Wackelkandidaten sind standardmäßig ausgeblendet und werden nur mit
+  // TE-112: Schnupperkinder (früher „Wackelkandidaten“) sind standardmäßig ausgeblendet und werden nur mit
   // explizit aktiviertem Chip zusätzlich zu den übrigen Filtern (Jahrgang etc.)
-  // eingeblendet – kein exklusiver "nur Wackelkandidaten"-Modus mehr.
-  const [wackelkandidatFilter, setWackelkandidatFilter] = useState(false);
+  // eingeblendet – kein exklusiver "nur Schnupper"-Modus.
+  const [schnupperFilter, setSchnupperFilter] = useState(false);
+  // Nur Wackelkandidaten zeigen (exklusiver Filter, kombinierbar mit Jahrgang/Status).
+  const [wackelFilter, setWackelFilter] = useState(false);
   // TE-109: Sortierung der flachen Liste (keine Jahrgangs-Überschriften mehr) –
   // family-weit persistiert, wie die übrigen Quickfilter (siehe filtersLoaded unten).
   const [sortMode, setSortMode] = useState<BambiniSortMode>('jahrgang');
@@ -152,6 +156,7 @@ export function BambiniScreen() {
   const [smsInput, setSmsInput] = useState(false);
   const [vereinAngemeldetInput, setVereinAngemeldetInput] = useState(false);
   const [schnuppertrainingInput, setSchnuppertrainingInput] = useState(false);
+  const [wackelkandidatInput, setWackelkandidatInput] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
 
   // TE-101: Notiz-Items (wichtig/nächste Aufgabe markierbar), löste die
@@ -445,7 +450,8 @@ export function BambiniScreen() {
       setChildren(list);
       setYearFilter(filters.years);
       setStoppedFilter(filters.stopped);
-      setWackelkandidatFilter(filters.wackelkandidat);
+      setSchnupperFilter(filters.wackelkandidat);
+      setWackelFilter(filters.nurWackelkandidaten);
       setSortMode(filters.sortMode);
       setSortReversed(filters.sortReversed);
       setFiltersOpen(filters.filtersOpen);
@@ -469,12 +475,13 @@ export function BambiniScreen() {
     saveBambiniFilters(fid, {
       years: yearFilter,
       stopped: stoppedFilter,
-      wackelkandidat: wackelkandidatFilter,
+      wackelkandidat: schnupperFilter,
+      nurWackelkandidaten: wackelFilter,
       sortMode,
       sortReversed,
       filtersOpen,
     }).catch((e) => console.warn('Bambini-Filter speichern fehlgeschlagen', e));
-  }, [fid, yearFilter, stoppedFilter, wackelkandidatFilter, sortMode, sortReversed, filtersOpen]);
+  }, [fid, yearFilter, stoppedFilter, schnupperFilter, wackelFilter, sortMode, sortReversed, filtersOpen]);
 
   const persist = useCallback(
     (next: Child[]) => {
@@ -485,7 +492,7 @@ export function BambiniScreen() {
   );
 
   const openNew = () => {
-    setEditing({ id: '', name: '', birthYear: 0, registeredSince: '', stopped: false, parentName: '', lastName: '', info: '', whatsapp: false, sms: false, vereinAngemeldet: false, schnuppertraining: false });
+    setEditing({ id: '', name: '', birthYear: 0, registeredSince: '', stopped: false, parentName: '', lastName: '', info: '', whatsapp: false, sms: false, vereinAngemeldet: false, schnuppertraining: false, wackelkandidat: false });
     setNameInput('');
     setYearInput('');
     setSinceInput('');
@@ -497,6 +504,7 @@ export function BambiniScreen() {
     setSmsInput(false);
     setVereinAngemeldetInput(false);
     setSchnuppertrainingInput(false);
+    setWackelkandidatInput(false);
   };
 
   const openEdit = (c: Child) => {
@@ -512,6 +520,7 @@ export function BambiniScreen() {
     setSmsInput(c.sms);
     setVereinAngemeldetInput(c.vereinAngemeldet);
     setSchnuppertrainingInput(c.schnuppertraining);
+    setWackelkandidatInput(c.wackelkandidat);
   };
 
   const closeModal = () => {
@@ -539,6 +548,7 @@ export function BambiniScreen() {
       sms: smsInput,
       vereinAngemeldet: vereinAngemeldetInput,
       schnuppertraining: schnuppertrainingInput,
+      wackelkandidat: wackelkandidatInput,
     };
 
     if (editing && editing.id) {
@@ -572,11 +582,12 @@ export function BambiniScreen() {
     }
     if (yearFilter.length > 0 && !yearFilter.includes(c.birthYear)) return false;
     if (stoppedFilter !== null && c.stopped !== stoppedFilter) return false;
-    if (c.schnuppertraining && !wackelkandidatFilter) return false;
+    if (c.schnuppertraining && !schnupperFilter) return false;
+    if (wackelFilter && !c.wackelkandidat) return false;
     return true;
   });
 
-  // TE-109: flache Liste, keine Jahrgangs-Gruppierung mehr – Wackelkandidaten
+  // TE-109: flache Liste, keine Jahrgangs-Gruppierung mehr – Schnupperkinder
   // reihen sich mit ein (Jahrgang steht ohnehin auf jedem Item).
   const sorted = [...filtered].sort((a, b) => {
     if (sortMode === 'erstesmal') {
@@ -608,6 +619,12 @@ export function BambiniScreen() {
       <Text style={s.schnupperPillText}>Schnupper</Text>
     </View>
   );
+  const renderWackelPill = () => (
+    <View style={s.schnupperPill}>
+      <LinearGradient colors={[mono(WACKEL_GRADIENT[0]), mono(WACKEL_GRADIENT[1])]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+      <Text style={s.schnupperPillText}>Wackel</Text>
+    </View>
+  );
 
   const renderChildRow = (c: Child, index: number, status: 'aktiv' | 'gewechselt' | null, gewechselt: boolean) => {
     return (
@@ -627,6 +644,7 @@ export function BambiniScreen() {
             {c.parentName ? <Text style={s.rowParent}>{'  '}{c.parentName.toUpperCase()}</Text> : null}
           </Text>
           {c.schnuppertraining ? renderSchnupperPill() : null}
+          {c.wackelkandidat ? renderWackelPill() : null}
           {c.stopped ? <Text style={s.badgeStopped}>aufgehört</Text> : null}
         </View>
         {/* TE-39: Icons + Alter als enger Block, eigener kleiner gap statt Zeilen-gap 8. */}
@@ -682,6 +700,7 @@ export function BambiniScreen() {
           <View style={s.rowMain}>
             <Text style={[s.bName, c.stopped && s.rowNameStopped]} numberOfLines={1}>{c.name}</Text>
             {c.schnuppertraining ? renderSchnupperPill() : null}
+            {c.wackelkandidat ? renderWackelPill() : null}
             {c.stopped ? <Text style={s.badgeStopped}>aufgehört</Text> : null}
           </View>
           {c.parentName ? <Text style={s.bParent} numberOfLines={1}>{c.parentName}</Text> : null}
@@ -1023,19 +1042,22 @@ export function BambiniScreen() {
   );
 
   // TE-89: Filterkopf (Bento Dark) – ersetzt Chips + große Kacheln. Kleine Toggle-Kacheln
-  // für Aktiv/Aufgehört/Wackelkandidaten, darunter die Jahrgangsbalken; ohne Hintergrundkarte.
-  const wackelCount = children.filter((c) => c.schnuppertraining).length;
-  const anyFilter = yearFilter.length > 0 || stoppedFilter !== null || wackelkandidatFilter || q.length >= 3;
+  // für Aktiv/Aufgehört/Schnupper/Wackelkandidaten, darunter die Jahrgangsbalken; ohne Hintergrundkarte.
+  const schnupperCount = children.filter((c) => c.schnuppertraining).length;
+  const wackelCandidateCount = children.filter((c) => c.wackelkandidat).length;
+  const anyFilter = yearFilter.length > 0 || stoppedFilter !== null || schnupperFilter || wackelFilter || q.length >= 3;
   const resetFilters = () => {
     setYearFilter([]);
     setStoppedFilter(null);
-    setWackelkandidatFilter(false);
+    setSchnupperFilter(false);
+    setWackelFilter(false);
     setQuery('');
   };
   const filterSummary = [
     yearFilter.length ? [...yearFilter].sort((x, y) => x - y).map((y) => y || '—').join(', ') : null,
     stoppedFilter === false ? 'aktiv' : stoppedFilter === true ? 'aufgehört' : null,
-    wackelkandidatFilter ? 'mit Schnupperkindern' : null,
+    schnupperFilter ? 'mit Schnupperkindern' : null,
+    wackelFilter ? 'nur Wackelkandidaten' : null,
   ].filter(Boolean).join(' · ');
 
   // TE-90: Balken lückenlos vom ältesten Jahrgang bis mindestens 2025 (künftige Bambini-Jahrgänge),
@@ -1067,7 +1089,8 @@ export function BambiniScreen() {
     const toggles: { key: string; label: string; count: number; on: boolean; colors: [string, string]; onPress: () => void }[] = [
       { key: 'aktiv', label: 'Aktiv', count: children.length - stoppedCount, on: stoppedFilter === false, colors: ['#30D158', '#00B8D9'], onPress: () => setStoppedFilter((v) => (v === false ? null : false)) },
       { key: 'stop', label: 'Aufgehört', count: stoppedCount, on: stoppedFilter === true, colors: ['#FF375F', '#7928CA'], onPress: () => setStoppedFilter((v) => (v === true ? null : true)) },
-      { key: 'wackel', label: 'Schnupper', count: wackelCount, on: wackelkandidatFilter, colors: SCHNUPPER_GRADIENT, onPress: () => setWackelkandidatFilter((v) => !v) },
+      { key: 'schnupper', label: 'Schnupper', count: schnupperCount, on: schnupperFilter, colors: SCHNUPPER_GRADIENT, onPress: () => setSchnupperFilter((v) => !v) },
+      { key: 'wackel', label: 'Wackel', count: wackelCandidateCount, on: wackelFilter, colors: WACKEL_GRADIENT, onPress: () => setWackelFilter((v) => !v) },
     ];
     return (
       <View style={s.fHead}>
@@ -1075,7 +1098,7 @@ export function BambiniScreen() {
           {toggles.map((tg) => (
             <Pressable key={tg.key} style={[s.fToggle, tg.on && s.fToggleOn]} onPress={tg.onPress} accessibilityState={{ selected: tg.on }} accessibilityLabel={`${tg.label} filtern`}>
               {tg.on ? <LinearGradient colors={tg.colors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} /> : null}
-              <Text style={[s.fToggleLabel, tg.on && s.bOnColor]}>{tg.label}</Text>
+              <Text style={[s.fToggleLabel, tg.on && s.bOnColor]} numberOfLines={1} adjustsFontSizeToFit>{tg.label}</Text>
               <Text style={[s.fToggleCount, tg.on && s.bOnColor]}>{tg.count}</Text>
             </Pressable>
           ))}
@@ -1242,10 +1265,16 @@ export function BambiniScreen() {
                   <Text style={[s.filterChipText, stoppedFilter === true && s.filterChipTextActive]}>Aufgehört</Text>
                 </Pressable>
                 <Pressable
-                  style={[s.filterChip, wackelkandidatFilter && s.filterChipActive]}
-                  onPress={() => setWackelkandidatFilter((v) => !v)}
+                  style={[s.filterChip, schnupperFilter && s.filterChipActive]}
+                  onPress={() => setSchnupperFilter((v) => !v)}
                 >
-                  <Text style={[s.filterChipText, wackelkandidatFilter && s.filterChipTextActive]}>Schnupperkinder</Text>
+                  <Text style={[s.filterChipText, schnupperFilter && s.filterChipTextActive]}>Schnupperkinder</Text>
+                </Pressable>
+                <Pressable
+                  style={[s.filterChip, wackelFilter && s.filterChipActive]}
+                  onPress={() => setWackelFilter((v) => !v)}
+                >
+                  <Text style={[s.filterChipText, wackelFilter && s.filterChipTextActive]}>Wackelkandidaten</Text>
                 </Pressable>
                 {yearCounts.map(({ year }) => (
                   <Pressable
@@ -1273,7 +1302,7 @@ export function BambiniScreen() {
                 </Pressable>
               </View>
 
-              {yearFilter.length > 0 || stoppedFilter !== null || wackelkandidatFilter ? (
+              {yearFilter.length > 0 || stoppedFilter !== null || schnupperFilter || wackelFilter ? (
                 <Text style={s.resultCount}>{filtered.length} Treffer</Text>
               ) : null}
             </>
@@ -1430,6 +1459,15 @@ export function BambiniScreen() {
                 color={schnuppertrainingInput ? colors.accent : colors.textSecondary}
               />
               <Text style={[s.checkLabel, { color: colors.text }]}>Schnupperkind</Text>
+            </Pressable>
+
+            <Pressable style={s.checkRow} onPress={() => setWackelkandidatInput((v) => !v)}>
+              <Ionicons
+                name={wackelkandidatInput ? 'checkbox' : 'square-outline'}
+                size={22}
+                color={wackelkandidatInput ? colors.accent : colors.textSecondary}
+              />
+              <Text style={[s.checkLabel, { color: colors.text }]}>Wackelkandidat</Text>
             </Pressable>
 
             <TextInput
@@ -1846,7 +1884,7 @@ function makeStyles(c: ThemeColors) {
     // TE-89: Filterkopf ohne Hintergrundkarte.
     fHead: { gap: 14, marginBottom: 16, paddingHorizontal: 2 },
     fToggles: { flexDirection: 'row', gap: 8 },
-    fToggle: { flex: 1, borderRadius: 14, paddingVertical: 9, paddingHorizontal: 11, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface, overflow: 'hidden' },
+    fToggle: { flex: 1, borderRadius: 14, paddingVertical: 9, paddingHorizontal: 9, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface, overflow: 'hidden' },
     fToggleOn: { borderColor: 'transparent' },
     fToggleLabel: { color: c.textSecondary, fontSize: 10.5, fontWeight: '700', letterSpacing: 0.5, textTransform: 'uppercase' },
     fToggleCount: { color: c.text, fontSize: 20, fontWeight: '800', marginTop: 1 },
