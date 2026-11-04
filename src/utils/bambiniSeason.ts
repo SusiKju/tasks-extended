@@ -27,3 +27,18 @@ export function getBetreuungsZeitraum(birthYear: number): { von: number; bis: nu
   const von = Math.min(Math.max(birthYear + BAMBINI_START_OFFSET, TRAINER_START_JAHR), bis);
   return { von, bis };
 }
+
+/** TE-114: Wo eine Trainingsidee funktioniert. */
+export type TrainingsOrt = 'draussen' | 'halle' | 'beides';
+
+/** TE-114: Standard-Ort nach Saison – Oktober bis März Halle, sonst draußen. */
+// ponytail: Monatsgrenzen fest, in Settings verschieben falls der Verein die Hallenzeit anders legt.
+export function saisonOrt(now: Date): 'draussen' | 'halle' {
+  const m = now.getMonth() + 1;
+  return m >= 10 || m <= 3 ? 'halle' : 'draussen';
+}
+
+/** TE-114: Passt die Idee zum gewählten Filter? „beides“/ohne Ort passt immer. */
+export function ortPasst(ort: TrainingsOrt | undefined, filter: 'draussen' | 'halle' | 'alle'): boolean {
+  return filter === 'alle' || !ort || ort === 'beides' || ort === filter;
+}
