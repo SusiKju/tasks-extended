@@ -54,6 +54,7 @@ import {
   BambiniSortMode,
 } from '../services/bambini';
 import { FlagFilterMode, matchesFlagFilter, nextFlagFilterMode } from '../utils/bambiniFlagFilter';
+import { RATING_COLORS, RATING_MAX, toggleRating } from '../utils/bambiniRating';
 
 /** Bewusst nicht über colors.danger (wird in mono() vergraut) – wie NotesScreen IMPORTANT_RED. */
 const NOT_ANGEMELDET_RED = '#EF4444';
@@ -157,6 +158,7 @@ export function BambiniScreen() {
   const [vereinAngemeldetInput, setVereinAngemeldetInput] = useState(false);
   const [schnuppertrainingInput, setSchnuppertrainingInput] = useState(false);
   const [wackelkandidatInput, setWackelkandidatInput] = useState(false);
+  const [ratingInput, setRatingInput] = useState(0);
   const [showDatePicker, setShowDatePicker] = useState(false);
 
   // TE-101: Notiz-Items (wichtig/nächste Aufgabe markierbar), löste die
@@ -492,7 +494,7 @@ export function BambiniScreen() {
   );
 
   const openNew = () => {
-    setEditing({ id: '', name: '', birthYear: 0, registeredSince: '', stopped: false, parentName: '', lastName: '', info: '', whatsapp: false, sms: false, vereinAngemeldet: false, schnuppertraining: false, wackelkandidat: false });
+    setEditing({ id: '', name: '', birthYear: 0, registeredSince: '', stopped: false, parentName: '', lastName: '', info: '', whatsapp: false, sms: false, vereinAngemeldet: false, schnuppertraining: false, wackelkandidat: false, rating: 0 });
     setNameInput('');
     setYearInput('');
     setSinceInput('');
@@ -505,6 +507,7 @@ export function BambiniScreen() {
     setVereinAngemeldetInput(false);
     setSchnuppertrainingInput(false);
     setWackelkandidatInput(false);
+    setRatingInput(0);
   };
 
   const openEdit = (c: Child) => {
@@ -521,6 +524,7 @@ export function BambiniScreen() {
     setVereinAngemeldetInput(c.vereinAngemeldet);
     setSchnuppertrainingInput(c.schnuppertraining);
     setWackelkandidatInput(c.wackelkandidat);
+    setRatingInput(c.rating);
   };
 
   const closeModal = () => {
@@ -549,6 +553,7 @@ export function BambiniScreen() {
       vereinAngemeldet: vereinAngemeldetInput,
       schnuppertraining: schnuppertrainingInput,
       wackelkandidat: wackelkandidatInput,
+      rating: ratingInput,
     };
 
     if (editing && editing.id) {
@@ -625,6 +630,16 @@ export function BambiniScreen() {
       <Text style={s.schnupperPillText}>Wackel</Text>
     </View>
   );
+
+  // Spielstärke als Regenbogen-Balken: 5 Segmente, die ersten `rating` farbig (rot → blau).
+  const renderRatingBar = (rating: number) =>
+    rating > 0 ? (
+      <View style={s.ratingBar} accessibilityLabel={`Spielstärke ${rating} von ${RATING_MAX}`}>
+        {RATING_COLORS.map((col, i) => (
+          <View key={i} style={[s.ratingSeg, { backgroundColor: i < rating ? mono(col) : colors.surfaceHigh }]} />
+        ))}
+      </View>
+    ) : null;
 
   const renderChildRow = (c: Child, index: number, status: 'aktiv' | 'gewechselt' | null, gewechselt: boolean) => {
     return (
@@ -705,6 +720,7 @@ export function BambiniScreen() {
           </View>
           {c.parentName ? <Text style={s.bParent} numberOfLines={1}>{c.parentName}</Text> : null}
         </View>
+        {renderRatingBar(c.rating)}
         <View style={s.bDots}>
           {dots.map((d) => (
             <View key={d.label} style={[s.bDot, { backgroundColor: d.color }]} accessibilityLabel={d.label} />
@@ -1476,6 +1492,28 @@ export function BambiniScreen() {
               <Text style={[s.checkLabel, { color: colors.text }]}>Wackelkandidat</Text>
             </Pressable>
 
+            <View style={s.ratingInputRow}>
+              <Text style={[s.checkLabel, { color: colors.text }]}>Spielstärke</Text>
+              <View style={s.ratingInputButtons}>
+                {RATING_COLORS.map((col, i) => {
+                  const value = i + 1;
+                  const on = value <= ratingInput;
+                  return (
+                    <Pressable
+                      key={value}
+                      style={[s.ratingInputBtn, on ? { backgroundColor: mono(col), borderColor: 'transparent' } : null]}
+                      onPress={() => setRatingInput((v) => toggleRating(v, value))}
+                      accessibilityLabel={`Spielstärke ${value}`}
+                      accessibilityState={{ selected: value === ratingInput }}
+                      hitSlop={4}
+                    >
+                      <Text style={[s.ratingInputText, on && s.bOnColor]}>{value}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+
             <TextInput
               style={s.input}
               value={parentInput}
@@ -1812,6 +1850,12 @@ function makeStyles(c: ThemeColors) {
     bName: { color: c.text, fontSize: 15, fontWeight: '600', flexShrink: 1 },
     bParent: { color: c.textMuted, fontSize: 12, marginTop: 1 },
     bDots: { flexDirection: 'row', gap: 4 },
+    ratingBar: { flexDirection: 'row', gap: 2, marginRight: 4 },
+    ratingSeg: { width: 6, height: 14, borderRadius: 2 },
+    ratingInputRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 4 },
+    ratingInputButtons: { flexDirection: 'row', gap: 6 },
+    ratingInputBtn: { width: 32, height: 32, borderRadius: 8, borderWidth: 1, borderColor: c.border, alignItems: 'center', justifyContent: 'center' },
+    ratingInputText: { color: c.textSecondary, fontSize: 14, fontWeight: '700' },
 
     // TE-86: Ansichts-Leiste und „+ Kind“.
     dock: {
