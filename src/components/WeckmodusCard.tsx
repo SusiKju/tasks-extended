@@ -1,7 +1,7 @@
 /**
  * WeckmodusCard.tsx (TE-82)
  *
- * Zeigt morgens zwischen 5:00 und 7:00 Uhr an Schultagen (Mo-Fr) pro Kind, ob
+ * Zeigt morgens zwischen 5:00 und 8:00 Uhr an Schultagen (Mo-Fr) pro Kind, ob
  * die 1. Stunde stattfindet (aufstehen) oder frei ist (ausschlafen; mehrere
  * freie Stunden am Stück werden zusammengezählt, TE-9). Kinder
  * ohne jemals eingetragenen Stundenplan werden ausgeblendet – für sie gibt es
@@ -23,6 +23,9 @@ import { isSchulfrei } from '../utils/schulferien';
 import ChildAvatar from './ChildAvatar';
 
 const LAST_LESSON_NR = 10;
+/** Anzeigefenster morgens [Start, Ende) in vollen Stunden. */
+const WAKE_WINDOW_START = 5;
+const WAKE_WINDOW_END = 8;
 
 /** Anzahl freier Stunden am Stück ab der 1. Stunde (0 = 1. Stunde findet statt). */
 function leadingFreePeriods(map: TimetableMap | undefined, dayIdx: number, biweeklyActive: boolean): number {
@@ -39,7 +42,7 @@ function statusText(free: number): string {
 }
 
 function inWakeWindow(d: Date): boolean {
-  return todayDayIndex() !== -1 && !isSchulfrei(d) && d.getHours() >= 5 && d.getHours() < 7;
+  return todayDayIndex() !== -1 && !isSchulfrei(d) && d.getHours() >= WAKE_WINDOW_START && d.getHours() < WAKE_WINDOW_END;
 }
 
 export function WeckmodusCard({ colors }: { colors: ThemeColors }) {
@@ -76,7 +79,7 @@ export function WeckmodusCard({ colors }: { colors: ThemeColors }) {
 
   return (
     <View style={[styles.wrap, { borderColor: colors.softBorder, backgroundColor: colors.surface }]}>
-      <Text style={[styles.windowLabel, { color: colors.textMuted }]}>wird angezeigt von 5–7 Uhr</Text>
+      <Text style={[styles.windowLabel, { color: colors.textMuted }]}>wird angezeigt von {WAKE_WINDOW_START}–{WAKE_WINDOW_END} Uhr</Text>
       {rows.map(({ child, free }) => {
         const wakeUp = free === 0;
         return (
