@@ -1,7 +1,7 @@
 /**
  * WeckmodusCard.tsx (TE-82)
  *
- * Zeigt morgens zwischen 5:00 und 8:00 Uhr an Schultagen (Mo-Fr) pro Kind, ob
+ * Zeigt morgens im einstellbaren Zeitfenster (Settings, Default 5:00–8:00 Uhr) an Schultagen (Mo-Fr) pro Kind, ob
  * die 1. Stunde stattfindet (aufstehen) oder frei ist (ausschlafen; mehrere
  * freie Stunden am Stück werden zusammengezählt, TE-9). Kinder
  * ohne jemals eingetragenen Stundenplan werden ausgeblendet – für sie gibt es
@@ -19,13 +19,11 @@ import { useFamily } from '../hooks/useFamily';
 import {
   TimetableMap, key, todayDayIndex, isBiweeklyActiveWeek, needsWakeUp, subscribeToTimetable,
 } from '../services/timetable';
-import { isSchulfrei } from '../utils/schulferien';
+import { formatWeckTime, isInWeckWindow, sanitizeWeckWindow } from '../utils/weckmodusWindow';
+import { useStore } from '../store';
 import ChildAvatar from './ChildAvatar';
 
 const LAST_LESSON_NR = 10;
-/** Anzeigefenster morgens [Start, Ende) in vollen Stunden. */
-const WAKE_WINDOW_START = 5;
-const WAKE_WINDOW_END = 8;
 
 /** Anzahl freier Stunden am Stück ab der 1. Stunde (0 = 1. Stunde findet statt). */
 function leadingFreePeriods(map: TimetableMap | undefined, dayIdx: number, biweeklyActive: boolean): number {
@@ -41,12 +39,11 @@ function statusText(free: number): string {
   return `1.–${free}. Stunde frei – ausschlafen`;
 }
 
-function inWakeWindow(d: Date): boolean {
-  return todayDayIndex() !== -1 && !isSchulfrei(d) && d.getHours() >= WAKE_WINDOW_START && d.getHours() < WAKE_WINDOW_END;
-}
-
 export function WeckmodusCard({ colors }: { colors: ThemeColors }) {
   const { familyId, children } = useFamily();
+  const startMin = useStore((s) => s.settings.weckmodusStartMin);
+  const endMin = useStore((s) => s.settings.weckmodusEndMin);
+  const win = sanitizeWeckWindow(startMin, endMin);
   const [now, setNow] = useState(new Date());
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 60_000);
@@ -64,7 +61,7 @@ export function WeckmodusCard({ colors }: { colors: ThemeColors }) {
     return () => unsubs.forEach((u) => u());
   }, [familyId, children]);
 
-  if (!familyId || !inWakeWindow(now)) return null;
+  if (!familyId || !isInWeckWindow(now, win.start, win.end)) return null;
 
   const todayIdx = todayDayIndex();
   const biweeklyActive = isBiweeklyActiveWeek(now);
@@ -79,7 +76,7 @@ export function WeckmodusCard({ colors }: { colors: ThemeColors }) {
 
   return (
     <View style={[styles.wrap, { borderColor: colors.softBorder, backgroundColor: colors.surface }]}>
-      <Text style={[styles.windowLabel, { color: colors.textMuted }]}>wird angezeigt von {WAKE_WINDOW_START}–{WAKE_WINDOW_END} Uhr</Text>
+      <Text style={[styles.windowLabel, { color: colors.textMuted }]}>wird angezeigt von {formatWeckTime(win.start)}–{formatWeckTime(win.end)} Uhr</Text>
       {rows.map(({ child, free }) => {
         const wakeUp = free === 0;
         return (

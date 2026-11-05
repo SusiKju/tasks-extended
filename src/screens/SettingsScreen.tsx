@@ -19,6 +19,7 @@ import { useStore } from '../store';
 import { useTheme, ThemeColors, neonGlow, THEMES } from '../utils/theme';
 import { GradientButton, PLUS_BUTTON, PLUS_ICON_SIZE } from '../components/GradientButton';
 import { DASHBOARD_BLOCKS, DEFAULT_DASHBOARD_BLOCKS, TOGGLEABLE_TABS, DEFAULT_VISIBLE_TABS, ThemeName } from '../types';
+import { formatWeckTime, sanitizeWeckWindow, WECK_STEP } from '../utils/weckmodusWindow';
 
 import {
   signInWithGoogle,
@@ -1122,6 +1123,41 @@ export function SettingsScreen() {
             </Pressable>
           );
         })}
+
+        {/* Weckmodus-Zeitfenster: von/bis in 30-Minuten-Schritten. */}
+        {(settings.dashboardBlocks ?? DEFAULT_DASHBOARD_BLOCKS).weckmodus !== false ? (() => {
+          const win = sanitizeWeckWindow(settings.weckmodusStartMin, settings.weckmodusEndMin);
+          const setWin = (start: number, end: number) => {
+            if (start < 0 || end > 24 * 60 || start >= end) return;
+            updateSettings({ weckmodusStartMin: start, weckmodusEndMin: end });
+          };
+          const stepper = (label: string, value: number, onMinus: () => void, onPlus: () => void) => (
+            <View style={styles.weckStepper}>
+              <Text style={styles.rowSubtitle}>{label}</Text>
+              <Pressable style={styles.weckBtn} onPress={onMinus} hitSlop={6} accessibilityLabel={`${label} früher`}>
+                <Ionicons name="remove" size={16} color={colors.text} />
+              </Pressable>
+              <Text style={styles.weckTime}>{formatWeckTime(value)}</Text>
+              <Pressable style={styles.weckBtn} onPress={onPlus} hitSlop={6} accessibilityLabel={`${label} später`}>
+                <Ionicons name="add" size={16} color={colors.text} />
+              </Pressable>
+            </View>
+          );
+          return (
+            <View style={styles.themeRow}>
+              <View style={styles.rowContent}>
+                <Text style={styles.rowTitle}>Weckmodus-Zeitfenster</Text>
+                <Text style={styles.rowSubtitle}>
+                  Mo–Fr in diesem Zeitraum. In den Schulferien und an Feiertagen in Sachsen bleibt die Karte aus.
+                </Text>
+                <View style={styles.weckRow}>
+                  {stepper('von', win.start, () => setWin(win.start - WECK_STEP, win.end), () => setWin(win.start + WECK_STEP, win.end))}
+                  {stepper('bis', win.end, () => setWin(win.start, win.end - WECK_STEP), () => setWin(win.start, win.end + WECK_STEP))}
+                </View>
+              </View>
+            </View>
+          );
+        })() : null}
       </View>
 
       {/* Sichtbare Tabs (TE-49) */}
@@ -1213,6 +1249,10 @@ function makeStyles(c: ThemeColors) {
       marginBottom: 2,
     },
     rowContent: { flex: 1 },
+    weckRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 16, marginTop: 10 },
+    weckStepper: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    weckBtn: { width: 30, height: 30, borderRadius: 8, borderWidth: 1, borderColor: c.border, alignItems: 'center', justifyContent: 'center' },
+    weckTime: { fontSize: 15, fontWeight: '700', color: c.text, minWidth: 42, textAlign: 'center' },
     rowTitle: { fontSize: 15, color: c.text },
     rowSubtitle: { fontSize: 13, color: c.textSecondary, marginTop: 2 },
     rowValue: { fontSize: 15, color: c.textSecondary },
