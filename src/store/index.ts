@@ -109,6 +109,8 @@ const DEFAULT_SETTINGS: AppSettings = {
   besteSchuleStudentIds: {},
   fussballDeTeamIds: {},
   kindergartenChildIds: {},
+  weckmodusStartMin: 300,
+  weckmodusEndMin: 480,
 };
 
 export const useStore = create<TaskState>()(
@@ -270,7 +272,7 @@ export const useStore = create<TaskState>()(
     }),
     {
       name: 'tasks-extended-store',
-      version: 28,
+      version: 29,
       migrate: (persistedState: any, version: number) => {
         if (version < 1 && persistedState?.tasks) {
           persistedState.tasks = persistedState.tasks.map((t: any) => ({
@@ -422,6 +424,11 @@ export const useStore = create<TaskState>()(
           // Sync zurück) auf 'ruhig' setzen.
           const valid = ['ruhig', 'bento-night', 'aurora'];
           if (!valid.includes(persistedState.settings.theme)) persistedState.settings.theme = 'ruhig';
+        }
+        if (version < 29 && persistedState?.settings) {
+          // Weckmodus-Zeitfenster einstellbar – Default 5:00–8:00 Uhr.
+          persistedState.settings.weckmodusStartMin = persistedState.settings.weckmodusStartMin ?? 300;
+          persistedState.settings.weckmodusEndMin = persistedState.settings.weckmodusEndMin ?? 480;
         }
         return persistedState;
       },

@@ -118,6 +118,12 @@ export interface AppSettings {
    * Infos/Termine als Aufgaben gedacht).
    */
   kindergartenChildIds: Partial<Record<string, boolean>>;
+  /**
+   * Weckmodus-Zeitfenster in Minuten seit Mitternacht (Default 300–480 = 5–8 Uhr).
+   * Familienweit synchronisiert. In sächsischen Ferien/Feiertagen ist die Karte trotzdem aus.
+   */
+  weckmodusStartMin: number;
+  weckmodusEndMin: number;
 }
 
 /**
@@ -142,7 +148,7 @@ export type DashboardBlockKey =
   | 'allowance';
 
 export const DASHBOARD_BLOCKS: { key: DashboardBlockKey; label: string; description: string }[] = [
-  { key: 'weckmodus',     label: 'Weckmodus',           description: 'Morgens 5–8 Uhr an Schultagen: muss ein Kind zur 1. Stunde aufstehen oder ist sie frei?' },
+  { key: 'weckmodus',     label: 'Weckmodus',           description: 'Morgens an Schultagen (Zeitfenster einstellbar, nicht in Sachsens Ferien): muss ein Kind zur 1. Stunde aufstehen oder ist sie frei?' },
   { key: 'birthdays',     label: 'Geburtstage',         description: 'Heutige Geburtstage ganz oben.' },
   { key: 'weather',       label: 'Wetter',              description: 'Wettervorhersage neben dem Sync-Button.' },
   { key: 'googleTasks',   label: 'Google Tasks',        description: 'Offene Google Tasks, zeilenweise über den Links.' },
