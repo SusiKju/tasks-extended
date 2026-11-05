@@ -26,6 +26,7 @@ import {
   defaultJahrgang,
 } from './fussballKachel';
 import { FlagFilterMode, parseFlagFilterMode } from '../utils/bambiniFlagFilter';
+import { sanitizeRating } from '../utils/bambiniRating';
 
 export interface Child {
   /** Stabile ID (uuid v4). */
@@ -54,6 +55,8 @@ export interface Child {
   schnuppertraining: boolean;
   /** Wackelkandidat – unsicher, ob das Kind dabeibleibt. Wird markiert und ist filterbar. */
   wackelkandidat: boolean;
+  /** Spielstärke 1–5, 0 = nicht bewertet. Wird als Regenbogen-Balken in der Liste gezeigt. */
+  rating: number;
 }
 
 /** Sortierung der Bambini-Liste (TE-109): nach Jahrgang oder nach "dabei seit". */
@@ -103,6 +106,7 @@ function sanitizeChild(c: any): Child | null {
     vereinAngemeldet: !!c?.vereinAngemeldet,
     schnuppertraining: !!c?.schnuppertraining,
     wackelkandidat: !!c?.wackelkandidat,
+    rating: sanitizeRating(c?.rating),
   };
 }
 
@@ -325,6 +329,7 @@ export async function migrateRosterToBambini(familyId: string): Promise<void> {
         vereinAngemeldet: false,
         schnuppertraining: false,
         wackelkandidat: false,
+        rating: 0,
       });
     });
   });
