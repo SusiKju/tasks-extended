@@ -44,6 +44,9 @@ const HALF_DAY = 12 * 60;
 const PAST = 60;
 const FUTURE = HALF_DAY - PAST;
 const MARKER_OVERHANG = 7;
+/** Aufgaben-Striche hinter dem Zeiger: ein Segment (12 min) Abstand, max. eine Stunde. */
+const TODO_STEP = HALF_DAY / SEGMENTS;
+const MAX_TODO_MARKS = PAST / TODO_STEP;
 
 /**
  * 12-Stunden-Ziffernblatt (oben = 12/0 Uhr) mit Blick nach vorn: die nächsten
@@ -53,6 +56,11 @@ const MARKER_OVERHANG = 7;
  * Fenster stehen als lange Striche nach außen; der nächste ist dicker,
  * vergangene blass. Termine außerhalb des Fensters fehlen bewusst – sie lägen
  * sonst auf derselben Stelle des Ziffernblatts wie ein Zeitpunkt darin.
+ *
+ * Aufgaben ohne Uhrzeit (heute fällig / überfällig) haben keinen Platz auf
+ * dem Ziffernblatt – sie stehen als farbige Striche direkt hinter dem Zeiger
+ * in der grauen letzten Stunde („ist schon dran“): überfällige rot direkt am
+ * Zeiger, heute fällige gelb dahinter, je ein Segment Abstand, max. 5.
  */
 function DayRing({
   nowMin,
@@ -60,10 +68,17 @@ function DayRing({
   track,
   hourTrack,
   marker,
+  todos,
+  overdueColor,
+  todayColor,
   children,
 }: {
   nowMin: number;
   eventMins: number[];
+  /** Bereits sortiert: überfällige zuerst. */
+  todos: { overdue: boolean }[];
+  overdueColor: string;
+  todayColor: string;
   track: string;
   hourTrack: string;
   marker: string;
@@ -72,12 +87,17 @@ function DayRing({
   const inWindow = eventMins.filter((m) => m >= nowMin - PAST && m < nowMin + FUTURE);
   const nextMin = Math.min(...inWindow.filter((m) => m >= nowMin));
   // Minuten, bis die Segment-Position auf dem Ziffernblatt wieder erreicht ist (0..719).
+  const todoMarks = todos.slice(0, MAX_TODO_MARKS);
+  const overdueCount = todos.filter((t) => t.overdue).length;
   const ahead = (i: number) => ((i * HALF_DAY) / SEGMENTS - (nowMin % HALF_DAY) + HALF_DAY) % HALF_DAY;
   return (
     <View
       style={styles.ring}
       accessibilityRole="image"
-      accessibilityLabel={`Uhr, ${inWindow.filter((m) => m >= nowMin).length} anstehende Termine in den nächsten 11 Stunden`}
+      accessibilityLabel={
+        `Uhr, ${inWindow.filter((m) => m >= nowMin).length} anstehende Termine in den nächsten 11 Stunden` +
+        (todos.length ? `, ${todos.length} Aufgaben heute, davon ${overdueCount} überfällig` : '')
+      }
     >
       {Array.from({ length: SEGMENTS }, (_, i) => {
         const hour = i % 5 === 0;
@@ -108,6 +128,14 @@ function DayRing({
               { backgroundColor: marker, opacity: m < nowMin ? 0.35 : 1 },
             ]}
           />
+        </View>
+      ))}
+      {todoMarks.map((t, i) => (
+        <View
+          key={`t${i}`}
+          style={[StyleSheet.absoluteFill, { transform: [{ rotate: `${(((nowMin - TODO_STEP * (i + 1)) % HALF_DAY + HALF_DAY) % HALF_DAY / HALF_DAY) * 360}deg` }] }]}
+        >
+          <View style={[styles.marker, styles.markerNext, { backgroundColor: t.overdue ? overdueColor : todayColor }]} />
         </View>
       ))}
       <View style={styles.ringCenter}>{children}</View>
@@ -186,7 +214,11 @@ export function TodayHero({
   return (
     <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.softBorder }]}>
       <View style={styles.top}>
-        <DayRing nowMin={nowMin} eventMins={eventMins} track={colors.surfaceHigh} hourTrack={colors.textMuted} marker={colors.text}>
+        <DayRing nowMin={nowMin} eventMins={eventMins} track={colors.surfaceHigh} hourTrack={colors.textMuted} marker={colors.text}
+          todos={todayTodos}
+          overdueColor={colors.danger}
+          todayColor={colors.warning}
+        >
           <Text style={[styles.time, { color: colors.text }]}>{hhmm(now)}</Text>
           {weather && (
             <Text style={[styles.temp, { color: colors.textMuted }]}>
@@ -220,15 +252,14 @@ export function TodayHero({
               {/* Ohne anstehenden Termin: die Aufgaben selbst zeigen statt „keine Termine“. */}
               {todayTodos.slice(0, MAX_TODOS).map((t) => (
                 <View key={t.id} style={styles.todoRow}>
-                  <View style={[styles.todoDot, { backgroundColor: t.overdue ? colors.danger : RING_STOPS[1] }]} />
+                  <View style={[styles.todoDot, { backgroundColor: t.overdue ? colors.danger : colors.warning }]} />
                   <Text style={[styles.todoText, { color: t.overdue ? colors.danger : colors.text }]} numberOfLines={1}>
                     {t.title}
                   </Text>
                 </View>
               ))}
               <Text style={[styles.after, { color: colors.textSecondary }]} numberOfLines={1}>
-                {todayTodos.length > MAX_TODOS ? `+${todayTodos.length - MAX_TODOS} weitere · ` : ''}
-                keine Termine mehr
+                {todayTodos.length > MAX_TODOS ? `+${todayTodos.length - MAX_TODOS} weitere` : 'keine Termine mehr'}
                 {overdueCount > 0 && (
                   <Text style={{ color: colors.danger, fontWeight: '700' }}> · {overdueCount} überfällig</Text>
                 )}
