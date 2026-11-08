@@ -29,3 +29,24 @@ export function showsAsTimedEvent(t: DashTask): boolean {
 export function showsInTaskList(t: DashTask): boolean {
   return !t.dueTime || isOverdue(t.dueDate ?? null);
 }
+
+/** Fällig heute oder überfällig – das, was „heute zu erledigen“ ist (Uhr-Karte).
+ *  Undatierte zählen nicht: die haben keinen Tagesbezug. */
+export function isDueTodayOrOverdue(dateStr?: string | null): boolean {
+  if (!dateStr) return false;
+  return localDateStr(dateStr) <= format(new Date(), 'yyyy-MM-dd');
+}
+
+export interface TodayTodo {
+  id: string;
+  title: string;
+  dueDate: string;
+  overdue: boolean;
+}
+
+/** Überfällige zuerst (älteste vorn), danach die heute fälligen. */
+export function sortTodayTodos(items: { id: string; title: string; dueDate: string }[]): TodayTodo[] {
+  return items
+    .map((t) => ({ ...t, overdue: isOverdue(t.dueDate) }))
+    .sort((a, b) => localDateStr(a.dueDate).localeCompare(localDateStr(b.dueDate)));
+}

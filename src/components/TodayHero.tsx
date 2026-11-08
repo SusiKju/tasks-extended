@@ -3,7 +3,8 @@
  *
  * Kopfkarte des Dashboards aus dem Aurora-Entwurf: links ein Tagesring
  * (12-h-Ziffernblatt mit Terminstrichen, TE-71) mit Uhrzeit + Temperatur,
- * rechts der nächste Termin von heute und der danach. Darunter drei
+ * rechts der nächste Termin von heute und der danach, dazu die heute fälligen
+ * und überfälligen Aufgaben (ohne Uhrzeit). Darunter drei
  * Schnell-Anlegen-Buttons: Aufgabe, Idee, Geistesblitz.
  *
  * Der Ring besteht aus 60 gedrehten Segment-Views statt SVG – so braucht es
@@ -16,6 +17,7 @@ import { ThemeColors, ButtonGradient } from '../utils/theme';
 import { GradientButton } from './GradientButton';
 import { CalendarEvent } from '../services/googleCalendar';
 import { fetchWeatherForecast, DailyWeather } from '../services/weather';
+import { TodayTodo } from '../utils/dashboardTasks';
 
 const SEGMENTS = 60;
 const RING_SIZE = 92;
@@ -115,9 +117,14 @@ function DayRing({
 
 const hhmm = (d: Date) => d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
 
+/** Max. Aufgaben, die ohne anstehenden Termin namentlich gelistet werden. */
+const MAX_TODOS = 3;
+
 export function TodayHero({
   colors,
   todayEvents,
+  todayTodos = [],
+  onOpenTodos,
   onAddTask,
   onAddIdea,
   onAddBlitz,
@@ -125,6 +132,9 @@ export function TodayHero({
   colors: ThemeColors;
   /** Termine von heute (beliebige Reihenfolge, inkl. ganztägiger). */
   todayEvents: CalendarEvent[];
+  /** Heute fällige + überfällige Aufgaben ohne Uhrzeit, überfällige zuerst. */
+  todayTodos?: TodayTodo[];
+  onOpenTodos?: () => void;
   onAddTask: () => void;
   onAddIdea: () => void;
   /** Fehlt, wenn der Geistesblitz-Block ausgeblendet ist – dann kein Button. */
@@ -163,6 +173,16 @@ export function TodayHero({
     [todayEvents, now],
   );
 
+  const overdueCount = todayTodos.filter((t) => t.overdue).length;
+  const todoSummary = todayTodos.length > 0 && (
+    <Text style={[styles.after, { color: colors.textSecondary }]} numberOfLines={1}>
+      {todayTodos.length === 1 ? '1 Aufgabe' : `${todayTodos.length} Aufgaben`} heute
+      {overdueCount > 0 && (
+        <Text style={{ color: colors.danger, fontWeight: '700' }}> · {overdueCount} überfällig</Text>
+      )}
+    </Text>
+  );
+
   return (
     <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.softBorder }]}>
       <View style={styles.top}>
@@ -174,8 +194,15 @@ export function TodayHero({
             </Text>
           )}
         </DayRing>
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={[styles.kicker, { color: RING_STOPS[0] }]}>ALS NÄCHSTES</Text>
+        <Pressable
+          style={{ flex: 1, minWidth: 0 }}
+          onPress={todayTodos.length > 0 ? onOpenTodos : undefined}
+          disabled={todayTodos.length === 0 || !onOpenTodos}
+          accessibilityRole={todayTodos.length > 0 && onOpenTodos ? 'button' : undefined}
+        >
+          <Text style={[styles.kicker, { color: RING_STOPS[0] }]}>
+            {next || todayTodos.length === 0 ? 'ALS NÄCHSTES' : 'HEUTE ZU ERLEDIGEN'}
+          </Text>
           {next ? (
             <>
               <Text style={[styles.nextTitle, { color: colors.text }]} numberOfLines={2}>
@@ -186,11 +213,31 @@ export function TodayHero({
                   danach {hhmm(new Date(after.start))} {after.summary}
                 </Text>
               )}
+              {todoSummary}
+            </>
+          ) : todayTodos.length > 0 ? (
+            <>
+              {/* Ohne anstehenden Termin: die Aufgaben selbst zeigen statt „keine Termine“. */}
+              {todayTodos.slice(0, MAX_TODOS).map((t) => (
+                <View key={t.id} style={styles.todoRow}>
+                  <View style={[styles.todoDot, { backgroundColor: t.overdue ? colors.danger : RING_STOPS[1] }]} />
+                  <Text style={[styles.todoText, { color: t.overdue ? colors.danger : colors.text }]} numberOfLines={1}>
+                    {t.title}
+                  </Text>
+                </View>
+              ))}
+              <Text style={[styles.after, { color: colors.textSecondary }]} numberOfLines={1}>
+                {todayTodos.length > MAX_TODOS ? `+${todayTodos.length - MAX_TODOS} weitere · ` : ''}
+                keine Termine mehr
+                {overdueCount > 0 && (
+                  <Text style={{ color: colors.danger, fontWeight: '700' }}> · {overdueCount} überfällig</Text>
+                )}
+              </Text>
             </>
           ) : (
             <Text style={[styles.nextTitle, { color: colors.text }]}>Heute keine Termine mehr</Text>
           )}
-        </View>
+        </Pressable>
       </View>
       <View style={styles.actions}>
         {/* TE-62: Verlauf je nach Theme (Bento Dark: Aufgabe blau, Idee gelb,
@@ -240,6 +287,9 @@ const styles = StyleSheet.create({
   kicker: { fontSize: 12, fontWeight: '700', letterSpacing: 0.6 },
   nextTitle: { fontSize: 18, fontWeight: '700', marginTop: 2 },
   after: { fontSize: 13, marginTop: 2 },
+  todoRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
+  todoDot: { width: 8, height: 8, borderRadius: 4 },
+  todoText: { flex: 1, fontSize: 16, fontWeight: '700' },
   actions: { flexDirection: 'row', gap: 8 },
   // Breite nach Inhalt statt gleicher Drittel – sonst wird „+ Geistesblitz“ am Handy abgeschnitten.
   btnFlex: { flexGrow: 1, flexShrink: 1, flexBasis: 'auto' },
