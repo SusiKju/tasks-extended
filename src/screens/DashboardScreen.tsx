@@ -25,7 +25,7 @@ import { useFirebaseAuth } from '../hooks/useFirebaseAuth';
 import { useGoogleTasksSync } from '../hooks/useGoogleTasksSync';
 import { useGoogleContactsBirthdaysSync } from '../hooks/useGoogleContactsBirthdaysSync';
 import { isOverdue, isDueToday, localDateStr } from '../utils/dateFormat';
-import { isUndatedOrSoon, isDashboardTask, showsAsTimedEvent, showsInTaskList } from '../utils/dashboardTasks';
+import { isUndatedOrSoon, isDashboardTask, showsAsTimedEvent, showsInTaskList, isDueTodayOrOverdue, sortTodayTodos } from '../utils/dashboardTasks';
 import { listUpcomingEvents, CalendarEvent, getValidAccessToken } from '../services/googleCalendar';
 import { syncBesteSchuleChild } from '../services/besteSchule';
 import { listStarredDriveFiles, DriveFile } from '../services/googleDrive';
@@ -577,6 +577,21 @@ export function DashboardScreen() {
     };
   }, [calEvents, timedTaskEvents]);
 
+  // Uhr-Karte: alles, was heute (oder schon früher) fällig ist und keine
+  // Uhrzeit hat – getimte Tasks stehen dort bereits als Termin.
+  const todayTodos = useMemo(
+    () =>
+      sortTodayTodos([
+        ...(showBlock('googleTasks') ? dashboardTasks : [])
+          .filter((t) => showsInTaskList(t) && isDueTodayOrOverdue(t.dueDate))
+          .map((t) => ({ id: `gt-${t.id}`, title: t.title, dueDate: t.dueDate! })),
+        ...(showBlock('scratchpad') ? personalNotes : [])
+          .filter((e) => isDueTodayOrOverdue(e.dueDate))
+          .map((e, i) => ({ id: `pt-${e.id ?? i}`, title: e.text.trim(), dueDate: e.dueDate! })),
+      ]),
+    [dashboardTasks, personalNotes, showBlock],
+  );
+
   // TE-168: Drive-Favoriten beim Laden automatisch ziehen – analog zum
   // Kalender. Nur wenn der Block überhaupt sichtbar ist (kein unnötiger Call).
   useEffect(() => {
@@ -655,6 +670,8 @@ export function DashboardScreen() {
       <TodayHero
         colors={colors}
         todayEvents={showBlock('calendar') && settings.googleCalendarEnabled ? todayEvents : []}
+        todayTodos={todayTodos}
+        onOpenTodos={() => router.push('/(tabs)/tasks' as any)}
         onAddTask={() => { setQuickAddDue(new Date()); setQuickAddKind('personal'); }}
         onAddIdea={() => setQuickAddKind('notiz')}
         onAddBlitz={showBlock('geistesblitze') ? () => setQuickAddKind('blitz') : undefined}

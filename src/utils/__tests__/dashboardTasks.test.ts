@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fromGoogleDate } from '../dateFormat';
-import { isDashboardTask, isUndatedOrSoon, showsAsTimedEvent, showsInTaskList } from '../dashboardTasks';
+import { isDashboardTask, isDueTodayOrOverdue, isUndatedOrSoon, showsAsTimedEvent, showsInTaskList, sortTodayTodos } from '../dashboardTasks';
 
 // Google liefert Fälligkeiten als "YYYY-MM-DDT00:00:00.000Z"; der Sync macht
 // daraus lokalen Mittag (fromGoogleDate). Genau so testen.
@@ -60,5 +60,22 @@ describe('Task mit Uhrzeit: Termin oder Listeneintrag', () => {
   it('ohne Uhrzeit → immer in der Liste', () => {
     expect(showsInTaskList(task(due('2026-11-04')))).toBe(true);
     expect(showsAsTimedEvent(task(due('2026-11-04')))).toBe(false);
+  });
+});
+
+describe('Heute zu erledigen (Uhr-Karte)', () => {
+  it('isDueTodayOrOverdue: heute und überfällig → true, sonst false', () => {
+    expect(isDueTodayOrOverdue(due('2026-11-04'))).toBe(true);
+    expect(isDueTodayOrOverdue(due('2026-10-25'))).toBe(true);
+    expect(isDueTodayOrOverdue(due('2026-11-05'))).toBe(false);
+    expect(isDueTodayOrOverdue(null)).toBe(false);
+  });
+  it('sortTodayTodos: überfällige zuerst (älteste vorn), dann heutige', () => {
+    const list = sortTodayTodos([
+      { id: 'a', title: 'heute', dueDate: due('2026-11-04') },
+      { id: 'b', title: 'Okt', dueDate: due('2026-10-25') },
+      { id: 'c', title: 'Nov3', dueDate: due('2026-11-03') },
+    ]);
+    expect(list.map((t) => [t.id, t.overdue])).toEqual([['b', true], ['c', true], ['a', false]]);
   });
 });
