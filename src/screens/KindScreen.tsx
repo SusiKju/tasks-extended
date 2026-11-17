@@ -487,9 +487,11 @@ export default function KindScreen({ onExitChildMode }: Props) {
             <View style={{ flex: 1 }}>
               <Text style={s.allowanceLabel}>Fernsehen diese Woche</Text>
               <Text style={[s.allowanceAmount, rest <= 0 && { color: TV_ROT }]}>
-                {rest > 0 ? `noch ${tvText(rest)}` : rest === 0 ? 'aufgebraucht' : `${tvText(-rest)} überzogen`}
+                {tvText(max - rest)} von {tvText(max)} geschaut
               </Text>
-              <Text style={s.allowanceHint}>{rest <= 0 ? 'Diese Woche kein Fernsehen mehr – ab Montag wieder voll. Filmabend am Freitag bleibt.' : `von ${tvText(max)}`}</Text>
+              <Text style={[s.allowanceHint, rest <= 0 && { color: TV_ROT, fontWeight: '700' }]}>
+                {rest > 0 ? `noch ${tvText(rest)} übrig` : `${rest === 0 ? 'Aufgebraucht' : `${tvText(-rest)} überzogen`} – diese Woche kein Fernsehen mehr, ab Montag wieder voll. Filmabend am Freitag bleibt.`}
+              </Text>
             </View>
           </View>
         );

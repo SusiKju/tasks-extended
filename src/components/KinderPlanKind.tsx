@@ -25,7 +25,7 @@ import {
 } from '../services/kinderTasks';
 import type { KPStyles } from '../screens/KinderPlanScreen';
 import { addTv, deleteTv } from '../services/kinderPlan';
-import { KinderRegeln, KinderWoche, TV_SCHRITTE, TV_ROT, tvKontingent, tvRest, tvRestText, tvProzent, tvText } from '../utils/kinderPlanLogic';
+import { KinderRegeln, KinderWoche, TV_SCHRITTE, TV_ROT, tvKontingent, tvRest, tvProzent, tvText } from '../utils/kinderPlanLogic';
 
 // Schiedsrichter-Lehrgang (TE-85): fester Link, wie im alten Kinder-Tab.
 const REFEREE_COURSE_URL = 'https://claude.ai/code/artifact/4146ef89-451a-41f2-bfcc-9b0787895549';
@@ -137,13 +137,13 @@ export function KindKacheln({ fid, child, pts, bis, barPct, today, regeln, woche
             <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
           </Pressable>
           <View style={s.rowBetween}>
-            <Text style={[s.bigNum, tvRot && { color: TV_ROT }]}>{tvRestText(tvLeft)}</Text>
-            <Text style={[s.muted, tvLeft < 0 && { color: TV_ROT, fontWeight: '700' }]}>
-              {tvLeft < 0 ? `überzogen · Kontingent ${tvText(tvMax)}` : `von ${tvText(tvMax)} übrig`}
-            </Text>
+            <Text style={[s.bigNum, tvRot && { color: TV_ROT }]} accessibilityLabel={`${tvText(tvMax - tvLeft)} von ${tvText(tvMax)} genommen`}>{tvText(tvMax - tvLeft)}</Text>
+            <Text style={s.muted}>von {tvText(tvMax)} genommen</Text>
           </View>
           <View style={s.bar}><View style={[s.barFill, { width: `${tvProzent(tvLeft, tvMax)}%`, backgroundColor: tvRot ? TV_ROT : mono(child.color) }]} /></View>
-          <Text style={s.muted}>{tvText(tvMax - tvLeft)} genommen</Text>
+          <Text style={[s.muted, tvRot && { color: TV_ROT, fontWeight: '700' }]}>
+            {tvLeft > 0 ? `noch ${tvText(tvLeft)} übrig` : tvLeft === 0 ? 'aufgebraucht' : `${tvText(-tvLeft)} überzogen`}
+          </Text>
           <View style={s.rowCenter}>
             {TV_SCHRITTE.map((m) => (
               <Pressable key={m} onPress={() => abbuchen(m)} style={[s.outlineBtn, { flex: 1, paddingHorizontal: 0 }]}
