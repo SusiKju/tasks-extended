@@ -142,7 +142,8 @@ export function KindKacheln({ fid, child, pts, bis, barPct, today, regeln, woche
               {tvLeft < 0 ? `überzogen · Kontingent ${tvText(tvMax)}` : `von ${tvText(tvMax)} übrig`}
             </Text>
           </View>
-          <View style={s.bar}><View style={[s.barFill, { width: `${tvProzent(tvLeft, tvMax)}%`, backgroundColor: mono(child.color) }]} /></View>
+          <View style={s.bar}><View style={[s.barFill, { width: `${tvProzent(tvLeft, tvMax)}%`, backgroundColor: tvRot ? TV_ROT : mono(child.color) }]} /></View>
+          <Text style={s.muted}>{tvText(tvMax - tvLeft)} genommen</Text>
           <View style={s.rowCenter}>
             {TV_SCHRITTE.map((m) => (
               <Pressable key={m} onPress={() => abbuchen(m)} style={[s.outlineBtn, { flex: 1, paddingHorizontal: 0 }]}
