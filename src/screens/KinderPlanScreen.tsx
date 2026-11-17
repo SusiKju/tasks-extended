@@ -28,7 +28,7 @@ import {
 } from '../services/kinderPlan';
 import {
   KinderRegeln, KinderWoche, Strafaufgabe, Mark, DEFAULT_REGELN, TAG_KURZ, aufgabenVon, aktuellerTag,
-  weekKey, weekDays, kalenderwoche, tvKontingent, tvRest, tvText, REGENBOGEN, isoDate, markKey, punkte, faelligeStufen, bisNaechsteStufe, quote, rotiere,
+  weekKey, weekDays, kalenderwoche, tvKontingent, tvRest, tvText, tvRestText, tvProzent, TV_ROT, REGENBOGEN, isoDate, markKey, punkte, faelligeStufen, bisNaechsteStufe, quote, rotiere,
 } from '../utils/kinderPlanLogic';
 import { WandFoto, subscribeWandFotos, pickAndUploadWandFotos, deleteWandFoto } from '../services/wandFotos';
 
@@ -279,10 +279,12 @@ export function KinderPlanScreen() {
                 const max = tvKontingent(regeln, c);
                 const rest = tvRest(regeln, woche, c);
                 return (
-                  <View style={{ gap: 4 }} accessibilityLabel={`Fernsehen: noch ${tvText(rest)} von ${tvText(max)}`}>
-                    <Text style={s.muted}>📺 {tvText(rest)} / {tvText(max)}</Text>
-                    <View style={[s.bar, { height: 8, borderRadius: 4 }]}>
-                      <View style={{ width: `${max ? Math.round((rest / max) * 100) : 0}%`, height: '100%', borderRadius: 4, overflow: 'hidden' }}>
+                  <View style={{ gap: 4 }} accessibilityLabel={rest < 0 ? `Fernsehen: um ${tvText(-rest)} überzogen` : `Fernsehen: noch ${tvText(rest)} von ${tvText(max)}`}>
+                    <Text style={[s.muted, rest <= 0 && { color: TV_ROT, fontWeight: '700' }]}>
+                      📺 {tvRestText(rest)} / {tvText(max)}{rest < 0 ? ' · überzogen' : rest === 0 ? ' · aufgebraucht' : ''}
+                    </Text>
+                    <View style={[s.bar, { height: 8, borderRadius: 4 }, rest < 0 && { backgroundColor: TV_ROT }]}>
+                      <View style={{ width: `${tvProzent(rest, max)}%`, height: '100%', borderRadius: 4, overflow: 'hidden' }}>
                         <LinearGradient colors={[...REGENBOGEN]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} />
                       </View>
                     </View>

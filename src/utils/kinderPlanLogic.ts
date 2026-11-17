@@ -209,7 +209,7 @@ export function normalisiereRegeln(raw: Partial<KinderRegeln> | undefined): Kind
 // ── Fernsehzeit ─────────────────────────────────────────────────────────────
 
 /** Abbuchen-Knöpfe in Minuten. */
-export const TV_SCHRITTE = [10, 20, 30, 90];
+export const TV_SCHRITTE = [5, 10, 20, 30, 90];
 export const TV_STANDARD = 30;
 /** Startwerte, solange unter „Regeln“ nichts eingestellt ist. */
 const TV_NACH_NAME: Record<string, number> = { lenny: 80, emil: 60, hannes: 40 };
@@ -222,13 +222,33 @@ export function tvVerbraucht(woche: KinderWoche, childId: string): number {
   return Object.values(woche.tv ?? {}).filter((e) => e.childId === childId).reduce((s, e) => s + e.min, 0);
 }
 
-/** Restminuten dieser Woche, nie negativ. */
+/** Restminuten dieser Woche. Negativ = überzogen (Abziehen ist auch über den Rest hinaus erlaubt). */
 export function tvRest(regeln: KinderRegeln, woche: KinderWoche, child: { id: string; name: string }): number {
-  return Math.max(0, tvKontingent(regeln, child) - tvVerbraucht(woche, child.id));
+  return tvKontingent(regeln, child) - tvVerbraucht(woche, child.id);
 }
+
+export type TvStatus = 'ok' | 'leer' | 'ueberzogen';
+
+export function tvStatus(rest: number): TvStatus {
+  return rest > 0 ? 'ok' : rest === 0 ? 'leer' : 'ueberzogen';
+}
+
+/** Rest als Anzeige: "40 min", bei 0 "0 min", überzogen "−15 min". */
+export function tvRestText(rest: number): string {
+  return rest < 0 ? `−${tvText(-rest)}` : tvText(rest);
+}
+
+/** Balkenbreite in Prozent (0–100), überzogen = leer. */
+export function tvProzent(rest: number, max: number): number {
+  return max > 0 ? Math.round((Math.min(max, Math.max(0, rest)) / max) * 100) : 0;
+}
+
+/** Feste Warnfarbe für leer/überzogen – wie REGENBOGEN bewusst auch im Schwarz-Weiß-Theme rot. */
+export const TV_ROT = '#FF3B30';
 
 /** "90" → "1½ h", "40" → "40 min". */
 export function tvText(min: number): string {
+  if (min < 0) return `−${tvText(-min)}`;
   if (min < 60) return `${min} min`;
   const h = Math.floor(min / 60), r = min % 60;
   return r === 0 ? `${h} h` : r === 30 ? `${h}½ h` : `${h} h ${r} min`;

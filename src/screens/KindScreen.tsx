@@ -46,7 +46,7 @@ async function requestWebNotificationPermission(): Promise<void> {
 import { format } from 'date-fns';
 import ChildAvatar from '../components/ChildAvatar';
 import { subscribeRegeln, subscribeWoche } from '../services/kinderPlan';
-import { KinderRegeln, KinderWoche, DEFAULT_REGELN, weekKey, tvKontingent, tvRest, tvText } from '../utils/kinderPlanLogic';
+import { KinderRegeln, KinderWoche, DEFAULT_REGELN, weekKey, tvKontingent, tvRest, tvText, TV_ROT } from '../utils/kinderPlanLogic';
 
 const TODAY = format(new Date(), 'yyyy-MM-dd');
 const STORAGE_KEY = 'kinder_child_id';
@@ -482,12 +482,14 @@ export default function KindScreen({ onExitChildMode }: Props) {
         const max = tvKontingent(kpRegeln, selectedChild);
         const rest = tvRest(kpRegeln, kpWoche, selectedChild);
         return (
-          <View style={s.allowanceCard}>
+          <View style={[s.allowanceCard, rest <= 0 && { borderColor: TV_ROT, backgroundColor: '#FFECEB' }]}>
             <Text style={s.allowanceEmoji}>📺</Text>
             <View style={{ flex: 1 }}>
               <Text style={s.allowanceLabel}>Fernsehen diese Woche</Text>
-              <Text style={s.allowanceAmount}>noch {tvText(rest)}</Text>
-              <Text style={s.allowanceHint}>{rest === 0 ? 'Aufgebraucht – ab Montag wieder voll.' : `von ${tvText(max)}`}</Text>
+              <Text style={[s.allowanceAmount, rest <= 0 && { color: TV_ROT }]}>
+                {rest > 0 ? `noch ${tvText(rest)}` : rest === 0 ? 'aufgebraucht' : `${tvText(-rest)} überzogen`}
+              </Text>
+              <Text style={s.allowanceHint}>{rest <= 0 ? 'Diese Woche kein Fernsehen mehr – ab Montag wieder voll. Filmabend am Freitag bleibt.' : `von ${tvText(max)}`}</Text>
             </View>
           </View>
         );

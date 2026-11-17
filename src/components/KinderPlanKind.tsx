@@ -25,7 +25,7 @@ import {
 } from '../services/kinderTasks';
 import type { KPStyles } from '../screens/KinderPlanScreen';
 import { addTv, deleteTv } from '../services/kinderPlan';
-import { KinderRegeln, KinderWoche, TV_SCHRITTE, tvKontingent, tvRest, tvText } from '../utils/kinderPlanLogic';
+import { KinderRegeln, KinderWoche, TV_SCHRITTE, TV_ROT, tvKontingent, tvRest, tvRestText, tvProzent, tvText } from '../utils/kinderPlanLogic';
 
 // Schiedsrichter-Lehrgang (TE-85): fester Link, wie im alten Kinder-Tab.
 const REFEREE_COURSE_URL = 'https://claude.ai/code/artifact/4146ef89-451a-41f2-bfcc-9b0787895549';
@@ -113,15 +113,13 @@ export function KindKacheln({ fid, child, pts, bis, barPct, today, regeln, woche
   const toggleMonth = (key: string, received: boolean, amount: number) =>
     run(setAllowanceReceived(fid, child.id, key, !received, amount));
 
-  // Fernsehzeit: Kontingent pro Woche, kein Übertrag (Wochen-Doc), kein Minus (Knopf > Rest gesperrt).
+  // Fernsehzeit: Kontingent pro Woche, kein Übertrag (Wochen-Doc). Überziehen ist erlaubt → Rest wird negativ und rot.
   const tvMax = tvKontingent(regeln, child);
   const tvLeft = tvRest(regeln, woche, child);
+  const tvRot = tvLeft <= 0;
   const tvLog = Object.entries(woche.tv ?? {}).filter(([, e]) => e.childId === child.id).sort(([, a], [, b]) => b.at.localeCompare(a.at));
-  const abbuchen = (min: number) => {
-    // ponytail: Rest wird lokal geprüft; zwei Eltern gleichzeitig könnten knapp überziehen – Transaktion, falls das je passiert.
-    if (min > tvLeft) return;
+  const abbuchen = (min: number) =>
     run(addTv(fid, wk, newId(), { childId: child.id, min, at: new Date().toISOString() }));
-  };
 
   return (
     <>
@@ -133,28 +131,31 @@ export function KindKacheln({ fid, child, pts, bis, barPct, today, regeln, woche
           <Text style={s.muted}>{bis === null ? 'höchste Stufe erreicht' : `noch ${bis} bis Strafaufgabe`}</Text>
         </View>
 
-        <View style={[s.tile, { flexBasis: '100%' }]}>
+        <View style={[s.tile, { flexBasis: '100%' }, tvRot && { borderColor: TV_ROT }]}>
           <Pressable onPress={() => setOpen('tv')} style={s.rowBetween} accessibilityLabel="Fernsehzeit-Verlauf öffnen">
             <Text style={s.label}>Fernsehen diese Woche</Text>
             <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
           </Pressable>
           <View style={s.rowBetween}>
-            <Text style={s.bigNum}>{tvText(tvLeft)}</Text>
-            <Text style={s.muted}>von {tvText(tvMax)} übrig</Text>
+            <Text style={[s.bigNum, tvRot && { color: TV_ROT }]}>{tvRestText(tvLeft)}</Text>
+            <Text style={[s.muted, tvLeft < 0 && { color: TV_ROT, fontWeight: '700' }]}>
+              {tvLeft < 0 ? `überzogen · Kontingent ${tvText(tvMax)}` : `von ${tvText(tvMax)} übrig`}
+            </Text>
           </View>
-          <View style={s.bar}><View style={[s.barFill, { width: `${tvMax ? Math.round((tvLeft / tvMax) * 100) : 0}%`, backgroundColor: mono(child.color) }]} /></View>
+          <View style={s.bar}><View style={[s.barFill, { width: `${tvProzent(tvLeft, tvMax)}%`, backgroundColor: mono(child.color) }]} /></View>
           <View style={s.rowCenter}>
-            {TV_SCHRITTE.map((m) => {
-              const gesperrt = m > tvLeft;
-              return (
-                <Pressable key={m} onPress={() => abbuchen(m)} disabled={gesperrt} style={[s.outlineBtn, { flex: 1 }, gesperrt && { opacity: 0.35 }]}
-                  accessibilityLabel={`${tvText(m)} Fernsehen abziehen`} accessibilityState={{ disabled: gesperrt }}>
-                  <Text style={s.bold}>−{tvText(m)}</Text>
-                </Pressable>
-              );
-            })}
+            {TV_SCHRITTE.map((m) => (
+              <Pressable key={m} onPress={() => abbuchen(m)} style={[s.outlineBtn, { flex: 1, paddingHorizontal: 0 }]}
+                accessibilityLabel={`${tvText(m)} Fernsehen abziehen`}>
+                <Text style={s.bold} numberOfLines={1} adjustsFontSizeToFit>−{tvText(m)}</Text>
+              </Pressable>
+            ))}
           </View>
-          {tvLeft === 0 ? <Text style={s.muted}>Kontingent aufgebraucht – ab Montag wieder voll.</Text> : null}
+          {tvRot ? (
+            <Text style={[s.muted, { color: TV_ROT, fontWeight: '700' }]}>
+              {tvLeft < 0 ? `Um ${tvText(-tvLeft)} überzogen` : 'Kontingent aufgebraucht'} – diese Woche kein Fernsehen mehr (Filmabend am Freitag zählt nicht). Ab Montag wieder voll.
+            </Text>
+          ) : null}
         </View>
 
         {allowance > 0 ? (
