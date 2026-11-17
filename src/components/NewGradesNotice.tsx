@@ -1,7 +1,7 @@
 /**
  * TE-52: Dezenter Hinweis auf neue Noten (Variante E) oberhalb der Heute-Karte.
  * Pro Kind mit ungelesenen beste.schule-Noten eine schmale Karte: Noten als
- * Abzeichen in der Kinderfarbe, Kurztext, „Gelesen“ (= ackGrades, familienweit).
+ * Abzeichen in der Kinderfarbe, Kurztext, „Gelesen“ (= ackGrades, pro Benutzer).
  * Antippen öffnet den Schule-Tab direkt auf den Noten des Kindes.
  */
 import React, { useEffect, useMemo, useState } from 'react';

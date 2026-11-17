@@ -11,7 +11,12 @@
 
 import { doc, arrayUnion, onSnapshot, Unsubscribe } from 'firebase/firestore';
 import { setDoc, updateDoc } from './firestoreWrites';
-import { db } from './firebase';
+import { db, getFirebaseAuth } from './firebase';
+import { ackListForUser } from '../utils/readAck';
+
+function currentUid(): string | null {
+  try { return getFirebaseAuth().currentUser?.uid ?? null; } catch { return null; }
+}
 
 export interface GradeEntry {
   /** Notenwert wie von beste.schule geliefert (Zahl oder Text, z. B. "2+"). */
@@ -79,7 +84,8 @@ export function gradeId(entry: GradeEntry): string | null {
  * Von beste.schule als ungelesen gemeldete Noten, die hier noch nicht per
  * `ackGrades` bestätigt wurden. `replaceGrades` überschreibt bei jedem Sync
  * die komplette `grades`-Map – der Gelesen-Status darf deshalb nicht darin
- * stecken, sondern lebt separat in `gradesAckIds` auf demselben Dokument.
+ * stecken, sondern lebt separat pro Benutzer in `gradesAckByUser` (siehe
+ * utils/readAck.ts) auf demselben Dokument.
  */
 export function unreadGradeIds(map: GradesMap, ackIds: string[]): string[] {
   const acked = new Set(ackIds);
@@ -101,18 +107,16 @@ export function subscribeToGradesAck(
 ): Unsubscribe {
   return onSnapshot(
     childDoc(familyId, childId),
-    (snap) => onChange((snap.data()?.gradesAckIds as string[] | undefined) ?? []),
+    (snap) => onChange(ackListForUser(snap.data(), 'gradesAckIds', 'gradesAckByUser', currentUid())),
     () => onChange([]),
   );
 }
 
-/** Markiert die übergebenen Noten als gelesen ("Als gelesen markieren"). */
+/** Markiert die übergebenen Noten für den angemeldeten Benutzer als gelesen. */
 export async function ackGrades(familyId: string, childId: string, ids: string[]): Promise<void> {
   if (ids.length === 0) return;
-  const ref = childDoc(familyId, childId);
-  try {
-    await updateDoc(ref, { gradesAckIds: arrayUnion(...ids) });
-  } catch {
-    await setDoc(ref, { gradesAckIds: ids }, { merge: true });
-  }
+  const uid = currentUid();
+  if (!uid) return;
+  // Pro Benutzer: Abhaken gilt nur für die eigene Person, nicht für den Partner.
+  await setDoc(childDoc(familyId, childId), { gradesAckByUser: { [uid]: arrayUnion(...ids) } }, { merge: true });
 }
