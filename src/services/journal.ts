@@ -12,7 +12,12 @@
 
 import { doc, arrayUnion, onSnapshot, Unsubscribe } from 'firebase/firestore';
 import { setDoc, updateDoc } from './firestoreWrites';
-import { db } from './firebase';
+import { db, getFirebaseAuth } from './firebase';
+import { ackListForUser } from '../utils/readAck';
+
+function currentUid(): string | null {
+  try { return getFirebaseAuth().currentUser?.uid ?? null; } catch { return null; }
+}
 
 export interface JournalNote {
   /** ISO-Datum (yyyy-MM-dd) des Schultags, dem der Eintrag zugeordnet ist. */
@@ -78,18 +83,16 @@ export function subscribeToJournalAck(
 ): Unsubscribe {
   return onSnapshot(
     childDoc(familyId, childId),
-    (snap) => onChange((snap.data()?.journalAckKeys as string[] | undefined) ?? []),
+    (snap) => onChange(ackListForUser(snap.data(), 'journalAckKeys', 'journalAckByUser', currentUid())),
     () => onChange([]),
   );
 }
 
-/** Markiert die übergebenen Klassenbuch-Einträge als gelesen. */
+/** Markiert die übergebenen Klassenbuch-Einträge für den angemeldeten Benutzer als gelesen. */
 export async function ackJournal(familyId: string, childId: string, keys: string[]): Promise<void> {
   if (keys.length === 0) return;
-  const ref = childDoc(familyId, childId);
-  try {
-    await updateDoc(ref, { journalAckKeys: arrayUnion(...keys) });
-  } catch {
-    await setDoc(ref, { journalAckKeys: keys }, { merge: true });
-  }
+  const uid = currentUid();
+  if (!uid) return;
+  // Pro Benutzer: Abhaken gilt nur für die eigene Person, nicht für den Partner.
+  await setDoc(childDoc(familyId, childId), { journalAckByUser: { [uid]: arrayUnion(...keys) } }, { merge: true });
 }
