@@ -46,6 +46,7 @@ import { WeatherWidget } from '../components/WeatherWidget';
 import { GoogleConnectBanner } from '../components/GoogleConnectBanner';
 import { FuerUnsReminderBanner } from '../components/FuerUnsReminderBanner';
 import { NewGradesNotice } from '../components/NewGradesNotice';
+import { TvAlarmNotice } from '../components/TvAlarmNotice';
 import { useFuerUns } from '../hooks/useFuerUns';
 import { CountdownStrip } from '../components/CountdownStrip';
 import { WeckmodusCard } from '../components/WeckmodusCard';
@@ -727,6 +728,10 @@ export function DashboardScreen() {
       {/* `children` = Kinder der Familie, nicht React-Children. */}
       {/* eslint-disable-next-line react/no-children-prop */}
       {!!fid && <NewGradesNotice familyId={fid} children={familyChildren} childColor={childColor} />}
+
+      {/* Fernsehzeit-Alarm: Kind bei 0 min oder überzogen → diese Woche kein Fernsehen mehr */}
+      {/* eslint-disable-next-line react/no-children-prop */}
+      {!!fid && <TvAlarmNotice familyId={fid} children={familyChildren} childColor={childColor} />}
 
       {/* TE-25: „Heutige Termine" und „Kurzübersicht" sind ein gemeinsamer Block
           „Heute" an der früheren Termine-Position (vor Geistesblitzen/Countdowns):

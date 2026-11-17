@@ -31,7 +31,7 @@ import { subscribeRegeln, subscribeWoche, subscribeStrafaufgaben } from '../serv
 import {
   KinderRegeln, KinderWoche, Strafaufgabe, DEFAULT_REGELN, TAG_KURZ, aufgabenVon, aktuellerTag,
   weekKey, kalenderwoche, isoDate, markKey, punkte, faelligeStufen, bisNaechsteStufe,
-  tvKontingent, tvRest, tvText, REGENBOGEN,
+  tvKontingent, tvRest, tvText, tvRestText, tvProzent, TV_ROT, REGENBOGEN,
 } from '../utils/kinderPlanLogic';
 import { LinearGradient } from 'expo-linear-gradient';
 
@@ -228,13 +228,13 @@ export default function WandScreen({ onExit }: Props) {
           </View>
         ) : null}
 
-        <View style={[s.section, paged && s.sectionCell]} accessibilityLabel={`Fernsehen: noch ${tvText(tvLeft)} von ${tvText(tvMax)}`}>
+        <View style={[s.section, paged && s.sectionCell]} accessibilityLabel={tvLeft < 0 ? `Fernsehen: um ${tvText(-tvLeft)} überzogen` : `Fernsehen: noch ${tvText(tvLeft)} von ${tvText(tvMax)}`}>
           <View style={s.rowCenter}>
             <Text style={[s.label, { flex: 1 }]}>Fernsehen</Text>
-            <Text style={[s.item, tvLeft === 0 && { color: colors.textMuted }]}>{tvText(tvLeft)} / {tvText(tvMax)}</Text>
+            <Text style={[s.item, tvLeft <= 0 && { color: TV_ROT, fontWeight: '800' }]}>{tvRestText(tvLeft)} / {tvText(tvMax)}</Text>
           </View>
-          <View style={s.bar}>
-            <View style={[s.barFill, { width: `${tvMax ? Math.round((tvLeft / tvMax) * 100) : 0}%`, overflow: 'hidden' }]}>
+          <View style={[s.bar, tvLeft < 0 && { backgroundColor: TV_ROT }]}>
+            <View style={[s.barFill, { width: `${tvProzent(tvLeft, tvMax)}%`, overflow: 'hidden' }]}>
               <LinearGradient colors={[...REGENBOGEN]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} />
             </View>
           </View>
