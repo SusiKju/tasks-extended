@@ -31,10 +31,13 @@ describe('Fernsehzeit', () => {
     expect(tvRestText(40)).toBe('40 min');
   });
 
-  it('Balken bleibt zwischen 0 und 100 %', () => {
-    expect(tvProzent(-10, 30)).toBe(0);
+  it('Balken zeigt die genommene Zeit, 0–100 %', () => {
+    expect(tvProzent(30, 30)).toBe(0);
+    expect(tvProzent(20, 30)).toBe(33);
     expect(tvProzent(15, 30)).toBe(50);
-    expect(tvProzent(40, 30)).toBe(100);
+    expect(tvProzent(0, 30)).toBe(100);
+    expect(tvProzent(-10, 30)).toBe(100);
+    expect(tvProzent(40, 30)).toBe(0);
     expect(tvProzent(10, 0)).toBe(0);
   });
 });

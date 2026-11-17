@@ -238,9 +238,9 @@ export function tvRestText(rest: number): string {
   return rest < 0 ? `−${tvText(-rest)}` : tvText(rest);
 }
 
-/** Balkenbreite in Prozent (0–100), überzogen = leer. */
+/** Balkenbreite in Prozent (0–100): Anteil der schon genommenen Zeit, überzogen = voll. */
 export function tvProzent(rest: number, max: number): number {
-  return max > 0 ? Math.round((Math.min(max, Math.max(0, rest)) / max) * 100) : 0;
+  return max > 0 ? Math.round((Math.min(max, Math.max(0, max - rest)) / max) * 100) : 0;
 }
 
 /** Feste Warnfarbe für leer/überzogen – wie REGENBOGEN bewusst auch im Schwarz-Weiß-Theme rot. */
