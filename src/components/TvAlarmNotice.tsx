@@ -7,7 +7,6 @@
  */
 import React, { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { cardEdge, useTheme } from '../utils/theme';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { ChildConfig } from '../services/family';
@@ -23,7 +22,6 @@ interface Props {
 }
 
 export function TvAlarmNotice({ familyId, children, childColor }: Props) {
-  const { colors } = useTheme();
   const [open, setOpen] = useState(false);
   const [regeln, setRegeln] = useState<KinderRegeln>(DEFAULT_REGELN);
   const [woche, setWoche] = useState<KinderWoche | null>(null);
@@ -41,7 +39,7 @@ export function TvAlarmNotice({ familyId, children, childColor }: Props) {
   const names = items.map((x) => x.child.name);
 
   return (
-    <View style={[styles.card, cardEdge(colors), styles.alarm]}>
+    <View style={styles.card}>
       <Pressable
         style={({ pressed }) => [styles.main, { opacity: pressed ? 0.6 : 1 }]}
         onPress={() => setOpen((o) => !o)}
@@ -112,12 +110,9 @@ function badgeText(rest: number): string {
 const MAX_BADGES = 4;
 const BADGE = 30;
 const styles = StyleSheet.create({
-  card: {
-    marginHorizontal: 16,
-    paddingVertical: 8, paddingLeft: 10, paddingRight: 10,
-    borderWidth: 1,
-  },
-  alarm: { borderColor: TV_ROT, borderLeftWidth: 3 },
+  // Bewusst ohne Rahmen/Kartenhintergrund: nur Kreise + Text, damit der
+  // Hinweis auf dem Dashboard so wenig Raum wie möglich einnimmt.
+  card: { marginHorizontal: 16, paddingVertical: 4, paddingHorizontal: 4 },
   main: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   badges: { flexDirection: 'row' },
   badge: {
