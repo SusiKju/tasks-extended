@@ -61,7 +61,10 @@ export function buildEvent({ appointment, match, teamsById, venuesById, refereeI
   const cancelled = Boolean(match?.reasonForCancellation) || /CANCEL/i.test(match?.status ?? '');
   const kickoff = new Date(appointment.kickoff);
 
-  const crew = appointment.referees
+  // feste Reihenfolge – die API liefert das Gespann wechselnd sortiert, sonst gäbe es bei jedem Lauf ein Update
+  const roleRank = (r) => (Object.keys(ROLE_LABEL).indexOf(r.role) + 99) % 99;
+  const crew = [...appointment.referees]
+    .sort((a, b) => roleRank(a) - roleRank(b))
     .map((r) => `${roleLabel(r.role)}: ${r.firstName} ${r.lastName}${r.appointmentConfirmed ? '' : ' (unbestätigt)'}`)
     .join('\n');
   const description = [
@@ -291,6 +294,8 @@ function selfTest() {
   assert.match(ev.description, /Pate: Anthony Bias/);
   assert.match(ev.description, /noch nicht bestätigt/);
   assert.doesNotMatch(ev.description, /\n\n\n/);
+  const reversed = { ...appointment, referees: [...appointment.referees].reverse() };
+  assert.equal(buildEvent({ appointment: reversed, match, teamsById, venuesById, refereeId: 'LENNY' }).description, ev.description);
 
   const cancelled = buildEvent({ appointment, match: { ...match, status: 'CANCELLED' }, teamsById, venuesById, refereeId: 'LENNY' });
   assert.ok(cancelled.summary.startsWith(CANCEL_PREFIX));
