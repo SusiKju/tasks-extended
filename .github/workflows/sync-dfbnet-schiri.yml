@@ -1,0 +1,22 @@
+name: Sync DFBnet Schiri-Ansetzungen
+
+on:
+  schedule:
+    # alle 3 Stunden zwischen ca. 6 und 21 Uhr (UTC-Angabe)
+    - cron: '23 5-20/3 * * *'
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20.20.0'
+      # keine npm-Abhängigkeiten nötig – nur Node-Bordmittel
+      - run: node scripts/sync-dfbnet-schiri.mjs
+        env:
+          DFBNET_USERNAME: ${{ secrets.DFBNET_USERNAME }}
+          DFBNET_PASSWORD: ${{ secrets.DFBNET_PASSWORD }}
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
