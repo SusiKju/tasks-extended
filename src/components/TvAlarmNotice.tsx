@@ -10,9 +10,9 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { ChildConfig } from '../services/family';
-import { subscribeRegeln, subscribeWoche } from '../services/kinderPlan';
+import { subscribeRegeln, subscribeTv } from '../services/kinderPlan';
 import {
-  DEFAULT_REGELN, KinderRegeln, KinderWoche, TV_ROT, tvKontingent, tvRest, tvText, weekKey,
+  DEFAULT_REGELN, KinderRegeln, TvEintrag, TV_ROT, tvKontingent, tvRest, tvText, tvWeekKey,
 } from '../utils/kinderPlanLogic';
 
 interface Props {
@@ -24,15 +24,15 @@ interface Props {
 export function TvAlarmNotice({ familyId, children, childColor }: Props) {
   const [open, setOpen] = useState(false);
   const [regeln, setRegeln] = useState<KinderRegeln>(DEFAULT_REGELN);
-  const [woche, setWoche] = useState<KinderWoche | null>(null);
-  const wk = weekKey();
+  const [tv, setTv] = useState<Record<string, TvEintrag> | null>(null);
+  const twk = tvWeekKey();
 
   useEffect(() => (familyId ? subscribeRegeln(familyId, setRegeln) : undefined), [familyId]);
-  useEffect(() => (familyId ? subscribeWoche(familyId, wk, setWoche) : undefined), [familyId, wk]);
+  useEffect(() => (familyId ? subscribeTv(familyId, twk, setTv) : undefined), [familyId, twk]);
 
-  if (!woche) return null;
+  if (!tv) return null;
   const items = children
-    .map((c) => ({ child: c, rest: tvRest(regeln, woche, c), max: tvKontingent(regeln, c) }))
+    .map((c) => ({ child: c, rest: tvRest(regeln, { tv }, c), max: tvKontingent(regeln, c) }))
     .filter((x) => x.max > 0 && x.rest <= 0);
   if (items.length === 0) return null;
 

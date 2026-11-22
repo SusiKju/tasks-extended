@@ -39,7 +39,7 @@ export interface PunktEintrag {
   markKey: string | null;
 }
 
-/** Eine Fernseh-Abbuchung. Liegt im Wochen-Doc → jeden Montag volles Kontingent, kein Übertrag. */
+/** Eine Fernseh-Abbuchung. Liegt im TV-Wochen-Doc (Key = Sonntag) → jeden Sonntag volles Kontingent, kein Übertrag. */
 export interface TvEintrag {
   childId: string;
   min: number;
@@ -49,6 +49,7 @@ export interface TvEintrag {
 export interface KinderWoche {
   punkte: Record<string, PunktEintrag>;
   marks: Record<string, Mark>;
+  /** Nur noch Altdaten (bis 2.98): Fernsehzeit liegt jetzt im eigenen Sonntag-Doc, siehe tvWeekKey. */
   tv?: Record<string, TvEintrag>;
 }
 
@@ -101,6 +102,16 @@ export const isoDate = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}
 export function weekKey(d: Date = new Date()): string {
   const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
   x.setDate(x.getDate() - ((x.getDay() + 6) % 7));
+  return isoDate(x);
+}
+
+/**
+ * Sonntag der Fernseh-Woche als "YYYY-MM-DD" (lokale Zeit). Die Fernsehzeit
+ * beginnt jeden Sonntag neu (So–Sa) – anders als Strafpunkte/Aufgaben (Mo–So).
+ */
+export function tvWeekKey(d: Date = new Date()): string {
+  const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  x.setDate(x.getDate() - x.getDay());
   return isoDate(x);
 }
 
@@ -218,12 +229,12 @@ export function tvKontingent(regeln: KinderRegeln, child: { id: string; name: st
   return regeln.tvMinuten[child.id] ?? TV_NACH_NAME[child.name.trim().toLowerCase()] ?? TV_STANDARD;
 }
 
-export function tvVerbraucht(woche: KinderWoche, childId: string): number {
+export function tvVerbraucht(woche: Pick<KinderWoche, 'tv'>, childId: string): number {
   return Object.values(woche.tv ?? {}).filter((e) => e.childId === childId).reduce((s, e) => s + e.min, 0);
 }
 
 /** Restminuten dieser Woche. Negativ = überzogen (Abziehen ist auch über den Rest hinaus erlaubt). */
-export function tvRest(regeln: KinderRegeln, woche: KinderWoche, child: { id: string; name: string }): number {
+export function tvRest(regeln: KinderRegeln, woche: Pick<KinderWoche, 'tv'>, child: { id: string; name: string }): number {
   return tvKontingent(regeln, child) - tvVerbraucht(woche, child.id);
 }
 

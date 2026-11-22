@@ -6,7 +6,8 @@
  * Bewusst unter families/{familyId}/config/* – durch die bestehende
  * config/{docId}-Rule (isFamilyMember) abgedeckt, kein Rules-Deploy nötig:
  *   config/kinderRegeln                 → KinderRegeln (die eine Stelle für alle Einstellungen)
- *   config/kinderWoche_{YYYY-MM-DD}     → KinderWoche (Strafpunkte, ✓/✗, Fernseh-Abbuchungen einer Woche, Key = Montag)
+ *   config/kinderWoche_{YYYY-MM-DD}     → KinderWoche (Strafpunkte, ✓/✗ einer Woche, Key = Montag)
+ *   config/kinderTv_{YYYY-MM-DD}        → { tv } Fernseh-Abbuchungen einer TV-Woche (Key = Sonntag, So–Sa)
  *   config/kinderStrafaufgaben          → { items: Record<id, Strafaufgabe> }
  *
  * Strafaufgaben werden zusätzlich als normale Aufgabe in der Kinder-App
@@ -23,6 +24,7 @@ import {
 
 const regelnDoc = (fid: string) => doc(db, 'families', fid, 'config', 'kinderRegeln');
 const wocheDoc = (fid: string, wk: string) => doc(db, 'families', fid, 'config', `kinderWoche_${wk}`);
+const tvDoc = (fid: string, twk: string) => doc(db, 'families', fid, 'config', `kinderTv_${twk}`);
 const strafDoc = (fid: string) => doc(db, 'families', fid, 'config', 'kinderStrafaufgaben');
 
 // ── Regeln ──────────────────────────────────────────────────────────────────
@@ -40,7 +42,7 @@ export function saveRegeln(fid: string, r: KinderRegeln): Promise<void> {
 export function subscribeWoche(fid: string, wk: string, cb: (w: KinderWoche) => void): Unsubscribe {
   return onSnapshot(wocheDoc(fid, wk), (s) => {
     const d = s.data() as Partial<KinderWoche> | undefined;
-    cb({ punkte: d?.punkte ?? {}, marks: d?.marks ?? {}, tv: d?.tv ?? {} });
+    cb({ punkte: d?.punkte ?? {}, marks: d?.marks ?? {} });
   });
 }
 
@@ -56,14 +58,18 @@ export function deletePunkt(fid: string, wk: string, id: string): Promise<void> 
   return updateDoc(wocheDoc(fid, wk), { [`punkte.${id}`]: deleteField() });
 }
 
-// ── Fernsehzeit (im Wochen-Doc, Feld tv) ────────────────────────────────────
+// ── Fernsehzeit (eigenes Doc pro TV-Woche, Key = Sonntag via tvWeekKey) ─────
 
-export function addTv(fid: string, wk: string, id: string, e: TvEintrag): Promise<void> {
-  return setDoc(wocheDoc(fid, wk), { tv: { [id]: e } }, { merge: true });
+export function subscribeTv(fid: string, twk: string, cb: (tv: Record<string, TvEintrag>) => void): Unsubscribe {
+  return onSnapshot(tvDoc(fid, twk), (s) => cb((s.data()?.tv as Record<string, TvEintrag> | undefined) ?? {}));
 }
 
-export function deleteTv(fid: string, wk: string, id: string): Promise<void> {
-  return updateDoc(wocheDoc(fid, wk), { [`tv.${id}`]: deleteField() });
+export function addTv(fid: string, twk: string, id: string, e: TvEintrag): Promise<void> {
+  return setDoc(tvDoc(fid, twk), { tv: { [id]: e } }, { merge: true });
+}
+
+export function deleteTv(fid: string, twk: string, id: string): Promise<void> {
+  return updateDoc(tvDoc(fid, twk), { [`tv.${id}`]: deleteField() });
 }
 
 export function setMark(fid: string, wk: string, key: string, mark: Mark): Promise<void> {
