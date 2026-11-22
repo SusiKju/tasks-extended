@@ -85,13 +85,14 @@ interface KachelnProps {
   today: string;
   regeln: KinderRegeln;
   woche: KinderWoche;
-  wk: string;
+  /** TV-Woche (Sonntag), in die Fernseh-Abbuchungen gebucht werden. */
+  twk: string;
   s: KPStyles;
   colors: ThemeColors;
   mono: (hex: string) => string;
 }
 
-export function KindKacheln({ fid, child, pts, bis, barPct, today, regeln, woche, wk, s, colors, mono }: KachelnProps) {
+export function KindKacheln({ fid, child, pts, bis, barPct, today, regeln, woche, twk, s, colors, mono }: KachelnProps) {
   const [months, setMonths] = useState<Record<string, AllowanceMonth>>({});
   const [matches, setMatches] = useState<Match[]>([]);
   const [table, setTable] = useState<Standing[]>([]);
@@ -119,7 +120,7 @@ export function KindKacheln({ fid, child, pts, bis, barPct, today, regeln, woche
   const tvRot = tvLeft <= 0;
   const tvLog = Object.entries(woche.tv ?? {}).filter(([, e]) => e.childId === child.id).sort(([, a], [, b]) => b.at.localeCompare(a.at));
   const abbuchen = (min: number) =>
-    run(addTv(fid, wk, newId(), { childId: child.id, min, at: new Date().toISOString() }));
+    run(addTv(fid, twk, newId(), { childId: child.id, min, at: new Date().toISOString() }));
 
   return (
     <>
@@ -154,7 +155,7 @@ export function KindKacheln({ fid, child, pts, bis, barPct, today, regeln, woche
           </View>
           {tvRot ? (
             <Text style={[s.muted, { color: TV_ROT, fontWeight: '700' }]}>
-              {tvLeft < 0 ? `Um ${tvText(-tvLeft)} überzogen` : 'Kontingent aufgebraucht'} – diese Woche kein Fernsehen mehr (Filmabend am Freitag zählt nicht). Ab Montag wieder voll.
+              {tvLeft < 0 ? `Um ${tvText(-tvLeft)} überzogen` : 'Kontingent aufgebraucht'} – diese Woche kein Fernsehen mehr (Filmabend am Freitag zählt nicht). Ab Sonntag wieder voll.
             </Text>
           ) : null}
         </View>
@@ -219,7 +220,7 @@ export function KindKacheln({ fid, child, pts, bis, barPct, today, regeln, woche
                 <View key={id} style={[s.rowCenter, s.divider, { paddingVertical: 6 }]}>
                   <Text style={[s.body, { flex: 1 }]}>{fmtTs(e.at)}</Text>
                   <Text style={s.bold}>−{tvText(e.min)}</Text>
-                  <Pressable onPress={() => confirmAction(`${tvText(e.min)} zurückbuchen?`, () => run(deleteTv(fid, wk, id)), 'Zurückbuchen')} hitSlop={8} accessibilityLabel={`${tvText(e.min)} zurückbuchen`}>
+                  <Pressable onPress={() => confirmAction(`${tvText(e.min)} zurückbuchen?`, () => run(deleteTv(fid, twk, id)), 'Zurückbuchen')} hitSlop={8} accessibilityLabel={`${tvText(e.min)} zurückbuchen`}>
                     <Ionicons name="arrow-undo-outline" size={18} color={colors.textMuted} />
                   </Pressable>
                 </View>

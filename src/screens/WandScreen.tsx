@@ -27,10 +27,10 @@ import {
 } from '../services/timetable';
 import { schulfreiGrund } from '../utils/schulferien';
 import { WandFoto, subscribeWandFotos } from '../services/wandFotos';
-import { subscribeRegeln, subscribeWoche, subscribeStrafaufgaben } from '../services/kinderPlan';
+import { subscribeRegeln, subscribeWoche, subscribeTv, subscribeStrafaufgaben } from '../services/kinderPlan';
 import {
-  KinderRegeln, KinderWoche, Strafaufgabe, DEFAULT_REGELN, TAG_KURZ, aufgabenVon, aktuellerTag,
-  weekKey, kalenderwoche, isoDate, markKey, punkte, faelligeStufen, bisNaechsteStufe,
+  KinderRegeln, KinderWoche, TvEintrag, Strafaufgabe, DEFAULT_REGELN, TAG_KURZ, aufgabenVon, aktuellerTag,
+  weekKey, tvWeekKey, kalenderwoche, isoDate, markKey, punkte, faelligeStufen, bisNaechsteStufe,
   tvKontingent, tvRest, tvText, tvProzent, TV_ROT, REGENBOGEN,
 } from '../utils/kinderPlanLogic';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -60,14 +60,17 @@ export default function WandScreen({ onExit }: Props) {
   }, []);
   const today = isoDate(now);
   const wk = weekKey(now);
+  const twk = tvWeekKey(now);
 
   const [regeln, setRegeln] = useState<KinderRegeln>(DEFAULT_REGELN);
   const [woche, setWoche] = useState<KinderWoche>({ punkte: {}, marks: {} });
+  const [tv, setTv] = useState<Record<string, TvEintrag>>({});
   const [straf, setStraf] = useState<Record<string, Strafaufgabe>>({});
   const [tasksByChild, setTasksByChild] = useState<Record<string, ChildTask[]>>({});
 
   useEffect(() => (fid ? subscribeRegeln(fid, setRegeln) : undefined), [fid]);
   useEffect(() => (fid ? subscribeWoche(fid, wk, setWoche) : undefined), [fid, wk]);
+  useEffect(() => (fid ? subscribeTv(fid, twk, setTv) : undefined), [fid, twk]);
   useEffect(() => (fid ? subscribeStrafaufgaben(fid, setStraf) : undefined), [fid]);
   useEffect(() => {
     if (!fid || children.length === 0) return;
@@ -159,7 +162,7 @@ export default function WandScreen({ onExit }: Props) {
     const tasks = (tasksByChild[c.id] ?? []).filter((t) => !strafTaskIds.has(t.id));
     const alarm = due.length > 0 || offen.length > 0;
     const tvMax = tvKontingent(regeln, c);
-    const tvLeft = tvRest(regeln, woche, c);
+    const tvLeft = tvRest(regeln, { tv }, c);
     const tt = timetables[c.id] ?? {};
     const lessons = schulfreiText ? [] : applyPeriodTimes(PERIODS, periodTimes[c.id] ?? {})
       .filter((p) => !p.pause)
