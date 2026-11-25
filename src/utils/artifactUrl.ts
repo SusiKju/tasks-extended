@@ -64,9 +64,14 @@ export function artifactPreviewUrl(url: string, attempt = 0, width = 800, height
   return attempt > 0 ? `${base}&r=${attempt}` : base;
 }
 
-/** Ob für diese Art Link eine echte Vorschau möglich ist (ohne Login sichtbar). */
-export function hasPublicPreview(kind: ArtifactKind): boolean {
-  return kind === 'public';
+/**
+ * Ob eine Vorschau versucht werden soll. Sowohl /public/artifacts/… als auch
+ * /artifact/… können öffentlich geteilt sein – ob die Seite ohne Login
+ * sichtbar ist, lässt sich am Link nicht ablesen. Deshalb immer versuchen;
+ * die Karte fällt nur bei einem Ladefehler auf den Platzhalter zurück.
+ */
+export function hasPublicPreview(_kind: ArtifactKind): boolean {
+  return true;
 }
 
 /** Anzeigename, wenn der Nutzer keinen Titel vergibt. */

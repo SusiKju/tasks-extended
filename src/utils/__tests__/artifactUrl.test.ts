@@ -51,6 +51,7 @@ describe('Hilfen', () => {
     const p = parseArtifactUrl(`https://claude.ai/public/artifacts/${UUID}`)!;
     expect(defaultArtifactTitle(p)).toBe('Artefakt 3f2a9c1e');
     expect(hasPublicPreview('public')).toBe(true);
-    expect(hasPublicPreview('private')).toBe(false);
+    expect(hasPublicPreview('private')).toBe(true);
+    expect(hasPublicPreview('code')).toBe(true);
   });
 });
