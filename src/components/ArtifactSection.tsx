@@ -54,11 +54,9 @@ function ArtifactPreview({ url, kind, colors }: { url: string; kind: ArtifactKin
   if (!canPreview || failed) {
     return (
       <View style={[s.preview, s.placeholder, { backgroundColor: ARTIFACT_COLOR + '18' }]}>
-        <Ionicons name={canPreview ? 'image-outline' : 'lock-closed-outline'} size={28} color={ARTIFACT_COLOR} />
+        <Ionicons name="image-outline" size={28} color={ARTIFACT_COLOR} />
         <Text style={[s.placeholderText, { color: colors.textMuted }]}>
-          {canPreview
-            ? 'Vorschau nicht verfügbar'
-            : 'Privates Artefakt – Vorschau nur bei veröffentlichten Artefakten'}
+          Vorschau nicht verfügbar – ist das Artefakt veröffentlicht?
         </Text>
       </View>
     );

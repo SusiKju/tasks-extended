@@ -299,7 +299,7 @@ export function LinksScreen() {
   const { user } = useFirebaseAuth();
   const { familyId } = useFamily();
   const [all, setAll] = useState<LinkItem[]>([]);
-  const [segment, setSegment] = useState<Segment>('links');
+  const [segment, setSegment] = useState<Segment>('artifacts');
   const links = useMemo(() => all.filter((l) => !isArtifact(l)), [all]);
   const artifacts = useMemo(() => all.filter(isArtifact), [all]);
   const [modalVisible, setModalVisible] = useState(false);
@@ -350,11 +350,11 @@ export function LinksScreen() {
   return (
     <View style={[s.container, { backgroundColor: colors.background }]}>
       <ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-        {/* Bereichsumschalter Links | Artefakte */}
+        {/* Bereichsumschalter Artefakte | Links (Artefakte = Standardansicht) */}
         <View style={[s.segment, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           {([
-            { key: 'links', label: 'Links', icon: 'link-outline', count: links.length },
             { key: 'artifacts', label: 'Artefakte', icon: 'sparkles-outline', count: artifacts.length },
+            { key: 'links', label: 'Links', icon: 'link-outline', count: links.length },
           ] as const).map((seg) => {
             const on = segment === seg.key;
             return (
