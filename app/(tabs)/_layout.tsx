@@ -108,10 +108,12 @@ function TabsLayoutInner() {
       <Tabs.Screen
         name="links"
         options={{
-          title: 'Links',
+          // 2.100.0: „Links“ → „Ablage“ (Links + Claude-Artefakte).
+          title: 'Ablage',
+          headerTitle: 'Links & Artefakte',
           href: hrefFor('links'),
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="link-outline" size={size} color={color} />
+            <Ionicons name="albums-outline" size={size} color={color} />
           ),
         }}
       />
