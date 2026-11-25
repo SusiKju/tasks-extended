@@ -8,15 +8,18 @@
  * Analog zu geistesKacheln.ts.
  */
 
-import { Linking } from 'react-native';
+import { Linking, Platform } from 'react-native';
 import { db } from './firebase';
 import {
   collection,
   doc,
   onSnapshot,
   Unsubscribe,
+  deleteField,
 } from 'firebase/firestore';
 import { addDoc, updateDoc, deleteDoc, writeBatch } from './firestoreWrites';
+import * as ImagePicker from 'expo-image-picker';
+import { shrinkWeb } from './wandFotos';
 import { ArtifactKind, ParsedArtifactUrl, defaultArtifactTitle } from '../utils/artifactUrl';
 
 export interface LinkItem {
@@ -35,6 +38,12 @@ export interface LinkItem {
   kind?: 'link' | 'artifact';
   /** Nur bei Artefakten: public | private | code (siehe utils/artifactUrl). */
   artifactKind?: ArtifactKind;
+  /**
+   * Nur bei Artefakten: selbst gewähltes Vorschaubild als JPEG-Data-URL
+   * (verkleinert, siehe pickArtifactPreview). claude.ai blockt automatische
+   * Screenshots per Bot-Schutz, darum wählt der Nutzer das Bild selbst.
+   */
+  previewImage?: string;
 }
 
 export const isArtifact = (l: LinkItem): boolean => l.kind === 'artifact';
@@ -117,6 +126,48 @@ export async function addArtifact(
     createdAt: new Date().toISOString(),
   });
   return ref.id;
+}
+
+/** Vorschaubild eines Artefakts setzen (Data-URL) oder mit `null` entfernen. */
+export async function setArtifactPreview(
+  familyId: string,
+  uid: string,
+  id: string,
+  dataUrl: string | null,
+): Promise<void> {
+  await updateDoc(
+    doc(db, 'families', familyId, 'linksByUser', uid, 'links', id),
+    { previewImage: dataUrl ?? deleteField() },
+  );
+}
+
+/** Max. Größe des Vorschaubilds – klein halten, die Links-Liste lädt es überall mit. */
+const PREVIEW_MAX_PX = 900;
+const PREVIEW_MAX_BYTES = 350_000;
+
+/**
+ * Bild (z. B. Screenshot des Artefakts) aus der Galerie wählen und als
+ * verkleinertes JPEG zurückgeben. `null` bei Abbruch; wirft bei zu großem Bild.
+ */
+export async function pickArtifactPreview(): Promise<string | null> {
+  const res = await ImagePicker.launchImageLibraryAsync({
+    mediaTypes: ['images'],
+    // Native kann nicht verkleinern (kein image-manipulator) – Zuschneiden auf
+    // Kartenformat + starke Kompression hält das Bild klein.
+    allowsEditing: Platform.OS !== 'web',
+    aspect: [16, 10],
+    quality: Platform.OS === 'web' ? 1 : 0.3,
+    base64: Platform.OS !== 'web',
+  });
+  if (res.canceled || !res.assets?.[0]) return null;
+  const a = res.assets[0];
+  const data = Platform.OS === 'web'
+    ? await shrinkWeb(a.uri, PREVIEW_MAX_PX, 0.7)
+    : `data:image/jpeg;base64,${a.base64}`;
+  if (data.length > PREVIEW_MAX_BYTES) {
+    throw new Error('Das Bild ist zu groß. Bitte einen kleineren Ausschnitt wählen.');
+  }
+  return data;
 }
 
 export async function updateLink(

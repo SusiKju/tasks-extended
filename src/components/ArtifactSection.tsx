@@ -2,16 +2,16 @@
  * ArtifactSection.tsx
  *
  * Bereich „Artefakte“ im Tab „Ablage“: Eingabefeld für eine Claude-Artefakt-URL,
- * nach „Hinzufügen“ erscheint automatisch eine Karte mit Vorschaubild.
+ * nach „Hinzufügen“ erscheint eine Karte, die das Artefakt öffnet.
  *
- * Vorschau: Claude liefert für alle Artefakte dasselbe generische og:image,
- * deshalb rendert ein Screenshot-Dienst die Seite (siehe artifactPreviewUrl).
- * Der Dienst schickt anfangs einen Platzhalter, solange der Screenshot
- * entsteht – die Karte lädt das Bild darum ein paar Mal automatisch nach.
- * Private Artefakte (Login nötig) bekommen eine gestaltete Platzhalterkarte.
+ * Vorschaubild: claude.ai liefert für alle Artefakte dasselbe generische
+ * og:image und blockt automatische Browser per Bot-Schutz („Just a moment…“).
+ * Ein automatischer Screenshot ist deshalb nicht möglich – auch nicht für
+ * öffentliche Artefakte. Der Nutzer wählt stattdessen einmal ein Bild (z. B.
+ * einen Screenshot des Artefakts); das funktioniert auch für private Artefakte.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -21,69 +21,71 @@ import {
   StyleSheet,
   ActivityIndicator,
   useWindowDimensions,
+  Platform,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ThemeColors, neonGlow } from '../utils/theme';
-import { LinkItem, addArtifact, deleteLink, updateLink, openLink } from '../services/links';
 import {
-  parseArtifactUrl,
-  artifactPreviewUrl,
-  hasPublicPreview,
-  ArtifactKind,
-} from '../utils/artifactUrl';
+  LinkItem,
+  addArtifact,
+  deleteLink,
+  updateLink,
+  openLink,
+  pickArtifactPreview,
+  setArtifactPreview,
+} from '../services/links';
+import { parseArtifactUrl } from '../utils/artifactUrl';
 import { confirmAction } from './KinderPlanKind';
 
 const ARTIFACT_COLOR = '#D97757';
-/** Nachlade-Zeitpunkte (ms) – bis dahin ist der Screenshot meist fertig. */
-const RELOAD_AFTER = [6000, 15000, 35000];
+
+function showError(msg: string) {
+  if (Platform.OS === 'web') window.alert(msg); else Alert.alert('Vorschaubild', msg);
+}
 
 // ─── Vorschaubild ───────────────────────────────────────────────────────────
 
-function ArtifactPreview({ url, kind, colors }: { url: string; kind: ArtifactKind; colors: ThemeColors }) {
-  const [attempt, setAttempt] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [failed, setFailed] = useState(false);
-  const canPreview = hasPublicPreview(kind);
-
-  useEffect(() => {
-    if (!canPreview) return;
-    const timers = RELOAD_AFTER.map((ms, i) => setTimeout(() => setAttempt(i + 1), ms));
-    return () => timers.forEach(clearTimeout);
-  }, [url, canPreview]);
-
-  if (!canPreview || failed) {
+function ArtifactPreview({ image, busy, colors, onPick }: {
+  image?: string;
+  busy: boolean;
+  colors: ThemeColors;
+  onPick: () => void;
+}) {
+  if (image) {
     return (
-      <View style={[s.preview, s.placeholder, { backgroundColor: ARTIFACT_COLOR + '18' }]}>
-        <Ionicons name="image-outline" size={28} color={ARTIFACT_COLOR} />
-        <Text style={[s.placeholderText, { color: colors.textMuted }]}>
-          Vorschau nicht verfügbar – ist das Artefakt veröffentlicht?
-        </Text>
+      <View style={[s.preview, { backgroundColor: colors.background }]}>
+        <Image source={{ uri: image }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+        {busy && <View style={[StyleSheet.absoluteFill, s.center, s.dim]}><ActivityIndicator color="#fff" /></View>}
       </View>
     );
   }
-
   return (
-    <View style={[s.preview, { backgroundColor: colors.background }]}>
-      <Image
-        source={{ uri: artifactPreviewUrl(url, attempt) }}
-        style={StyleSheet.absoluteFill}
-        resizeMode="cover"
-        onLoad={() => setLoading(false)}
-        onError={() => { setLoading(false); setFailed(true); }}
-      />
-      {loading && (
-        <View style={[StyleSheet.absoluteFill, s.center]}>
-          <ActivityIndicator color={ARTIFACT_COLOR} />
-        </View>
+    <Pressable
+      style={({ pressed }) => [s.preview, s.placeholder, { backgroundColor: ARTIFACT_COLOR + (pressed ? '28' : '18') }]}
+      onPress={onPick}
+      disabled={busy}
+      accessibilityLabel="Vorschaubild wählen"
+    >
+      {busy ? <ActivityIndicator color={ARTIFACT_COLOR} /> : (
+        <>
+          <Ionicons name="image-outline" size={30} color={ARTIFACT_COLOR} />
+          <Text style={[s.placeholderTitle, { color: ARTIFACT_COLOR }]}>Vorschaubild wählen</Text>
+          <Text style={[s.placeholderText, { color: colors.textMuted }]}>
+            Screenshot des Artefakts aus der Galerie – geht auch bei privaten Artefakten
+          </Text>
+        </>
       )}
-    </View>
+    </Pressable>
   );
 }
 
 // ─── Karte ──────────────────────────────────────────────────────────────────
 
-function ArtifactCard({ item, width, colors, isDark, onRename, onDelete }: {
+function ArtifactCard({ item, familyId, uid, width, colors, isDark, onRename, onDelete }: {
   item: LinkItem;
+  familyId: string;
+  uid: string;
   width: number | `${number}%`;
   colors: ThemeColors;
   isDark: boolean;
@@ -92,6 +94,7 @@ function ArtifactCard({ item, width, colors, isDark, onRename, onDelete }: {
 }) {
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(item.title);
+  const [busy, setBusy] = useState(false);
   const startEdit = () => { setTitle(item.title); setEditing(true); };
 
   const commit = () => {
@@ -100,15 +103,40 @@ function ArtifactCard({ item, width, colors, isDark, onRename, onDelete }: {
     if (t && t !== item.title) onRename(t);
   };
 
+  const pickImage = async () => {
+    setBusy(true);
+    try {
+      const data = await pickArtifactPreview();
+      if (data) await setArtifactPreview(familyId, uid, item.id, data);
+    } catch (e) {
+      showError(String((e as Error)?.message ?? e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const removeImage = () => confirmAction('Vorschaubild entfernen?', () => {
+    setArtifactPreview(familyId, uid, item.id, null).catch((e) => showError(String(e?.message ?? e)));
+  }, 'Entfernen');
+
   return (
     <View style={[
       s.card,
       { width, backgroundColor: colors.surface, borderColor: isDark ? colors.accentNeon + '30' : colors.border },
       isDark ? neonGlow(colors.accentNeon, 'soft') : null,
     ]}>
-      <Pressable onPress={() => openLink(item.url)} accessibilityLabel={`${item.title} öffnen`}>
-        <ArtifactPreview url={item.url} kind={item.artifactKind ?? 'public'} colors={colors} />
-      </Pressable>
+      {item.previewImage ? (
+        <View>
+          <Pressable onPress={() => openLink(item.url)} accessibilityLabel={`${item.title} öffnen`}>
+            <ArtifactPreview image={item.previewImage} busy={busy} colors={colors} onPick={pickImage} />
+          </Pressable>
+          <Pressable onPress={removeImage} hitSlop={8} style={s.removeImg} accessibilityLabel="Vorschaubild entfernen">
+            <Ionicons name="close" size={16} color="#fff" />
+          </Pressable>
+        </View>
+      ) : (
+        <ArtifactPreview busy={busy} colors={colors} onPick={pickImage} />
+      )}
       <View style={s.cardFooter}>
         <Ionicons name="sparkles" size={14} color={ARTIFACT_COLOR} />
         {editing ? (
@@ -126,6 +154,12 @@ function ArtifactCard({ item, width, colors, isDark, onRename, onDelete }: {
             <Text style={[s.cardTitle, { color: colors.text }]} numberOfLines={1}>{item.title}</Text>
           </Pressable>
         )}
+        <Pressable onPress={() => openLink(item.url)} hitSlop={8} style={s.iconBtn} accessibilityLabel="Öffnen">
+          <Ionicons name="open-outline" size={18} color={colors.textSecondary} />
+        </Pressable>
+        <Pressable onPress={pickImage} hitSlop={8} style={s.iconBtn} accessibilityLabel={item.previewImage ? 'Vorschaubild ersetzen' : 'Vorschaubild wählen'}>
+          <Ionicons name="image-outline" size={18} color={colors.textSecondary} />
+        </Pressable>
         <Pressable onPress={startEdit} hitSlop={8} style={s.iconBtn} accessibilityLabel="Umbenennen">
           <Ionicons name="create-outline" size={18} color={colors.textSecondary} />
         </Pressable>
@@ -207,7 +241,7 @@ export function ArtifactSection({ items, familyId, uid, colors, isDark }: {
         <View style={[s.empty, { borderColor: ARTIFACT_COLOR + '40' }]}>
           <Ionicons name="sparkles-outline" size={22} color={colors.textMuted} />
           <Text style={[s.emptyText, { color: colors.textMuted }]}>
-            Noch keine Artefakte. Füge oben den Link eines veröffentlichten Claude-Artefakts ein.
+            Noch keine Artefakte. Füge oben den Link eines Claude-Artefakts ein.
           </Text>
         </View>
       ) : (
@@ -216,6 +250,8 @@ export function ArtifactSection({ items, familyId, uid, colors, isDark }: {
             <ArtifactCard
               key={it.id}
               item={it}
+              familyId={familyId}
+              uid={uid}
               width={cardWidth}
               colors={colors}
               isDark={isDark}
@@ -250,7 +286,13 @@ const s = StyleSheet.create({
   grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 12 },
   card: { borderWidth: 1, borderRadius: 14, overflow: 'hidden' },
   preview: { width: '100%', aspectRatio: 16 / 10, overflow: 'hidden' },
-  placeholder: { alignItems: 'center', justifyContent: 'center', gap: 8, padding: 16 },
+  placeholder: { alignItems: 'center', justifyContent: 'center', gap: 6, padding: 16 },
+  placeholderTitle: { fontSize: 14, fontWeight: '700' },
+  dim: { backgroundColor: 'rgba(0,0,0,0.35)' },
+  removeImg: {
+    position: 'absolute', top: 8, right: 8, width: 28, height: 28, borderRadius: 14,
+    alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.55)',
+  },
   placeholderText: { fontSize: 12, textAlign: 'center' },
   center: { alignItems: 'center', justifyContent: 'center' },
   cardFooter: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 10 },
