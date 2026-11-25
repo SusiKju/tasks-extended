@@ -5,9 +5,12 @@
  * weist jedem Link ein Fallback-Symbol/Farbe zu (genutzt, wenn kein Favicon
  * geladen werden kann) und aktiviert einzelne Links. Aktive Links erscheinen
  * als Karten-Schnellleiste oberhalb der Geistesblitze auf dem Dashboard.
+ *
+ * Seit 2.100.0 heißt der Tab „Ablage“ und hat zwei Bereiche: Links und
+ * Claude-Artefakte (Vorschaukarten, siehe components/ArtifactSection).
  */
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -34,8 +37,12 @@ import {
   deleteLink,
   persistLinkOrder,
   openLink,
+  isArtifact,
 } from '../services/links';
 import { LinkAvatar } from '../components/LinkAvatar';
+import { ArtifactSection } from '../components/ArtifactSection';
+
+type Segment = 'links' | 'artifacts';
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -291,7 +298,10 @@ export function LinksScreen() {
   const { colors, isDark } = useTheme();
   const { user } = useFirebaseAuth();
   const { familyId } = useFamily();
-  const [links, setLinks] = useState<LinkItem[]>([]);
+  const [all, setAll] = useState<LinkItem[]>([]);
+  const [segment, setSegment] = useState<Segment>('links');
+  const links = useMemo(() => all.filter((l) => !isArtifact(l)), [all]);
+  const artifacts = useMemo(() => all.filter(isArtifact), [all]);
   const [modalVisible, setModalVisible] = useState(false);
   const [editing, setEditing] = useState<LinkItem | null>(null);
 
@@ -300,7 +310,7 @@ export function LinksScreen() {
 
   useEffect(() => {
     if (!fid || !uid) return;
-    return subscribeToLinks(fid, uid, setLinks);
+    return subscribeToLinks(fid, uid, setAll);
   }, [fid, uid]);
 
   const openNew = useCallback(() => { setEditing(null); setModalVisible(true); }, []);
@@ -339,8 +349,34 @@ export function LinksScreen() {
 
   return (
     <View style={[s.container, { backgroundColor: colors.background }]}>
-      <ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
-        {links.length === 0 ? (
+      <ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+        {/* Bereichsumschalter Links | Artefakte */}
+        <View style={[s.segment, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          {([
+            { key: 'links', label: 'Links', icon: 'link-outline', count: links.length },
+            { key: 'artifacts', label: 'Artefakte', icon: 'sparkles-outline', count: artifacts.length },
+          ] as const).map((seg) => {
+            const on = segment === seg.key;
+            return (
+              <Pressable
+                key={seg.key}
+                style={[s.segBtn, on && { backgroundColor: colors.accentNeon }]}
+                onPress={() => setSegment(seg.key)}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: on }}
+              >
+                <Ionicons name={seg.icon} size={16} color={on ? (isDark ? '#000' : '#fff') : colors.textSecondary} />
+                <Text style={[s.segText, { color: on ? (isDark ? '#000' : '#fff') : colors.textSecondary }]}>
+                  {seg.label}{seg.count > 0 ? ` · ${seg.count}` : ''}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        {segment === 'artifacts' ? (
+          <ArtifactSection items={artifacts} familyId={fid} uid={uid} colors={colors} isDark={isDark} />
+        ) : links.length === 0 ? (
           <Pressable
             style={({ pressed }) => [s.empty, { borderColor: colors.accentNeon + '20', opacity: pressed ? 0.7 : 1 }]}
             onPress={openNew}
@@ -369,8 +405,9 @@ export function LinksScreen() {
         )}
       </ScrollView>
 
-      {/* Floating Add-Button (TE-63: Verlauf im Theme, sonst Neon-Fläche) */}
-      <GradientButton
+      {/* Floating Add-Button (TE-63: Verlauf im Theme, sonst Neon-Fläche) –
+          nur bei Links; Artefakte haben ihr eigenes Eingabefeld. */}
+      {segment === 'links' && <GradientButton
         gradient={colors.gradients?.primary}
         style={[[s.fab, isDark && !colors.gradients ? neonGlow(colors.accentNeon, 'medium') : null], PLUS_BUTTON]}
         fallbackStyle={{ backgroundColor: colors.accentNeon }}
@@ -378,7 +415,7 @@ export function LinksScreen() {
         accessibilityLabel="Link anlegen"
       >
         <Ionicons name="add" size={PLUS_ICON_SIZE} color={colors.gradients?.primary?.fg ?? (isDark ? '#000' : '#fff')} />
-      </GradientButton>
+      </GradientButton>}
 
       <LinkModal
         visible={modalVisible}
@@ -403,6 +440,13 @@ const s = StyleSheet.create({
     borderWidth: 1.5, borderStyle: 'dashed', borderRadius: 14, padding: 24, marginTop: 8,
   },
   emptyText: { fontSize: 14 },
+
+  segment: { flexDirection: 'row', borderWidth: 1, borderRadius: 12, padding: 3, marginBottom: 4 },
+  segBtn: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    borderRadius: 9, paddingVertical: 8,
+  },
+  segText: { fontSize: 13, fontWeight: '700' },
 
   // Listenzeile
   row: {

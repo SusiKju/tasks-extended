@@ -21,7 +21,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { ThemeColors } from '../utils/theme';
 import { useFirebaseAuth } from '../hooks/useFirebaseAuth';
 import { useFamily } from '../hooks/useFamily';
-import { LinkItem, subscribeToLinks, openLink } from '../services/links';
+import { LinkItem, subscribeToLinks, openLink, isArtifact } from '../services/links';
 import { DriveFile } from '../services/googleDrive';
 import { LinkAvatar } from './LinkAvatar';
 
@@ -52,7 +52,7 @@ export function LinkCardBar({
     return subscribeToLinks(fid, uid, setLinks);
   }, [fid, uid]);
 
-  const active = showLinks ? links.filter((l) => l.active) : [];
+  const active = showLinks ? links.filter((l) => l.active && !isArtifact(l)) : [];
   const drive = driveFavorites.slice(0, DRIVE_MAX);
   const driveOverflow = driveFavorites.length - drive.length;
 

@@ -179,7 +179,7 @@ export type TabKey = 'tasks' | 'links' | 'kids' | 'kinderPlan' | 'schule' | 'bam
 
 export const TOGGLEABLE_TABS: { key: TabKey; label: string; description: string }[] = [
   { key: 'tasks',   label: 'Tasks',   description: 'Aufgabenliste.' },
-  { key: 'links',   label: 'Links',   description: 'Schnellleiste mit Links.' },
+  { key: 'links',   label: 'Ablage',  description: 'Links-Schnellleiste und Claude-Artefakte.' },
   // 'kids' (alter Kinder-Tab) ist ausgeblendet und deshalb nicht mehr schaltbar.
   { key: 'kinderPlan', label: 'Kinder', description: 'Strafpunkte, Wochenaufgaben, Aufgaben, Taschengeld und Fußball.' },
   { key: 'schule',  label: 'Schule',  description: 'beste.schule-Anbindung.' },

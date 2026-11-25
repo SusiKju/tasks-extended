@@ -17,6 +17,7 @@ import {
   Unsubscribe,
 } from 'firebase/firestore';
 import { addDoc, updateDoc, deleteDoc, writeBatch } from './firestoreWrites';
+import { ArtifactKind, ParsedArtifactUrl, defaultArtifactTitle } from '../utils/artifactUrl';
 
 export interface LinkItem {
   id: string;
@@ -30,7 +31,13 @@ export interface LinkItem {
   createdAt: string;
   /** Manuelle Sortierreihenfolge (TE-34); fehlt bei Altdaten → fällt auf createdAt zurück. */
   order?: number;
+  /** 'artifact' = Claude-Artefakt mit Vorschaukarte; fehlt bei normalen Links (Altdaten). */
+  kind?: 'link' | 'artifact';
+  /** Nur bei Artefakten: public | private | code (siehe utils/artifactUrl). */
+  artifactKind?: ArtifactKind;
 }
+
+export const isArtifact = (l: LinkItem): boolean => l.kind === 'artifact';
 
 export type LinkPatch = Partial<Pick<LinkItem, 'title' | 'url' | 'icon' | 'color' | 'active'>>;
 
@@ -83,6 +90,30 @@ export async function addLink(
     icon: data.icon ?? null,
     color: data.color,
     active: data.active,
+    createdAt: new Date().toISOString(),
+  });
+  return ref.id;
+}
+
+/**
+ * Claude-Artefakt ablegen. Liegt in derselben Collection wie die Links
+ * (gleiche Rules), wird aber über `kind` getrennt angezeigt und standardmäßig
+ * nicht in der Dashboard-Schnellleiste gezeigt.
+ */
+export async function addArtifact(
+  familyId: string,
+  uid: string,
+  parsed: ParsedArtifactUrl,
+  title?: string,
+): Promise<string> {
+  const ref = await addDoc(linksCol(familyId, uid), {
+    title: title?.trim() || defaultArtifactTitle(parsed),
+    url: parsed.url,
+    icon: 'sparkles-outline',
+    color: '#D97757',
+    active: false,
+    kind: 'artifact',
+    artifactKind: parsed.kind,
     createdAt: new Date().toISOString(),
   });
   return ref.id;
