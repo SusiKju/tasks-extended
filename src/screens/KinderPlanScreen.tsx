@@ -23,12 +23,12 @@ import {
   KindKacheln, KindAufgaben, Fill, HEAT_FG, confirmAction as confirmDelete, confirmAction, info, run, newId, repeatLabel,
 } from '../components/KinderPlanKind';
 import {
-  subscribeRegeln, saveRegeln, subscribeWoche, addPunkt, setPunktGrund, deletePunkt, setMark,
+  subscribeRegeln, saveRegeln, subscribeWoche, subscribeTv, addPunkt, setPunktGrund, deletePunkt, setMark,
   subscribeStrafaufgaben, addStrafaufgabe, setStrafaufgabeDone, deleteStrafaufgabe, syncStrafaufgaben,
 } from '../services/kinderPlan';
 import {
-  KinderRegeln, KinderWoche, Strafaufgabe, Mark, DEFAULT_REGELN, TAG_KURZ, aufgabenVon, aktuellerTag,
-  weekKey, weekDays, kalenderwoche, tvKontingent, tvRest, tvText, tvProzent, TV_ROT, REGENBOGEN, isoDate, markKey, punkte, faelligeStufen, bisNaechsteStufe, quote, rotiere,
+  KinderRegeln, KinderWoche, TvEintrag, Strafaufgabe, Mark, DEFAULT_REGELN, TAG_KURZ, aufgabenVon, aktuellerTag,
+  weekKey, tvWeekKey, weekDays, kalenderwoche, tvKontingent, tvRest, tvText, tvProzent, TV_ROT, REGENBOGEN, isoDate, markKey, punkte, faelligeStufen, bisNaechsteStufe, quote, rotiere,
 } from '../utils/kinderPlanLogic';
 import { WandFoto, subscribeWandFotos, pickAndUploadWandFotos, deleteWandFoto } from '../services/wandFotos';
 
@@ -46,12 +46,14 @@ export function KinderPlanScreen() {
 
   const today = isoDate(new Date());
   const wk = weekKey();
+  const twk = tvWeekKey();
   const days = weekDays(wk);
 
   const [view, setView] = useState<View_>('uebersicht');
   const [regeln, setRegeln] = useState<KinderRegeln>(DEFAULT_REGELN);
   const [regelnLoaded, setRegelnLoaded] = useState(false);
   const [woche, setWoche] = useState<KinderWoche>({ punkte: {}, marks: {} });
+  const [tv, setTv] = useState<Record<string, TvEintrag>>({});
   const [straf, setStraf] = useState<Record<string, Strafaufgabe>>({});
   const [snack, setSnack] = useState<{ id: string; childId: string; pts: number } | null>(null);
   const [sheetChild, setSheetChild] = useState<string | null>(null);
@@ -65,6 +67,7 @@ export function KinderPlanScreen() {
     return subscribeRegeln(fid, (r) => { setRegeln(r); setRegelnLoaded(true); });
   }, [fid]);
   useEffect(() => (fid ? subscribeWoche(fid, wk, setWoche) : undefined), [fid, wk]);
+  useEffect(() => (fid ? subscribeTv(fid, twk, setTv) : undefined), [fid, twk]);
   useEffect(() => (fid ? subscribeStrafaufgaben(fid, setStraf) : undefined), [fid]);
   const [fotos, setFotos] = useState<WandFoto[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -277,7 +280,7 @@ export function KinderPlanScreen() {
               </Text>
               {(() => {
                 const max = tvKontingent(regeln, c);
-                const rest = tvRest(regeln, woche, c);
+                const rest = tvRest(regeln, { tv }, c);
                 return (
                   <View style={{ gap: 4 }} accessibilityLabel={rest < 0 ? `Fernsehen: um ${tvText(-rest)} überzogen` : `Fernsehen: noch ${tvText(rest)} von ${tvText(max)}`}>
                     <Text style={[s.muted, rest <= 0 && { color: TV_ROT, fontWeight: '700' }]}>
@@ -371,7 +374,7 @@ export function KinderPlanScreen() {
           <Text style={s.gradBtnText}>+ Aufgabe vergeben</Text>
         </Pressable>
 
-        <KindKacheln fid={fid} child={c} pts={pts} bis={bis} barPct={barPct(pts)} today={today} regeln={regeln} woche={woche} wk={wk} s={s} colors={colors} mono={mono} />
+        <KindKacheln fid={fid} child={c} pts={pts} bis={bis} barPct={barPct(pts)} today={today} regeln={regeln} woche={{ ...woche, tv }} twk={twk} s={s} colors={colors} mono={mono} />
 
         {due.map((st) => {
           const choices = regeln.stufen[st]?.aufgaben ?? [];
@@ -499,7 +502,7 @@ export function KinderPlanScreen() {
 
       <View style={s.tile}>
         <Text style={s.label}>Fernsehzeit pro Woche</Text>
-        <Text style={s.muted}>Minuten je Kind. Jeden Montag wieder voll, Reste verfallen.</Text>
+        <Text style={s.muted}>Minuten je Kind. Jeden Sonntag wieder voll, Reste verfallen.</Text>
         {children.map((c) => (
           <View key={c.id} style={[s.rowCenter, s.divider]}>
             <Text style={[s.body, { flex: 1 }]}>{c.name}</Text>

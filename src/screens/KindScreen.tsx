@@ -45,8 +45,8 @@ async function requestWebNotificationPermission(): Promise<void> {
 }
 import { format } from 'date-fns';
 import ChildAvatar from '../components/ChildAvatar';
-import { subscribeRegeln, subscribeWoche } from '../services/kinderPlan';
-import { KinderRegeln, KinderWoche, DEFAULT_REGELN, weekKey, tvKontingent, tvRest, tvText, TV_ROT } from '../utils/kinderPlanLogic';
+import { subscribeRegeln, subscribeTv } from '../services/kinderPlan';
+import { KinderRegeln, TvEintrag, DEFAULT_REGELN, tvWeekKey, tvKontingent, tvRest, tvText, TV_ROT } from '../utils/kinderPlanLogic';
 
 const TODAY = format(new Date(), 'yyyy-MM-dd');
 const STORAGE_KEY = 'kinder_child_id';
@@ -80,7 +80,8 @@ export default function KindScreen({ onExitChildMode }: Props) {
   const [allowanceMonths, setAllowanceMonths] = useState<Record<string, AllowanceMonth>>({});
   // Fernsehzeit (TE-110): Kontingent aus den Kinderplan-Regeln, Abbuchungen aus dem Wochen-Doc.
   const [kpRegeln, setKpRegeln] = useState<KinderRegeln>(DEFAULT_REGELN);
-  const [kpWoche, setKpWoche] = useState<KinderWoche>({ punkte: {}, marks: {} });
+  const [kpTv, setKpTv] = useState<Record<string, TvEintrag>>({});
+  const twk = tvWeekKey();
   const [timetable, setTimetable] = useState<TimetableMap>({});
   const [matches, setMatches] = useState<Match[]>([]);
   const [standings, setStandings] = useState<Standing[]>([]);
@@ -140,9 +141,11 @@ export default function KindScreen({ onExitChildMode }: Props) {
     const unsubMatches = subscribeToMatches(familyId, childId, setMatches);
     const unsubTable = subscribeToTable(familyId, childId, setStandings);
     const unsubRegeln = subscribeRegeln(familyId, setKpRegeln);
-    const unsubWoche = subscribeWoche(familyId, weekKey(), setKpWoche);
-    return () => { unsubTasks(); unsubPush(); unsubAllowance(); unsubTimetable(); unsubMatches(); unsubTable(); unsubRegeln(); unsubWoche(); };
+    return () => { unsubTasks(); unsubPush(); unsubAllowance(); unsubTimetable(); unsubMatches(); unsubTable(); unsubRegeln(); };
   }, [childId, familyId]);
+
+  // Fernsehzeit: eigene TV-Woche (So–Sa), neu abonnieren, sobald Sonntag ist.
+  useEffect(() => (familyId ? subscribeTv(familyId, twk, setKpTv) : undefined), [familyId, twk]);
 
   // Schatzkiste-Animation auslösen, sobald eine Aufgabe NEU abgehakt wurde (TE-100)
   useEffect(() => {
@@ -480,7 +483,7 @@ export default function KindScreen({ onExitChildMode }: Props) {
       {/* Fernsehzeit (TE-110) – nur Anzeige, abgezogen wird im Eltern-Tab. */}
       {selectedChild && (() => {
         const max = tvKontingent(kpRegeln, selectedChild);
-        const rest = tvRest(kpRegeln, kpWoche, selectedChild);
+        const rest = tvRest(kpRegeln, { tv: kpTv }, selectedChild);
         return (
           <View style={[s.allowanceCard, rest <= 0 && { borderColor: TV_ROT, backgroundColor: '#FFECEB' }]}>
             <Text style={s.allowanceEmoji}>📺</Text>
@@ -490,7 +493,7 @@ export default function KindScreen({ onExitChildMode }: Props) {
                 {tvText(max - rest)} von {tvText(max)} geschaut
               </Text>
               <Text style={[s.allowanceHint, rest <= 0 && { color: TV_ROT, fontWeight: '700' }]}>
-                {rest > 0 ? `noch ${tvText(rest)} übrig` : `${rest === 0 ? 'Aufgebraucht' : `${tvText(-rest)} überzogen`} – diese Woche kein Fernsehen mehr, ab Montag wieder voll. Filmabend am Freitag bleibt.`}
+                {rest > 0 ? `noch ${tvText(rest)} übrig` : `${rest === 0 ? 'Aufgebraucht' : `${tvText(-rest)} überzogen`} – diese Woche kein Fernsehen mehr, ab Sonntag wieder voll. Filmabend am Freitag bleibt.`}
               </Text>
             </View>
           </View>

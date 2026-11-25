@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_REGELN, KinderWoche, TV_SCHRITTE, tvProzent, tvRest, tvRestText, tvStatus, tvText } from '../kinderPlanLogic';
+import { DEFAULT_REGELN, KinderWoche, TV_SCHRITTE, tvProzent, tvRest, tvRestText, tvStatus, tvText, tvWeekKey, weekKey } from '../kinderPlanLogic';
 
 const kind = { id: 'k1', name: 'Testkind' };
 const regeln = { ...DEFAULT_REGELN, tvMinuten: { k1: 30 } };
@@ -39,5 +39,28 @@ describe('Fernsehzeit', () => {
     expect(tvProzent(-10, 30)).toBe(100);
     expect(tvProzent(40, 30)).toBe(0);
     expect(tvProzent(10, 0)).toBe(0);
+  });
+});
+
+describe('Fernseh-Woche beginnt sonntags', () => {
+  it('Sonntag ist selbst der Wochenstart', () => {
+    expect(tvWeekKey(new Date(2026, 10, 22, 0, 5))).toBe('2026-11-22');
+    expect(tvWeekKey(new Date(2026, 10, 22, 23, 59))).toBe('2026-11-22');
+  });
+
+  it('Montag bis Samstag gehören zum Sonntag davor', () => {
+    expect(tvWeekKey(new Date(2026, 10, 23))).toBe('2026-11-22');
+    expect(tvWeekKey(new Date(2026, 10, 28, 23, 59))).toBe('2026-11-22');
+    expect(tvWeekKey(new Date(2026, 10, 21, 12))).toBe('2026-11-15');
+  });
+
+  it('weicht am Sonntag von der Montags-Woche (Strafpunkte) ab', () => {
+    const sonntag = new Date(2026, 10, 22, 12);
+    expect(weekKey(sonntag)).toBe('2026-11-16');
+    expect(tvWeekKey(sonntag)).toBe('2026-11-22');
+  });
+
+  it('funktioniert über den Jahreswechsel', () => {
+    expect(tvWeekKey(new Date(2027, 0, 1))).toBe('2026-12-27');
   });
 });
