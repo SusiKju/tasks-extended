@@ -40,17 +40,17 @@ export function deleteWandFoto(fid: string, id: string): Promise<void> {
   return deleteDoc(doc(db, 'families', fid, 'config', `${PREFIX}${id}`));
 }
 
-/** Verkleinert ein Bild im Browser auf MAX_PX (lange Kante) und gibt ein JPEG als Data-URL zurück. */
-function shrinkWeb(uri: string): Promise<string> {
+/** Verkleinert ein Bild im Browser auf maxPx (lange Kante) und gibt ein JPEG als Data-URL zurück. */
+export function shrinkWeb(uri: string, maxPx = MAX_PX, quality = 0.75): Promise<string> {
   return new Promise((resolve, reject) => {
     const img = new window.Image();
     img.onload = () => {
-      const f = Math.min(1, MAX_PX / Math.max(img.width, img.height));
+      const f = Math.min(1, maxPx / Math.max(img.width, img.height));
       const canvas = document.createElement('canvas');
       canvas.width = Math.round(img.width * f);
       canvas.height = Math.round(img.height * f);
       canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
-      resolve(canvas.toDataURL('image/jpeg', 0.75));
+      resolve(canvas.toDataURL('image/jpeg', quality));
     };
     img.onerror = () => reject(new Error('Bild konnte nicht gelesen werden'));
     img.src = uri;

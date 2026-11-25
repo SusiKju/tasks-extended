@@ -1,9 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   parseArtifactUrl,
-  artifactPreviewUrl,
   defaultArtifactTitle,
-  hasPublicPreview,
 } from '../artifactUrl';
 
 const UUID = '3f2a9c1e-1b2d-4c5e-8f90-123456789abc';
@@ -36,22 +34,9 @@ describe('parseArtifactUrl', () => {
   });
 });
 
-describe('artifactPreviewUrl', () => {
-  it('kodiert die Ziel-URL und hängt bei Wiederholung einen Cache-Buster an', () => {
-    const u = `https://claude.ai/public/artifacts/${UUID}`;
-    expect(artifactPreviewUrl(u)).toBe(
-      `https://s.wordpress.com/mshots/v1/${encodeURIComponent(u)}?w=800&h=500`,
-    );
-    expect(artifactPreviewUrl(u, 2)).toMatch(/&r=2$/);
-  });
-});
-
 describe('Hilfen', () => {
-  it('Titel-Fallback und Vorschau-Fähigkeit', () => {
+  it('Titel-Fallback', () => {
     const p = parseArtifactUrl(`https://claude.ai/public/artifacts/${UUID}`)!;
     expect(defaultArtifactTitle(p)).toBe('Artefakt 3f2a9c1e');
-    expect(hasPublicPreview('public')).toBe(true);
-    expect(hasPublicPreview('private')).toBe(true);
-    expect(hasPublicPreview('code')).toBe(true);
   });
 });

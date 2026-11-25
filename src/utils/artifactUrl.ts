@@ -50,30 +50,6 @@ export function parseArtifactUrl(raw: string): ParsedArtifactUrl | null {
   return null;
 }
 
-/**
- * Screenshot-URL für die Vorschaukarte. Claude liefert für alle Artefakte
- * dasselbe generische og:image, daher rendert ein Screenshot-Dienst
- * (WordPress mShots, kostenlos, ohne Schlüssel) die Seite selbst.
- *
- * mShots liefert beim ersten Aufruf ein Platzhalterbild, solange der
- * Screenshot entsteht – `attempt` hängt einen Cache-Buster an, damit die
- * Karte nach ein paar Sekunden das fertige Bild nachladen kann.
- */
-export function artifactPreviewUrl(url: string, attempt = 0, width = 800, height = 500): string {
-  const base = `https://s.wordpress.com/mshots/v1/${encodeURIComponent(url)}?w=${width}&h=${height}`;
-  return attempt > 0 ? `${base}&r=${attempt}` : base;
-}
-
-/**
- * Ob eine Vorschau versucht werden soll. Sowohl /public/artifacts/… als auch
- * /artifact/… können öffentlich geteilt sein – ob die Seite ohne Login
- * sichtbar ist, lässt sich am Link nicht ablesen. Deshalb immer versuchen;
- * die Karte fällt nur bei einem Ladefehler auf den Platzhalter zurück.
- */
-export function hasPublicPreview(_kind: ArtifactKind): boolean {
-  return true;
-}
-
 /** Anzeigename, wenn der Nutzer keinen Titel vergibt. */
 export function defaultArtifactTitle(parsed: ParsedArtifactUrl): string {
   return `Artefakt ${parsed.id.slice(0, 8)}`;
