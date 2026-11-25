@@ -48,6 +48,7 @@ import {
   saisonOrt,
   ortPasst,
   sortHeute,
+  ordneHeute,
   looksLikePhone,
   parseNeuesKind,
   makeId,
@@ -320,10 +321,13 @@ export function BambiniScreen() {
     }));
   }, [trainingsideenItems, persistTrainingsideenItems]);
 
-  // TE-115: Karte unter „Übungen heute“ antippen = auf Platz 1 holen.
-  const heuteNachVorne = useCallback((id: string) => {
-    const max = Math.max(0, ...trainingsideenItems.map((n) => n.heuteRang ?? 0));
-    persistTrainingsideenItems(trainingsideenItems.map((n) => (n.id === id ? { ...n, heuteRang: max + 1 } : n)));
+  // TE-117: Ordnen-Modus – Karten in Wunschreihenfolge antippen; null = Modus aus.
+  const [ordnenIds, setOrdnenIds] = useState<string[] | null>(null);
+  const heuteSpeichern = useCallback((aktuell: string[], getippt: string[]) => {
+    const reihe = ordneHeute(aktuell, getippt);
+    const rang = new Map(reihe.map((id, i) => [id, reihe.length - i]));
+    persistTrainingsideenItems(trainingsideenItems.map((n) => (rang.has(n.id) ? { ...n, heuteRang: rang.get(n.id) } : n)));
+    setOrdnenIds(null);
   }, [trainingsideenItems, persistTrainingsideenItems]);
 
   const deleteTrainingsideeItem = useCallback((id: string) => {
@@ -369,6 +373,7 @@ export function BambiniScreen() {
     .filter((n) => n.deletedAt)
     .sort((a, b) => (b.deletedAt as string).localeCompare(a.deletedAt as string));
   const markedTrainingsideenItems = sortHeute(activeTrainingsideenItems.filter((n) => n.marked));
+  const heuteFarbIndex = activeTrainingsideenItems.filter((n) => n.marked).map((n) => n.id);
   const sichtbareIdeen = activeTrainingsideenItems.filter((n) => ortPasst(n.ort, ortFilter));
   const ausgeblendetCount = activeTrainingsideenItems.length - sichtbareIdeen.length;
 
@@ -738,6 +743,8 @@ export function BambiniScreen() {
     ['#7B2FF7', '#F72585'],
     ['#FF9F0A', '#FF375F'],
     ['#30D158', '#00B8D9'],
+    ['#FF375F', '#FFD60A'],
+    ['#5E5CE6', '#64D2FF'],
   ];
   const NOTE_TAG: Record<NotizKind, { label: string; color: string }> = {
     tel: { label: 'TEL', color: '#4A9EFF' },
@@ -790,15 +797,38 @@ export function BambiniScreen() {
 
         {markedTrainingsideenItems.length > 0 ? (
           <>
-            <Text style={[s.bTileLabel, s.exLabel]}>Übungen heute</Text>
+            <View style={s.exHeader}>
+              <Text style={[s.bTileLabel, s.exLabel]}>Übungen heute</Text>
+              {markedTrainingsideenItems.length > 1 ? (
+                <Pressable
+                  hitSlop={10}
+                  onPress={() => (ordnenIds ? heuteSpeichern(markedTrainingsideenItems.map((n) => n.id), ordnenIds) : setOrdnenIds([]))}
+                  accessibilityLabel={ordnenIds ? 'Reihenfolge übernehmen' : 'Übungen ordnen'}
+                >
+                  <Text style={s.quickAction}>{ordnenIds ? 'Fertig' : 'Ordnen'}</Text>
+                </Pressable>
+              ) : null}
+            </View>
+            {ordnenIds ? <Text style={s.exHint}>Karten in der gewünschten Reihenfolge antippen</Text> : null}
             <View style={s.exGrid}>
-              {markedTrainingsideenItems.map((n, i) => {
-                const g = EXERCISE_GRADIENTS[i % EXERCISE_GRADIENTS.length];
+              {markedTrainingsideenItems.map((n) => {
+                // TE-117: Farbe hängt am Item (Listenreihenfolge), nicht an der Position.
+                const g = EXERCISE_GRADIENTS[Math.max(0, heuteFarbIndex.indexOf(n.id)) % EXERCISE_GRADIENTS.length];
+                const platz = ordnenIds ? ordnenIds.indexOf(n.id) + 1 : 0;
+                const onPress = () => {
+                  if (!ordnenIds) return;
+                  if (platz) return setOrdnenIds(ordnenIds.filter((id) => id !== n.id));
+                  const next = [...ordnenIds, n.id];
+                  // Vorletzte getippt → letzte steht fest, gleich speichern.
+                  if (next.length >= markedTrainingsideenItems.length - 1) heuteSpeichern(markedTrainingsideenItems.map((x) => x.id), next);
+                  else setOrdnenIds(next);
+                };
                 return (
-                  <Pressable key={n.id} style={s.exCard} onPress={() => heuteNachVorne(n.id)} disabled={i === 0} accessibilityLabel={`${n.text} – nach vorne holen`}>
+                  <Pressable key={n.id} style={[s.exCard, ordnenIds && !platz && s.exCardOffen]} onPress={onPress} disabled={!ordnenIds} accessibilityLabel={ordnenIds ? `${n.text} – ${platz ? `Platz ${platz}, antippen zum Entfernen` : 'als nächstes einreihen'}` : n.text}>
                     <LinearGradient colors={[mono(g[0]), mono(g[1])]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
                     <Text style={s.exText} numberOfLines={3}>{n.text}</Text>
                     <Text style={s.exOrt}>{ORT_LABEL[n.ort ?? 'beides']}</Text>
+                    {platz ? <View style={s.exPlatz}><Text style={s.exPlatzText}>{platz}</Text></View> : null}
                   </Pressable>
                 );
               })}
@@ -1905,6 +1935,11 @@ function makeStyles(c: ThemeColors) {
     quickNoteTime: { color: c.textMuted, fontSize: 11 },
     quickAction: { color: c.accent, fontSize: 12, fontWeight: '700' },
     exLabel: { paddingHorizontal: 4 },
+    exHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingRight: 4 },
+    exHint: { color: c.textMuted, fontSize: 12, paddingHorizontal: 4, marginBottom: 6 },
+    exCardOffen: { opacity: 0.75 },
+    exPlatz: { position: 'absolute', top: 6, right: 8, width: 24, height: 24, borderRadius: 12, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
+    exPlatzText: { color: '#000000', fontSize: 13, fontWeight: '800' },
     exGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
     exCard: { width: '48.5%', minHeight: 64, borderRadius: 16, padding: 12, overflow: 'hidden', justifyContent: 'center' },
     exText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
