@@ -53,3 +53,12 @@ export function sortHeute<T extends { heuteRang?: number }>(items: T[]): T[] {
     .sort((a, b) => (b.item.heuteRang ?? -Infinity) - (a.item.heuteRang ?? -Infinity) || a.i - b.i)
     .map((x) => x.item);
 }
+
+/**
+ * TE-117: Ordnen-Modus. Angetippte Karten stehen in Tipp-Reihenfolge vorne,
+ * nicht angetippte behalten ihre bisherige Reihenfolge dahinter.
+ */
+export function ordneHeute(aktuell: string[], getippt: string[]): string[] {
+  const set = new Set(getippt);
+  return [...getippt.filter((id) => aktuell.includes(id)), ...aktuell.filter((id) => !set.has(id))];
+}

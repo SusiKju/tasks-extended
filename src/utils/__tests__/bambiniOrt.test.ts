@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ortPasst, saisonOrt, sortHeute } from '../bambiniSeason';
+import { ordneHeute, ortPasst, saisonOrt, sortHeute } from '../bambiniSeason';
 
 describe('saisonOrt (TE-114)', () => {
   it('Oktober bis März ist Halle, April bis September draußen', () => {
@@ -26,5 +26,14 @@ describe('sortHeute (TE-115)', () => {
   it('zuletzt nach vorne geholt steht vorne, Rest in Listenreihenfolge', () => {
     const items = [{ id: 'a' }, { id: 'b', heuteRang: 1 }, { id: 'c' }, { id: 'd', heuteRang: 2 }];
     expect(sortHeute(items).map((x) => x.id)).toEqual(['d', 'b', 'a', 'c']);
+  });
+});
+
+describe('ordneHeute (TE-117)', () => {
+  it('getippte zuerst in Tipp-Reihenfolge, Rest wie bisher', () => {
+    expect(ordneHeute(['a', 'b', 'c', 'd', 'e', 'f'], ['e', 'a', 'c'])).toEqual(['e', 'a', 'c', 'b', 'd', 'f']);
+  });
+  it('ignoriert ids, die nicht mehr da sind', () => {
+    expect(ordneHeute(['a', 'b'], ['x', 'b'])).toEqual(['b', 'a']);
   });
 });

@@ -187,7 +187,7 @@ export interface NotizItem {
 export type NotizKind = 'tel' | 'neu' | 'info';
 
 // TE-114: Ort-Typ und -Helfer liegen firebase-frei (testbar) in bambiniSeason.
-export { saisonOrt, ortPasst, sortHeute } from '../utils/bambiniSeason';
+export { saisonOrt, ortPasst, sortHeute, ordneHeute } from '../utils/bambiniSeason';
 export type { TrainingsOrt } from '../utils/bambiniSeason';
 
 function sanitizeNotizItem(n: any): NotizItem | null {
